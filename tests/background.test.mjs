@@ -53,7 +53,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.7.0' }; },
+    getManifest() { return { version: '0.7.1' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -192,7 +192,9 @@ context = vm.createContext({
       if (url.pathname.endsWith('/logs')) body = {
         ok:true,
         pending:[{ attacker_id:3853023, attacker_name:'Considious', defender_id:9001, defender_name:'War Target', outcome:'loss', event_count:1, first_seen_at:Date.now(), last_seen_at:Date.now() }],
-        stored:[]
+        stored:[],
+        storedAvailable:false,
+        storageWarning:'Historical War log storage is not configured. Live targets and retals remain available.'
       };
       if (url.pathname.endsWith('/logs') && url.searchParams.get('include_stored') !== '0') warStoredLogReads++;
     } else if (url.hostname === 'api.torn.com') {
@@ -353,6 +355,7 @@ const warCycle = await send('war.cycle.prepare');
 assert(warCycle.ok && warCycle.data.runtime.snapshot.members.length === 1, 'War cycle did not load the shared target snapshot.');
 assert(warCycle.data.runtime.snapshot.retals.length === 1, 'War cycle did not load active retals.');
 assert(warCycle.data.runtime.logs[0].event_count === 1, 'War cycle did not load aggregate logs.');
+assert(warCycle.data.runtime.logsWarning.includes('Live targets and retals remain available'), 'Missing historical storage did not degrade to a live-data warning.');
 assert(warStatusSubmissions === 1, 'Elected public status collector did not submit once.');
 assert(warAttackSubmissions === 1, 'Elected faction collector did not submit attacks once.');
 const secondWarCycle = await send('war.cycle.prepare');

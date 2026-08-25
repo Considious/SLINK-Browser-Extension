@@ -2,13 +2,13 @@
 
 Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
-Version 0.7.0 reorganizes the dashboard around one local Torn credential area,
-an explicitly separate remotely saved Public Only donation, three equal module
-slots, and a single Leveling/War target deck. Retals remain visible in the War
-panel instead of competing with target navigation. War restores Fair Fight
-sorting, chain and Turtle Timer state, attack/war/mug counters, and configurable
-sound, panel-flash, and Torn-page-border alerts. Ranked-war opponents are now
-identified through the Torn API without opening a War page.
+Version 0.7.1 collapses verified API access into a compact one-third-width card,
+uses the freed dashboard space for live retals, and keeps War targets active if
+optional historical log storage is unavailable. The dashboard retains one local
+Torn credential area, an explicitly separate remotely saved Public Only donation,
+three equal module slots, and a single Leveling/War target deck. War includes Fair
+Fight sorting, chain and Turtle Timer state, attack/war/mug counters, configurable
+sound, panel-flash, and Torn-page-border alerts, and API-based ranked-war discovery.
 
 War logs require `slink.war.log` or `admin.*`. The permission manager and
 diagnostics pages are visible only to the signed sole administrator. The

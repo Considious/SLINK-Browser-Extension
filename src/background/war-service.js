@@ -52,6 +52,7 @@
       lastError: '',
       snapshot: null,
       logs: [],
+      logsWarning: '',
       collectStatus: false,
       collectAttacks: false,
       panelStats: { attacks:0, warAttacks:0, mugs:0, chain:null, turtle:null },
@@ -452,16 +453,21 @@
     ]);
     const includeStored = forceStored || cached?.warId !== activeWar.warId || lastRead?.warId !== activeWar.warId || Date.now() - Number(lastRead?.at) >= 10 * 60 * 1000;
     let stored = Array.isArray(cached?.rows) && cached?.warId === activeWar.warId ? cached.rows : [];
+    let storageWarning = cached?.warId === activeWar.warId ? String(cached.storageWarning || '') : '';
     if (includeStored) {
       const result = await workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/logs?limit=200&include_stored=1`);
       stored = Array.isArray(result?.stored) ? result.stored : [];
       pendingLogs = Array.isArray(result?.pending) ? result.pending : pendingLogs;
+      if (result?.storedAvailable === false) storageWarning = String(result.storageWarning || 'Historical War logs are temporarily unavailable; live War data is still active.');
       await Promise.all([
-        SLINK.core.storage.set(KEYS.storedLogs, { warId:activeWar.warId, rows:stored }),
+        SLINK.core.storage.set(KEYS.storedLogs, { warId:activeWar.warId, rows:stored, storageWarning }),
         SLINK.core.storage.set(KEYS.lastStoredLogsAt, { warId:activeWar.warId, at:Date.now() })
       ]);
     }
-    return SLINK.core.war.summarizeLogs({ stored, pending:pendingLogs });
+    return {
+      rows:SLINK.core.war.summarizeLogs({ stored, pending:pendingLogs }),
+      warning:storageWarning
+    };
   }
 
   async function prepareCycle(payload = {}) {
@@ -497,13 +503,25 @@
       const snapshot = await fetchSnapshot(activeWar, currentSettings);
       snapshot.members = await refineMembers(snapshot?.members || [], currentSettings);
       const canViewLogs = SLINK.core.permissions.hasScope(session, 'slink.war.log') || SLINK.core.permissions.hasScope(session, 'admin.*');
-      const logs = canViewLogs ? await fetchLogs(activeWar, false, snapshot?.pendingLogs || []) : [];
+      let logs = [];
+      let logsWarning = '';
+      if (canViewLogs) {
+        try {
+          const logResult = await fetchLogs(activeWar, false, snapshot?.pendingLogs || []);
+          logs = logResult.rows;
+          logsWarning = logResult.warning;
+        } catch (error) {
+          logs = SLINK.core.war.summarizeLogs({ stored:[], pending:snapshot?.pendingLogs || [] });
+          logsWarning = `Historical War logs are unavailable: ${SLINK.core.format.errorMessage(error)} Live targets and retals are still active.`;
+        }
+      }
       const panelStats = await refreshPanelStats(activeWar, currentSettings);
       await setRuntime({
         status:`${snapshot.members?.length || 0} targets / ${snapshot.retals?.length || 0} active retals`,
         lastError:'',
         snapshot,
         logs,
+        logsWarning,
         collectStatus:Boolean(heartbeat.collectStatus),
         collectAttacks:Boolean(heartbeat.collectAttacks),
         statusChecks,
@@ -606,7 +624,7 @@
         const session = await ensureSession(false);
         if (!SLINK.core.permissions.hasScope(session, 'slink.war.log') && !SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('slink.war.log permission is required to view War logs.');
         const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
-        return activeWar?.warId ? fetchLogs(activeWar, true) : [];
+        return activeWar?.warId ? (await fetchLogs(activeWar, true)).rows : [];
       },
       'war.admin.scopes': async () => {
         const session = await ensureSession(false);

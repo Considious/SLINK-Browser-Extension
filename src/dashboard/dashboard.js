@@ -9,6 +9,7 @@
   let contribution = null;
   let contributionTerms = null;
   let termsExpanded = false;
+  let accessExpanded = null;
   let targetView = 'leveling';
   let adminUser = null;
 
@@ -92,6 +93,15 @@
     byId('toggle-shared-terms').textContent = byId('shared-terms-full').hidden ? 'View terms' : 'Hide terms';
     const authenticated = [leveling?.session, war?.session].find(session => session?.authenticated);
     byId('identity-state').textContent = authenticated ? `Torn ID ${authenticated.userId}` : 'Enter a key to unlock access';
+    if (accessExpanded === null) accessExpanded = !authenticated;
+    const compact = Boolean(authenticated && !accessExpanded);
+    byId('access-card').classList.toggle('expanded', !compact);
+    byId('access-config').hidden = compact;
+    byId('toggle-access').textContent = compact ? 'API & access settings' : authenticated ? 'Collapse' : 'Setup required';
+    byId('toggle-access').disabled = !authenticated && accessExpanded;
+    byId('access-summary').textContent = compact
+      ? `${leveling?.settings?.hasTornKey ? 'Leveling' : ''}${leveling?.settings?.hasTornKey && war?.settings?.hasTornKey ? ' + ' : ''}${war?.settings?.hasTornKey ? 'War' : ''} enabled with locally saved credentials.`
+      : 'Enter each local credential once, then choose which SLINK modules may use it.';
   }
 
   function renderLeveling() {
@@ -116,7 +126,15 @@
   function renderRetals() {
     const root = byId('war-retals');
     const retals = war?.runtime?.snapshot?.retals || [];
-    root.replaceChildren(...retals.slice(0, 3).map(retal => {
+    byId('retal-summary').textContent = retals.length ? `${retals.length} active retaliation opportunit${retals.length === 1 ? 'y' : 'ies'}` : 'No active retaliation opportunities';
+    if (!retals.length) {
+      const empty = document.createElement('p');
+      empty.className = 'muted retal-empty';
+      empty.textContent = war?.configured ? 'SLINK War is watching for retals.' : 'Enable SLINK War in API & access settings to watch for retals.';
+      root.replaceChildren(empty);
+      return;
+    }
+    root.replaceChildren(...retals.slice(0, 6).map(retal => {
       const div = document.createElement('div');
       div.className = 'retal-item';
       const remaining = SLINK.core.format.formatHumanDuration(Number(retal.expiresAt) - Math.floor(Date.now() / 1000));
@@ -132,6 +150,9 @@
     const permitted = war?.session?.canViewLogs === true || hasScope('admin.*') || hasScope('slink.war.log');
     byId('war-logs-panel').hidden = !permitted;
     if (!permitted) return;
+    const warning = war?.runtime?.logsWarning || '';
+    byId('war-logs-warning').textContent = warning;
+    byId('war-logs-warning').hidden = !warning;
     const rows = war?.runtime?.logs || [];
     byId('war-logs').replaceChildren(...rows.slice(0, 20).map(row => {
       const div = document.createElement('div');
@@ -269,6 +290,7 @@
   }
 
   byId('refresh-all').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { await refresh(); } finally { setBusy(button, false); } });
+  byId('toggle-access').addEventListener('click', () => { accessExpanded = !accessExpanded; renderAccess(); });
   byId('toggle-shared-terms').addEventListener('click', () => { termsExpanded = !termsExpanded; renderAccess(); });
   byId('access-form').addEventListener('submit', async event => {
     event.preventDefault(); const submit = byId('save-access'); setBusy(submit, true); byId('access-message').textContent = '';
@@ -280,10 +302,11 @@
       if ((byId('use-leveling').checked && byId('page-panel').checked) || (byId('use-war').checked && byId('war-display-mode').value !== 'extension')) await SLINK.core.storage.set('ui.pagePanelHidden', false);
       byId('shared-torn-key').value = ''; byId('shared-ff-key').value = ''; byId('accept-shared-terms').checked = false;
       byId('access-message').textContent = 'Saved locally and verified. Available features are now unlocked by signed SLINK permissions.';
+      accessExpanded = false;
       await refresh();
     } catch (error) { byId('access-message').textContent = errorText(error); } finally { setBusy(submit, false); }
   });
-  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true})]); await SLINK.core.messaging.send('leveling.session.clear'); await SLINK.core.messaging.send('war.session.clear'); await refresh(); });
+  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true})]); await SLINK.core.messaging.send('leveling.session.clear'); await SLINK.core.messaging.send('war.session.clear'); accessExpanded = true; await refresh(); });
   byId('page-panel').addEventListener('change', async event => { await SLINK.core.storage.set('ui.modules.leveling.showInTorn', event.currentTarget.checked); if (event.currentTarget.checked) await SLINK.core.storage.set('ui.pagePanelHidden', false); system.levelingInTorn = event.currentTarget.checked; });
   byId('reset-position').addEventListener('click', () => SLINK.core.storage.remove('ui.main.position'));
   byId('war-reset-position').addEventListener('click', () => SLINK.core.storage.remove('ui.main.position'));
