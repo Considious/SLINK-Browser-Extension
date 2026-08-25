@@ -4,7 +4,7 @@
   const SLINK = global.SLINK_EXTENSION;
   const WAR = SLINK.core.war;
   const MODULE_STYLES = `
-    .slink-war-subtabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; }
+    .slink-war-subtabs { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
     .slink-war-subtab[aria-selected="true"] { border-color:var(--slink-border); background:var(--slink-accent); }
     .slink-war-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }
     .slink-war-stat { padding:6px; border-radius:6px; background:var(--slink-bg-raised); text-align:center; }
@@ -116,6 +116,21 @@
         }).join('');
       }
 
+      function outsideCards() {
+        const settings = current?.settings || {};
+        const members = WAR.sortMembers(current?.runtime?.outsideTargets || [], Date.now(), 'fairFightAsc');
+        const controls = `<div class="slink-war-settings"><label>Minimum FF<input id="slink-war-outside-min" type="number" min="1" max="3" step="0.1" value="${Number(settings.outsideMinFF) || 1}"></label><label>Maximum FF<input id="slink-war-outside-max" type="number" min="1" max="3" step="0.1" value="${Number(settings.outsideMaxFF) || 3}"></label><div class="slink-war-settings-actions"><button id="slink-war-outside-refresh" type="button">Poll up to 50 outside targets</button></div></div>`;
+        const message = current?.runtime?.outsideError
+          ? `<div class="slink-war-error">${escape(current.runtime.outsideError)}</div>`
+          : !members.length ? '<div class="slink-war-empty">Choose a Fair Fight range and poll FFScouter for outside targets.</div>' : '';
+        const cards = members.map(member => `<article class="slink-war-card">
+          <div class="slink-war-card-head"><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">${escape(member.name)} [${member.id}]</a><span>Lv ${member.level || '?'}</span></div>
+          <div class="slink-war-meta"><span class="slink-war-pill">${escape(member.activity || 'Unknown')}</span><span class="slink-war-pill">${escape(member.statusState || 'Unknown')}</span><span class="slink-war-pill">Estimated BS ${Number.isFinite(member.battleStatsEstimate) ? SLINK.core.format.shortNumber(member.battleStatsEstimate) : '?'}</span><span class="slink-war-pill">FF ${Number.isFinite(member.fairFight) ? member.fairFight.toFixed(2) : '?'}</span>${member.lastActionRelative ? `<span>${escape(member.lastActionRelative)}</span>` : ''}</div>
+          <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" target="_blank" rel="noopener noreferrer">Attack</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-paste="${member.id}" type="button">Paste to faction chat</button></div>
+        </article>`).join('');
+        return controls + message + cards;
+      }
+
       function claimCards() {
         const claims = current?.runtime?.snapshot?.claims || [];
         if (!claims.length) return '<div class="slink-war-empty">No med-out targets are currently claimed.</div>';
@@ -175,8 +190,8 @@
         context.ui.setSubtitle(current?.session?.authenticated ? `${current.session.factionCapable ? 'Faction API' : 'Public API'} / ${current.activeWar?.opponentName || 'No active opponent'}` : 'Setup required');
         context.ui.setStatus(localError || current?.runtime?.lastError || current?.runtime?.status || 'SLINK War ready.', (localError || current?.runtime?.lastError) ? 'error' : (current?.configured ? 'ready' : 'normal'));
         context.ui.setActions([{ label:busy ? 'Refreshing...' : 'Refresh', disabled:busy, onClick:() => runCycle(true) }]);
-        const tabs = ['targets', 'claims', ...(canViewLogs ? ['logs'] : []), 'settings'];
-        const body = activeTab === 'targets' ? targetCards() : activeTab === 'claims' ? claimCards() : activeTab === 'logs' ? logCards() : settingsHtml();
+        const tabs = ['targets', 'outside', 'claims', ...(canViewLogs ? ['logs'] : []), 'settings'];
+        const body = activeTab === 'targets' ? targetCards() : activeTab === 'outside' ? outsideCards() : activeTab === 'claims' ? claimCards() : activeTab === 'logs' ? logCards() : settingsHtml();
         const chain = stats.chain?.current ? `${stats.chain.current}${stats.chain.target ? `/${stats.chain.target}` : ''}` : 'None';
         context.ui.setContentHtml(`<div class="slink-war-subtabs">${tabs.map(tab => `<button class="slink-war-subtab" data-war-tab="${tab}" aria-selected="${activeTab === tab}">${tab[0].toUpperCase()}${tab.slice(1)}</button>`).join('')}</div><div class="slink-war-summary"><div class="slink-war-stat"><b>${Number(stats.attacks) || 0}</b><span>Attacks</span></div><div class="slink-war-stat"><b>${Number(stats.warAttacks) || 0}</b><span>War</span></div><div class="slink-war-stat"><b>${Number(stats.mugs) || 0}</b><span>Mugs</span></div><div class="slink-war-stat"><b>${chain}</b><span>Chain</span></div></div>${snapshot.retals?.length ? `<div class="slink-war-note"><strong>Active retals</strong>${retalCards()}</div>` : ''}${localError ? `<div class="slink-war-error">${escape(localError)}</div>` : ''}<div>${body}</div>`);
         bindEvents();
@@ -185,7 +200,7 @@
       function bindEvents() {
         const root = context.ui.getContentElement();
         for (const button of root.querySelectorAll('[data-war-tab]')) button.addEventListener('click', () => { activeTab = button.dataset.warTab; render(); });
-        const members = new Map((current?.runtime?.snapshot?.members || []).map(member => [Number(member.id), member]));
+        const members = new Map([...(current?.runtime?.snapshot?.members || []), ...(current?.runtime?.outsideTargets || [])].map(member => [Number(member.id), member]));
         for (const button of root.querySelectorAll('[data-war-copy]')) button.addEventListener('click', () => void copyCallout(members.get(Number(button.dataset.warCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
         for (const button of root.querySelectorAll('[data-war-paste]')) button.addEventListener('click', () => pasteCallout(members.get(Number(button.dataset.warPaste)), button));
         for (const button of root.querySelectorAll('[data-war-claim]')) button.addEventListener('click', async () => {
@@ -199,6 +214,17 @@
         for (const button of root.querySelectorAll('[data-war-release]')) button.addEventListener('click', async () => {
           try { current = await SLINK.core.messaging.send('war.claims.update', { operation:'release', targetId:Number(button.dataset.warRelease) }); localError=''; render(); }
           catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
+        });
+        root.querySelector('#slink-war-outside-refresh')?.addEventListener('click', async event => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          try {
+            current = await SLINK.core.messaging.send('war.outside.refresh', {
+              minFF:root.querySelector('#slink-war-outside-min')?.value,
+              maxFF:root.querySelector('#slink-war-outside-max')?.value
+            });
+            localError = ''; render();
+          } catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
         root.querySelector('#slink-war-clear')?.addEventListener('click', async () => { current = await SLINK.core.messaging.send('war.session.clear'); render(); });
         root.querySelector('#slink-war-save')?.addEventListener('click', async () => {

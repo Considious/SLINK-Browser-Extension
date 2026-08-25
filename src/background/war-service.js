@@ -21,10 +21,13 @@
     lastFfAt: 'war.lastFairFightAt.v1',
     personalStats: 'war.personalStats.v1',
     seenPersonalAttacks: 'war.seenPersonalAttacks.v1',
-    lastPanelStatsAt: 'war.lastPanelStatsAt.v1'
+    lastPanelStatsAt: 'war.lastPanelStatsAt.v1',
+    outsideTargets: 'war.outsideTargets.v1',
+    lastOutsideAt: 'war.lastOutsideAt.v1'
   });
   const STATUS_INTERVAL_MS = 10_000;
   const ATTACK_INTERVAL_MS = 30_000;
+  const NO_WAR_DISCOVERY_INTERVAL_MS = 8 * 60 * 60 * 1000;
   let authenticating = null;
   let cycling = null;
 
@@ -37,6 +40,8 @@
       ffKey: '',
       minFF: 1,
       maxFF: 3,
+      outsideMinFF: 1,
+      outsideMaxFF: 3,
       alertSound: true,
       alertPanelFlash: true,
       alertPageFlash: false,
@@ -53,6 +58,9 @@
       snapshot: null,
       logs: [],
       logsWarning: '',
+      outsideTargets: [],
+      outsideLastAt: 0,
+      outsideError: '',
       collectStatus: false,
       collectAttacks: false,
       panelStats: { attacks:0, warAttacks:0, mugs:0, chain:null, turtle:null },
@@ -255,7 +263,7 @@
   async function discoverActiveWar(session, currentSettings, force = false) {
     const lastCheck = Number(await SLINK.core.storage.get(KEYS.lastOpponentCheckAt, 0)) || 0;
     const cached = await SLINK.core.storage.get(KEYS.activeWar, null);
-    if (!force && cached?.warId && Date.now() - lastCheck < 5 * 60 * 1000) return cached;
+    if (!force && Date.now() - lastCheck < NO_WAR_DISCOVERY_INTERVAL_MS) return cached?.warId ? cached : null;
     const payload = await tornRequest(`/v2/faction/${encodeURIComponent(session.factionId)}/rankedwars?sort=desc&limit=10`, currentSettings.tornKey);
     await SLINK.core.storage.set(KEYS.lastOpponentCheckAt, Date.now());
     const detected = currentRankedWar(payload, session.factionId);
@@ -387,6 +395,56 @@
       fairFight:Number.isFinite(Number(cache[member.id]?.value)) ? Number(cache[member.id].value) : null,
       battleStatsEstimate:Number.isFinite(Number(cache[member.id]?.battleStatsEstimate)) ? Number(cache[member.id].battleStatsEstimate) : null
     }));
+  }
+
+  function normalizeOutsideTarget(row) {
+    const id = WAR.positiveInteger(row?.player_id ?? row?.id ?? row?.user_id);
+    if (!id) return null;
+    const lastAction = Number(row?.last_action ?? row?.lastAction ?? 0) || 0;
+    const hospitalUntil = Number(row?.hospital_until ?? row?.status_until ?? 0) || 0;
+    const minutes = lastAction ? Math.max(0, Math.floor((Date.now() / 1000 - lastAction) / 60)) : null;
+    return WAR.normalizeMember({
+      id,
+      name:String(row?.name || `Player ${id}`),
+      level:Number(row?.level) || 0,
+      activity:minutes === null ? 'Unknown' : minutes < 5 ? 'Online' : minutes < 15 ? 'Idle' : 'Offline',
+      lastActionTimestamp:lastAction,
+      lastActionRelative:minutes === null ? '' : `${minutes}m ago`,
+      statusState:hospitalUntil > Date.now() / 1000 ? 'Hospital' : 'Unknown',
+      statusUntil:hospitalUntil,
+      fairFight:fairFightValue(row) ?? undefined,
+      battleStatsEstimate:battleStatsValue(row) ?? undefined
+    });
+  }
+
+  async function discoverOutsideTargets(input = {}) {
+    await ensureSession(false);
+    const current = await settings();
+    if (!current.ffKey) throw new Error('Save the FFScouter API key before polling outside targets.');
+    const minFF = Math.max(1, Math.min(3, Number(input.minFF ?? current.outsideMinFF) || 1));
+    const maxFF = Math.max(1, Math.min(3, Number(input.maxFF ?? current.outsideMaxFF) || 3));
+    if (minFF > maxFF) throw new Error('Minimum Fair Fight cannot be higher than maximum Fair Fight.');
+    const nextSettings = { ...current, outsideMinFF:minFF, outsideMaxFF:maxFF };
+    await SLINK.core.storage.set(KEYS.settings, nextSettings);
+    const query = new URLSearchParams({
+      key:current.ffKey, minlevel:'1', maxlevel:'100', inactiveonly:'0', factionless:'0',
+      minff:String(minFF), maxff:String(maxFF), limit:'50'
+    });
+    try {
+      const response = await SLINK.core.http.requestJson('ffscouter', `https://ffscouter.com/api/v1/get-targets?${query}`, { cache:'no-store' });
+      if (response?.error) throw new Error(String(response.error?.message || response.error));
+      const targets = (Array.isArray(response?.targets) ? response.targets : [])
+        .map(normalizeOutsideTarget).filter(Boolean).slice(0, 50);
+      await Promise.all([
+        SLINK.core.storage.set(KEYS.outsideTargets, targets),
+        SLINK.core.storage.set(KEYS.lastOutsideAt, Date.now()),
+        setRuntime({ outsideTargets:targets, outsideLastAt:Date.now(), outsideError:'' })
+      ]);
+      return publicStatus();
+    } catch (error) {
+      await setRuntime({ outsideError:SLINK.core.format.errorMessage(error) });
+      throw error;
+    }
   }
 
   async function refreshPanelStats(activeWar, currentSettings) {
@@ -601,6 +659,8 @@
       idleMinutes:Math.max(0, Math.min(60, Number(input.idleMinutes ?? current.idleMinutes) || 0)),
       minFF:Math.max(1, Math.min(3, Number(input.minFF ?? current.minFF) || 1)),
       maxFF:Math.max(1, Math.min(3, Number(input.maxFF ?? current.maxFF) || 3)),
+      outsideMinFF:Math.max(1, Math.min(3, Number(input.outsideMinFF ?? current.outsideMinFF) || 1)),
+      outsideMaxFF:Math.max(1, Math.min(3, Number(input.outsideMaxFF ?? current.outsideMaxFF) || 3)),
       alertSound:input.alertSound === undefined ? current.alertSound : input.alertSound === true,
       alertPanelFlash:input.alertPanelFlash === undefined ? current.alertPanelFlash : input.alertPanelFlash === true,
       alertPageFlash:input.alertPageFlash === undefined ? current.alertPageFlash : input.alertPageFlash === true,
@@ -637,6 +697,8 @@
         idleMinutes:currentSettings.idleMinutes,
         minFF:currentSettings.minFF,
         maxFF:currentSettings.maxFF,
+        outsideMinFF:currentSettings.outsideMinFF,
+        outsideMaxFF:currentSettings.outsideMaxFF,
         alertSound:currentSettings.alertSound,
         alertPanelFlash:currentSettings.alertPanelFlash,
         alertPageFlash:currentSettings.alertPageFlash,
@@ -673,6 +735,7 @@
       'war.cycle.prepare': prepareCycle,
       'war.config.save': saveSharedConfig,
       'war.claims.update': updateClaim,
+      'war.outside.refresh': discoverOutsideTargets,
       'war.logs': async () => {
         const session = await ensureSession(false);
         if (!SLINK.core.permissions.hasScope(session, 'slink.war.officer') && !SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('slink.war.officer permission is required to view War logs.');

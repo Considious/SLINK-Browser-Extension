@@ -70,7 +70,7 @@
     return article;
   }
 
-  function warTargetCard(member) {
+  function warTargetCard(member, outside = false) {
     const article = document.createElement('article');
     article.className = 'target';
     const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(member.id)}`;
@@ -92,6 +92,10 @@
     });
     const claim = (war?.runtime?.snapshot?.claims || []).find(row => Number(row.targetId) === Number(member.id));
     const claimButton = article.querySelector('.claim-war-target');
+    if (outside) {
+      claimButton.remove();
+      return article;
+    }
     const mine = Number(claim?.claimedById) === Number(war?.session?.userId);
     claimButton.textContent = claim ? (mine ? 'Release my claim' : `Claimed by ${claim.claimedByName || claim.claimedById}`) : 'Claim med-out';
     claimButton.disabled = Boolean(claim && !mine && !war?.session?.officer);
@@ -242,6 +246,8 @@
     byId('war-alert-page').checked = settings.alertPageFlash === true;
     byId('war-chain-alert').checked = settings.chainAlert !== false;
     byId('war-turtle-alert').checked = settings.turtleAlert !== false;
+    byId('outside-min-ff').value = settings.outsideMinFF || 1;
+    byId('outside-max-ff').value = settings.outsideMaxFF || 3;
     renderRetals(); renderLogs();
     if (war?.runtime?.lastError) showError('war-error', war.runtime.lastError); else clearError('war-error');
   }
@@ -251,17 +257,25 @@
     const levelingTab = document.querySelector('[data-target-view="leveling"]');
     const warTab = document.querySelector('[data-target-view="war"]');
     const claimsTab = document.querySelector('[data-target-view="claims"]');
+    const outsideTab = document.querySelector('[data-target-view="outside"]');
     levelingTab.hidden = Boolean(system?.permissions?.userId) && !hasScope('slink.level');
     warTab.hidden = Boolean(system?.permissions?.userId) && !hasScope('slink.war');
     claimsTab.hidden = warTab.hidden;
-    if ((targetView === 'leveling' && levelingTab.hidden) || ((targetView === 'war' || targetView === 'claims') && warTab.hidden)) targetView = levelingTab.hidden ? 'war' : 'leveling';
+    outsideTab.hidden = warTab.hidden;
+    if ((targetView === 'leveling' && levelingTab.hidden) || ((targetView === 'war' || targetView === 'outside' || targetView === 'claims') && warTab.hidden)) targetView = levelingTab.hidden ? 'war' : 'leveling';
     for (const button of document.querySelectorAll('.target-tab')) button.classList.toggle('active', button.dataset.targetView === targetView);
     byId('war-sort-row').hidden = targetView !== 'war';
+    byId('outside-filter-row').hidden = targetView !== 'outside';
     if (targetView === 'claims') {
       const claims = war?.runtime?.snapshot?.claims || [];
       root.replaceChildren(...claims.map(claimCard));
       byId('target-deck-title').textContent = 'Med-out claims';
       byId('target-summary').textContent = claims.length ? `${claims.length} claimed targets` : 'No med-out targets claimed';
+    } else if (targetView === 'outside') {
+      const members = SLINK.core.war.sortMembers(war?.runtime?.outsideTargets || [], Date.now(), 'fairFightAsc');
+      root.replaceChildren(...members.map(member => warTargetCard(member, true)));
+      byId('target-deck-title').textContent = 'Outside targets';
+      byId('target-summary').textContent = members.length ? `${members.length} FFScouter targets` : (war?.runtime?.outsideError || 'Choose a Fair Fight range and poll FFScouter');
     } else if (targetView === 'war') {
       const members = SLINK.core.war.sortMembers(war?.runtime?.snapshot?.members || [], Date.now(), byId('war-target-sort').value);
       root.replaceChildren(...members.map(warTargetCard));
@@ -373,6 +387,7 @@
   byId('war-reset-position').addEventListener('click', () => SLINK.core.storage.remove('ui.main.position'));
   byId('refresh-targets').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { leveling = await SLINK.core.messaging.send('leveling.activity.touch'); const result = await SLINK.core.messaging.send('leveling.cycle.prepare',{contribute:false}); leveling = result.status; renderLeveling(); renderTargets(); } catch (error) { showError('leveling-error', error); } finally { setBusy(button, false); } });
   byId('war-refresh').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { war = await SLINK.core.messaging.send('war.cycle.prepare',{forceOpponentRefresh:true}); renderWar(); renderTargets(); } catch (error) { showError('war-error', error); } finally { setBusy(button, false); } });
+  byId('outside-refresh').addEventListener('click', async event => { const button=event.currentTarget; setBusy(button,true); byId('war-action-message').textContent=''; try { war=await SLINK.core.messaging.send('war.outside.refresh',{minFF:byId('outside-min-ff').value,maxFF:byId('outside-max-ff').value}); byId('war-action-message').textContent=`Loaded ${war?.runtime?.outsideTargets?.length || 0} outside targets from FFScouter.`; renderWar(); renderTargets(); } catch(error){ byId('war-action-message').textContent=errorText(error); } finally{setBusy(button,false);} });
   byId('war-save-settings').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); clearError('war-error');
     try {

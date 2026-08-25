@@ -2,6 +2,7 @@
 
 Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
+Version 0.8.1 keeps faction-chat sending inside Torn, adds local FFScouter outside-target discovery, and reduces inactive-war API checks.
 Version 0.8.0 restores faction-chat target callouts, adds shared officer-controlled
 War mode and med-out claims, and makes the War settings save explicitly. Version
 0.7.1 collapsed verified API access into a compact one-third-width card,
