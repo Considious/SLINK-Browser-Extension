@@ -187,6 +187,7 @@
         token:String(response.session_token),
         expiresAt:Date.parse(response.expires_at) || 0,
         userId:Number(response.user_id) || null,
+        userName:String(response.user_name || `Player ${response.user_id}`),
         factionId:Number(response.faction_id) || 0,
         roles:Array.isArray(response.roles) ? response.roles : [],
         scopes:Array.isArray(response.scopes) ? response.scopes : []
@@ -353,6 +354,14 @@
     return null;
   }
 
+  function battleStatsValue(row) {
+    for (const value of [row?.bs_estimate, row?.battle_stats_estimate, row?.battleStatsEstimate, row?.total_stats, row?.estimate?.battle_stats]) {
+      const number = Number(value);
+      if (Number.isFinite(number) && number >= 0) return number;
+    }
+    return null;
+  }
+
   async function refineMembers(members, currentSettings) {
     const values = Array.isArray(members) ? members : [];
     if (!currentSettings.ffKey || !values.length) return values;
@@ -368,12 +377,16 @@
         const id = WAR.positiveInteger(row?.player_id ?? row?.id ?? row?.user_id);
         if (!id) continue;
         returned.add(id);
-        cache[id] = { value:fairFightValue(row), checkedAt:now };
+        cache[id] = { value:fairFightValue(row), battleStatsEstimate:battleStatsValue(row), checkedAt:now };
       }
       for (const id of targets) if (!returned.has(id)) cache[id] = { value:null, checkedAt:now };
     }
     await SLINK.core.storage.set(KEYS.ffCache, cache);
-    return values.map(member => ({ ...member, fairFight:Number.isFinite(Number(cache[member.id]?.value)) ? Number(cache[member.id].value) : null }));
+    return values.map(member => ({
+      ...member,
+      fairFight:Number.isFinite(Number(cache[member.id]?.value)) ? Number(cache[member.id].value) : null,
+      battleStatsEstimate:Number.isFinite(Number(cache[member.id]?.battleStatsEstimate)) ? Number(cache[member.id].battleStatsEstimate) : null
+    }));
   }
 
   async function refreshPanelStats(activeWar, currentSettings) {
@@ -446,6 +459,41 @@
     return workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/snapshot?${query}`);
   }
 
+  async function saveSharedConfig(input = {}) {
+    const session = await ensureSession(false);
+    if (!SLINK.core.permissions.hasScope(session, 'slink.war.officer') && !SLINK.core.permissions.hasScope(session, 'admin.*')) {
+      throw new Error('slink.war.officer permission is required to change faction-wide War settings.');
+    }
+    const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
+    if (!activeWar?.warId) throw new Error('An active ranked war is required before changing faction-wide War settings.');
+    const result = await workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/config`, {
+      method:'POST',
+      body:{
+        opponent_faction_id:activeWar.opponentFactionId,
+        mode:input.mode === 'termed' ? 'termed' : 'war',
+        idleMinutes:Math.max(0, Math.min(60, Number(input.idleMinutes) || 0))
+      }
+    });
+    await setRuntime({ snapshot:{ ...((await runtime()).snapshot || {}), config:result.config, mode:result.config?.mode || 'war' } });
+    return publicStatus();
+  }
+
+  async function updateClaim(input = {}) {
+    const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
+    if (!activeWar?.warId) throw new Error('An active ranked war is required to manage med-out claims.');
+    await workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/claims`, {
+      method:'POST',
+      body:{
+        opponent_faction_id:activeWar.opponentFactionId,
+        operation:input.operation === 'release' ? 'release' : 'claim',
+        targetId:WAR.positiveInteger(input.targetId),
+        targetName:String(input.targetName || ''),
+        minutes:Math.max(5, Math.min(180, Number(input.minutes) || 30))
+      }
+    });
+    return prepareCycle();
+  }
+
   async function fetchLogs(activeWar, forceStored = false, pendingLogs = []) {
     const [cached, lastRead] = await Promise.all([
       SLINK.core.storage.get(KEYS.storedLogs, null),
@@ -502,7 +550,7 @@
       ) attackChecks = await collectAttacks(activeWar, currentSettings);
       const snapshot = await fetchSnapshot(activeWar, currentSettings);
       snapshot.members = await refineMembers(snapshot?.members || [], currentSettings);
-      const canViewLogs = SLINK.core.permissions.hasScope(session, 'slink.war.log') || SLINK.core.permissions.hasScope(session, 'admin.*');
+      const canViewLogs = SLINK.core.permissions.hasScope(session, 'slink.war.officer') || SLINK.core.permissions.hasScope(session, 'admin.*');
       let logs = [];
       let logsWarning = '';
       if (canViewLogs) {
@@ -601,11 +649,14 @@
         authenticated,
         userId:authenticated ? session.userId : null,
         factionId:authenticated ? session.factionId : 0,
+        userName:authenticated ? session.userName : '',
         factionCapable:authenticated && SLINK.core.permissions.hasScope(session, 'slink.war.faction'),
-        canViewLogs:authenticated && (SLINK.core.permissions.hasScope(session, 'slink.war.log') || SLINK.core.permissions.hasScope(session, 'admin.*')),
+        officer:authenticated && (SLINK.core.permissions.hasScope(session, 'slink.war.officer') || SLINK.core.permissions.hasScope(session, 'admin.*')),
+        canViewLogs:authenticated && (SLINK.core.permissions.hasScope(session, 'slink.war.officer') || SLINK.core.permissions.hasScope(session, 'admin.*')),
         expiresAt:authenticated ? session.expiresAt : 0
       },
       permissions:SLINK.core.permissions.normalizeSnapshot(permissions || {}),
+      sharedConfig:currentRuntime?.snapshot?.config || { mode:currentSettings.warMode, idleMinutes:currentSettings.idleMinutes, updatedBy:0, updatedAt:0 },
       activeWar,
       runtime:currentRuntime
     };
@@ -620,9 +671,11 @@
       'war.session.clear': async () => { await clearSession(); return publicStatus(); },
       'war.active.detect': async payload => { const activeWar = await registerActiveWar(payload); return { activeWar, status:await publicStatus() }; },
       'war.cycle.prepare': prepareCycle,
+      'war.config.save': saveSharedConfig,
+      'war.claims.update': updateClaim,
       'war.logs': async () => {
         const session = await ensureSession(false);
-        if (!SLINK.core.permissions.hasScope(session, 'slink.war.log') && !SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('slink.war.log permission is required to view War logs.');
+        if (!SLINK.core.permissions.hasScope(session, 'slink.war.officer') && !SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('slink.war.officer permission is required to view War logs.');
         const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
         return activeWar?.warId ? (await fetchLogs(activeWar, true)).rows : [];
       },

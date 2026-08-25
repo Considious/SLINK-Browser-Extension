@@ -77,7 +77,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.7.1', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.8.0', 'Unexpected runtime version.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
 
@@ -101,6 +101,12 @@ assert(SLINK.core.war.sortMembers([
   { id:2, name:'Hospital', activity:'Offline', statusState:'Hospital', statusUntil:Math.floor(Date.now() / 1000) + 60 },
   { id:1, name:'Ready', activity:'Online', statusState:'Okay' }
 ])[0].id === 1, 'Available War targets were not sorted before hospitalized targets.');
+const warCallout = SLINK.core.war.factionCallout({
+  id:9001, name:'War Target', activity:'Online', statusState:'Hospital',
+  statusUntil:Math.floor(Date.now() / 1000) + 600, battleStatsEstimate:2500000, fairFight:1.75
+});
+assert(warCallout.includes('Estimated BS: 2.5M'), 'Faction-chat callout omitted the estimated battle stats.');
+assert(warCallout.includes('TCT') && warCallout.includes('Status: Hospital / Online'), 'Faction-chat callout omitted current status or hospital release time.');
 
 await SLINK.core.storage.set('test.value', { working: true });
 assert((await SLINK.core.storage.get('test.value')).working, 'Extension storage adapter failed.');

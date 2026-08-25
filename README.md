@@ -2,17 +2,20 @@
 
 Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
-Version 0.7.1 collapses verified API access into a compact one-third-width card,
-uses the freed dashboard space for live retals, and keeps War targets active if
+Version 0.8.0 restores faction-chat target callouts, adds shared officer-controlled
+War mode and med-out claims, and makes the War settings save explicitly. Version
+0.7.1 collapsed verified API access into a compact one-third-width card,
+used the freed dashboard space for live retals, and kept War targets active if
 optional historical log storage is unavailable. The dashboard retains one local
 Torn credential area, an explicitly separate remotely saved Public Only donation,
 three equal module slots, and a single Leveling/War target deck. War includes Fair
-Fight sorting, chain and Turtle Timer state, attack/war/mug counters, configurable
-sound, panel-flash, and Torn-page-border alerts, and API-based ranked-war discovery.
+Fight sorting, estimated battle stats, faction-chat callouts, shared officer-controlled
+War mode, med-out claims, chain and Turtle Timer state, attack/war/mug counters,
+configurable alerts, and API-based ranked-war discovery.
 
-War logs require `slink.war.log` or `admin.*`. The permission manager and
-diagnostics pages are visible only to the signed sole administrator. The
-permission manager can assign `slink.level`, `slink.war`, and `slink.war.log`
+War logs and faction-wide mode changes require `slink.war.officer` or `admin.*`.
+The permission manager and diagnostics pages are visible only to the signed sole administrator. The
+permission manager can assign `slink.level`, `slink.war`, and `slink.war.officer`
 to a Torn ID for a duration measured in hours; it cannot assign `admin.*`.
 
 The War module uses `slink.war` for product access. It elects one active public
@@ -111,7 +114,7 @@ SLINK uses two separate permission layers:
 1. **Browser capabilities** control which browser APIs and remote origins the installed extension may access. Torn, Torn API, FFScouter, and the SLINK Worker are core dependencies and are granted together at installation. There are no separate in-app permission buttons.
 2. **SLINK scopes** are supplied by the authenticated SLINK Worker and control which modules and server operations the Torn user may use.
 
-Before authentication, the extension has no SLINK server scopes. Torn authentication establishes identity, while the standalone `slink-permissions` D1 database supplies product access. Current Slinky's members receive `slink.level` and `slink.war` automatically; users outside the faction may receive either product scope through an active purchased or manual grant. A successful faction-attack capability probe adds the temporary `slink.war.faction` scope for that War session. Retained War logs additionally require `slink.war.log`. Considious also receives `admin.*`; diagnostics and permission management are not exposed without that signed scope. Each Worker signs its product scopes into its own session, and the extension combines them only for module visibility.
+Before authentication, the extension has no SLINK server scopes. Torn authentication establishes identity, while the standalone `slink-permissions` D1 database supplies product access. Current Slinky's members receive `slink.level` and `slink.war` automatically; users outside the faction may receive either product scope through an active purchased or manual grant. A successful faction-attack capability probe adds the temporary `slink.war.faction` scope for that War session. Faction-wide War control and retained logs require `slink.war.officer`. Considious also receives `admin.*`; diagnostics and permission management are not exposed without that signed scope. Each Worker signs its product scopes into its own session, and the extension combines them only for module visibility.
 
 `admin.*` exposes the zero routine API-contribution override in both the Torn panel and full dashboard. The Worker rejects a zero-capacity claim from any session without that scope. Authentication still performs one Torn key validation, and Leveling may refresh the administrator's own battle stats locally; the override applies to routine shared-service contribution checks.
 

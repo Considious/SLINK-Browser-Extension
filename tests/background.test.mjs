@@ -16,6 +16,8 @@ let contributionActive = false;
 let warStatusSubmissions = 0;
 let warAttackSubmissions = 0;
 let warStoredLogReads = 0;
+let sharedWarMode = 'war';
+let warClaims = [];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -53,7 +55,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.7.1' }; },
+    getManifest() { return { version: '0.8.0' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -170,8 +172,8 @@ context = vm.createContext({
     } else if (url.hostname === 'slinkwarworker.richard-johnson554.workers.dev') {
       if (url.pathname === '/api/health') body = { ok:true, version:'test-war', database:'connected', coordinator:'configured', session_secret:'configured' };
       if (url.pathname === '/api/terms') body = { ok:true, terms:{ version:'2026-08-24', sha256:'72a933d69ec99cabeb92b426208e9d0c47e90acaf960818e0b4da38f3f2f5b0a', url:'https://example.test/terms', summary:'War disclosure.' } };
-      if (url.pathname === '/api/auth') body = { ok:true, session_token:'signed-war-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, faction_id:46978, roles:['admin'], scopes:['admin.*','slink.war','slink.war.faction'] };
-      if (url.pathname === '/api/admin/scopes') body = { ok:true, scopes:[{ scope:'slink.level', title:'SLINK Leveling' }, { scope:'slink.war', title:'SLINK War' }, { scope:'slink.war.log', title:'SLINK War Logs' }] };
+      if (url.pathname === '/api/auth') body = { ok:true, session_token:'signed-war-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:['admin.*','slink.war','slink.war.faction'] };
+      if (url.pathname === '/api/admin/scopes') body = { ok:true, scopes:[{ scope:'slink.level', title:'SLINK Leveling' }, { scope:'slink.war', title:'SLINK War' }, { scope:'slink.war.officer', title:'SLINK War Officer' }] };
       if (/^\/api\/admin\/users\/\d+\/permissions$/.test(url.pathname)) body = { ok:true, user_id:Number(url.pathname.split('/')[4]), scopes:[{ scope:'slink.level', title:'SLINK Leveling', description:'Leveling access', active:true, status:'active', expires_at:Date.now() + 86_400_000 }, { scope:'slink.war', title:'SLINK War', description:'War access', active:options.method === 'POST', status:options.method === 'POST' ? 'active' : 'not_granted', expires_at:options.method === 'POST' ? Date.now() + 86_400_000 : null }] };
       if (url.pathname.endsWith('/heartbeat')) body = { ok:true, collectStatus:true, collectAttacks:true, statusCollectorAvailable:true, attackCollectorAvailable:true };
       if (url.pathname.endsWith('/status')) {
@@ -187,8 +189,21 @@ context = vm.createContext({
         observedAt:Date.now(),
         members:[{ id:9001, name:'War Target', level:55, activity:'Offline', statusState:'Okay' }],
         retals:[{ attackId:'retal-1', attackerId:9001, attackerName:'War Target', defenderId:3853023, defenderName:'Considious', expiresAt:Math.floor(Date.now() / 1000) + 240 }],
+        config:{ mode:sharedWarMode, idleMinutes:5, updatedBy:3853023, updatedAt:Date.now() },
+        claims:warClaims,
         collectors:{ status:true, attacks:true }
       };
+      if (url.pathname.endsWith('/config')) {
+        const request = JSON.parse(String(options.body || '{}'));
+        sharedWarMode = request.mode === 'termed' ? 'termed' : 'war';
+        body = { ok:true, config:{ mode:sharedWarMode, idleMinutes:Number(request.idleMinutes) || 0, updatedBy:3853023, updatedAt:Date.now() } };
+      }
+      if (url.pathname.endsWith('/claims')) {
+        const request = JSON.parse(String(options.body || '{}'));
+        if (request.operation === 'release') warClaims = warClaims.filter(claim => claim.targetId !== Number(request.targetId));
+        else warClaims = [{ targetId:Number(request.targetId), targetName:request.targetName, claimedById:3853023, claimedByName:'Considious', claimedAt:Date.now(), expiresAt:Date.now() + 1_800_000 }];
+        body = { ok:true, claims:warClaims };
+      }
       if (url.pathname.endsWith('/logs')) body = {
         ok:true,
         pending:[{ attacker_id:3853023, attacker_name:'Considious', defender_id:9001, defender_name:'War Target', outcome:'loss', event_count:1, first_seen_at:Date.now(), last_seen_at:Date.now() }],
@@ -218,7 +233,10 @@ context = vm.createContext({
         }
       };
     } else if (url.hostname === 'ffscouter.com') {
-      body = [{ player_id: 123, fair_fight: 2, bs_estimate: 1000, source: 'FFScouter' }];
+      body = [
+        { player_id:123, fair_fight:2, bs_estimate:1000, source:'FFScouter' },
+        { player_id:9001, fair_fight:1.75, bs_estimate:2500000, source:'FFScouter' }
+      ];
     }
     return {
       ok: true,
@@ -335,6 +353,7 @@ assert(zeroPrepared.ok && zeroPrepared.data.checks.length === 0, 'Admin zero-con
 
 const warSaved = await send('war.settings.save', {
   tornKey:'war-test-key',
+  ffKey:'ff-test-key',
   displayMode:'hybrid',
   warMode:'war',
   idleMinutes:5,
@@ -354,10 +373,15 @@ assert(detectedWar.ok && detectedWar.data.activeWar.warId === 'rw_46978_46999_17
 const warCycle = await send('war.cycle.prepare');
 assert(warCycle.ok && warCycle.data.runtime.snapshot.members.length === 1, 'War cycle did not load the shared target snapshot.');
 assert(warCycle.data.runtime.snapshot.retals.length === 1, 'War cycle did not load active retals.');
+assert(warCycle.data.runtime.snapshot.members[0].battleStatsEstimate === 2500000, 'War target did not retain the FFScouter battle-stat estimate.');
 assert(warCycle.data.runtime.logs[0].event_count === 1, 'War cycle did not load aggregate logs.');
 assert(warCycle.data.runtime.logsWarning.includes('Live targets and retals remain available'), 'Missing historical storage did not degrade to a live-data warning.');
 assert(warStatusSubmissions === 1, 'Elected public status collector did not submit once.');
 assert(warAttackSubmissions === 1, 'Elected faction collector did not submit attacks once.');
+const configuredWar = await send('war.config.save', { mode:'termed', idleMinutes:10 });
+assert(configuredWar.ok && configuredWar.data.sharedConfig.mode === 'termed', 'Officer War mode was not saved faction-wide.');
+const claimedWar = await send('war.claims.update', { operation:'claim', targetId:9001, targetName:'War Target' });
+assert(claimedWar.ok && claimedWar.data.runtime.snapshot.claims[0].claimedByName === 'Considious', 'Med-out claim was not shared through the War coordinator.');
 const secondWarCycle = await send('war.cycle.prepare');
 assert(secondWarCycle.ok, 'Second War refresh failed.');
 assert(warStoredLogReads === 1, 'War panels reread persisted D1 logs before the ten-minute cache expired.');

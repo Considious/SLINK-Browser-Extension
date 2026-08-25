@@ -36,8 +36,43 @@
       statusDescription: String(member?.statusDescription || ''),
       statusUntil: Math.max(0, Number(member?.statusUntil) || 0),
       position: String(member?.position || ''),
-      fairFight:Number.isFinite(Number(member?.fairFight ?? member?.fair_fight)) ? Number(member?.fairFight ?? member?.fair_fight) : null
+      fairFight:Number.isFinite(Number(member?.fairFight ?? member?.fair_fight)) ? Number(member?.fairFight ?? member?.fair_fight) : null,
+      battleStatsEstimate:Number.isFinite(Number(member?.battleStatsEstimate ?? member?.battle_stats_estimate ?? member?.bs_estimate)) ? Number(member?.battleStatsEstimate ?? member?.battle_stats_estimate ?? member?.bs_estimate) : null
     };
+  }
+
+  function tctTime(unixSeconds) {
+    if (!Number.isFinite(Number(unixSeconds)) || Number(unixSeconds) <= 0) return '';
+    return new Date(Number(unixSeconds) * 1000).toLocaleTimeString('en-GB', {
+      timeZone:'UTC', hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'
+    });
+  }
+
+  function statusEmoji(member) {
+    if (member?.activity === 'Online') return '🟢';
+    if (member?.activity === 'Idle') return '🟡';
+    if (member?.activity === 'Offline') return '⚪';
+    return '⚫';
+  }
+
+  function factionCallout(value) {
+    const member = normalizeMember(value);
+    if (!member) return '';
+    const escape = SLINK.core.format.escapeHtml;
+    const profile = `https://www.torn.com/profiles.php?XID=${member.id}`;
+    const attack = `https://www.torn.com/loader2.php?sid=getInAttack&user2ID=${member.id}`;
+    const details = [
+      `<a href="${attack}">Attack</a>`,
+      `Status: ${escape(member.statusState || 'Okay')} / ${escape(member.activity)}`
+    ];
+    if (isHospitalized(member)) {
+      const readyAt = tctTime(member.statusUntil);
+      details.push(`Hospital: ${SLINK.core.format.formatHumanDuration(statusSeconds(member))}${readyAt ? ` / ready ${readyAt} TCT` : ''}`);
+    }
+    if (Number.isFinite(member.battleStatsEstimate)) details.push(`Estimated BS: ${SLINK.core.format.shortNumber(member.battleStatsEstimate)}`);
+    if (Number.isFinite(member.fairFight)) details.push(`FF: ${member.fairFight.toFixed(2)}`);
+    if (member.lastActionRelative) details.push(`Last action: ${escape(member.lastActionRelative)}`);
+    return `${statusEmoji(member)} <a href="${profile}">${escape(member.name)} [${member.id}]</a> - ${details.join(' - ')}`;
   }
 
   function isHospitalized(member) {
@@ -96,6 +131,7 @@
     TERMS_SHA256,
     TERMS_VERSION,
     WORKER_BASE,
+    factionCallout,
     isHospitalized,
     isTraveling,
     makeWarId,
@@ -103,6 +139,7 @@
     positiveInteger,
     sortMembers,
     statusSeconds,
+    tctTime,
     summarizeLogs
   }));
 })(globalThis);
