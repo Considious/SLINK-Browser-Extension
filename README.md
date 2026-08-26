@@ -2,6 +2,8 @@
 
 Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
+[Privacy Policy](PRIVACY.md)
+
 Version 0.9.1 prevents extension state changes from ever refreshing or navigating
 Torn. Changes that cannot be applied safely in place wait for the user's next
 normal navigation. The build now rejects page-refresh and page-navigation APIs.
