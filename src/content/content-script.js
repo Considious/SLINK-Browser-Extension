@@ -12,21 +12,23 @@
   });
   ui.setHidden(await SLINK.core.storage.get('ui.pagePanelHidden', false));
 
+  // SLINK must never navigate or refresh Torn. Storage changes are applied in
+  // place where that is safe; everything else waits for normal user navigation.
   chrome.storage.onChanged.addListener(changes => {
     const hiddenKey = SLINK.core.storage.fullKey('ui.pagePanelHidden');
     if (changes[hiddenKey]) ui.setHidden(Boolean(changes[hiddenKey].newValue));
     const permissionsKey = SLINK.core.storage.fullKey('permissions.snapshot');
-    const visibilityChanged = Object.keys(changes).some(key =>
-      key.startsWith(SLINK.core.storage.fullKey('ui.modules.')) && key.endsWith('.showInTorn')
-    );
-    const warSettingsChanged = Boolean(changes[SLINK.core.storage.fullKey('war.settings.v1')]);
     const themeKey = SLINK.core.storage.fullKey(SLINK.core.themes.STORAGE_KEY);
-    if (changes[themeKey]) {
-      void SLINK.core.messaging.send('permissions.get').then(permissions => {
-        ui.setTheme(changes[themeKey].newValue, permissions);
+    if (changes[themeKey] || changes[permissionsKey]) {
+      void Promise.all([
+        SLINK.core.storage.get(SLINK.core.themes.STORAGE_KEY, SLINK.core.themes.DEFAULT_THEME_ID),
+        SLINK.core.messaging.send('permissions.get')
+      ]).then(([themeId, permissions]) => {
+        ui.setTheme(themeId, permissions);
+      }).catch(error => {
+        console.error('[SLINK] Could not update the theme in place:', error);
       });
     }
-    if (changes[permissionsKey] || visibilityChanged || warSettingsChanged) global.location.reload();
   });
 
   try {

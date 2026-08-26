@@ -2,6 +2,10 @@
 
 Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
+Version 0.9.1 prevents extension state changes from ever refreshing or navigating
+Torn. Changes that cannot be applied safely in place wait for the user's next
+normal navigation. The build now rejects page-refresh and page-navigation APIs.
+
 Version 0.9.0 adds permission-gated SLINK themes across the dashboard, popup,
 and in-Torn panels while retaining faction-chat copying, local FFScouter
 outside-target discovery, and inactive-war API backoff.

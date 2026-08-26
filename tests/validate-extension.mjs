@@ -78,6 +78,18 @@ for (const file of listFiles(path.join(root, 'src')).filter(file => file.endsWit
   const source = fs.readFileSync(file, 'utf8');
   new vm.Script(source, { filename: path.relative(root, file) });
   assert(!source.includes('chrome.permissions.request'), 'Core SLINK hosts must not require runtime permission buttons.');
+  const forbiddenPageNavigation = [
+    /\blocation\s*\.\s*reload\s*\(/,
+    /\b(?:chrome|browser)\s*\.\s*tabs\s*\.\s*reload\s*\(/,
+    /\bhistory\s*\.\s*go\s*\(\s*0\s*\)/,
+    /\blocation\s*\.\s*(?:assign|replace)\s*\(/
+  ];
+  for (const pattern of forbiddenPageNavigation) {
+    assert(
+      !pattern.test(source),
+      `Forbidden page refresh/navigation capability in ${path.relative(root, file)}.`
+    );
+  }
 }
 
 assert(!read(manifest.action.default_popup).includes('Optional access'), 'Popup must not present core services as optional.');
