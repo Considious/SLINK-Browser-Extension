@@ -2,7 +2,9 @@
 
 Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
-Version 0.8.1 keeps faction-chat sending inside Torn, adds local FFScouter outside-target discovery, and reduces inactive-war API checks.
+Version 0.9.0 adds permission-gated SLINK themes across the dashboard, popup,
+and in-Torn panels while retaining faction-chat copying, local FFScouter
+outside-target discovery, and inactive-war API backoff.
 Version 0.8.0 restores faction-chat target callouts, adds shared officer-controlled
 War mode and med-out claims, and makes the War settings save explicitly. Version
 0.7.1 collapsed verified API access into a compact one-third-width card,
@@ -49,7 +51,9 @@ extension-wide Public Only API key donations:
 - a permission-aware module registry with per-module Torn visibility
 - a tabbed main Torn panel for enabled modules
 - per-module pop-out/pop-back-in controls and persistent movable positions
-- centralized theme tokens for future interface themes
+- centralized theme tokens plus three permission-gated cosmetic themes:
+  `slink.theme.pursuit`, `slink.theme.underglow`, and
+  `slink.theme.black-chrome`
 - an inline, separate API Donation area with explicit remote-storage wording
 - remote AES-GCM storage for donated Public Only keys through the separate
   SLINK Contribution Service

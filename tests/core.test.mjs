@@ -77,7 +77,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.8.1', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.9.0', 'Unexpected runtime version.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
 
@@ -85,6 +85,10 @@ const permissions = SLINK.core.permissions;
 assert(Object.values(permissions.BROWSER_CAPABILITIES).every(capability => capability.optional === false), 'A core host was marked optional.');
 assert(permissions.BROWSER_CAPABILITIES.contributionWorker, 'Contribution Worker capability is missing.');
 assert(SLINK.core.themes.get().tokens['--slink-bg'], 'Theme token registry is missing.');
+assert(Object.keys(SLINK.core.themes.THEMES).length === 4, 'Expected the free theme and three premium SLINK themes.');
+assert(SLINK.core.themes.resolve('slinky-underglow', { userId:12, scopes:[] }).id === 'slink-dark', 'Locked theme did not fall back safely.');
+assert(SLINK.core.themes.resolve('slinky-underglow', { userId:12, scopes:['slink.theme.underglow'] }).id === 'slinky-underglow', 'Granted theme permission was not honored.');
+assert(SLINK.core.themes.resolve('slinky-black-chrome', { userId:3853023, scopes:['admin.*'] }).id === 'slinky-black-chrome', 'Sole administrator did not unlock all themes.');
 assert(permissions.hasScope({ scopes: ['slink.level'] }, 'slink.level'), 'Exact scope matching failed.');
 assert(permissions.hasScope({ userId:3853023, scopes: ['admin.*'] }, 'admin.users'), 'Wildcard scope matching failed.');
 assert(!permissions.hasScope({ roles: ['admin'], scopes: ['slink.level'] }, 'admin.users'), 'Roles must not bypass signed scope checks.');

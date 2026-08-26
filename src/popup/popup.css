@@ -111,3 +111,22 @@ button.wide { width: 100%; min-height: 28px; margin-top: 8px; }
 
 .actions { display: grid; grid-template-columns: 1fr 90px; gap: 7px; }
 .error { padding: 7px 8px; border: 1px solid #6a3636; border-radius: 7px; background: #3c2222; color: #ffc2c2; }
+
+/* Shared theme tokens are applied by core/themes.js after permission checks. */
+:root { background: var(--slink-bg); color: var(--slink-text); }
+body { background: var(--slink-page-bg); }
+header { background: var(--slink-topbar-bg); }
+.mark {
+  background: var(--slink-mark-bg);
+  color: #050607;
+  box-shadow: inset 0 0 0 1px var(--slink-metal), 0 0 12px var(--slink-glow-right);
+  text-shadow: 0 1px rgba(255,255,255,.45);
+}
+header p, dt, .hint { color: var(--slink-muted); }
+.card {
+  border-color: var(--slink-border-soft);
+  background: var(--slink-panel-bg);
+  box-shadow: -3px 0 12px var(--slink-glow-left), 3px 0 12px var(--slink-glow-right);
+}
+button { border-color: var(--slink-border-soft); background: var(--slink-button-bg); color: var(--slink-text); }
+button.secondary { background: var(--slink-control); }

@@ -20,12 +20,23 @@
       key.startsWith(SLINK.core.storage.fullKey('ui.modules.')) && key.endsWith('.showInTorn')
     );
     const warSettingsChanged = Boolean(changes[SLINK.core.storage.fullKey('war.settings.v1')]);
+    const themeKey = SLINK.core.storage.fullKey(SLINK.core.themes.STORAGE_KEY);
+    if (changes[themeKey]) {
+      void SLINK.core.messaging.send('permissions.get').then(permissions => {
+        ui.setTheme(changes[themeKey].newValue, permissions);
+      });
+    }
     if (changes[permissionsKey] || visibilityChanged || warSettingsChanged) global.location.reload();
   });
 
   try {
     await SLINK.core.messaging.send('content.ready', { url:global.location.href });
     const permissions = await SLINK.core.messaging.send('permissions.get');
+    const preferredTheme = await SLINK.core.storage.get(
+      SLINK.core.themes.STORAGE_KEY,
+      SLINK.core.themes.DEFAULT_THEME_ID
+    );
+    ui.setTheme(preferredTheme, permissions);
     await SLINK.modules.startAll({
       url:new URL(global.location.href),
       permissions,

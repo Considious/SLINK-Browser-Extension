@@ -55,7 +55,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.8.1' }; },
+    getManifest() { return { version: '0.9.0' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -173,8 +173,15 @@ context = vm.createContext({
       if (url.pathname === '/api/health') body = { ok:true, version:'test-war', database:'connected', coordinator:'configured', session_secret:'configured' };
       if (url.pathname === '/api/terms') body = { ok:true, terms:{ version:'2026-08-24', sha256:'72a933d69ec99cabeb92b426208e9d0c47e90acaf960818e0b4da38f3f2f5b0a', url:'https://example.test/terms', summary:'War disclosure.' } };
       if (url.pathname === '/api/auth') body = { ok:true, session_token:'signed-war-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:['admin.*','slink.war','slink.war.faction'] };
-      if (url.pathname === '/api/admin/scopes') body = { ok:true, scopes:[{ scope:'slink.level', title:'SLINK Leveling' }, { scope:'slink.war', title:'SLINK War' }, { scope:'slink.war.officer', title:'SLINK War Officer' }] };
-      if (/^\/api\/admin\/users\/\d+\/permissions$/.test(url.pathname)) body = { ok:true, user_id:Number(url.pathname.split('/')[4]), scopes:[{ scope:'slink.level', title:'SLINK Leveling', description:'Leveling access', active:true, status:'active', expires_at:Date.now() + 86_400_000 }, { scope:'slink.war', title:'SLINK War', description:'War access', active:options.method === 'POST', status:options.method === 'POST' ? 'active' : 'not_granted', expires_at:options.method === 'POST' ? Date.now() + 86_400_000 : null }] };
+      if (url.pathname === '/api/admin/scopes') body = { ok:true, scopes:[{ scope:'slink.level', category:'Products', title:'SLINK Leveling' }, { scope:'slink.war', category:'Products', title:'SLINK War' }, { scope:'slink.war.officer', category:'War permissions', title:'SLINK War Officer' }, { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow' }] };
+      if (/^\/api\/admin\/users\/\d+\/permissions$/.test(url.pathname)) {
+        const selected = options.method === 'POST' ? new Set(JSON.parse(options.body || '{}').scopes || []) : new Set(['slink.level']);
+        body = { ok:true, user_id:Number(url.pathname.split('/')[4]), scopes:[
+          { scope:'slink.level', category:'Products', title:'SLINK Leveling', description:'Leveling access', active:selected.has('slink.level'), status:selected.has('slink.level') ? 'active' : 'not_granted', expires_at:selected.has('slink.level') ? Date.now() + 86_400_000 : null },
+          { scope:'slink.war', category:'Products', title:'SLINK War', description:'War access', active:selected.has('slink.war'), status:selected.has('slink.war') ? 'active' : 'not_granted', expires_at:selected.has('slink.war') ? Date.now() + 86_400_000 : null },
+          { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow', description:'Purple and green theme', active:selected.has('slink.theme.underglow'), status:selected.has('slink.theme.underglow') ? 'active' : 'not_granted', expires_at:selected.has('slink.theme.underglow') ? Date.now() + 86_400_000 : null }
+        ] };
+      }
       if (url.pathname.endsWith('/heartbeat')) body = { ok:true, collectStatus:true, collectAttacks:true, statusCollectorAvailable:true, attackCollectorAvailable:true };
       if (url.pathname.endsWith('/status')) {
         warStatusSubmissions++;
@@ -389,8 +396,9 @@ assert(values.get('slink.permissions.snapshot')?.scopes.includes('slink.level'),
 assert(values.get('slink.permissions.snapshot')?.scopes.includes('slink.war'), 'Combined permissions omitted the War scope.');
 const adminPermissions = await send('war.admin.permissions.get', { userId:1234567 });
 assert(adminPermissions.ok && adminPermissions.data.user_id === 1234567, 'Admin permission lookup failed.');
-const updatedPermissions = await send('war.admin.permissions.save', { userId:1234567, scopes:['slink.level','slink.war'], hours:24, note:'Test grant' });
+const updatedPermissions = await send('war.admin.permissions.save', { userId:1234567, scopes:['slink.level','slink.war','slink.theme.underglow'], hours:24, note:'Test grant' });
 assert(updatedPermissions.ok && updatedPermissions.data.scopes.find(scope => scope.scope === 'slink.war').active, 'Admin permission update failed.');
+assert(updatedPermissions.data.scopes.find(scope => scope.scope === 'slink.theme.underglow').active, 'Theme permission update failed.');
 
 const leader = await send('leveling.leader.claim', {}, { id: 'test', tab: { id: 7 } });
 assert(leader.ok && leader.data.leader, 'Torn tab did not acquire the local Leveling leader lease.');

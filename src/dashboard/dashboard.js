@@ -12,6 +12,7 @@
   let accessExpanded = null;
   let targetView = 'leveling';
   let adminUser = null;
+  let activeTheme = SLINK.core.themes.get();
 
   function setBusy(button, busy) {
     if (button) button.disabled = Boolean(busy);
@@ -299,6 +300,83 @@
     byId('donation-revoke').hidden = !donation?.active;
   }
 
+  function renderThemes() {
+    const root = byId('theme-options');
+    const themes = SLINK.core.themes.list(system?.permissions || {});
+    root.replaceChildren(...themes.map(theme => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'theme-option';
+      button.dataset.themeId = theme.id;
+      button.disabled = !theme.unlocked;
+      button.setAttribute('role', 'radio');
+      button.setAttribute('aria-checked', String(activeTheme.id === theme.id));
+      const swatch = document.createElement('span');
+      swatch.className = 'theme-swatch';
+      for (const color of theme.swatch) {
+        const colorBand = document.createElement('span');
+        colorBand.style.background = color;
+        swatch.append(colorBand);
+      }
+      const copy = document.createElement('span');
+      const title = document.createElement('strong');
+      const description = document.createElement('small');
+      title.textContent = theme.label;
+      description.textContent = theme.description;
+      copy.append(title, description);
+      const access = document.createElement('span');
+      access.className = 'muted';
+      access.textContent = theme.unlocked ? (activeTheme.id === theme.id ? 'Active' : 'Use') : 'Locked';
+      button.append(swatch, copy, access);
+      return button;
+    }));
+    byId('theme-summary').textContent = `${activeTheme.label} is active. Theme changes apply to the dashboard, popup, and Torn panels.`;
+  }
+
+  async function applySavedTheme() {
+    const preferred = await SLINK.core.storage.get(
+      SLINK.core.themes.STORAGE_KEY,
+      SLINK.core.themes.DEFAULT_THEME_ID
+    );
+    activeTheme = SLINK.core.themes.applyToElement(
+      document.documentElement,
+      preferred,
+      system?.permissions || {}
+    );
+    renderThemes();
+  }
+
+  function renderAdminScopes(scopes) {
+    const root = byId('admin-scope-list');
+    const categories = new Map();
+    for (const scope of scopes || []) {
+      const category = String(scope.category || 'Products');
+      if (!categories.has(category)) categories.set(category, []);
+      categories.get(category).push(scope);
+    }
+    root.replaceChildren(...[...categories].map(([category, entries]) => {
+      const section = document.createElement('section');
+      section.className = 'scope-category';
+      const heading = document.createElement('h3');
+      heading.textContent = category;
+      section.append(heading);
+      for (const scope of entries) {
+        const label = document.createElement('label');
+        label.className = 'scope-row';
+        label.innerHTML = '<input type="checkbox"><span><strong></strong><small></small></span><span class="muted"></span>';
+        label.querySelector('input').dataset.scope = scope.scope;
+        label.querySelector('input').checked = scope.active;
+        label.querySelector('strong').textContent = `${scope.title} (${scope.scope})`;
+        label.querySelector('small').textContent = scope.description;
+        label.lastElementChild.textContent = scope.active
+          ? (scope.expires_at ? `Expires ${new Date(scope.expires_at).toLocaleString()}` : 'No expiration')
+          : scope.status.replace('_', ' ');
+        section.append(label);
+      }
+      return section;
+    }));
+  }
+
   function renderAccessTabs() {
     const admin = hasScope('admin.*');
     byId('admin-tab').hidden = !admin;
@@ -342,6 +420,7 @@
     await SLINK.core.storage.set('ui.modules.contribution.showInTorn', false);
     byId('connection').textContent = status.worker.connected ? 'Worker connected' : 'Worker offline';
     byId('connection').className = status.worker.connected ? 'badge ready' : 'badge error';
+    await applySavedTheme();
     renderAccess(); renderLeveling(); renderWar(); renderTargets(); renderContribution(); renderAccessTabs();
     if (hasScope('admin.*')) byId('diagnostic').textContent = formatDiagnostic(status.lastDiagnostic);
   }
@@ -367,6 +446,15 @@
   byId('refresh-all').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { await refresh(); } finally { setBusy(button, false); } });
   byId('toggle-access').addEventListener('click', () => { accessExpanded = !accessExpanded; renderAccess(); });
   byId('toggle-shared-terms').addEventListener('click', () => { termsExpanded = !termsExpanded; renderAccess(); });
+  byId('theme-options').addEventListener('click', async event => {
+    const button = event.target.closest('[data-theme-id]');
+    if (!button || button.disabled) return;
+    const theme = SLINK.core.themes.get(button.dataset.themeId);
+    if (!SLINK.core.themes.isUnlocked(theme, system?.permissions || {})) return;
+    await SLINK.core.storage.set(SLINK.core.themes.STORAGE_KEY, theme.id);
+    activeTheme = SLINK.core.themes.applyToElement(document.documentElement, theme.id, system.permissions);
+    renderThemes();
+  });
   byId('access-form').addEventListener('submit', async event => {
     event.preventDefault(); const submit = byId('save-access'); setBusy(submit, true); byId('access-message').textContent = '';
     try {
@@ -412,7 +500,7 @@
   byId('donation-form').addEventListener('submit', async event => { event.preventDefault(); const submit = byId('donation-submit'); setBusy(submit,true); byId('donation-message').textContent=''; try { contribution=await SLINK.core.messaging.send('contribution.donate',{apiKey:byId('donation-key').value,acceptTerms:byId('donation-accept').checked}); byId('donation-key').value=''; byId('donation-accept').checked=false; byId('donation-message').textContent='Public Only key validated and saved on SLINK servers in encrypted form.'; renderContribution(); } catch(error){ byId('donation-message').textContent=errorText(error); } finally{ setBusy(submit,false); } });
   byId('donation-revoke').addEventListener('click', async () => { if (!confirm('Revoke this saved donation and erase its encrypted key material?')) return; contribution=await SLINK.core.messaging.send('contribution.revoke'); byId('donation-message').textContent='Donation revoked and encrypted key material erased.'; renderContribution(); });
   byId('run-diagnostic').addEventListener('click', async event => { const button=event.currentTarget; setBusy(button,true); try { byId('diagnostic').textContent=formatDiagnostic(await SLINK.core.messaging.send('diagnostics.run')); } catch(error){ byId('diagnostic').textContent=errorText(error); } finally{ setBusy(button,false); } });
-  byId('admin-lookup-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-lookup'); setBusy(button,true); byId('admin-message').textContent=''; try { adminUser=await SLINK.core.messaging.send('war.admin.permissions.get',{userId:byId('admin-user-id').value}); byId('admin-scope-list').replaceChildren(...adminUser.scopes.map(scope => { const label=document.createElement('label'); label.className='scope-row'; label.innerHTML='<input type="checkbox"><span><strong></strong><small></small></span><span class="muted"></span>'; label.querySelector('input').dataset.scope=scope.scope; label.querySelector('input').checked=scope.active; label.querySelector('strong').textContent=`${scope.title} (${scope.scope})`; label.querySelector('small').textContent=scope.description; label.lastElementChild.textContent=scope.active ? (scope.expires_at ? `Expires ${new Date(scope.expires_at).toLocaleString()}` : 'No expiration') : scope.status.replace('_',' '); return label; })); byId('admin-permissions-form').hidden=false; byId('admin-message').textContent=`Loaded direct grants for Torn ID ${adminUser.user_id}.`; } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
+  byId('admin-lookup-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-lookup'); setBusy(button,true); byId('admin-message').textContent=''; try { adminUser=await SLINK.core.messaging.send('war.admin.permissions.get',{userId:byId('admin-user-id').value}); renderAdminScopes(adminUser.scopes); byId('admin-permissions-form').hidden=false; byId('admin-message').textContent=`Loaded direct grants for Torn ID ${adminUser.user_id}.`; } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
   byId('admin-permissions-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-save'); setBusy(button,true); try { const scopes=[...byId('admin-scope-list').querySelectorAll('input[data-scope]:checked')].map(input=>input.dataset.scope); adminUser=await SLINK.core.messaging.send('war.admin.permissions.save',{userId:adminUser.user_id,scopes,hours:byId('admin-hours').value,note:byId('admin-note').value}); byId('admin-message').textContent=`Permissions saved for Torn ID ${adminUser.user_id}. They take effect on the user's next authentication.`; byId('admin-lookup-form').requestSubmit(); } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
 
   await refresh();

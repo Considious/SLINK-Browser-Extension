@@ -39,6 +39,10 @@
     .slink-alert { width:min(330px,calc(100vw - 16px)); }
     .slink-alert .content { max-height:min(300px,calc(100dvh - 170px)); }
     .slink-alert-body { display:grid; gap:7px; }
+    :host(:not([data-slink-theme="slink-dark"])) .window { border-color:var(--slink-border); background:var(--slink-panel-bg); box-shadow:-5px 0 20px var(--slink-glow-left),5px 0 20px var(--slink-glow-right),0 10px 28px var(--slink-shadow); }
+    :host(:not([data-slink-theme="slink-dark"])) .mark { background:var(--slink-mark-bg); color:#050607; box-shadow:inset 0 0 0 1px var(--slink-metal),0 0 12px var(--slink-glow-right); text-shadow:0 1px rgba(255,255,255,.45); }
+    :host(:not([data-slink-theme="slink-dark"])) .tab[aria-selected="true"] { background:var(--slink-selected-bg); box-shadow:0 0 12px var(--slink-glow-right); }
+    :host(:not([data-slink-theme="slink-dark"])) .actions button { background:var(--slink-button-bg); }
     @media(max-width:420px) { .window{width:min(300px,calc(100vw - 8px))}.main{right:4px;top:4px}.popup{left:4px;top:4px}.row{grid-template-columns:90px minmax(0,1fr)}.content{max-height:calc(100dvh - 190px)} }
   `;
 
@@ -53,7 +57,16 @@
     shadow.replaceChildren();
     const style = document.createElement('style');
     style.textContent = STYLES;
-    shadow.append(style);
+    const themeStyle = document.createElement('style');
+    shadow.append(style, themeStyle);
+
+    function setTheme(id, permissions = {}) {
+      const theme = SLINK.core.themes.resolve(id, permissions);
+      host.dataset.slinkTheme = theme.id;
+      themeStyle.textContent = `:host{${SLINK.core.themes.cssVariables(theme.id, permissions)}}`;
+      return theme;
+    }
+    setTheme(options.themeId || SLINK.core.themes.DEFAULT_THEME_ID, options.permissions || {});
 
     const main = createWindow('main', options.title || 'SLINK', options.subtitle || 'Extension systems');
     const tabs = document.createElement('nav');
@@ -252,6 +265,7 @@
       createModuleView,
       dismissAlert,
       showAlert,
+      setTheme,
       setHidden(value) { hidden = Boolean(value); refreshShell(); },
       onHide(handler) { hideHandler = handler; },
       resetPosition() { void SLINK.core.storage.remove('ui.main.position'); },

@@ -92,5 +92,7 @@ for (const match of dashboardSource.matchAll(/byId\('([^']+)'\)/g)) {
   assert(dashboardIds.has(match[1]), `Dashboard script references missing element #${match[1]}.`);
 }
 assert(/function setBusy\(button, busy\)\s*{\s*if \(button\)/.test(dashboardSource), 'Dashboard busy-state helper must tolerate removed or unavailable controls.');
+assert(dashboardHtml.includes('id="theme-options"'), 'Dashboard theme selector is missing.');
+assert(read('src/content/ui-shell.js').includes('setTheme'), 'Torn UI shell does not support live themes.');
 
 console.log(`Validated Manifest V3 extension ${manifest.version} (${listFiles(path.join(root, 'src')).length} source files).`);

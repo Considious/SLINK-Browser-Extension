@@ -98,6 +98,11 @@
 
     try {
       const status = await SLINK.core.messaging.send('system.status');
+      const preferredTheme = await SLINK.core.storage.get(
+        SLINK.core.themes.STORAGE_KEY,
+        SLINK.core.themes.DEFAULT_THEME_ID
+      );
+      SLINK.core.themes.applyToElement(document.documentElement, preferredTheme, status.permissions);
       elements.version.textContent = chrome.runtime.getManifest().version;
       elements.worker.textContent = status.worker.connected
         ? `Connected / v${status.worker.version}`
