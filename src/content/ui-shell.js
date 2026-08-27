@@ -10,6 +10,16 @@
     * { box-sizing:border-box; }
     .window { position:fixed; z-index:999999; width:min(350px,calc(100vw - 16px)); overflow:hidden; border:1px solid var(--slink-border); border-radius:10px; background:var(--slink-bg); color:var(--slink-text); box-shadow:0 10px 28px var(--slink-shadow); font:12px/1.4 Arial,sans-serif; }
     .window[hidden], .module-view[hidden] { display:none; }
+    .bubble { position:fixed; right:12px; top:88px; z-index:999999; display:grid; place-items:center; width:50px; height:50px; padding:0; border:1px solid var(--slink-border); border-radius:50%; background:var(--slink-panel-bg); color:var(--slink-text); box-shadow:-3px 0 14px var(--slink-glow-left),3px 0 14px var(--slink-glow-right),0 8px 22px var(--slink-shadow); cursor:grab; touch-action:none; user-select:none; }
+    .bubble[hidden] { display:none; }
+    .bubble[data-dragging="true"] { cursor:grabbing; }
+    .bubble-coil { position:relative; display:block; width:28px; height:24px; }
+    .bubble-coil span { position:absolute; left:2px; width:24px; height:9px; border:2px solid var(--slink-metal); border-radius:50%; background:transparent; box-shadow:0 0 5px var(--slink-glow-right); }
+    .bubble-coil span:nth-child(1) { top:0; }
+    .bubble-coil span:nth-child(2) { top:5px; }
+    .bubble-coil span:nth-child(3) { top:10px; }
+    .bubble-coil span:nth-child(4) { top:15px; }
+    :host([data-slink-theme="slink-dark"]) .bubble { background:linear-gradient(145deg,#3478b9,#172f4c); }
     .main { right:12px; top:88px; }
     .popup { left:12px; top:88px; }
     .head { display:flex; align-items:center; gap:8px; padding:9px 10px; border-bottom:1px solid var(--slink-border-soft); cursor:grab; touch-action:none; user-select:none; }
@@ -43,7 +53,7 @@
     :host(:not([data-slink-theme="slink-dark"])) .mark { background:var(--slink-mark-bg); color:#050607; box-shadow:inset 0 0 0 1px var(--slink-metal),0 0 12px var(--slink-glow-right); text-shadow:0 1px rgba(255,255,255,.45); }
     :host(:not([data-slink-theme="slink-dark"])) .tab[aria-selected="true"] { background:var(--slink-selected-bg); box-shadow:0 0 12px var(--slink-glow-right); }
     :host(:not([data-slink-theme="slink-dark"])) .actions button { background:var(--slink-button-bg); }
-    @media(max-width:420px) { .window{width:min(300px,calc(100vw - 8px))}.main{right:4px;top:4px}.popup{left:4px;top:4px}.row{grid-template-columns:90px minmax(0,1fr)}.content{max-height:calc(100dvh - 190px)} }
+    @media(max-width:420px) { .window{width:min(300px,calc(100vw - 8px))}.main{right:4px;top:4px}.popup{left:4px;top:4px}.bubble{right:6px;top:64px;width:46px;height:46px}.row{grid-template-columns:90px minmax(0,1fr)}.content{max-height:calc(100dvh - 190px)} }
   `;
 
   function createShell(options = {}) {
@@ -69,15 +79,23 @@
     setTheme(options.themeId || SLINK.core.themes.DEFAULT_THEME_ID, options.permissions || {});
 
     const main = createWindow('main', options.title || 'SLINK', options.subtitle || 'Extension systems');
+    main.element.querySelector('.hide').textContent = '−';
+    main.element.querySelector('.hide').title = 'Collapse SLINK to a movable bubble';
     const tabs = document.createElement('nav');
     tabs.className = 'tabs';
     main.head.after(tabs);
-    shadow.append(main.element);
+    const bubble = document.createElement('button');
+    bubble.type = 'button';
+    bubble.className = 'bubble';
+    bubble.title = 'Open SLINK';
+    bubble.setAttribute('aria-label', 'Open SLINK panel');
+    bubble.innerHTML = '<span class="bubble-coil" aria-hidden="true"><span></span><span></span><span></span><span></span></span>';
+    shadow.append(main.element, bubble);
     const views = new Map();
     const alerts = new Map();
     let hidden = false;
+    let collapsed = false;
     let activeId = '';
-    let hideHandler = null;
 
     function createWindow(kind, title, subtitle) {
       const element = document.createElement('section');
@@ -136,11 +154,56 @@
       if (!docked.some(view => view.id === activeId)) activeId = docked[0]?.id || '';
       if (activeId) setActive(activeId);
       tabs.hidden = docked.length < 2;
-      main.element.hidden = hidden || docked.length === 0;
+      main.element.hidden = hidden || collapsed || docked.length === 0;
+      bubble.hidden = hidden || !collapsed || views.size === 0;
       for (const view of views.values()) {
-        if (view.popup) view.popup.element.hidden = hidden;
+        if (view.popup) view.popup.element.hidden = hidden || collapsed;
       }
       for (const alert of alerts.values()) alert.element.hidden = hidden;
+    }
+
+    async function setCollapsed(value, persist = true) {
+      collapsed = Boolean(value);
+      if (persist) await SLINK.core.storage.set('ui.main.collapsed', collapsed);
+      refreshShell();
+    }
+
+    function makeBubbleMovable() {
+      let drag = null;
+      let moved = false;
+      const setPosition = (position, persist = false) => {
+        if (!Number.isFinite(Number(position?.left)) || !Number.isFinite(Number(position?.top))) return;
+        const size = bubble.getBoundingClientRect().width || 50;
+        const next = {
+          left:Math.round(Math.max(4, Math.min(Number(position.left), global.innerWidth - size - 4))),
+          top:Math.round(Math.max(4, Math.min(Number(position.top), global.innerHeight - size - 4)))
+        };
+        bubble.style.left = `${next.left}px`; bubble.style.top = `${next.top}px`; bubble.style.right = 'auto';
+        if (persist) void SLINK.core.storage.set('ui.bubble.position', next);
+      };
+      bubble.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        const box = bubble.getBoundingClientRect();
+        drag = { id:event.pointerId, x:event.clientX, y:event.clientY, left:box.left, top:box.top };
+        moved = false; bubble.dataset.dragging = 'true'; bubble.setPointerCapture(event.pointerId); event.preventDefault();
+      });
+      bubble.addEventListener('pointermove', event => {
+        if (!drag || event.pointerId !== drag.id) return;
+        if (Math.abs(event.clientX - drag.x) > 3 || Math.abs(event.clientY - drag.y) > 3) moved = true;
+        setPosition({ left:drag.left + event.clientX - drag.x, top:drag.top + event.clientY - drag.y });
+      });
+      const finish = event => {
+        if (!drag || event.pointerId !== drag.id) return;
+        const box = bubble.getBoundingClientRect(); drag = null; delete bubble.dataset.dragging;
+        if (moved) setPosition({ left:box.left, top:box.top }, true);
+      };
+      bubble.addEventListener('pointerup', finish);
+      bubble.addEventListener('pointercancel', finish);
+      bubble.addEventListener('click', event => {
+        if (moved) { moved = false; event.preventDefault(); return; }
+        void setCollapsed(false);
+      });
+      void SLINK.core.storage.get('ui.bubble.position', null).then(position => { if (position) setPosition(position); });
     }
 
     function dismissAlert(id) {
@@ -259,15 +322,17 @@
       return view.api;
     }
 
-    main.element.querySelector('.hide').addEventListener('click', () => { if (hideHandler) void hideHandler(); });
+    makeBubbleMovable();
+    main.element.querySelector('.hide').addEventListener('click', () => void setCollapsed(true));
+    void SLINK.core.storage.get('ui.main.collapsed', false).then(value => setCollapsed(Boolean(value), false));
     return Object.freeze({
       host,
       createModuleView,
       dismissAlert,
       showAlert,
       setTheme,
+      setCollapsed,
       setHidden(value) { hidden = Boolean(value); refreshShell(); },
-      onHide(handler) { hideHandler = handler; },
       resetPosition() { void SLINK.core.storage.remove('ui.main.position'); },
       setPosition() {},
       setRows() {},

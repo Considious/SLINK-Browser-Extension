@@ -187,7 +187,8 @@
         const stats = current?.runtime?.panelStats || {};
         const canViewLogs = current?.session?.canViewLogs === true;
         if (activeTab === 'logs' && !canViewLogs) activeTab = 'targets';
-        context.ui.setSubtitle(current?.session?.authenticated ? `${current.session.factionCapable ? 'Faction API' : 'Public API'} / ${current.activeWar?.opponentName || 'No active opponent'}` : 'Setup required');
+        const phaseLabel = current?.activeWar?.phase === 'scheduled' ? 'Assigned' : current?.activeWar?.phase === 'prewar' ? 'Pre-war' : current?.activeWar?.phase === 'active' ? 'Active' : '';
+        context.ui.setSubtitle(current?.session?.authenticated ? `${current.session.factionCapable ? 'Faction API' : 'Public API'} / ${current.activeWar?.opponentName || 'No assigned opponent'}${phaseLabel ? ` / ${phaseLabel}` : ''}` : 'Setup required');
         context.ui.setStatus(localError || current?.runtime?.lastError || current?.runtime?.status || 'SLINK War ready.', (localError || current?.runtime?.lastError) ? 'error' : (current?.configured ? 'ready' : 'normal'));
         context.ui.setActions([{ label:busy ? 'Refreshing...' : 'Refresh', disabled:busy, onClick:() => runCycle(true) }]);
         const tabs = ['targets', 'outside', 'claims', ...(canViewLogs ? ['logs'] : []), 'settings'];

@@ -105,6 +105,8 @@ for (const match of dashboardSource.matchAll(/byId\('([^']+)'\)/g)) {
 }
 assert(/function setBusy\(button, busy\)\s*{\s*if \(button\)/.test(dashboardSource), 'Dashboard busy-state helper must tolerate removed or unavailable controls.');
 assert(dashboardHtml.includes('id="theme-options"'), 'Dashboard theme selector is missing.');
-assert(read('src/content/ui-shell.js').includes('setTheme'), 'Torn UI shell does not support live themes.');
+const uiShellSource = read('src/content/ui-shell.js');
+assert(uiShellSource.includes('setTheme'), 'Torn UI shell does not support live themes.');
+assert(uiShellSource.includes('ui.main.collapsed') && uiShellSource.includes('bubble-coil'), 'Torn UI shell does not provide the persistent theme-aware collapse bubble.');
 
 console.log(`Validated Manifest V3 extension ${manifest.version} (${listFiles(path.join(root, 'src')).length} source files).`);

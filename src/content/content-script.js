@@ -6,10 +6,6 @@
   const SLINK = global.SLINK_EXTENSION;
   const ui = SLINK.core.uiShell.createShell({ title:'SLINK', subtitle:'Shared Live Intelligence NetworK' });
 
-  ui.onHide(async () => {
-    await SLINK.core.storage.set('ui.pagePanelHidden', true);
-    ui.setHidden(true);
-  });
   ui.setHidden(await SLINK.core.storage.get('ui.pagePanelHidden', false));
 
   // SLINK must never navigate or refresh Torn. Storage changes are applied in
@@ -17,6 +13,8 @@
   chrome.storage.onChanged.addListener(changes => {
     const hiddenKey = SLINK.core.storage.fullKey('ui.pagePanelHidden');
     if (changes[hiddenKey]) ui.setHidden(Boolean(changes[hiddenKey].newValue));
+    const collapsedKey = SLINK.core.storage.fullKey('ui.main.collapsed');
+    if (changes[collapsedKey]) void ui.setCollapsed(Boolean(changes[collapsedKey].newValue), false);
     const permissionsKey = SLINK.core.storage.fullKey('permissions.snapshot');
     const themeKey = SLINK.core.storage.fullKey(SLINK.core.themes.STORAGE_KEY);
     if (changes[themeKey] || changes[permissionsKey]) {

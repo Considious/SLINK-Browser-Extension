@@ -18,6 +18,7 @@ let warAttackSubmissions = 0;
 let warStoredLogReads = 0;
 let sharedWarMode = 'war';
 let warClaims = [];
+let assignedWarStart = 0;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -55,7 +56,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.9.1' }; },
+    getManifest() { return { version: '0.10.0' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -220,7 +221,14 @@ context = vm.createContext({
       };
       if (url.pathname.endsWith('/logs') && url.searchParams.get('include_stored') !== '0') warStoredLogReads++;
     } else if (url.hostname === 'api.torn.com') {
-      if (url.pathname === '/v2/faction/46999/members') body = {
+      if (url.pathname === '/v2/faction/46978/rankedwars') body = {
+        rankedwars:assignedWarStart ? [{
+          id:'scheduled-test',
+          war:{ start:Math.floor(assignedWarStart / 1000), end:0 },
+          factions:{ 46978:{ name:'Slinkys' }, 46999:{ name:'Future Opponent' } }
+        }] : []
+      };
+      else if (url.pathname === '/v2/faction/46999/members') body = {
         members:[{ id:9001, name:'War Target', level:55, last_action:{ status:'Offline', timestamp:Math.floor(Date.now() / 1000) - 300 }, status:{ state:'Okay', description:'Okay', until:0 } }]
       };
       else if (url.pathname === '/v2/faction/attacks') body = {
@@ -371,9 +379,22 @@ assert(warSaved.data.session.factionCapable, 'Faction attack capability was not 
 assert(warSaved.data.permissions.scopes.includes('slink.war'), 'War product scope was not persisted.');
 assert(!JSON.stringify(warSaved.data).includes('war-test-key'), 'Public War state leaked the Torn API key.');
 
+assignedWarStart = Date.now() + 60 * 60 * 1000;
+const scheduledCycle = await send('war.cycle.prepare', { forceOpponentRefresh:true });
+assert(scheduledCycle.ok && scheduledCycle.data.activeWar.phase === 'scheduled', 'Assigned future War was not discovered as scheduled.');
+assert(scheduledCycle.ok && scheduledCycle.data.runtime.snapshot.members.length === 1, 'Assigned War did not load the enemy roster for med-out claims.');
+assert(scheduledCycle.data.runtime.snapshot.retals.length === 0, 'Retals were enabled before the assigned War started.');
+assert(warStatusSubmissions === 0 && warAttackSubmissions === 0, 'Assigned War started live collection before the pre-war window.');
+const scheduledConfig = await send('war.config.save', { mode:'termed', idleMinutes:10 });
+assert(scheduledConfig.ok && scheduledConfig.data.sharedConfig.mode === 'termed', 'Officer settings were unavailable for an assigned War.');
+const scheduledClaim = await send('war.claims.update', { operation:'claim', targetId:9001, targetName:'War Target' });
+assert(scheduledClaim.ok && scheduledClaim.data.runtime.snapshot.claims[0].claimedByName === 'Considious', 'Med-out claims were unavailable for an assigned War.');
+await send('war.claims.update', { operation:'release', targetId:9001, targetName:'War Target' });
+
 const detectedWar = await send('war.active.detect', {
   opponentFactionId:46999,
   opponentName:'Test Opponent',
+  rankedWarId:'active-test',
   startedAt:1_777_000_000
 });
 assert(detectedWar.ok && detectedWar.data.activeWar.warId === 'rw_46978_46999_1777000000', 'Active War identity was not stable.');

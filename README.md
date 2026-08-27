@@ -4,6 +4,13 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.10.0 recognizes an assigned ranked-war opponent before the war starts.
+Med-out claims and officer-controlled faction settings become available as soon
+as the matchup is assigned, status collection begins five minutes before the
+scheduled start, and attack, retal, logging, chain, and personal-stat collection
+remain disabled until the war is active. The movable in-Torn panel can also
+collapse into a draggable bubble that follows the selected SLINK theme.
+
 Version 0.9.1 prevents extension state changes from ever refreshing or navigating
 Torn. Changes that cannot be applied safely in place wait for the user's next
 normal navigation. The build now rejects page-refresh and page-navigation APIs.
@@ -135,6 +142,8 @@ SLINK overlay panels must be movable with mouse and touch, persist their last
 position, remain clamped inside the visible viewport, and provide a position
 reset. Every feature uses the shared tabbed shell. A feature can be popped into
 its own movable window and returned to the main panel without losing state.
+The combined Torn panel can collapse into a persistent movable, theme-aware
+bubble without disabling background module behavior or alerts.
 Tabs are created only when the user's scope permits the module and its **Show
 GUI in Torn** preference is enabled.
 

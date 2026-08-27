@@ -23,11 +23,14 @@
     seenPersonalAttacks: 'war.seenPersonalAttacks.v1',
     lastPanelStatsAt: 'war.lastPanelStatsAt.v1',
     outsideTargets: 'war.outsideTargets.v1',
-    lastOutsideAt: 'war.lastOutsideAt.v1'
+    lastOutsideAt: 'war.lastOutsideAt.v1',
+    scheduledRoster: 'war.scheduledRoster.v1'
   });
   const STATUS_INTERVAL_MS = 10_000;
   const ATTACK_INTERVAL_MS = 30_000;
-  const NO_WAR_DISCOVERY_INTERVAL_MS = 8 * 60 * 60 * 1000;
+  const NO_WAR_DISCOVERY_INTERVAL_MS = 60 * 60 * 1000;
+  const PREWAR_WINDOW_MS = 5 * 60 * 1000;
+  const SCHEDULED_ROSTER_MAX_AGE_MS = 6 * 60 * 60 * 1000;
   let authenticating = null;
   let cycling = null;
 
@@ -236,26 +239,42 @@
     return Object.entries(factions).map(([key, faction]) => [WAR.positiveInteger(faction?.id ?? faction?.faction_id ?? faction?.faction?.id ?? key), faction]).filter(([id]) => id);
   }
 
+  function phaseForStart(startedAt, now = Date.now()) {
+    const start = Math.max(0, Number(startedAt) || 0);
+    if (start > now + PREWAR_WINDOW_MS) return 'scheduled';
+    if (start > now) return 'prewar';
+    return 'active';
+  }
+
   function currentRankedWar(payload, ownFactionId, now = Math.floor(Date.now() / 1000)) {
     const wars = payload?.rankedwars ?? payload?.ranked_wars ?? payload?.wars ?? [];
     const entries = Array.isArray(wars)
       ? wars.map((war, index) => [String(war?.id ?? war?.ranked_war_id ?? index), war])
       : Object.entries(wars || {});
-    const active = entries.find(([, war]) => {
+    const eligible = entries.filter(([, war]) => {
       const start = Number(war?.war?.start ?? war?.start ?? war?.started ?? 0);
       const end = Number(war?.war?.end ?? war?.end ?? war?.ended ?? 0);
-      return start > 0 && start <= now && (!end || end > now);
+      return start > 0 && (!end || end > now);
+    }).sort((left, right) => {
+      const leftStart = Number(left[1]?.war?.start ?? left[1]?.start ?? left[1]?.started ?? 0);
+      const rightStart = Number(right[1]?.war?.start ?? right[1]?.start ?? right[1]?.started ?? 0);
+      const leftActive = leftStart <= now;
+      const rightActive = rightStart <= now;
+      if (leftActive !== rightActive) return leftActive ? -1 : 1;
+      return leftActive ? rightStart - leftStart : leftStart - rightStart;
     });
-    if (!active) return null;
-    const [entryId, war] = active;
+    if (!eligible.length) return null;
+    const [entryId, war] = eligible[0];
     const opponent = warFactionEntries(war?.factions ?? war?.war?.factions)
       .find(([id]) => id !== Number(ownFactionId));
     if (!opponent) return null;
     const [opponentFactionId, faction] = opponent;
+    const startedAt = Number(war?.war?.start ?? war?.start ?? war?.started ?? 0) * 1000;
     return {
       opponentFactionId,
       opponentName:String(faction?.name || `Faction ${opponentFactionId}`),
-      startedAt:Number(war?.war?.start ?? war?.start ?? war?.started ?? 0) * 1000,
+      startedAt,
+      phase:phaseForStart(startedAt, now * 1000),
       rankedWarId:String(war?.id ?? war?.ranked_war_id ?? war?.war?.id ?? entryId)
     };
   }
@@ -283,15 +302,16 @@
     const sameWar = Number(previous?.ownFactionId) === session.factionId &&
       Number(previous?.opponentFactionId) === opponentFactionId &&
       (!incomingRankedWarId || !previous?.rankedWarId || String(previous.rankedWarId) === incomingRankedWarId);
-    const startedAt = sameWar
-      ? Number(previous.startedAt)
-      : Math.max(1, Number(input.startedAt ?? input.started_at) || Date.now());
+    const inputStart = Math.max(1, Number(input.startedAt ?? input.started_at) || Date.now());
+    const normalizedInputStart = inputStart < 10_000_000_000 ? inputStart * 1000 : inputStart;
+    const startedAt = sameWar ? Number(previous.startedAt) : normalizedInputStart;
     const activeWar = {
       warId:WAR.makeWarId(session.factionId, opponentFactionId, startedAt),
       ownFactionId:session.factionId,
       opponentFactionId,
       opponentName:String(input.opponentName ?? input.opponent_name ?? previous?.opponentName ?? `Faction ${opponentFactionId}`),
       startedAt,
+      phase:phaseForStart(startedAt),
       rankedWarId:String(incomingRankedWarId || previous?.rankedWarId || ''),
       detectedAt:Date.now()
     };
@@ -303,6 +323,40 @@
     }
     await SLINK.core.storage.set(KEYS.activeWar, activeWar);
     return activeWar;
+  }
+
+  function normalizeTornFactionMember(row) {
+    const id = WAR.positiveInteger(row?.id ?? row?.user_id);
+    if (!id) return null;
+    const lastAction = row?.last_action ?? row?.lastAction ?? {};
+    const status = row?.status ?? {};
+    return WAR.normalizeMember({
+      id,
+      name:String(row?.name || `Player ${id}`),
+      level:Number(row?.level) || 0,
+      activity:String(lastAction?.status ?? row?.activity ?? 'Unknown'),
+      lastActionTimestamp:Number(lastAction?.timestamp ?? row?.lastActionTimestamp) || 0,
+      lastActionRelative:String(lastAction?.relative ?? row?.lastActionRelative ?? ''),
+      statusState:String(status?.state ?? row?.statusState ?? ''),
+      statusDescription:String(status?.description ?? row?.statusDescription ?? ''),
+      statusUntil:Number(status?.until ?? row?.statusUntil) || 0,
+      position:String(row?.position || '')
+    });
+  }
+
+  async function scheduledRoster(activeWar, currentSettings) {
+    const cached = await SLINK.core.storage.get(KEYS.scheduledRoster, null);
+    if (
+      cached?.warId === activeWar.warId &&
+      Array.isArray(cached.members) && cached.members.length &&
+      Date.now() - Number(cached.fetchedAt) < SCHEDULED_ROSTER_MAX_AGE_MS
+    ) return cached.members;
+    const response = await tornRequest(`/v2/faction/${encodeURIComponent(activeWar.opponentFactionId)}/members`, currentSettings.tornKey);
+    const rows = response?.members ?? response?.faction?.members ?? [];
+    const members = (Array.isArray(rows) ? rows : []).map(normalizeTornFactionMember).filter(Boolean);
+    if (!members.length) throw new Error('Torn returned no opposing faction members for the assigned war.');
+    await SLINK.core.storage.set(KEYS.scheduledRoster, { warId:activeWar.warId, fetchedAt:Date.now(), members });
+    return members;
   }
 
   async function collectStatus(activeWar, currentSettings) {
@@ -523,7 +577,7 @@
       throw new Error('slink.war.officer permission is required to change faction-wide War settings.');
     }
     const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
-    if (!activeWar?.warId) throw new Error('An active ranked war is required before changing faction-wide War settings.');
+    if (!activeWar?.warId) throw new Error('An assigned or active ranked war is required before changing faction-wide War settings.');
     const result = await workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/config`, {
       method:'POST',
       body:{
@@ -538,7 +592,7 @@
 
   async function updateClaim(input = {}) {
     const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
-    if (!activeWar?.warId) throw new Error('An active ranked war is required to manage med-out claims.');
+    if (!activeWar?.warId) throw new Error('An assigned or active ranked war is required to manage med-out claims.');
     await workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/claims`, {
       method:'POST',
       body:{
@@ -583,11 +637,31 @@
       const session = await ensureSession(false);
       let activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
       if (WAR.positiveInteger(payload.opponentFactionId ?? payload.opponent_faction_id)) activeWar = await registerActiveWar(payload);
-      if (!activeWar?.warId || payload.forceOpponentRefresh === true) {
+      const lastOpponentCheckAt = Number(await SLINK.core.storage.get(KEYS.lastOpponentCheckAt, 0)) || 0;
+      if (!activeWar?.warId || payload.forceOpponentRefresh === true || Date.now() - lastOpponentCheckAt >= NO_WAR_DISCOVERY_INTERVAL_MS) {
         activeWar = await discoverActiveWar(session, currentSettings, payload.forceOpponentRefresh === true);
       }
       if (!activeWar?.warId) {
-        await setRuntime({ status:'No active ranked war was found through the Torn API.', lastError:'', lastCycleAt:Date.now() });
+        await setRuntime({ status:'No assigned or active ranked war was found through the Torn API.', lastError:'', lastCycleAt:Date.now() });
+        return publicStatus();
+      }
+      activeWar = { ...activeWar, phase:phaseForStart(activeWar.startedAt) };
+      await SLINK.core.storage.set(KEYS.activeWar, activeWar);
+      if (activeWar.phase === 'scheduled') {
+        const [snapshot, members] = await Promise.all([
+          fetchSnapshot(activeWar, currentSettings),
+          scheduledRoster(activeWar, currentSettings)
+        ]);
+        snapshot.members = members;
+        snapshot.retals = [];
+        const startsIn = SLINK.core.format.formatHumanDuration(Math.max(0, (Number(activeWar.startedAt) - Date.now()) / 1000));
+        await setRuntime({
+          status:`War assigned against ${activeWar.opponentName}; starts in ${startsIn}. Claims and officer settings are ready.`,
+          lastError:'', snapshot, logs:[], logsWarning:'',
+          collectStatus:false, collectAttacks:false, statusChecks:0, attackChecks:0,
+          panelStats:{ attacks:0, warAttacks:0, mugs:0, chain:null, turtle:null },
+          lastCycleAt:Date.now()
+        });
         return publicStatus();
       }
       const heartbeat = await workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/heartbeat`, {
@@ -602,16 +676,18 @@
       let attackChecks = 0;
       if (heartbeat.collectStatus && now - Number(lastStatusAt) >= STATUS_INTERVAL_MS) statusChecks = await collectStatus(activeWar, currentSettings);
       if (
+        activeWar.phase === 'active' &&
         heartbeat.collectAttacks &&
         SLINK.core.permissions.hasScope(session, 'slink.war.faction') &&
         now - Number(lastAttackAt) >= ATTACK_INTERVAL_MS
       ) attackChecks = await collectAttacks(activeWar, currentSettings);
       const snapshot = await fetchSnapshot(activeWar, currentSettings);
+      if (activeWar.phase !== 'active') snapshot.retals = [];
       snapshot.members = await refineMembers(snapshot?.members || [], currentSettings);
       const canViewLogs = SLINK.core.permissions.hasScope(session, 'slink.war.officer') || SLINK.core.permissions.hasScope(session, 'admin.*');
       let logs = [];
       let logsWarning = '';
-      if (canViewLogs) {
+      if (canViewLogs && activeWar.phase === 'active') {
         try {
           const logResult = await fetchLogs(activeWar, false, snapshot?.pendingLogs || []);
           logs = logResult.rows;
@@ -621,9 +697,14 @@
           logsWarning = `Historical War logs are unavailable: ${SLINK.core.format.errorMessage(error)} Live targets and retals are still active.`;
         }
       }
-      const panelStats = await refreshPanelStats(activeWar, currentSettings);
+      const panelStats = activeWar.phase === 'active'
+        ? await refreshPanelStats(activeWar, currentSettings)
+        : { attacks:0, warAttacks:0, mugs:0, chain:null, turtle:null };
+      const statusText = activeWar.phase === 'prewar'
+        ? `Pre-war status checks active for ${activeWar.opponentName}; full War collection starts at the scheduled time.`
+        : `${snapshot.members?.length || 0} targets / ${snapshot.retals?.length || 0} active retals`;
       await setRuntime({
-        status:`${snapshot.members?.length || 0} targets / ${snapshot.retals?.length || 0} active retals`,
+        status:statusText,
         lastError:'',
         snapshot,
         logs,

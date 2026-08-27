@@ -276,7 +276,7 @@ chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
   if (alarm.name === WAR_CYCLE_ALARM) {
     void SLINK.services.war.publicStatus()
-      .then(status => status.configured && status.activeWar ? SLINK.services.war.prepareCycle() : null)
+      .then(status => status.configured ? SLINK.services.war.prepareCycle() : null)
       .catch(error => console.error('[SLINK] War cycle:', error));
   }
 });

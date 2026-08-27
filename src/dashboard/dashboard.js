@@ -221,7 +221,14 @@
     const snapshot = war?.runtime?.snapshot || {};
     const stats = war?.runtime?.panelStats || {};
     byId('war-role').textContent = war?.session?.authenticated ? (war.session.officer ? 'War officer' : war.session.factionCapable ? 'Faction API' : 'Public API') : 'Setup required';
-    byId('war-opponent').textContent = war?.activeWar ? `${war.activeWar.opponentName} [${war.activeWar.opponentFactionId}]` : 'No active ranked war detected by API';
+    const phase = war?.activeWar?.phase;
+    const startsAt = Number(war?.activeWar?.startedAt) || 0;
+    const phaseLabel = phase === 'scheduled'
+      ? `Assigned • starts ${new Date(startsAt).toLocaleString()}`
+      : phase === 'prewar' ? 'Pre-war status checks' : phase === 'active' ? 'War active' : '';
+    byId('war-opponent').textContent = war?.activeWar
+      ? `${war.activeWar.opponentName} [${war.activeWar.opponentFactionId}]${phaseLabel ? ` • ${phaseLabel}` : ''}`
+      : 'No assigned or active ranked war detected by API';
     byId('war-attack-count').textContent = stats.attacks || 0;
     byId('war-ranked-count').textContent = stats.warAttacks || 0;
     byId('war-mug-count').textContent = stats.mugs || 0;
