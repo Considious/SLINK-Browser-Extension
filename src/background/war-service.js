@@ -371,6 +371,18 @@
     return members.length;
   }
 
+  function profileFactionId(payload) {
+    const source = payload?.profile ?? payload?.basic ?? payload?.user ?? payload ?? {};
+    return WAR.positiveInteger(
+      source?.faction_id ??
+      source?.faction?.id ??
+      source?.faction?.faction_id ??
+      payload?.faction_id ??
+      payload?.faction?.id ??
+      payload?.faction?.faction_id
+    ) || 0;
+  }
+
   function emptyPersonalStats(warId) {
     return { warId, attacks:0, warAttacks:0, mugs:0, mugTotal:0, mugMin:0, mugMax:0 };
   }
@@ -913,7 +925,21 @@
         if (!SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('admin.* permission is required.');
         const userId = WAR.positiveInteger(payload?.userId);
         if (!userId) throw new Error('Enter a valid Torn user ID.');
-        return workerRequest(`/api/admin/users/${userId}/permissions`);
+        let factionIdValue = 0;
+        let identityWarning = '';
+        try {
+          const currentSettings = await settings();
+          const profile = await tornRequest(
+            `/v2/user/${userId}/basic`,
+            currentSettings.tornKey
+          );
+          factionIdValue = profileFactionId(profile);
+        } catch (error) {
+          identityWarning = `Current faction could not be checked: ${SLINK.core.format.errorMessage(error)}`;
+        }
+        const query = factionIdValue > 0 ? `?faction_id=${factionIdValue}` : '';
+        const result = await workerRequest(`/api/admin/users/${userId}/permissions${query}`);
+        return { ...result, identity_warning:identityWarning };
       },
       'war.admin.permissions.save': async payload => {
         const session = await ensureSession(false);
@@ -933,3 +959,4 @@
 
   SLINK.define('services', 'war', api);
 })(globalThis);
+

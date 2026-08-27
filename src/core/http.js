@@ -56,7 +56,13 @@
       }
     }
     if (!response.ok) {
-      const error = new Error(data?.error?.message || data?.error || `HTTP ${response.status}`);
+      const primaryMessage = data?.error?.message || data?.error || `HTTP ${response.status}`;
+      const diagnosticDetail = typeof data?.detail === 'string' && data.detail.trim()
+        ? data.detail.trim()
+        : '';
+      const error = new Error(diagnosticDetail && !String(primaryMessage).includes(diagnosticDetail)
+        ? `${primaryMessage} (${diagnosticDetail})`
+        : primaryMessage);
       error.code = 'SLINK_HTTP_ERROR';
       error.status = response.status;
       error.data = data;
@@ -92,3 +98,4 @@
     validateUrl
   }));
 })(globalThis);
+

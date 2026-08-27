@@ -4,6 +4,12 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.11.1 makes the administrator permission view show effective faction
+access as inherited instead of incorrectly appearing empty. Inherited grants
+remain separate from direct paid/manual grants and cannot be accidentally
+rewritten by the administrator form. Worker authentication errors now include
+the safe backend detail needed to identify a D1 schema or entitlement failure.
+
 Version 0.11.0 adds the queued War coordination and theme work. War officers
 can set one faction-wide inside-hit cap and assign med-out targets to another
 Torn member. Personal mug tracking now includes total, minimum, average, and
@@ -182,3 +188,4 @@ SLINK_EXTENSION.modules.register({
 ## Planned next milestone
 
 Verify Leveling and War against live Torn use, then add the next feature module to the same shared shell. Admin remains a separate private module sharing the same core.
+

@@ -57,7 +57,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.11.0' }; },
+    getManifest() { return { version: '0.11.1' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -459,3 +459,4 @@ await new Promise(resolve => setTimeout(resolve, 0));
 assert(values.get('slink.worker.lastStatus')?.connected === true, 'Alarm connection status was not persisted.');
 
 console.log('Background startup, required capabilities, Leveling and War auth/collection, routes, alarms, and diagnostics passed.');
+

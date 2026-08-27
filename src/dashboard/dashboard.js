@@ -395,12 +395,16 @@
         const label = document.createElement('label');
         label.className = 'scope-row';
         label.innerHTML = '<input type="checkbox"><span><strong></strong><small></small></span><span class="muted"></span>';
-        label.querySelector('input').dataset.scope = scope.scope;
-        label.querySelector('input').checked = scope.active;
+        const input = label.querySelector('input');
+        input.dataset.scope = scope.scope;
+        input.checked = scope.active;
+        input.disabled = Boolean(scope.inherited_active && !scope.direct_active);
         label.querySelector('strong').textContent = `${scope.title} (${scope.scope})`;
         label.querySelector('small').textContent = scope.description;
-        label.lastElementChild.textContent = scope.active
-          ? (scope.expires_at ? `Expires ${new Date(scope.expires_at).toLocaleString()}` : 'No expiration')
+        label.lastElementChild.textContent = scope.inherited_active
+          ? `Inherited from faction ${scope.inherited_from_faction}`
+          : scope.active
+          ? (scope.expires_at ? `Direct grant expires ${new Date(scope.expires_at).toLocaleString()}` : 'Direct grant; no expiration')
           : scope.status.replace('_', ' ');
         section.append(label);
       }
@@ -542,9 +546,10 @@
   byId('donation-form').addEventListener('submit', async event => { event.preventDefault(); const submit = byId('donation-submit'); setBusy(submit,true); byId('donation-message').textContent=''; try { contribution=await SLINK.core.messaging.send('contribution.donate',{apiKey:byId('donation-key').value,acceptTerms:byId('donation-accept').checked}); byId('donation-key').value=''; byId('donation-accept').checked=false; byId('donation-message').textContent='Public Only key validated and saved on SLINK servers in encrypted form.'; renderContribution(); } catch(error){ byId('donation-message').textContent=errorText(error); } finally{ setBusy(submit,false); } });
   byId('donation-revoke').addEventListener('click', async () => { if (!confirm('Revoke this saved donation and erase its encrypted key material?')) return; contribution=await SLINK.core.messaging.send('contribution.revoke'); byId('donation-message').textContent='Donation revoked and encrypted key material erased.'; renderContribution(); });
   byId('run-diagnostic').addEventListener('click', async event => { const button=event.currentTarget; setBusy(button,true); try { byId('diagnostic').textContent=formatDiagnostic(await SLINK.core.messaging.send('diagnostics.run')); } catch(error){ byId('diagnostic').textContent=errorText(error); } finally{ setBusy(button,false); } });
-  byId('admin-lookup-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-lookup'); setBusy(button,true); byId('admin-message').textContent=''; try { adminUser=await SLINK.core.messaging.send('war.admin.permissions.get',{userId:byId('admin-user-id').value}); renderAdminScopes(adminUser.scopes); byId('admin-permissions-form').hidden=false; byId('admin-message').textContent=`Loaded direct grants for Torn ID ${adminUser.user_id}.`; } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
-  byId('admin-permissions-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-save'); setBusy(button,true); try { const scopes=[...byId('admin-scope-list').querySelectorAll('input[data-scope]:checked')].map(input=>input.dataset.scope); adminUser=await SLINK.core.messaging.send('war.admin.permissions.save',{userId:adminUser.user_id,scopes,hours:byId('admin-hours').value,note:byId('admin-note').value}); byId('admin-message').textContent=`Permissions saved for Torn ID ${adminUser.user_id}. They take effect on the user's next authentication.`; byId('admin-lookup-form').requestSubmit(); } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
+  byId('admin-lookup-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-lookup'); setBusy(button,true); byId('admin-message').textContent=''; try { adminUser=await SLINK.core.messaging.send('war.admin.permissions.get',{userId:byId('admin-user-id').value}); renderAdminScopes(adminUser.scopes); byId('admin-permissions-form').hidden=false; const identity=adminUser.faction_id ? ` Current faction: ${adminUser.faction_id}. Faction access is marked as inherited and does not create a personal grant row.` : ' No current faction entitlement was found; only direct grants are shown.'; byId('admin-message').textContent=`Loaded effective access for Torn ID ${adminUser.user_id}.${identity}${adminUser.identity_warning ? ` ${adminUser.identity_warning}` : ''}`; } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
+  byId('admin-permissions-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-save'); setBusy(button,true); try { const scopes=[...byId('admin-scope-list').querySelectorAll('input[data-scope]:checked:not(:disabled)')].map(input=>input.dataset.scope); adminUser=await SLINK.core.messaging.send('war.admin.permissions.save',{userId:adminUser.user_id,scopes,hours:byId('admin-hours').value,note:byId('admin-note').value}); byId('admin-message').textContent=`Permissions saved for Torn ID ${adminUser.user_id}. They take effect on the user's next authentication.`; byId('admin-lookup-form').requestSubmit(); } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
 
   await refresh();
   setInterval(async () => { if (!war?.configured) return; try { war=await SLINK.core.messaging.send('war.cycle.prepare'); renderWar(); if(targetView==='war'||targetView==='claims')renderTargets(); } catch(error){ showError('war-error',error); } },10_000);
 })();
+

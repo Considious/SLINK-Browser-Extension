@@ -77,7 +77,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.11.0', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.11.1', 'Unexpected runtime version.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
 
@@ -164,6 +164,30 @@ try {
 }
 assert(blocked, 'Unapproved HTTP origin was not blocked.');
 
+const successfulFetch = context.fetch;
+context.fetch = async () => ({
+  ok:false,
+  status:500,
+  text:async () => JSON.stringify({
+    error:'Authentication failed.',
+    detail:'Permission lookup failed.'
+  })
+});
+let diagnosticError = '';
+try {
+  await SLINK.core.http.requestJson(
+    'slinkWorker',
+    'https://slinkyleveling.richard-johnson554.workers.dev/api/auth'
+  );
+} catch (error) {
+  diagnosticError = String(error.message);
+}
+context.fetch = successfulFetch;
+assert(
+  diagnosticError.includes('Permission lookup failed.'),
+  'Safe Worker diagnostic detail was hidden from the extension.'
+);
+
 const workerProbe = await SLINK.core.workerClient.probe({ deep: true });
 assert(workerProbe.connected, 'Required SLINK Worker probe did not connect.');
 assert(workerProbe.database === 'connected', 'Deep SLINK Worker health was not normalized.');
@@ -191,3 +215,4 @@ const routed = await new Promise(resolve => {
 assert(routed.ok && routed.data.value === 7, 'Message router returned the wrong response.');
 
 console.log('Core storage, required hosts, scopes, modules, HTTP guard, limiter, and messaging checks passed.');
+
