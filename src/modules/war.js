@@ -6,7 +6,7 @@
   const MODULE_STYLES = `
     .slink-war-subtabs { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
     .slink-war-subtab[aria-selected="true"] { border-color:var(--slink-border); background:var(--slink-accent); }
-    .slink-war-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; }
+    .slink-war-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
     .slink-war-stat { padding:6px; border-radius:6px; background:var(--slink-bg-raised); text-align:center; }
     .slink-war-stat b,.slink-war-stat span { display:block; }
     .slink-war-stat span { color:var(--slink-muted); font-size:9px; }
@@ -30,6 +30,7 @@
     .slink-war-terms a { color:var(--slink-link); }
     .slink-war-agree { display:flex !important; grid-template-columns:auto 1fr !important; align-items:start; gap:7px !important; }
     .slink-war-settings-actions { display:flex; flex-wrap:wrap; gap:6px; }
+    .slink-war-report { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:6px; }
     .window.slink-war-alerting { animation:slinkWarPanelAlert .8s ease-in-out infinite alternate; }
     @keyframes slinkWarPanelAlert { to { border-color:#ff3d3d; box-shadow:0 0 28px rgba(255,0,0,.75); } }
     @media(max-width:420px) { .slink-war-settings{grid-template-columns:1fr}.slink-war-summary{grid-template-columns:repeat(2,1fr)} }
@@ -68,6 +69,12 @@
       function profileUrl(id) { return `https://www.torn.com/profiles.php?XID=${encodeURIComponent(id)}`; }
       function attackUrl(id) { return `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(id)}`; }
       function duration(seconds) { return SLINK.core.format.formatHumanDuration(Math.max(0, seconds)); }
+      function money(value) { return `$${Math.max(0, Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits:0 })}`; }
+
+      function assignmentControls() {
+        if (!current?.session?.officer) return '';
+        return `<div class="slink-war-settings slink-war-note"><label>Assign claim to Torn ID<input id="slink-war-assignee-id" type="number" min="1" placeholder="Leave blank for yourself"></label><label>Member name<input id="slink-war-assignee-name" type="text" maxlength="80" placeholder="Optional"></label></div>`;
+      }
 
       async function copyCallout(member, button) {
         await navigator.clipboard.writeText(WAR.factionCallout(member));
@@ -102,7 +109,7 @@
       function targetCards() {
         const members = WAR.sortMembers(current?.runtime?.snapshot?.members || [], Date.now(), targetSort);
         if (!members.length) return '<div class="slink-war-empty">No eligible targets in the latest shared snapshot.</div>';
-        return members.map(member => {
+        return assignmentControls() + members.map(member => {
           const hospitalized = WAR.isHospitalized(member);
           const remaining = WAR.statusSeconds(member);
           const readyAt = hospitalized ? WAR.tctTime(member.statusUntil) : '';
@@ -133,8 +140,8 @@
 
       function claimCards() {
         const claims = current?.runtime?.snapshot?.claims || [];
-        if (!claims.length) return '<div class="slink-war-empty">No med-out targets are currently claimed.</div>';
-        return claims.map(claim => {
+        if (!claims.length) return assignmentControls() + '<div class="slink-war-empty">No med-out targets are currently claimed.</div>';
+        return assignmentControls() + claims.map(claim => {
           const mine = Number(claim.claimedById) === Number(current?.session?.userId);
           return `<article class="slink-war-card">
             <div class="slink-war-card-head"><a href="${profileUrl(claim.targetId)}" target="_blank" rel="noopener noreferrer">${escape(claim.targetName || `Player ${claim.targetId}`)} [${claim.targetId}]</a><span>${duration((Number(claim.expiresAt) - Date.now()) / 1000)}</span></div>
@@ -175,7 +182,8 @@
           <label>Display mode<select id="slink-war-display"><option value="extension" ${settings.displayMode === 'extension' ? 'selected' : ''}>Extension only</option><option value="torn" ${settings.displayMode === 'torn' ? 'selected' : ''}>Fully in Torn</option><option value="hybrid" ${settings.displayMode === 'hybrid' ? 'selected' : ''}>Hybrid retal alerts</option></select></label>
           <label>Faction War mode<select id="slink-war-mode" ${officer ? '' : 'disabled'}><option value="war" ${(shared.mode || settings.warMode) === 'war' ? 'selected' : ''}>Real war</option><option value="termed" ${(shared.mode || settings.warMode) === 'termed' ? 'selected' : ''}>Termed war</option></select></label>
           <label>Faction idle filter<input id="slink-war-idle" type="number" min="0" max="60" value="${Number(shared.idleMinutes ?? settings.idleMinutes) || 0}" ${officer ? '' : 'disabled'}></label>
-          <div class="wide slink-war-note">${officer ? 'War mode and idle filtering apply to everyone in your faction. Other settings remain local.' : `Faction-wide mode is ${shared.mode === 'termed' ? 'Termed war' : 'Real war'}. A slink.war.officer may change it.`}</div>
+          <label>Inside-hit cap<input id="slink-war-inside-cap" type="number" min="0" max="9999" value="${Number(shared.insideHitCap) || 0}" ${officer ? '' : 'disabled'}></label>
+          <div class="wide slink-war-note">${officer ? 'War mode, idle filtering, and the inside-hit cap apply to everyone in your faction. Other settings remain local.' : `Faction-wide mode is ${shared.mode === 'termed' ? 'Termed war' : 'Real war'}. A slink.war.officer may change it.`}</div>
           <label>Target sort<select id="slink-war-sort"><option value="availability" ${targetSort === 'availability' ? 'selected' : ''}>Availability</option><option value="fairFightDesc" ${targetSort === 'fairFightDesc' ? 'selected' : ''}>FF high to low</option><option value="fairFightAsc" ${targetSort === 'fairFightAsc' ? 'selected' : ''}>FF low to high</option></select></label>
           <div class="slink-war-settings-actions"><button id="slink-war-save" type="button">Save War settings</button><button id="slink-war-clear" type="button">Clear War session</button></div>
         </div>`;
@@ -194,13 +202,32 @@
         const tabs = ['targets', 'outside', 'claims', ...(canViewLogs ? ['logs'] : []), 'settings'];
         const body = activeTab === 'targets' ? targetCards() : activeTab === 'outside' ? outsideCards() : activeTab === 'claims' ? claimCards() : activeTab === 'logs' ? logCards() : settingsHtml();
         const chain = stats.chain?.current ? `${stats.chain.current}${stats.chain.target ? `/${stats.chain.target}` : ''}` : 'None';
-        context.ui.setContentHtml(`<div class="slink-war-subtabs">${tabs.map(tab => `<button class="slink-war-subtab" data-war-tab="${tab}" aria-selected="${activeTab === tab}">${tab[0].toUpperCase()}${tab.slice(1)}</button>`).join('')}</div><div class="slink-war-summary"><div class="slink-war-stat"><b>${Number(stats.attacks) || 0}</b><span>Attacks</span></div><div class="slink-war-stat"><b>${Number(stats.warAttacks) || 0}</b><span>War</span></div><div class="slink-war-stat"><b>${Number(stats.mugs) || 0}</b><span>Mugs</span></div><div class="slink-war-stat"><b>${chain}</b><span>Chain</span></div></div>${snapshot.retals?.length ? `<div class="slink-war-note"><strong>Active retals</strong>${retalCards()}</div>` : ''}${localError ? `<div class="slink-war-error">${escape(localError)}</div>` : ''}<div>${body}</div>`);
+        const insideCap = Math.max(0, Number(current?.sharedConfig?.insideHitCap) || 0);
+        const mugSummary = Number(stats.mugs)
+          ? `${Number(stats.mugs)} mugs • ${money(stats.mugTotal)} total • ${money(stats.mugMin)} min • ${money(stats.mugAverage)} avg • ${money(stats.mugMax)} max`
+          : 'Mug totals appear after a mug.';
+        context.ui.setContentHtml(`<div class="slink-war-subtabs">${tabs.map(tab => `<button class="slink-war-subtab" data-war-tab="${tab}" aria-selected="${activeTab === tab}">${tab[0].toUpperCase()}${tab.slice(1)}</button>`).join('')}</div><div class="slink-war-summary"><div class="slink-war-stat"><b>${Number(stats.attacks) || 0}</b><span>Attacks</span></div><div class="slink-war-stat"><b>${Number(stats.warAttacks) || 0}${insideCap ? `/${insideCap}` : ''}</b><span>War / cap</span></div><div class="slink-war-stat"><b>${Number(stats.mugs) || 0}</b><span>Mugs</span></div><div class="slink-war-stat"><b>${chain}</b><span>Chain</span></div></div><div class="slink-war-note slink-war-report"><span>${mugSummary}</span><button id="slink-war-copy-report" type="button">Copy report</button></div>${snapshot.retals?.length ? `<div class="slink-war-note"><strong>Active retals</strong>${retalCards()}</div>` : ''}${localError ? `<div class="slink-war-error">${escape(localError)}</div>` : ''}<div>${body}</div>`);
         bindEvents();
       }
 
       function bindEvents() {
         const root = context.ui.getContentElement();
         for (const button of root.querySelectorAll('[data-war-tab]')) button.addEventListener('click', () => { activeTab = button.dataset.warTab; render(); });
+        root.querySelector('#slink-war-copy-report')?.addEventListener('click', async event => {
+          const button = event.currentTarget;
+          button.disabled = true;
+          try {
+            const result = await SLINK.core.messaging.send('war.chain.report');
+            await navigator.clipboard.writeText(result.text);
+            button.textContent = 'Copied';
+            localError = '';
+          } catch (error) {
+            localError = SLINK.core.format.errorMessage(error);
+            render();
+          } finally {
+            if (button.isConnected) button.disabled = false;
+          }
+        });
         const members = new Map([...(current?.runtime?.snapshot?.members || []), ...(current?.runtime?.outsideTargets || [])].map(member => [Number(member.id), member]));
         for (const button of root.querySelectorAll('[data-war-copy]')) button.addEventListener('click', () => void copyCallout(members.get(Number(button.dataset.warCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
         for (const button of root.querySelectorAll('[data-war-paste]')) button.addEventListener('click', () => pasteCallout(members.get(Number(button.dataset.warPaste)), button));
@@ -208,7 +235,15 @@
           const member = members.get(Number(button.dataset.warClaim));
           const claim = (current?.runtime?.snapshot?.claims || []).find(row => Number(row.targetId) === Number(member?.id));
           try {
-            current = await SLINK.core.messaging.send('war.claims.update', { operation:claim ? 'release' : 'claim', targetId:member.id, targetName:member.name });
+            const assigneeId = current?.session?.officer ? Number(root.querySelector('#slink-war-assignee-id')?.value) || 0 : 0;
+            const assigning = Boolean(assigneeId);
+            current = await SLINK.core.messaging.send('war.claims.update', {
+              operation:claim && !assigning ? 'release' : 'claim',
+              targetId:member.id,
+              targetName:member.name,
+              assigneeId,
+              assigneeName:assigning ? String(root.querySelector('#slink-war-assignee-name')?.value || '').trim() : ''
+            });
             localError = ''; render();
           } catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
@@ -236,7 +271,8 @@
             });
             if (current?.session?.officer) current = await SLINK.core.messaging.send('war.config.save', {
               mode:root.querySelector('#slink-war-mode')?.value,
-              idleMinutes:root.querySelector('#slink-war-idle')?.value
+              idleMinutes:root.querySelector('#slink-war-idle')?.value,
+              insideHitCap:root.querySelector('#slink-war-inside-cap')?.value
             });
             targetSort = root.querySelector('#slink-war-sort')?.value || targetSort;
             localError = '';

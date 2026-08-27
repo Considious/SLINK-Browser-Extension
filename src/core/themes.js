@@ -4,6 +4,15 @@
   const SLINK = global.SLINK_EXTENSION;
   const DEFAULT_THEME_ID = 'slink-dark';
   const STORAGE_KEY = 'ui.theme';
+  const CATALOG_STORAGE_KEY = 'themes.catalog.v1';
+  const TOKEN_NAMES = new Set([
+    '--slink-bg', '--slink-bg-raised', '--slink-bg-control', '--slink-surface', '--slink-card',
+    '--slink-control', '--slink-border', '--slink-border-soft', '--slink-text', '--slink-muted',
+    '--slink-accent', '--slink-accent-alt', '--slink-ready', '--slink-warning', '--slink-error',
+    '--slink-danger-bg', '--slink-link', '--slink-shadow', '--slink-page-bg', '--slink-topbar-bg',
+    '--slink-panel-bg', '--slink-button-bg', '--slink-selected-bg', '--slink-mark-bg',
+    '--slink-glow-left', '--slink-glow-right', '--slink-metal', '--slink-metal-dark'
+  ]);
   if (!SLINK) throw new Error('SLINK runtime must load before themes.');
 
   function tokens(values) {
@@ -46,6 +55,7 @@
       label: 'SLINK Dark',
       description: 'The standard free SLINK interface.',
       scope: null,
+      ornament: 'none',
       swatch: Object.freeze(['#162331', '#2f74ad', '#8fc9ff']),
       tokens: tokens({})
     }),
@@ -54,6 +64,7 @@
       label: 'Slinky Pursuit',
       description: 'Chrome coils with red and blue pursuit lighting.',
       scope: 'slink.theme.pursuit',
+      ornament: 'coil',
       swatch: Object.freeze(['#05080d', '#ee2525', '#167ee7']),
       tokens: tokens({
         '--slink-bg': '#04080d',
@@ -90,6 +101,7 @@
       label: 'Slinky Underglow',
       description: 'Glossy black with purple and green tuner-style underglow.',
       scope: 'slink.theme.underglow',
+      ornament: 'coil',
       swatch: Object.freeze(['#030405', '#a53dff', '#7bff45']),
       tokens: tokens({
         '--slink-bg': '#030405',
@@ -126,6 +138,7 @@
       label: 'Slinky Black Chrome',
       description: 'Matte black, gunmetal, and polished silver.',
       scope: 'slink.theme.black-chrome',
+      ornament: 'coil',
       swatch: Object.freeze(['#030303', '#656a70', '#f0f2f4']),
       tokens: tokens({
         '--slink-bg': '#050607',
@@ -159,8 +172,64 @@
     })
   });
 
+  let activeThemes = THEMES;
+  let activeCatalog = Object.freeze({ schemaVersion:1, revision:'bundled-0.11.0', updatedAt:'', themes:Object.values(THEMES) });
+
+  function validateCatalog(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value) || Number(value.schemaVersion) !== 1) throw new Error('Unsupported SLINK theme catalog.');
+    const revision = String(value.revision || '').trim();
+    if (!/^[a-zA-Z0-9._:-]{1,80}$/.test(revision)) throw new Error('Theme catalog revision is invalid.');
+    if (!Array.isArray(value.themes) || !value.themes.length || value.themes.length > 32) throw new Error('Theme catalog is empty or too large.');
+    const next = {};
+    for (const entry of value.themes) {
+      const id = String(entry?.id || '').trim();
+      const label = String(entry?.label || '').trim();
+      const description = String(entry?.description || '').trim();
+      const scope = entry?.scope === null || entry?.scope === undefined ? null : String(entry.scope).trim();
+      if (!/^[a-z0-9][a-z0-9-]{1,47}$/.test(id) || next[id]) throw new Error('Theme ID is invalid or duplicated.');
+      if (!label || label.length > 80 || !description || description.length > 180) throw new Error(`Theme ${id} has invalid display text.`);
+      if (scope !== null && !/^slink\.theme\.[a-z0-9][a-z0-9-]{0,63}$/.test(scope)) throw new Error(`Theme ${id} has an invalid permission scope.`);
+      if (!Array.isArray(entry?.swatch) || entry.swatch.length !== 3 || !entry.swatch.every(color => /^#[0-9a-fA-F]{6}$/.test(String(color)))) throw new Error(`Theme ${id} has invalid swatches.`);
+      if (!entry?.tokens || typeof entry.tokens !== 'object' || Array.isArray(entry.tokens)) throw new Error(`Theme ${id} has invalid visual tokens.`);
+      const values = {};
+      for (const [name, raw] of Object.entries(entry.tokens)) {
+        const token = String(raw || '').trim();
+        if (!TOKEN_NAMES.has(name) || !token || token.length > 320 || !/^[a-zA-Z0-9#(),.%+\-\s]+$/.test(token) || /url\s*\(|expression\s*\(/i.test(token)) throw new Error(`Theme ${id} contains a disallowed visual token.`);
+        values[name] = token;
+      }
+      next[id] = Object.freeze({
+        id,
+        label,
+        description,
+        scope,
+        ornament:entry.ornament === 'coil' ? 'coil' : 'none',
+        swatch:Object.freeze(entry.swatch.map(String)),
+        tokens:tokens(values)
+      });
+    }
+    if (!next[DEFAULT_THEME_ID] || next[DEFAULT_THEME_ID].scope !== null) throw new Error('Theme catalog is missing the free fallback.');
+    return Object.freeze({
+      schemaVersion:1,
+      revision,
+      updatedAt:String(value.updatedAt || ''),
+      themes:Object.freeze(Object.values(next)),
+      map:Object.freeze(next)
+    });
+  }
+
+  function installCatalog(value) {
+    const catalog = validateCatalog(value);
+    activeCatalog = Object.freeze({ schemaVersion:catalog.schemaVersion, revision:catalog.revision, updatedAt:catalog.updatedAt, themes:catalog.themes });
+    activeThemes = catalog.map;
+    return activeCatalog;
+  }
+
+  function catalog() {
+    return activeCatalog;
+  }
+
   function get(id = DEFAULT_THEME_ID) {
-    return THEMES[id] || THEMES[DEFAULT_THEME_ID];
+    return activeThemes[id] || activeThemes[DEFAULT_THEME_ID] || THEMES[DEFAULT_THEME_ID];
   }
 
   function isUnlocked(themeOrId, permissions = {}) {
@@ -172,11 +241,11 @@
 
   function resolve(id, permissions = {}) {
     const requested = get(id);
-    return isUnlocked(requested, permissions) ? requested : THEMES[DEFAULT_THEME_ID];
+    return isUnlocked(requested, permissions) ? requested : get(DEFAULT_THEME_ID);
   }
 
   function list(permissions = {}) {
-    return Object.values(THEMES).map(theme => Object.freeze({
+    return Object.values(activeThemes).map(theme => Object.freeze({
       ...theme,
       unlocked: isUnlocked(theme, permissions)
     }));
@@ -192,19 +261,24 @@
     if (!element?.style) throw new TypeError('A styleable element is required to apply a SLINK theme.');
     const theme = resolve(id, permissions);
     element.dataset.slinkTheme = theme.id;
+    element.dataset.slinkOrnament = theme.ornament || 'none';
     for (const [name, value] of Object.entries(theme.tokens)) element.style.setProperty(name, value);
     return theme;
   }
 
   SLINK.define('core', 'themes', Object.freeze({
     DEFAULT_THEME_ID,
+    CATALOG_STORAGE_KEY,
     STORAGE_KEY,
     THEMES,
     applyToElement,
     cssVariables,
+    catalog,
     get,
+    installCatalog,
     isUnlocked,
     list,
-    resolve
+    resolve,
+    validateCatalog
   }));
 })(globalThis);

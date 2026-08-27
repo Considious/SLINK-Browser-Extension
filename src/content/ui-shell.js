@@ -53,6 +53,7 @@
     :host(:not([data-slink-theme="slink-dark"])) .mark { background:var(--slink-mark-bg); color:#050607; box-shadow:inset 0 0 0 1px var(--slink-metal),0 0 12px var(--slink-glow-right); text-shadow:0 1px rgba(255,255,255,.45); }
     :host(:not([data-slink-theme="slink-dark"])) .tab[aria-selected="true"] { background:var(--slink-selected-bg); box-shadow:0 0 12px var(--slink-glow-right); }
     :host(:not([data-slink-theme="slink-dark"])) .actions button { background:var(--slink-button-bg); }
+    :host([data-slink-ornament="coil"]) .module-head strong::before { display:inline-block; width:20px; height:15px; margin-right:6px; vertical-align:-3px; background:repeating-radial-gradient(ellipse at center,transparent 0 2px,var(--slink-metal) 3px 4px,transparent 5px 7px); filter:drop-shadow(0 0 4px var(--slink-glow-right)); content:""; }
     @media(max-width:420px) { .window{width:min(300px,calc(100vw - 8px))}.main{right:4px;top:4px}.popup{left:4px;top:4px}.bubble{right:6px;top:64px;width:46px;height:46px}.row{grid-template-columns:90px minmax(0,1fr)}.content{max-height:calc(100dvh - 190px)} }
   `;
 
@@ -73,6 +74,7 @@
     function setTheme(id, permissions = {}) {
       const theme = SLINK.core.themes.resolve(id, permissions);
       host.dataset.slinkTheme = theme.id;
+      host.dataset.slinkOrnament = theme.ornament || 'none';
       themeStyle.textContent = `:host{${SLINK.core.themes.cssVariables(theme.id, permissions)}}`;
       return theme;
     }

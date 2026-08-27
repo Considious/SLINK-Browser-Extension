@@ -77,7 +77,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.10.0', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.11.0', 'Unexpected runtime version.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
 
@@ -89,6 +89,22 @@ assert(Object.keys(SLINK.core.themes.THEMES).length === 4, 'Expected the free th
 assert(SLINK.core.themes.resolve('slinky-underglow', { userId:12, scopes:[] }).id === 'slink-dark', 'Locked theme did not fall back safely.');
 assert(SLINK.core.themes.resolve('slinky-underglow', { userId:12, scopes:['slink.theme.underglow'] }).id === 'slinky-underglow', 'Granted theme permission was not honored.');
 assert(SLINK.core.themes.resolve('slinky-black-chrome', { userId:3853023, scopes:['admin.*'] }).id === 'slinky-black-chrome', 'Sole administrator did not unlock all themes.');
+const remoteThemes = Object.values(SLINK.core.themes.THEMES).map(theme => ({
+  id:theme.id, label:theme.label, description:theme.description, scope:theme.scope,
+  ornament:theme.ornament, swatch:[...theme.swatch], tokens:{ ...theme.tokens }
+}));
+remoteThemes.push({
+  id:'slinky-test', label:'Slinky Test', description:'Validated remote visual tokens.',
+  scope:'slink.theme.test', ornament:'coil', swatch:['#112233','#445566','#778899'],
+  tokens:{ '--slink-accent':'#445566' }
+});
+SLINK.core.themes.installCatalog({ schemaVersion:1, revision:'test.1', themes:remoteThemes });
+assert(SLINK.core.themes.list({ userId:12, scopes:['slink.theme.test'] }).some(theme => theme.id === 'slinky-test' && theme.unlocked), 'Validated remote theme was not installed.');
+let rejectedRemoteCode = false;
+try {
+  SLINK.core.themes.validateCatalog({ schemaVersion:1, revision:'bad.1', themes:[...remoteThemes.slice(0, 4), { ...remoteThemes[4], tokens:{ '--slink-page-bg':'url(https://evil.test/code.js)' } }] });
+} catch { rejectedRemoteCode = true; }
+assert(rejectedRemoteCode, 'Remote URL/code-like theme content was not rejected.');
 assert(permissions.hasScope({ scopes: ['slink.level'] }, 'slink.level'), 'Exact scope matching failed.');
 assert(permissions.hasScope({ userId:3853023, scopes: ['admin.*'] }, 'admin.users'), 'Wildcard scope matching failed.');
 assert(!permissions.hasScope({ roles: ['admin'], scopes: ['slink.level'] }, 'admin.users'), 'Roles must not bypass signed scope checks.');

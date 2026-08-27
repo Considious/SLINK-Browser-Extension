@@ -17,7 +17,12 @@
     if (changes[collapsedKey]) void ui.setCollapsed(Boolean(changes[collapsedKey].newValue), false);
     const permissionsKey = SLINK.core.storage.fullKey('permissions.snapshot');
     const themeKey = SLINK.core.storage.fullKey(SLINK.core.themes.STORAGE_KEY);
-    if (changes[themeKey] || changes[permissionsKey]) {
+    const catalogKey = SLINK.core.storage.fullKey(SLINK.core.themes.CATALOG_STORAGE_KEY);
+    if (changes[catalogKey]?.newValue?.catalog) {
+      try { SLINK.core.themes.installCatalog(changes[catalogKey].newValue.catalog); }
+      catch (error) { console.error('[SLINK] Rejected invalid cached theme catalog:', error); }
+    }
+    if (changes[themeKey] || changes[permissionsKey] || changes[catalogKey]) {
       void Promise.all([
         SLINK.core.storage.get(SLINK.core.themes.STORAGE_KEY, SLINK.core.themes.DEFAULT_THEME_ID),
         SLINK.core.messaging.send('permissions.get')
@@ -31,7 +36,11 @@
 
   try {
     await SLINK.core.messaging.send('content.ready', { url:global.location.href });
-    const permissions = await SLINK.core.messaging.send('permissions.get');
+    const [permissions, themeRecord] = await Promise.all([
+      SLINK.core.messaging.send('permissions.get'),
+      SLINK.core.messaging.send('themes.catalog').catch(() => null)
+    ]);
+    if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
     const preferredTheme = await SLINK.core.storage.get(
       SLINK.core.themes.STORAGE_KEY,
       SLINK.core.themes.DEFAULT_THEME_ID

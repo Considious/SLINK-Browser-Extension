@@ -113,6 +113,7 @@ button.wide { width: 100%; min-height: 28px; margin-top: 8px; }
 .error { padding: 7px 8px; border: 1px solid #6a3636; border-radius: 7px; background: #3c2222; color: #ffc2c2; }
 
 /* Shared theme tokens are applied by core/themes.js after permission checks. */
+:root[data-slink-ornament="coil"] h2::before{display:inline-block;width:20px;height:15px;margin-right:6px;vertical-align:-3px;background:repeating-radial-gradient(ellipse at center,transparent 0 2px,var(--slink-metal) 3px 4px,transparent 5px 7px);filter:drop-shadow(0 0 4px var(--slink-glow-right));content:""}
 :root { background: var(--slink-bg); color: var(--slink-text); }
 body { background: var(--slink-page-bg); }
 header { background: var(--slink-topbar-bg); }

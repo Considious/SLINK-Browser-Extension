@@ -77,6 +77,7 @@ for (const page of [manifest.action.default_popup, manifest.options_ui.page]) {
 for (const file of listFiles(path.join(root, 'src')).filter(file => file.endsWith('.js'))) {
   const source = fs.readFileSync(file, 'utf8');
   new vm.Script(source, { filename: path.relative(root, file) });
+  assert(!/\beval\s*\(|\bnew\s+Function\s*\(/.test(source), `Remote-code execution primitive in ${path.relative(root, file)}.`);
   assert(!source.includes('chrome.permissions.request'), 'Core SLINK hosts must not require runtime permission buttons.');
   const forbiddenPageNavigation = [
     /\blocation\s*\.\s*reload\s*\(/,
@@ -105,6 +106,8 @@ for (const match of dashboardSource.matchAll(/byId\('([^']+)'\)/g)) {
 }
 assert(/function setBusy\(button, busy\)\s*{\s*if \(button\)/.test(dashboardSource), 'Dashboard busy-state helper must tolerate removed or unavailable controls.');
 assert(dashboardHtml.includes('id="theme-options"'), 'Dashboard theme selector is missing.');
+assert(read('src/background/theme-service.js').includes('/api/themes'), 'Background theme catalog route is missing.');
+assert(!manifest.host_permissions.some(origin => /githubusercontent|github\.com/.test(origin)), 'The extension must receive theme data through its existing Worker, not direct GitHub host access.');
 const uiShellSource = read('src/content/ui-shell.js');
 assert(uiShellSource.includes('setTheme'), 'Torn UI shell does not support live themes.');
 assert(uiShellSource.includes('ui.main.collapsed') && uiShellSource.includes('bubble-coil'), 'Torn UI shell does not provide the persistent theme-aware collapse bubble.');

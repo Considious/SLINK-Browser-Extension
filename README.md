@@ -4,6 +4,21 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.11.0 adds the queued War coordination and theme work. War officers
+can set one faction-wide inside-hit cap and assign med-out targets to another
+Torn member. Personal mug tracking now includes total, minimum, average, and
+maximum values, and the current chain/War summary is fetched and copied only
+when the user presses **Copy report**. The three premium themes now use a
+bundled coil ornament preset instead of being color swaps alone.
+
+Theme definitions are loaded as strictly validated visual JSON through the
+existing SLINK War Worker. The extension rejects remote JavaScript, HTML, CSS,
+URLs, and executable content, keeps a last-known-good local catalog, and falls
+back to its bundled themes if the service or GitHub is unavailable. This lets
+new visual-token themes and their `slink.theme.<id>` scopes be published from
+the central Cloudflare-services repository without a new Chrome Web Store
+package; all theme behavior remains bundled in the extension.
+
 Version 0.10.0 recognizes an assigned ranked-war opponent before the war starts.
 Med-out claims and officer-controlled faction settings become available as soon
 as the matchup is assigned, status collection begins five minutes before the

@@ -1,6 +1,6 @@
 {
   "name": "slink-browser-extension",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "description": "Chrome-first SLINK browser extension with SLINK Leveling and War tools.",
   "scripts": {

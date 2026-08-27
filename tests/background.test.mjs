@@ -17,6 +17,7 @@ let warStatusSubmissions = 0;
 let warAttackSubmissions = 0;
 let warStoredLogReads = 0;
 let sharedWarMode = 'war';
+let sharedInsideHitCap = 0;
 let warClaims = [];
 let assignedWarStart = 0;
 
@@ -56,7 +57,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.10.0' }; },
+    getManifest() { return { version: '0.11.0' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -173,6 +174,12 @@ context = vm.createContext({
     } else if (url.hostname === 'slinkwarworker.richard-johnson554.workers.dev') {
       if (url.pathname === '/api/health') body = { ok:true, version:'test-war', database:'connected', coordinator:'configured', session_secret:'configured' };
       if (url.pathname === '/api/terms') body = { ok:true, terms:{ version:'2026-08-24', sha256:'72a933d69ec99cabeb92b426208e9d0c47e90acaf960818e0b4da38f3f2f5b0a', url:'https://example.test/terms', summary:'War disclosure.' } };
+      if (url.pathname === '/api/themes') body = { ok:true, source:'test-worker', catalog:{ schemaVersion:1, revision:'test.remote.1', themes:[
+        { id:'slink-dark', label:'SLINK Dark', description:'Free fallback.', scope:null, ornament:'none', swatch:['#112233','#224466','#336699'], tokens:{ '--slink-bg':'#112233' } },
+        { id:'slinky-pursuit', label:'Slinky Pursuit', description:'Pursuit.', scope:'slink.theme.pursuit', ornament:'coil', swatch:['#111111','#ff0000','#0000ff'], tokens:{ '--slink-accent':'#ff0000' } },
+        { id:'slinky-underglow', label:'Slinky Underglow', description:'Underglow.', scope:'slink.theme.underglow', ornament:'coil', swatch:['#111111','#9900ff','#00ff66'], tokens:{ '--slink-accent':'#9900ff' } },
+        { id:'slinky-black-chrome', label:'Slinky Black Chrome', description:'Chrome.', scope:'slink.theme.black-chrome', ornament:'coil', swatch:['#111111','#777777','#eeeeee'], tokens:{ '--slink-accent':'#777777' } }
+      ] } };
       if (url.pathname === '/api/auth') body = { ok:true, session_token:'signed-war-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:['admin.*','slink.war','slink.war.faction'] };
       if (url.pathname === '/api/admin/scopes') body = { ok:true, scopes:[{ scope:'slink.level', category:'Products', title:'SLINK Leveling' }, { scope:'slink.war', category:'Products', title:'SLINK War' }, { scope:'slink.war.officer', category:'War permissions', title:'SLINK War Officer' }, { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow' }] };
       if (/^\/api\/admin\/users\/\d+\/permissions$/.test(url.pathname)) {
@@ -197,19 +204,20 @@ context = vm.createContext({
         observedAt:Date.now(),
         members:[{ id:9001, name:'War Target', level:55, activity:'Offline', statusState:'Okay' }],
         retals:[{ attackId:'retal-1', attackerId:9001, attackerName:'War Target', defenderId:3853023, defenderName:'Considious', expiresAt:Math.floor(Date.now() / 1000) + 240 }],
-        config:{ mode:sharedWarMode, idleMinutes:5, updatedBy:3853023, updatedAt:Date.now() },
+        config:{ mode:sharedWarMode, idleMinutes:5, insideHitCap:sharedInsideHitCap, updatedBy:3853023, updatedAt:Date.now() },
         claims:warClaims,
         collectors:{ status:true, attacks:true }
       };
       if (url.pathname.endsWith('/config')) {
         const request = JSON.parse(String(options.body || '{}'));
         sharedWarMode = request.mode === 'termed' ? 'termed' : 'war';
-        body = { ok:true, config:{ mode:sharedWarMode, idleMinutes:Number(request.idleMinutes) || 0, updatedBy:3853023, updatedAt:Date.now() } };
+        sharedInsideHitCap = Number(request.insideHitCap) || 0;
+        body = { ok:true, config:{ mode:sharedWarMode, idleMinutes:Number(request.idleMinutes) || 0, insideHitCap:sharedInsideHitCap, updatedBy:3853023, updatedAt:Date.now() } };
       }
       if (url.pathname.endsWith('/claims')) {
         const request = JSON.parse(String(options.body || '{}'));
         if (request.operation === 'release') warClaims = warClaims.filter(claim => claim.targetId !== Number(request.targetId));
-        else warClaims = [{ targetId:Number(request.targetId), targetName:request.targetName, claimedById:3853023, claimedByName:'Considious', claimedAt:Date.now(), expiresAt:Date.now() + 1_800_000 }];
+        else warClaims = [{ targetId:Number(request.targetId), targetName:request.targetName, claimedById:Number(request.assigneeId) || 3853023, claimedByName:request.assigneeName || 'Considious', assignedById:3853023, assignedByName:'Considious', claimedAt:Date.now(), expiresAt:Date.now() + 1_800_000 }];
         body = { ok:true, claims:warClaims };
       }
       if (url.pathname.endsWith('/logs')) body = {
@@ -234,6 +242,11 @@ context = vm.createContext({
       else if (url.pathname === '/v2/faction/attacks') body = {
         attacks:[{ id:'attack-1', ended:Math.floor(Date.now() / 1000), attacker:{ id:9001, name:'War Target', faction:{ id:46999 } }, defender:{ id:3853023, name:'Considious', faction:{ id:46978 } }, result:'Hospitalized' }]
       };
+      else if (url.pathname === '/v2/user/attacks') body = {
+        attacks:[{ id:'my-mug-1', ended:Math.floor(Date.now() / 1000), attacker:{ id:3853023, faction:{ id:46978 } }, defender:{ id:9001, faction:{ id:46999 } }, result:'Mugged', is_ranked_war:true, money_mugged:1250000 }]
+      };
+      else if (url.pathname === '/v2/faction/chain') body = { chain:{ id:444, current:25, max:50, timeout:75 } };
+      else if (url.pathname === '/v2/faction/444/chainreport' || url.pathname === '/v2/faction/chainreport') body = { chainreport:{ id:444, hits:25, respect:31.5 } };
       else if (url.pathname.endsWith('/battlestats')) body = {
         battlestats: { strength: 100, defense: 100, speed: 100, dexterity: 100, total: 400 }
       };
@@ -285,6 +298,7 @@ assert(values.get('slink.ui.pagePanelHidden') === false, 'Default page-panel sta
 assert(values.get('slink.permissions.snapshot')?.scopes?.length === 0, 'Unauthenticated bootstrap must not invent server scopes.');
 assert(alarms.has('slink.worker.connection'), 'Worker connection alarm was not created.');
 assert(values.get('slink.worker.lastStatus')?.connected === true, 'Automatic Worker connection was not persisted.');
+assert(values.get('slink.themes.catalog.v1')?.catalog?.revision === 'test.remote.1', 'Remote theme catalog was not cached locally.');
 
 async function send(type, payload = {}, sender = { id: 'test' }) {
   return new Promise(resolve => {
@@ -385,10 +399,14 @@ assert(scheduledCycle.ok && scheduledCycle.data.activeWar.phase === 'scheduled',
 assert(scheduledCycle.ok && scheduledCycle.data.runtime.snapshot.members.length === 1, 'Assigned War did not load the enemy roster for med-out claims.');
 assert(scheduledCycle.data.runtime.snapshot.retals.length === 0, 'Retals were enabled before the assigned War started.');
 assert(warStatusSubmissions === 0 && warAttackSubmissions === 0, 'Assigned War started live collection before the pre-war window.');
-const scheduledConfig = await send('war.config.save', { mode:'termed', idleMinutes:10 });
+const scheduledConfig = await send('war.config.save', { mode:'termed', idleMinutes:10, insideHitCap:25 });
 assert(scheduledConfig.ok && scheduledConfig.data.sharedConfig.mode === 'termed', 'Officer settings were unavailable for an assigned War.');
+assert(scheduledConfig.data.sharedConfig.insideHitCap === 25, 'Officer inside-hit cap was not saved faction-wide.');
 const scheduledClaim = await send('war.claims.update', { operation:'claim', targetId:9001, targetName:'War Target' });
 assert(scheduledClaim.ok && scheduledClaim.data.runtime.snapshot.claims[0].claimedByName === 'Considious', 'Med-out claims were unavailable for an assigned War.');
+await send('war.claims.update', { operation:'release', targetId:9001, targetName:'War Target' });
+const assignedClaim = await send('war.claims.update', { operation:'claim', targetId:9001, targetName:'War Target', assigneeId:1234567, assigneeName:'Assigned Member' });
+assert(assignedClaim.ok && assignedClaim.data.runtime.snapshot.claims[0].claimedById === 1234567, 'Officer could not assign a med-out partner to another member.');
 await send('war.claims.update', { operation:'release', targetId:9001, targetName:'War Target' });
 
 const detectedWar = await send('war.active.detect', {
@@ -404,12 +422,15 @@ assert(warCycle.data.runtime.snapshot.retals.length === 1, 'War cycle did not lo
 assert(warCycle.data.runtime.snapshot.members[0].battleStatsEstimate === 2500000, 'War target did not retain the FFScouter battle-stat estimate.');
 assert(warCycle.data.runtime.logs[0].event_count === 1, 'War cycle did not load aggregate logs.');
 assert(warCycle.data.runtime.logsWarning.includes('Live targets and retals remain available'), 'Missing historical storage did not degrade to a live-data warning.');
+assert(warCycle.data.runtime.panelStats.mugTotal === 1250000 && warCycle.data.runtime.panelStats.mugAverage === 1250000, 'Mug totals were not calculated from personal attacks.');
 assert(warStatusSubmissions === 1, 'Elected public status collector did not submit once.');
 assert(warAttackSubmissions === 1, 'Elected faction collector did not submit attacks once.');
-const configuredWar = await send('war.config.save', { mode:'termed', idleMinutes:10 });
+const configuredWar = await send('war.config.save', { mode:'termed', idleMinutes:10, insideHitCap:25 });
 assert(configuredWar.ok && configuredWar.data.sharedConfig.mode === 'termed', 'Officer War mode was not saved faction-wide.');
 const claimedWar = await send('war.claims.update', { operation:'claim', targetId:9001, targetName:'War Target' });
 assert(claimedWar.ok && claimedWar.data.runtime.snapshot.claims[0].claimedByName === 'Considious', 'Med-out claim was not shared through the War coordinator.');
+const copiedReport = await send('war.chain.report');
+assert(copiedReport.ok && copiedReport.data.text.includes('War hits: 1/25') && copiedReport.data.text.includes('$1,250,000'), 'On-demand chain report omitted the shared cap or mug totals.');
 const secondWarCycle = await send('war.cycle.prepare');
 assert(secondWarCycle.ok, 'Second War refresh failed.');
 assert(warStoredLogReads === 1, 'War panels reread persisted D1 logs before the ten-minute cache expired.');

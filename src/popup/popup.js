@@ -97,7 +97,11 @@
     elements.connection.className = 'badge';
 
     try {
-      const status = await SLINK.core.messaging.send('system.status');
+      const [status, themeRecord] = await Promise.all([
+        SLINK.core.messaging.send('system.status'),
+        SLINK.core.messaging.send('themes.catalog').catch(() => null)
+      ]);
+      if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
       const preferredTheme = await SLINK.core.storage.get(
         SLINK.core.themes.STORAGE_KEY,
         SLINK.core.themes.DEFAULT_THEME_ID

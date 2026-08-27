@@ -55,6 +55,10 @@
     document.body.append(input); input.select(); document.execCommand('copy'); input.remove();
   }
 
+  function money(value) {
+    return `$${Math.max(0, Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits:0 })}`;
+  }
+
   function targetCard(target) {
     const article = document.createElement('article');
     article.className = 'target';
@@ -102,8 +106,19 @@
     claimButton.disabled = Boolean(claim && !mine && !war?.session?.officer);
     claimButton.addEventListener('click', async () => {
       try {
-        war = await SLINK.core.messaging.send('war.claims.update', { operation:claim ? 'release' : 'claim', targetId:member.id, targetName:member.name });
-        byId('war-action-message').textContent = claim ? `Released ${member.name}.` : `Claimed ${member.name} as your med-out target.`;
+        const assigneeId = war?.session?.officer ? Number(byId('claim-assignee-id').value) || 0 : 0;
+        const assigning = Boolean(assigneeId);
+        const operation = claim && !assigning ? 'release' : 'claim';
+        war = await SLINK.core.messaging.send('war.claims.update', {
+          operation,
+          targetId:member.id,
+          targetName:member.name,
+          assigneeId,
+          assigneeName:assigning ? byId('claim-assignee-name').value.trim() : ''
+        });
+        byId('war-action-message').textContent = operation === 'release'
+          ? `Released ${member.name}.`
+          : assigning ? `Assigned ${member.name} to Torn ID ${assigneeId}.` : `Claimed ${member.name} as your med-out target.`;
         renderTargets(); renderWar();
       } catch (error) { byId('war-action-message').textContent = errorText(error); }
     });
@@ -222,6 +237,7 @@
     const stats = war?.runtime?.panelStats || {};
     byId('war-role').textContent = war?.session?.authenticated ? (war.session.officer ? 'War officer' : war.session.factionCapable ? 'Faction API' : 'Public API') : 'Setup required';
     const phase = war?.activeWar?.phase;
+    byId('copy-chain-report').disabled = phase !== 'active';
     const startsAt = Number(war?.activeWar?.startedAt) || 0;
     const phaseLabel = phase === 'scheduled'
       ? `Assigned • starts ${new Date(startsAt).toLocaleString()}`
@@ -230,8 +246,12 @@
       ? `${war.activeWar.opponentName} [${war.activeWar.opponentFactionId}]${phaseLabel ? ` • ${phaseLabel}` : ''}`
       : 'No assigned or active ranked war detected by API';
     byId('war-attack-count').textContent = stats.attacks || 0;
-    byId('war-ranked-count').textContent = stats.warAttacks || 0;
+    const insideCap = Math.max(0, Number(sharedConfig.insideHitCap) || 0);
+    byId('war-ranked-count').textContent = `${Number(stats.warAttacks) || 0}${insideCap ? `/${insideCap}` : ''}`;
     byId('war-mug-count').textContent = stats.mugs || 0;
+    byId('war-mug-summary').textContent = Number(stats.mugs)
+      ? `Mugs ${money(stats.mugTotal)} total • ${money(stats.mugMin)} min • ${money(stats.mugAverage)} avg • ${money(stats.mugMax)} max`
+      : 'Mug totals appear after a mug.';
     byId('war-retal-count').textContent = snapshot.retals?.length || 0;
     const chain = stats.chain;
     byId('war-chain').textContent = chain?.current ? `${chain.current}${chain.target ? `/${chain.target}` : ''}${chain.secondsLeft ? ` • ${SLINK.core.format.formatHumanDuration(chain.secondsLeft)}` : ''}` : 'No active chain';
@@ -243,10 +263,12 @@
     byId('war-display-mode').value = settings.displayMode || 'hybrid';
     byId('war-mode').value = sharedConfig.mode || settings.warMode || 'war';
     byId('war-idle-minutes').value = sharedConfig.idleMinutes ?? settings.idleMinutes ?? 5;
+    byId('war-inside-cap').value = insideCap;
     byId('war-mode').disabled = !war?.session?.officer;
     byId('war-idle-minutes').disabled = !war?.session?.officer;
+    byId('war-inside-cap').disabled = !war?.session?.officer;
     byId('war-config-note').textContent = war?.session?.officer
-      ? 'War mode and idle filtering are shared faction-wide. Your other alert and display settings remain local.'
+      ? 'War mode, idle filtering, and the inside-hit cap are shared faction-wide. Your other alert and display settings remain local.'
       : `Faction-wide mode: ${sharedConfig.mode === 'termed' ? 'Termed war' : 'Real war'}. A slink.war.officer may change it.`;
     byId('war-turtle-minutes').value = settings.turtleMinutes || 5;
     byId('war-alert-sound').checked = settings.alertSound !== false;
@@ -274,6 +296,7 @@
     for (const button of document.querySelectorAll('.target-tab')) button.classList.toggle('active', button.dataset.targetView === targetView);
     byId('war-sort-row').hidden = targetView !== 'war';
     byId('outside-filter-row').hidden = targetView !== 'outside';
+    byId('claim-assignee-row').hidden = !war?.session?.officer || !['war', 'claims'].includes(targetView);
     if (targetView === 'claims') {
       const claims = war?.runtime?.snapshot?.claims || [];
       root.replaceChildren(...claims.map(claimCard));
@@ -337,7 +360,8 @@
       button.append(swatch, copy, access);
       return button;
     }));
-    byId('theme-summary').textContent = `${activeTheme.label} is active. Theme changes apply to the dashboard, popup, and Torn panels.`;
+    const revision = SLINK.core.themes.catalog()?.revision || 'bundled';
+    byId('theme-summary').textContent = `${activeTheme.label} is active. Theme catalog ${revision}; visual changes apply without a Web Store update.`;
   }
 
   async function applySavedTheme() {
@@ -418,10 +442,12 @@
   }
 
   async function refresh() {
-    const [status, terms] = await Promise.all([
+    const [status, terms, themeRecord] = await Promise.all([
       SLINK.core.messaging.send('system.status'),
-      SLINK.core.messaging.send('contribution.terms').catch(() => null)
+      SLINK.core.messaging.send('contribution.terms').catch(() => null),
+      SLINK.core.messaging.send('themes.catalog').catch(() => null)
     ]);
+    if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
     system = status; leveling = status.leveling; war = status.war; contribution = status.contribution; contributionTerms = terms;
     system.levelingInTorn = await SLINK.core.storage.get('ui.modules.leveling.showInTorn', true);
     await SLINK.core.storage.set('ui.modules.contribution.showInTorn', false);
@@ -482,6 +508,15 @@
   byId('war-reset-position').addEventListener('click', () => SLINK.core.storage.remove('ui.main.position'));
   byId('refresh-targets').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { leveling = await SLINK.core.messaging.send('leveling.activity.touch'); const result = await SLINK.core.messaging.send('leveling.cycle.prepare',{contribute:false}); leveling = result.status; renderLeveling(); renderTargets(); } catch (error) { showError('leveling-error', error); } finally { setBusy(button, false); } });
   byId('war-refresh').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { war = await SLINK.core.messaging.send('war.cycle.prepare',{forceOpponentRefresh:true}); renderWar(); renderTargets(); } catch (error) { showError('war-error', error); } finally { setBusy(button, false); } });
+  byId('copy-chain-report').addEventListener('click', async event => {
+    const button = event.currentTarget; setBusy(button, true); byId('war-action-message').textContent = '';
+    try {
+      const report = await SLINK.core.messaging.send('war.chain.report');
+      await copyText(report.text);
+      byId('war-action-message').textContent = 'Current chain and SLINK War report copied for faction chat.';
+    } catch (error) { byId('war-action-message').textContent = errorText(error); }
+    finally { setBusy(button, false); }
+  });
   byId('outside-refresh').addEventListener('click', async event => { const button=event.currentTarget; setBusy(button,true); byId('war-action-message').textContent=''; try { war=await SLINK.core.messaging.send('war.outside.refresh',{minFF:byId('outside-min-ff').value,maxFF:byId('outside-max-ff').value}); byId('war-action-message').textContent=`Loaded ${war?.runtime?.outsideTargets?.length || 0} outside targets from FFScouter.`; renderWar(); renderTargets(); } catch(error){ byId('war-action-message').textContent=errorText(error); } finally{setBusy(button,false);} });
   byId('war-save-settings').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); clearError('war-error');
@@ -495,7 +530,7 @@
         turtleAlert:byId('war-turtle-alert').checked,
         turtleMinutes:byId('war-turtle-minutes').value
       });
-      if (war?.session?.officer) war = await SLINK.core.messaging.send('war.config.save', { mode:byId('war-mode').value, idleMinutes:byId('war-idle-minutes').value });
+      if (war?.session?.officer) war = await SLINK.core.messaging.send('war.config.save', { mode:byId('war-mode').value, idleMinutes:byId('war-idle-minutes').value, insideHitCap:byId('war-inside-cap').value });
       war = await SLINK.core.messaging.send('war.cycle.prepare');
       byId('war-action-message').textContent = war?.session?.officer ? 'Local alerts and faction-wide War settings saved.' : 'Local War display and alert settings saved.';
       renderWar(); renderTargets();

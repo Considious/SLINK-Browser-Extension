@@ -66,7 +66,7 @@
       outsideError: '',
       collectStatus: false,
       collectAttacks: false,
-      panelStats: { attacks:0, warAttacks:0, mugs:0, chain:null, turtle:null },
+      panelStats: { attacks:0, warAttacks:0, mugs:0, mugTotal:0, mugMin:0, mugMax:0, mugAverage:0, chain:null, turtle:null },
       lastCycleAt: 0
     };
   }
@@ -317,7 +317,7 @@
     };
     if (!sameWar) {
       await Promise.all([
-        SLINK.core.storage.set(KEYS.personalStats, { warId:activeWar.warId, attacks:0, warAttacks:0, mugs:0 }),
+        SLINK.core.storage.set(KEYS.personalStats, emptyPersonalStats(activeWar.warId)),
         SLINK.core.storage.set(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:[] })
       ]);
     }
@@ -371,6 +371,49 @@
     return members.length;
   }
 
+  function emptyPersonalStats(warId) {
+    return { warId, attacks:0, warAttacks:0, mugs:0, mugTotal:0, mugMin:0, mugMax:0 };
+  }
+
+  function mugAmount(attack) {
+    for (const value of [
+      attack?.money_mugged,
+      attack?.moneyMugged,
+      attack?.stealthed_money,
+      attack?.money,
+      attack?.details?.money_mugged,
+      attack?.details?.money
+    ]) {
+      const amount = Number(value);
+      if (Number.isFinite(amount) && amount > 0) return Math.floor(amount);
+    }
+    return 0;
+  }
+
+  function addPersonalAttacks(storedStats, storedSeen, activeWar, session, attacks, assumeCurrentUser = false) {
+    const stats = storedStats?.warId === activeWar.warId ? { ...emptyPersonalStats(activeWar.warId), ...storedStats } : emptyPersonalStats(activeWar.warId);
+    const seen = new Set(storedSeen?.warId === activeWar.warId ? storedSeen.ids || [] : []);
+    for (const attack of attacks) {
+      const id = String(attack?.id ?? attack?.attack_id ?? '');
+      const attackerId = Number(attack?.attacker?.id ?? attack?.attacker_id ?? (assumeCurrentUser ? session.userId : 0));
+      if (!id || attackerId !== Number(session.userId) || seen.has(id)) continue;
+      seen.add(id);
+      stats.attacks += 1;
+      const defenderFaction = Number(attack?.defender?.faction?.id ?? attack?.defender?.faction_id ?? attack?.defender_faction_id ?? 0);
+      if (attack?.is_ranked_war === true || defenderFaction === Number(activeWar.opponentFactionId)) stats.warAttacks += 1;
+      if (String(attack?.result ?? attack?.outcome ?? '').toLowerCase() === 'mugged') {
+        const amount = mugAmount(attack);
+        stats.mugs += 1;
+        stats.mugTotal += amount;
+        if (amount > 0) {
+          stats.mugMin = stats.mugMin > 0 ? Math.min(stats.mugMin, amount) : amount;
+          stats.mugMax = Math.max(stats.mugMax, amount);
+        }
+      }
+    }
+    return { stats, seen:[...seen].slice(-1000) };
+  }
+
   async function collectAttacks(activeWar, currentSettings) {
     const session = await ensureSession(false);
     const now = Math.floor(Date.now() / 1000);
@@ -384,26 +427,15 @@
     });
     const newest = attacks.reduce((maximum, attack) => Math.max(maximum, Number(attack?.ended ?? attack?.ended_at ?? 0) || 0), previous);
     const [storedStats, storedSeen] = await Promise.all([
-      SLINK.core.storage.get(KEYS.personalStats, { warId:activeWar.warId, attacks:0, warAttacks:0, mugs:0 }),
+      SLINK.core.storage.get(KEYS.personalStats, emptyPersonalStats(activeWar.warId)),
       SLINK.core.storage.get(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:[] })
     ]);
-    const stats = storedStats?.warId === activeWar.warId ? { ...storedStats } : { warId:activeWar.warId, attacks:0, warAttacks:0, mugs:0 };
-    const seen = new Set(storedSeen?.warId === activeWar.warId ? storedSeen.ids || [] : []);
-    for (const attack of attacks) {
-      const id = String(attack?.id ?? attack?.attack_id ?? '');
-      const attackerId = Number(attack?.attacker?.id ?? attack?.attacker_id ?? 0);
-      if (!id || attackerId !== Number(session.userId) || seen.has(id)) continue;
-      seen.add(id);
-      stats.attacks += 1;
-      const defenderFaction = Number(attack?.defender?.faction?.id ?? attack?.defender?.faction_id ?? attack?.defender_faction_id ?? 0);
-      if (attack?.is_ranked_war === true || defenderFaction === Number(activeWar.opponentFactionId)) stats.warAttacks += 1;
-      if (String(attack?.result ?? attack?.outcome ?? '').toLowerCase() === 'mugged') stats.mugs += 1;
-    }
+    const personal = addPersonalAttacks(storedStats, storedSeen, activeWar, session, attacks);
     await Promise.all([
       SLINK.core.storage.set(KEYS.lastAttackAt, Date.now()),
       SLINK.core.storage.set(KEYS.lastAttackEnded, newest),
-      SLINK.core.storage.set(KEYS.personalStats, stats),
-      SLINK.core.storage.set(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:[...seen].slice(-1000) })
+      SLINK.core.storage.set(KEYS.personalStats, personal.stats),
+      SLINK.core.storage.set(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:personal.seen })
     ]);
     return attacks.length;
   }
@@ -512,30 +544,26 @@
       const response = await tornRequest(`/v2/user/attacks?from=${from}&to=${nowSeconds}&limit=100&sort=desc`, currentSettings.tornKey);
       const attacks = Array.isArray(response?.attacks) ? response.attacks : [];
       const [savedStats, savedSeen] = await Promise.all([
-        SLINK.core.storage.get(KEYS.personalStats, { warId:activeWar.warId, attacks:0, warAttacks:0, mugs:0 }),
+        SLINK.core.storage.get(KEYS.personalStats, emptyPersonalStats(activeWar.warId)),
         SLINK.core.storage.get(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:[] })
       ]);
-      const nextStats = savedStats?.warId === activeWar.warId ? { ...savedStats } : { warId:activeWar.warId, attacks:0, warAttacks:0, mugs:0 };
-      const seen = new Set(savedSeen?.warId === activeWar.warId ? savedSeen.ids || [] : []);
-      for (const attack of attacks) {
-        const id = String(attack?.id ?? attack?.attack_id ?? '');
-        const attackerId = Number(attack?.attacker?.id ?? attack?.attacker_id ?? session.userId);
-        if (!id || attackerId !== Number(session.userId) || seen.has(id)) continue;
-        seen.add(id); nextStats.attacks += 1;
-        const defenderFaction = Number(attack?.defender?.faction?.id ?? attack?.defender?.faction_id ?? attack?.defender_faction_id ?? 0);
-        if (attack?.is_ranked_war === true || defenderFaction === Number(activeWar.opponentFactionId)) nextStats.warAttacks += 1;
-        if (String(attack?.result ?? attack?.outcome ?? '').toLowerCase() === 'mugged') nextStats.mugs += 1;
-      }
+      const personal = addPersonalAttacks(savedStats, savedSeen, activeWar, session, attacks, true);
       await Promise.all([
-        SLINK.core.storage.set(KEYS.personalStats, nextStats),
-        SLINK.core.storage.set(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:[...seen].slice(-1000) })
+        SLINK.core.storage.set(KEYS.personalStats, personal.stats),
+        SLINK.core.storage.set(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:personal.seen })
       ]);
     } catch { /* Public Only keys cannot read personal attacks; shared War features continue. */ }
-    const stored = await SLINK.core.storage.get(KEYS.personalStats, { warId:activeWar.warId, attacks:0, warAttacks:0, mugs:0 });
+    const stored = await SLINK.core.storage.get(KEYS.personalStats, emptyPersonalStats(activeWar.warId));
+    const mugTotal = stored?.warId === activeWar.warId ? Number(stored.mugTotal) || 0 : 0;
+    const mugCount = stored?.warId === activeWar.warId ? Number(stored.mugs) || 0 : 0;
     const panelStats = {
       attacks:stored?.warId === activeWar.warId ? Number(stored.attacks) || 0 : 0,
       warAttacks:stored?.warId === activeWar.warId ? Number(stored.warAttacks) || 0 : 0,
-      mugs:stored?.warId === activeWar.warId ? Number(stored.mugs) || 0 : 0,
+      mugs:mugCount,
+      mugTotal,
+      mugMin:stored?.warId === activeWar.warId ? Number(stored.mugMin) || 0 : 0,
+      mugMax:stored?.warId === activeWar.warId ? Number(stored.mugMax) || 0 : 0,
+      mugAverage:mugCount ? Math.round(mugTotal / mugCount) : 0,
       chain:previousRuntime.panelStats?.chain || null,
       turtle:previousRuntime.panelStats?.turtle || null
     };
@@ -571,6 +599,54 @@
     return workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/snapshot?${query}`);
   }
 
+  function firstNumber(...values) {
+    for (const value of values) {
+      const number = Number(value);
+      if (Number.isFinite(number)) return number;
+    }
+    return 0;
+  }
+
+  function money(value) {
+    return `$${Math.max(0, Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits:0 })}`;
+  }
+
+  async function chainReport() {
+    const currentSettings = await settings();
+    const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
+    if (!activeWar?.warId || activeWar.phase !== 'active') throw new Error('An active ranked war is required for the current chain report.');
+    const currentRuntime = await runtime();
+    const chain = currentRuntime?.panelStats?.chain || {};
+    const paths = chain.id
+      ? [`/v2/faction/${encodeURIComponent(chain.id)}/chainreport`, '/v2/faction/chainreport']
+      : ['/v2/faction/chainreport'];
+    let payload = null;
+    let lastError = null;
+    for (const path of paths) {
+      try { payload = await tornRequest(path, currentSettings.tornKey); break; }
+      catch (error) { lastError = error; }
+    }
+    if (!payload) throw lastError || new Error('Torn did not return a current chain report.');
+    const report = payload?.chainreport ?? payload?.chain_report ?? payload?.report ?? payload;
+    const summary = report?.chain ?? report?.summary ?? report;
+    const officialHits = firstNumber(summary?.hits, summary?.current, summary?.length, report?.hits);
+    const officialRespect = firstNumber(summary?.respect, summary?.respect_gained, report?.respect);
+    const stats = currentRuntime?.panelStats || {};
+    const shared = currentRuntime?.snapshot?.config || {};
+    const cap = Math.max(0, Number(shared.insideHitCap) || 0);
+    const lines = [
+      `SLINK War vs ${activeWar.opponentName} [${activeWar.opponentFactionId}]`,
+      `Chain: ${Number(chain.current) || officialHits || 0}${Number(chain.target) ? `/${Number(chain.target)}` : ''}${Number(chain.secondsLeft) ? ` (${SLINK.core.format.formatHumanDuration(chain.secondsLeft)} left)` : ''}`,
+      `My attacks: ${Number(stats.attacks) || 0} | War hits: ${Number(stats.warAttacks) || 0}${cap ? `/${cap}` : ''}`,
+      `Mugs: ${Number(stats.mugs) || 0} | Total ${money(stats.mugTotal)} | Min ${money(stats.mugMin)} | Avg ${money(stats.mugAverage)} | Max ${money(stats.mugMax)}`
+    ];
+    if (officialRespect) lines.push(`Chain respect: ${officialRespect.toLocaleString('en-US', { maximumFractionDigits:2 })}`);
+    return {
+      text:lines.join('\n'),
+      report:{ chainId:String(chain.id || report?.id || ''), hits:officialHits, respect:officialRespect, fetchedAt:Date.now() }
+    };
+  }
+
   async function saveSharedConfig(input = {}) {
     const session = await ensureSession(false);
     if (!SLINK.core.permissions.hasScope(session, 'slink.war.officer') && !SLINK.core.permissions.hasScope(session, 'admin.*')) {
@@ -583,7 +659,8 @@
       body:{
         opponent_faction_id:activeWar.opponentFactionId,
         mode:input.mode === 'termed' ? 'termed' : 'war',
-        idleMinutes:Math.max(0, Math.min(60, Number(input.idleMinutes) || 0))
+        idleMinutes:Math.max(0, Math.min(60, Number(input.idleMinutes) || 0)),
+        insideHitCap:Math.max(0, Math.min(9999, Math.floor(Number(input.insideHitCap) || 0)))
       }
     });
     await setRuntime({ snapshot:{ ...((await runtime()).snapshot || {}), config:result.config, mode:result.config?.mode || 'war' } });
@@ -600,6 +677,8 @@
         operation:input.operation === 'release' ? 'release' : 'claim',
         targetId:WAR.positiveInteger(input.targetId),
         targetName:String(input.targetName || ''),
+        assigneeId:WAR.positiveInteger(input.assigneeId),
+        assigneeName:String(input.assigneeName || ''),
         minutes:Math.max(5, Math.min(180, Number(input.minutes) || 30))
       }
     });
@@ -659,7 +738,7 @@
           status:`War assigned against ${activeWar.opponentName}; starts in ${startsIn}. Claims and officer settings are ready.`,
           lastError:'', snapshot, logs:[], logsWarning:'',
           collectStatus:false, collectAttacks:false, statusChecks:0, attackChecks:0,
-          panelStats:{ attacks:0, warAttacks:0, mugs:0, chain:null, turtle:null },
+          panelStats:{ ...emptyPersonalStats(activeWar.warId), mugAverage:0, chain:null, turtle:null },
           lastCycleAt:Date.now()
         });
         return publicStatus();
@@ -699,7 +778,7 @@
       }
       const panelStats = activeWar.phase === 'active'
         ? await refreshPanelStats(activeWar, currentSettings)
-        : { attacks:0, warAttacks:0, mugs:0, chain:null, turtle:null };
+        : { ...emptyPersonalStats(activeWar.warId), mugAverage:0, chain:null, turtle:null };
       const statusText = activeWar.phase === 'prewar'
         ? `Pre-war status checks active for ${activeWar.opponentName}; full War collection starts at the scheduled time.`
         : `${snapshot.members?.length || 0} targets / ${snapshot.retals?.length || 0} active retals`;
@@ -799,7 +878,7 @@
         expiresAt:authenticated ? session.expiresAt : 0
       },
       permissions:SLINK.core.permissions.normalizeSnapshot(permissions || {}),
-      sharedConfig:currentRuntime?.snapshot?.config || { mode:currentSettings.warMode, idleMinutes:currentSettings.idleMinutes, updatedBy:0, updatedAt:0 },
+      sharedConfig:currentRuntime?.snapshot?.config || { mode:currentSettings.warMode, idleMinutes:currentSettings.idleMinutes, insideHitCap:0, updatedBy:0, updatedAt:0 },
       activeWar,
       runtime:currentRuntime
     };
@@ -816,6 +895,7 @@
       'war.cycle.prepare': prepareCycle,
       'war.config.save': saveSharedConfig,
       'war.claims.update': updateClaim,
+      'war.chain.report': chainReport,
       'war.outside.refresh': discoverOutsideTargets,
       'war.logs': async () => {
         const session = await ensureSession(false);

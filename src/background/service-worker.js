@@ -3,11 +3,13 @@ importScripts(
   '../core/format.js',
   '../core/storage.js',
   '../core/permissions.js',
+  '../core/themes.js',
   '../core/messaging.js',
   '../core/http.js',
   '../core/war.js',
   '../core/worker-client.js',
   '../core/torn-api-limiter.js',
+  'theme-service.js',
   'leveling-service.js',
   'war-service.js',
   'contribution-service.js'
@@ -255,6 +257,7 @@ const routes = {
 
   ...SLINK.services.leveling.routes,
   ...SLINK.services.war.routes,
+  ...SLINK.services.themes.routes,
   ...SLINK.services.contributionRoutes
 };
 
@@ -264,12 +267,14 @@ chrome.runtime.onInstalled.addListener(() => {
   void ensureDefaultState();
   void ensureConnectionAlarm();
   void connectionStatus();
+  void SLINK.services.themes.load(true);
 });
 
 chrome.runtime.onStartup.addListener(() => {
   void ensureDefaultState();
   void ensureConnectionAlarm();
   void connectionStatus();
+  void SLINK.services.themes.load(false);
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
@@ -284,3 +289,4 @@ chrome.alarms.onAlarm.addListener(alarm => {
 void ensureDefaultState().catch(error => console.error('[SLINK] Default state:', error));
 void ensureConnectionAlarm().catch(error => console.error('[SLINK] Connection alarm:', error));
 void connectionStatus().catch(error => console.error('[SLINK] Worker connection:', error));
+void SLINK.services.themes.load(false).catch(error => console.error('[SLINK] Theme catalog:', error));
