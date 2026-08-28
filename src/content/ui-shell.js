@@ -106,8 +106,8 @@
       element.querySelector('.title').textContent = title;
       element.querySelector('.subtitle').textContent = subtitle;
       const head = element.querySelector('.head');
-      makeMovable(element, head, kind === 'main' ? 'ui.main.position' : `ui.popouts.${kind}.position`);
-      return { element, head };
+      const mover = makeMovable(element, head, kind === 'main' ? 'ui.main.position' : `ui.alerts.${kind}.position`);
+      return { element, head, mover };
     }
 
     function makeMovable(element, head, storageKey) {
@@ -140,27 +140,31 @@
       };
       head.addEventListener('pointerup', finish); head.addEventListener('pointercancel', finish);
       void SLINK.core.storage.get(storageKey, null).then(position => { if (position) setPosition(position); });
+      return Object.freeze({
+        reset() {
+          element.style.removeProperty('left');
+          element.style.removeProperty('top');
+          element.style.removeProperty('right');
+        }
+      });
     }
 
     function setActive(id) {
-      if (!views.has(id) || views.get(id).popped) return;
+      if (!views.has(id)) return;
       activeId = id;
       for (const [moduleId, view] of views) {
-        if (!view.popped) view.element.hidden = moduleId !== id;
+        view.element.hidden = moduleId !== id;
         view.tab?.setAttribute('aria-selected', String(moduleId === id));
       }
     }
 
     function refreshShell() {
-      const docked = [...views.values()].filter(view => !view.popped);
+      const docked = [...views.values()];
       if (!docked.some(view => view.id === activeId)) activeId = docked[0]?.id || '';
       if (activeId) setActive(activeId);
       tabs.hidden = docked.length < 2;
       main.element.hidden = hidden || collapsed || docked.length === 0;
       bubble.hidden = hidden || !collapsed || views.size === 0;
-      for (const view of views.values()) {
-        if (view.popup) view.popup.element.hidden = hidden || collapsed;
-      }
       for (const alert of alerts.values()) alert.element.hidden = hidden;
     }
 
@@ -206,6 +210,13 @@
         void setCollapsed(false);
       });
       void SLINK.core.storage.get('ui.bubble.position', null).then(position => { if (position) setPosition(position); });
+      return Object.freeze({
+        reset() {
+          bubble.style.removeProperty('left');
+          bubble.style.removeProperty('top');
+          bubble.style.removeProperty('right');
+        }
+      });
     }
 
     function dismissAlert(id) {
@@ -249,40 +260,18 @@
       return Object.freeze({ dismiss:() => dismissAlert(id), element:alert.element });
     }
 
-    async function setPopped(view, popped) {
-      view.popped = Boolean(popped);
-      await SLINK.core.storage.set(`ui.modules.${view.id}.docked`, !view.popped);
-      if (view.popped) {
-        view.popup = createWindow(view.id, view.title, 'Popped out from SLINK');
-        view.popup.element.append(view.element);
-        view.popup.element.querySelector('.hide').addEventListener('click', () => void setPopped(view, false));
-        shadow.append(view.popup.element);
-        view.popButton.textContent = 'Pop back in';
-        view.popButton.title = 'Return this feature to the main SLINK window';
-        view.element.hidden = false;
-      } else {
-        view.popup?.element.remove(); view.popup = null;
-        main.element.append(view.element);
-        view.popButton.textContent = 'Pop out';
-        view.popButton.title = 'Open this feature in its own movable window';
-        setActive(view.id);
-      }
-      refreshShell();
-    }
-
     async function createModuleView(module) {
       if (views.has(module.id)) return views.get(module.id).api;
       const element = document.createElement('section');
       element.className = 'module-view';
-      element.innerHTML = `<div class="module-head"><strong></strong><button class="pop" type="button">Pop out</button></div><div class="status" role="status"></div><div class="content"></div><div class="actions"></div>`;
+      element.innerHTML = `<div class="module-head"><strong></strong></div><div class="status" role="status"></div><div class="content"></div><div class="actions"></div>`;
       element.querySelector('strong').textContent = module.title;
       const tab = document.createElement('button');
       tab.className = 'tab'; tab.type = 'button'; tab.textContent = module.title; tab.setAttribute('role', 'tab');
       tabs.append(tab); main.element.append(element);
-      const view = { id:module.id, title:module.title, element, tab, popped:false, popup:null, popButton:element.querySelector('.pop') };
+      const view = { id:module.id, title:module.title, element, tab };
       views.set(module.id, view);
       tab.addEventListener('click', () => setActive(module.id));
-      view.popButton.addEventListener('click', () => void setPopped(view, !view.popped));
       const moduleStyle = document.createElement('style'); shadow.append(moduleStyle);
       const content = element.querySelector('.content'); const status = element.querySelector('.status'); const actions = element.querySelector('.actions');
       const api = {
@@ -314,19 +303,33 @@
         },
         showAlert,
         dismissAlert,
-        remove() { view.popup?.element.remove(); view.tab.remove(); element.remove(); moduleStyle.remove(); views.delete(module.id); refreshShell(); },
+        remove() { view.tab.remove(); element.remove(); moduleStyle.remove(); views.delete(module.id); refreshShell(); },
         ui: null
       };
       api.ui = api;
       view.api = Object.freeze(api);
-      const docked = await SLINK.core.storage.get(`ui.modules.${module.id}.docked`, true);
-      if (!docked) await setPopped(view, true); else { if (!activeId) activeId = module.id; refreshShell(); }
+      if (!activeId) activeId = module.id;
+      refreshShell();
       return view.api;
     }
 
-    makeBubbleMovable();
+    const bubbleMover = makeBubbleMovable();
     main.element.querySelector('.hide').addEventListener('click', () => void setCollapsed(true));
     void SLINK.core.storage.get('ui.main.collapsed', false).then(value => setCollapsed(Boolean(value), false));
+    async function restore() {
+      await Promise.all([
+        SLINK.core.storage.remove('ui.main.position'),
+        SLINK.core.storage.remove('ui.bubble.position'),
+        SLINK.core.storage.remove('ui.main.collapsed'),
+        SLINK.core.storage.set('ui.pagePanelHidden', false)
+      ]);
+      hidden = false;
+      collapsed = false;
+      main.mover.reset();
+      bubbleMover.reset();
+      refreshShell();
+      return { restored:true, modules:views.size };
+    }
     return Object.freeze({
       host,
       createModuleView,
@@ -335,7 +338,8 @@
       setTheme,
       setCollapsed,
       setHidden(value) { hidden = Boolean(value); refreshShell(); },
-      resetPosition() { void SLINK.core.storage.remove('ui.main.position'); },
+      resetPosition:restore,
+      restore,
       setPosition() {},
       setRows() {},
       setStatus() {}

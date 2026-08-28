@@ -4,6 +4,14 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.12.0 replaces the broken Torn module pop-out with a reliable
+**Restore GUI in Torn** action. It clears off-screen panel and bubble positions,
+reopens the shell, and reapplies Extension-only, Hybrid, or Torn display changes
+without ever refreshing Torn. Live retals again show War/retal flags, faction,
+the attacked member, current status, battle-stat estimate, and Fair Fight
+estimate. Officer logs are grouped by player and expand into dated/time-stamped
+opponent and outcome details while retaining the low-write ten-minute buckets.
+
 Version 0.11.1 makes the administrator permission view show effective faction
 access as inherited instead of incorrectly appearing empty. Inherited grants
 remain separate from direct paid/manual grants and cannot be accidentally

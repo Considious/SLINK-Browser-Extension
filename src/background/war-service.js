@@ -24,7 +24,8 @@
     lastPanelStatsAt: 'war.lastPanelStatsAt.v1',
     outsideTargets: 'war.outsideTargets.v1',
     lastOutsideAt: 'war.lastOutsideAt.v1',
-    scheduledRoster: 'war.scheduledRoster.v1'
+    scheduledRoster: 'war.scheduledRoster.v1',
+    retalProfileCache: 'war.retalProfileCache.v1'
   });
   const STATUS_INTERVAL_MS = 10_000;
   const ATTACK_INTERVAL_MS = 30_000;
@@ -611,6 +612,55 @@
     return workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/snapshot?${query}`);
   }
 
+  async function enrichRetals(retals, members, currentSettings) {
+    const values = Array.isArray(retals) ? retals : [];
+    if (!values.length) return [];
+    const roster = new Map((Array.isArray(members) ? members : []).map(member => [Number(member.id), member]));
+    const estimates = await refineMembers(values.map(retal => ({
+      id:Number(retal.attackerId),
+      name:String(retal.attackerName || `Player ${retal.attackerId}`),
+      activity:String(retal.attackerActivity || 'Unknown'),
+      statusState:String(retal.attackerStatus || ''),
+      statusDescription:String(retal.attackerStatusDescription || ''),
+      statusUntil:Number(retal.attackerStatusUntil) || 0
+    })), currentSettings);
+    const estimatesById = new Map(estimates.map(member => [Number(member.id), member]));
+    const now = Date.now();
+    const cached = await SLINK.core.storage.get(KEYS.retalProfileCache, {});
+    const missing = [...new Set(values.map(retal => Number(retal.attackerId)))]
+      .filter(id => id && !roster.has(id) && (!cached[id] || now - Number(cached[id].checkedAt) >= 60_000))
+      .slice(0, 10);
+    for (const id of missing) {
+      try {
+        const response = await tornRequest(`/v2/user/${encodeURIComponent(id)}/profile`, currentSettings.tornKey);
+        const source = response?.profile ?? response?.basic ?? response?.user ?? response;
+        const member = normalizeTornFactionMember({ id, ...source });
+        if (member) cached[id] = { member, checkedAt:Date.now() };
+      } catch {
+        cached[id] = { member:null, checkedAt:Date.now() };
+      }
+    }
+    const trimmedCache = Object.fromEntries(Object.entries(cached)
+      .sort((left, right) => Number(right[1]?.checkedAt) - Number(left[1]?.checkedAt))
+      .slice(0, 100));
+    await SLINK.core.storage.set(KEYS.retalProfileCache, trimmedCache);
+    return values.map(retal => {
+      const id = Number(retal.attackerId);
+      const live = roster.get(id) || trimmedCache[id]?.member || null;
+      const estimate = estimatesById.get(id) || null;
+      return {
+        ...retal,
+        attackerActivity:live?.activity || retal.attackerActivity || 'Unknown',
+        attackerStatus:live?.statusState || retal.attackerStatus || 'Unknown',
+        attackerStatusDescription:live?.statusDescription || retal.attackerStatusDescription || '',
+        attackerStatusUntil:live?.statusUntil || retal.attackerStatusUntil || 0,
+        attackerLastActionRelative:live?.lastActionRelative || retal.attackerLastActionRelative || '',
+        fairFight:Number.isFinite(estimate?.fairFight) ? estimate.fairFight : null,
+        battleStatsEstimate:Number.isFinite(estimate?.battleStatsEstimate) ? estimate.battleStatsEstimate : null
+      };
+    });
+  }
+
   function firstNumber(...values) {
     for (const value of values) {
       const number = Number(value);
@@ -775,6 +825,7 @@
       const snapshot = await fetchSnapshot(activeWar, currentSettings);
       if (activeWar.phase !== 'active') snapshot.retals = [];
       snapshot.members = await refineMembers(snapshot?.members || [], currentSettings);
+      snapshot.retals = await enrichRetals(snapshot?.retals || [], snapshot.members, currentSettings);
       const canViewLogs = SLINK.core.permissions.hasScope(session, 'slink.war.officer') || SLINK.core.permissions.hasScope(session, 'admin.*');
       let logs = [];
       let logsWarning = '';

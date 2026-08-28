@@ -114,7 +114,7 @@
     const rows = [...(payload?.pending || []), ...(payload?.stored || [])];
     const byKey = new Map();
     for (const row of rows) {
-      const key = `${row.attacker_id}:${row.defender_id}:${row.outcome}`;
+      const key = `${Number(row.bucket_start) || 0}:${row.attacker_id}:${row.defender_id}:${row.outcome}`;
       const current = byKey.get(key) || { ...row, event_count:0 };
       current.event_count += Number(row.event_count) || 0;
       current.first_seen_at = Math.min(

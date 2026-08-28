@@ -202,14 +202,35 @@
       root.replaceChildren(empty);
       return;
     }
-    root.replaceChildren(...retals.slice(0, 6).map(retal => {
-      const div = document.createElement('div');
-      div.className = 'retal-item';
+    root.replaceChildren(...retals.slice(0, 12).map(retal => {
+      const div = document.createElement('article');
+      div.className = 'retal-item retal-detail';
       const remaining = SLINK.core.format.formatHumanDuration(Number(retal.expiresAt) - Math.floor(Date.now() / 1000));
-      div.innerHTML = `<a target="_blank" rel="noopener noreferrer"></a><div class="muted"></div>`;
+      div.innerHTML = '<div class="retal-head"><a target="_blank" rel="noopener noreferrer"></a><strong></strong></div><div class="retal-badges"></div><dl class="retal-report"></dl><div class="retal-actions"><button class="small secondary" type="button">Copy retal</button></div>';
       div.querySelector('a').href = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(retal.attackerId)}`;
       div.querySelector('a').textContent = `Retal: ${retal.attackerName || `Player ${retal.attackerId}`}`;
-      div.querySelector('.muted').textContent = `${remaining} remaining`;
+      div.querySelector('.retal-head strong').textContent = remaining;
+      const badges = div.querySelector('.retal-badges');
+      for (const label of [retal.isWar ? 'War hit' : '', retal.isRetal ? 'Retal hit' : '', retal.againstWarOpponent ? 'Current war opponent' : 'Outside faction'].filter(Boolean)) badges.append(pill(label));
+      const faction = retal.attackerFactionName || (retal.attackerFactionId ? `Faction ${retal.attackerFactionId}` : 'No faction');
+      const details = [
+        ['Faction', `${faction}${retal.attackerFactionTag ? ` [${retal.attackerFactionTag}]` : ''}`],
+        ['Attacked', `${retal.defenderName || `Player ${retal.defenderId}`}${retal.defenderId ? ` [${retal.defenderId}]` : ''}`],
+        ['Status', `${retal.attackerStatus || retal.attackerActivity || 'Unknown'}${retal.attackerStatusDescription ? ` • ${retal.attackerStatusDescription}` : ''}`],
+        ['Estimated BS', Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : 'Unknown'],
+        ['Fair Fight', Number.isFinite(retal.fairFight) ? retal.fairFight.toFixed(2) : 'Unknown']
+      ];
+      const report = div.querySelector('.retal-report');
+      for (const [label, value] of details) {
+        const dt = document.createElement('dt'); dt.textContent = label;
+        const dd = document.createElement('dd'); dd.textContent = value;
+        report.append(dt, dd);
+      }
+      div.querySelector('button').addEventListener('click', async event => {
+        const flags = [retal.isWar ? 'War hit' : '', retal.isRetal ? 'Retal hit' : '', retal.againstWarOpponent ? 'current war opponent' : 'outside faction'].filter(Boolean).join(' / ');
+        await copyText(`🚨 Retal: ${retal.attackerName || `Player ${retal.attackerId}`} [${retal.attackerId}] • ${faction} • ${flags} • attacked ${retal.defenderName || `Player ${retal.defenderId}`} [${retal.defenderId}] • status ${retal.attackerStatus || retal.attackerActivity || 'Unknown'} • BS ${Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : '?'} • FF ${Number.isFinite(retal.fairFight) ? retal.fairFight.toFixed(2) : '?'} • https://www.torn.com/page.php?sid=attack&user2ID=${retal.attackerId}`);
+        event.currentTarget.textContent = 'Copied';
+      });
       return div;
     }));
   }
@@ -222,11 +243,32 @@
     byId('war-logs-warning').textContent = warning;
     byId('war-logs-warning').hidden = !warning;
     const rows = war?.runtime?.logs || [];
-    byId('war-logs').replaceChildren(...rows.slice(0, 20).map(row => {
-      const div = document.createElement('div');
-      div.className = 'mini-item';
-      div.textContent = `${row.attacker_name || row.attacker_id} → ${row.defender_name || row.defender_id}: ${String(row.outcome || '').replace('_', ' ')} × ${Number(row.event_count) || 0}`;
-      return div;
+    const grouped = new Map();
+    for (const row of rows) {
+      const id = Number(row.attacker_id) || 0;
+      if (!grouped.has(id)) grouped.set(id, { id, name:String(row.attacker_name || `Player ${id}`), total:0, loss:0, escape:0, online:0, rows:[] });
+      const group = grouped.get(id);
+      const count = Number(row.event_count) || 0;
+      group.total += count;
+      if (row.outcome === 'loss') group.loss += count;
+      else if (row.outcome === 'escape') group.escape += count;
+      else if (row.outcome === 'online_hit') group.online += count;
+      group.rows.push(row);
+    }
+    byId('war-logs').replaceChildren(...[...grouped.values()].sort((a, b) => b.total - a.total).map(group => {
+      const details = document.createElement('details');
+      details.className = 'mini-item war-log-person';
+      const summary = document.createElement('summary');
+      summary.textContent = `${group.name}${group.id ? ` [${group.id}]` : ''} — ${group.total} recorded • ${group.loss} lost • ${group.escape} escaped • ${group.online} online hits`;
+      details.append(summary);
+      for (const row of group.rows.sort((a, b) => Number(b.last_seen_at) - Number(a.last_seen_at))) {
+        const event = document.createElement('div');
+        event.className = 'war-log-event';
+        const seen = new Date(Number(row.last_seen_at) || 0);
+        event.textContent = `${String(row.outcome || '').replace('_', ' ')} × ${Number(row.event_count) || 0} against ${row.defender_name || `Player ${row.defender_id}`} [${row.defender_id}] • ${seen.toLocaleDateString()} • ${seen.toLocaleTimeString()}${row.observed_status ? ` • observed ${row.observed_status}` : ''}`;
+        details.append(event);
+      }
+      return details;
     }));
   }
 
@@ -508,8 +550,21 @@
   });
   byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true})]); await SLINK.core.messaging.send('leveling.session.clear'); await SLINK.core.messaging.send('war.session.clear'); accessExpanded = true; await refresh(); });
   byId('page-panel').addEventListener('change', async event => { await SLINK.core.storage.set('ui.modules.leveling.showInTorn', event.currentTarget.checked); if (event.currentTarget.checked) await SLINK.core.storage.set('ui.pagePanelHidden', false); system.levelingInTorn = event.currentTarget.checked; });
-  byId('reset-position').addEventListener('click', () => SLINK.core.storage.remove('ui.main.position'));
-  byId('war-reset-position').addEventListener('click', () => SLINK.core.storage.remove('ui.main.position'));
+  byId('reset-position').textContent = 'Restore GUI in Torn';
+  byId('war-reset-position').textContent = 'Restore GUI in Torn';
+  async function restoreTornGui(button) {
+    setBusy(button, true);
+    try {
+      const result = await SLINK.core.messaging.send('ui.torn.restore');
+      byId('war-action-message').textContent = result.restored
+        ? `Restored the SLINK GUI in ${result.restored} open Torn tab${result.restored === 1 ? '' : 's'}.`
+        : 'No current Torn tab accepted the restore request. Open Torn once, then try again.';
+    } catch (error) {
+      byId('war-action-message').textContent = errorText(error);
+    } finally { setBusy(button, false); }
+  }
+  byId('reset-position').addEventListener('click', event => restoreTornGui(event.currentTarget));
+  byId('war-reset-position').addEventListener('click', event => restoreTornGui(event.currentTarget));
   byId('refresh-targets').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { leveling = await SLINK.core.messaging.send('leveling.activity.touch'); const result = await SLINK.core.messaging.send('leveling.cycle.prepare',{contribute:false}); leveling = result.status; renderLeveling(); renderTargets(); } catch (error) { showError('leveling-error', error); } finally { setBusy(button, false); } });
   byId('war-refresh').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { war = await SLINK.core.messaging.send('war.cycle.prepare',{forceOpponentRefresh:true}); renderWar(); renderTargets(); } catch (error) { showError('war-error', error); } finally { setBusy(button, false); } });
   byId('copy-chain-report').addEventListener('click', async event => {

@@ -111,6 +111,37 @@ async function connectionStatus() {
   return status;
 }
 
+async function restoreTornUi() {
+  await Promise.all([
+    SLINK.core.storage.remove('ui.main.position'),
+    SLINK.core.storage.remove('ui.bubble.position'),
+    SLINK.core.storage.remove('ui.main.collapsed'),
+    SLINK.core.storage.remove('ui.modules.leveling.docked'),
+    SLINK.core.storage.remove('ui.modules.war.docked'),
+    SLINK.core.storage.set('ui.pagePanelHidden', false)
+  ]);
+  const tabs = await chrome.tabs.query({ url:'https://www.torn.com/*' });
+  let restored = 0;
+  for (const tab of tabs) {
+    if (!Number.isInteger(tab?.id)) continue;
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        channel:'slink-ui-control',
+        type:'restore'
+      });
+      if (response?.ok) restored += 1;
+    } catch {
+      // A pre-update tab may not have the current content script. Never reload
+      // or navigate Torn automatically; normal user navigation will load it.
+    }
+  }
+  return {
+    restored,
+    matchingTabs:tabs.length,
+    needsManualPageLoad:tabs.length > restored
+  };
+}
+
 async function capabilityStatus() {
   const entries = await Promise.all(
     Object.entries(SLINK.core.permissions.BROWSER_CAPABILITIES).map(async ([id, capability]) => {
@@ -239,6 +270,10 @@ const routes = {
     };
     await SLINK.core.storage.set('diagnostics.pageInjection', injection);
     return injection;
+  },
+
+  async 'ui.torn.restore'() {
+    return restoreTornUi();
   },
 
   async 'diagnostics.run'() {

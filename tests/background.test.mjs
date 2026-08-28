@@ -20,6 +20,7 @@ let sharedWarMode = 'war';
 let sharedInsideHitCap = 0;
 let warClaims = [];
 let assignedWarStart = 0;
+let uiRestoreMessages = 0;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -40,6 +41,14 @@ const onStartup = event();
 const onAlarm = event();
 
 const chrome = {
+  tabs: {
+    async query() { return [{ id:7, url:'https://www.torn.com/index.php' }]; },
+    async sendMessage(tabId, message) {
+      assert(tabId === 7 && message?.type === 'restore', 'Unexpected Torn UI control message.');
+      uiRestoreMessages += 1;
+      return { ok:true, restored:true };
+    }
+  },
   alarms: {
     async create(name, details) { alarms.set(name, { name, ...details }); },
     async get(name) { return alarms.get(name); },
@@ -57,7 +66,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.11.1' }; },
+    getManifest() { return { version: '0.12.0' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -337,6 +346,13 @@ const injection = await send(
   { id: 'test', tab: { id: 7, url: 'https://www.torn.com/index.php' } }
 );
 assert(injection.ok && injection.data.tabId === 7, 'Torn page injection was not recorded.');
+values.set('slink.ui.main.position', { left:9999, top:9999 });
+values.set('slink.ui.bubble.position', { left:9999, top:9999 });
+values.set('slink.ui.main.collapsed', true);
+const restoredUi = await send('ui.torn.restore');
+assert(restoredUi.ok && restoredUi.data.restored === 1 && uiRestoreMessages === 1, 'Torn GUI restore was not delivered to the open Torn tab.');
+assert(!values.has('slink.ui.main.position') && !values.has('slink.ui.bubble.position'), 'Torn GUI restore kept off-screen coordinates.');
+assert(!values.has('slink.ui.main.collapsed') && values.get('slink.ui.pagePanelHidden') === false, 'Torn GUI restore did not reopen the interface.');
 
 const saved = await send('leveling.settings.save', {
   tornKey: 'torn-test-key',
@@ -419,6 +435,8 @@ assert(detectedWar.ok && detectedWar.data.activeWar.warId === 'rw_46978_46999_17
 const warCycle = await send('war.cycle.prepare');
 assert(warCycle.ok && warCycle.data.runtime.snapshot.members.length === 1, 'War cycle did not load the shared target snapshot.');
 assert(warCycle.data.runtime.snapshot.retals.length === 1, 'War cycle did not load active retals.');
+assert(warCycle.data.runtime.snapshot.retals[0].battleStatsEstimate === 2500000, 'Live retal omitted the FFScouter battle-stat estimate.');
+assert(warCycle.data.runtime.snapshot.retals[0].attackerStatus === 'Okay', 'Live retal omitted current target status.');
 assert(warCycle.data.runtime.snapshot.members[0].battleStatsEstimate === 2500000, 'War target did not retain the FFScouter battle-stat estimate.');
 assert(warCycle.data.runtime.logs[0].event_count === 1, 'War cycle did not load aggregate logs.');
 assert(warCycle.data.runtime.logsWarning.includes('Live targets and retals remain available'), 'Missing historical storage did not degrade to a live-data warning.');

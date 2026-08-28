@@ -111,5 +111,8 @@ assert(!manifest.host_permissions.some(origin => /githubusercontent|github\.com/
 const uiShellSource = read('src/content/ui-shell.js');
 assert(uiShellSource.includes('setTheme'), 'Torn UI shell does not support live themes.');
 assert(uiShellSource.includes('ui.main.collapsed') && uiShellSource.includes('bubble-coil'), 'Torn UI shell does not provide the persistent theme-aware collapse bubble.');
+assert(uiShellSource.includes('async function restore()'), 'Torn UI shell does not provide an in-place recovery path.');
+assert(!uiShellSource.includes('Pop out') && !uiShellSource.includes('setPopped'), 'The broken Torn module pop-out control is still packaged.');
+assert(read('src/background/service-worker.js').includes("'ui.torn.restore'"), 'The extension cannot repush its GUI to open Torn tabs.');
 
 console.log(`Validated Manifest V3 extension ${manifest.version} (${listFiles(path.join(root, 'src')).length} source files).`);

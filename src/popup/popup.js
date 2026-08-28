@@ -144,9 +144,21 @@
   elements.openDashboard.addEventListener('click', () => chrome.runtime.openOptionsPage());
 
   elements.resetPosition.addEventListener('click', async () => {
-    await SLINK.core.storage.remove('ui.main.position');
-    elements.resetPosition.textContent = 'Position reset';
-    setTimeout(() => { elements.resetPosition.textContent = 'Reset panel position'; }, 1200);
+    elements.resetPosition.disabled = true;
+    try {
+      const result = await SLINK.core.messaging.send('ui.torn.restore');
+      elements.resetPosition.textContent = result.restored
+        ? `Restored in ${result.restored} Torn tab${result.restored === 1 ? '' : 's'}`
+        : 'Open Torn, then try again';
+    } catch (error) {
+      showError(error);
+      elements.resetPosition.textContent = 'Restore failed';
+    } finally {
+      setTimeout(() => {
+        elements.resetPosition.textContent = 'Restore GUI in Torn';
+        elements.resetPosition.disabled = false;
+      }, 1800);
+    }
   });
 
   elements.runDiagnostic.addEventListener('click', async () => {

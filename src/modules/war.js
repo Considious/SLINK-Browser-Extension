@@ -18,6 +18,13 @@
     .slink-war-online { color:var(--slink-ready); }
     .slink-war-hospital { color:var(--slink-warning); }
     .slink-war-retal { border-left:3px solid var(--slink-error); padding-left:8px; }
+    .slink-war-retal-report { display:grid; grid-template-columns:82px minmax(0,1fr); gap:3px 7px; }
+    .slink-war-retal-report span:nth-child(odd) { color:var(--slink-muted); }
+    .slink-war-log-person { border-top:1px solid var(--slink-border-soft); }
+    .slink-war-log-person summary { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 2px; cursor:pointer; }
+    .slink-war-log-events { display:grid; gap:6px; padding:0 0 8px 10px; }
+    .slink-war-log-event { padding:7px; border-left:2px solid var(--slink-border); background:var(--slink-bg-raised); }
+    .slink-war-log-event a { color:var(--slink-link); text-decoration:none; }
     .slink-war-card-actions a,.slink-war-card-actions button { min-height:27px; padding:4px 7px; border:1px solid var(--slink-border-soft); border-radius:5px; background:var(--slink-bg-control); color:var(--slink-text); text-decoration:none; }
     .slink-war-empty,.slink-war-note,.slink-war-error { padding:9px; border-radius:6px; background:var(--slink-bg-raised); color:var(--slink-muted); }
     .slink-war-error { background:var(--slink-danger-bg); color:var(--slink-error); }
@@ -106,6 +113,37 @@
         setTimeout(() => { if (button.isConnected) button.textContent = original; }, 1400);
       }
 
+      function retalCallout(retal) {
+        const faction = retal.attackerFactionName || (retal.attackerFactionId ? `Faction ${retal.attackerFactionId}` : 'No faction');
+        const flags = [retal.isWar ? 'War hit' : '', retal.isRetal ? 'Retal hit' : '', retal.againstWarOpponent ? 'current war opponent' : 'outside faction'].filter(Boolean);
+        const estimates = [
+          Number.isFinite(retal.battleStatsEstimate) ? `Estimated BS ${SLINK.core.format.shortNumber(retal.battleStatsEstimate)}` : '',
+          Number.isFinite(retal.fairFight) ? `FF ${retal.fairFight.toFixed(2)}` : ''
+        ].filter(Boolean);
+        return `🚨 Retal: ${retal.attackerName || `Player ${retal.attackerId}`} [${retal.attackerId}] • ${faction} • ${flags.join(' / ')} • attacked ${retal.defenderName || `Player ${retal.defenderId}`} [${retal.defenderId}] • status ${retal.attackerStatus || retal.attackerActivity || 'Unknown'}${estimates.length ? ` • ${estimates.join(' • ')}` : ''} • ${attackUrl(retal.attackerId)}`;
+      }
+
+      async function copyRetal(retal, button) {
+        await navigator.clipboard.writeText(retalCallout(retal));
+        const original = button.textContent; button.textContent = 'Copied';
+        setTimeout(() => { if (button.isConnected) button.textContent = original; }, 1400);
+      }
+
+      function pasteRetal(retal, button) {
+        const composer = findFactionComposer();
+        if (!composer) {
+          localError = 'Open Faction Chat first, then press Paste to faction chat.';
+          render(); return;
+        }
+        const callout = retalCallout(retal);
+        composer.focus();
+        if ('value' in composer) composer.value = callout;
+        else composer.textContent = callout;
+        composer.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'insertText', data:callout }));
+        const original = button.textContent; button.textContent = 'Pasted';
+        setTimeout(() => { if (button.isConnected) button.textContent = original; }, 1400);
+      }
+
       function targetCards() {
         const members = WAR.sortMembers(current?.runtime?.snapshot?.members || [], Date.now(), targetSort);
         if (!members.length) return '<div class="slink-war-empty">No eligible targets in the latest shared snapshot.</div>';
@@ -155,20 +193,44 @@
         const retals = current?.runtime?.snapshot?.retals || [];
         if (!retals.length) return '<div class="slink-war-empty">No active retaliation alerts.</div>';
         const now = Math.floor(Date.now() / 1000);
-        return retals.map(retal => `<article class="slink-war-card slink-war-retal">
+        return retals.map(retal => {
+          const faction = retal.attackerFactionName || (retal.attackerFactionId ? `Faction ${retal.attackerFactionId}` : 'No faction');
+          const tag = retal.attackerFactionTag ? ` [${retal.attackerFactionTag}]` : '';
+          const status = retal.attackerStatus || retal.attackerActivity || 'Unknown';
+          const readyAt = /hospital/i.test(status) && Number(retal.attackerStatusUntil) ? WAR.tctTime(retal.attackerStatusUntil) : '';
+          return `<article class="slink-war-card slink-war-retal">
           <div class="slink-war-card-head"><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">${escape(retal.attackerName || `Player ${retal.attackerId}`)} [${retal.attackerId}]</a><span>${duration(Number(retal.expiresAt) - now)}</span></div>
-          <div class="slink-war-meta"><span class="slink-war-pill">${retal.againstWarOpponent ? 'War opponent' : 'Retal'}</span><span>Hit ${escape(retal.defenderName || retal.defenderId)}</span></div>
-          <div class="slink-war-card-actions"><a href="${attackUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">Retaliate</a><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">Profile</a></div>
-        </article>`).join('');
+          <div class="slink-war-meta">${retal.isWar ? '<span class="slink-war-pill">War hit</span>' : ''}${retal.isRetal ? '<span class="slink-war-pill">Retal hit</span>' : ''}<span class="slink-war-pill">${retal.againstWarOpponent ? 'Current war opponent' : 'Outside faction'}</span></div>
+          <div class="slink-war-retal-report"><span>Faction</span><span>${escape(faction + tag)}</span><span>Attacked</span><span>${escape(retal.defenderName || `Player ${retal.defenderId}`)}${retal.defenderId ? ` [${retal.defenderId}]` : ''}</span><span>Status</span><span>${escape(status)}${readyAt ? ` • out ${escape(readyAt)} TCT` : ''}${retal.attackerStatusDescription ? ` • ${escape(retal.attackerStatusDescription)}` : ''}</span><span>Estimated BS</span><span>${Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : 'Unknown'}</span><span>Fair Fight</span><span>${Number.isFinite(retal.fairFight) ? retal.fairFight.toFixed(2) : 'Unknown'}</span></div>
+          <div class="slink-war-card-actions"><a href="${attackUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">Retaliate</a><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-retal-copy="${retal.attackId}" type="button">Copy</button><button data-war-retal-paste="${retal.attackId}" type="button">Paste to faction chat</button></div>
+        </article>`;
+        }).join('');
       }
 
       function logCards() {
         const logs = current?.runtime?.logs || [];
         if (!logs.length) return '<div class="slink-war-empty">No loss, escape, or online-hit counters yet.</div>';
-        return logs.map(row => `<article class="slink-war-card">
-          <div class="slink-war-card-head"><strong>${escape(row.attacker_name || row.attacker_id)} → ${escape(row.defender_name || row.defender_id)}</strong><span>${Number(row.event_count) || 0}</span></div>
-          <div class="slink-war-meta"><span class="slink-war-pill">${escape(String(row.outcome || '').replace('_', ' '))}</span><span>${new Date(Number(row.last_seen_at) || 0).toLocaleDateString()} ${new Date(Number(row.last_seen_at) || 0).toLocaleTimeString()}</span></div>
-        </article>`).join('');
+        const grouped = new Map();
+        for (const row of logs) {
+          const id = Number(row.attacker_id) || 0;
+          if (!grouped.has(id)) grouped.set(id, { id, name:String(row.attacker_name || `Player ${id}`), total:0, loss:0, escape:0, online:0, rows:[] });
+          const group = grouped.get(id);
+          const count = Number(row.event_count) || 0;
+          const outcome = String(row.outcome || 'unknown');
+          group.total += count;
+          if (outcome === 'loss') group.loss += count;
+          else if (outcome === 'escape') group.escape += count;
+          else if (outcome === 'online_hit') group.online += count;
+          group.rows.push(row);
+        }
+        return [...grouped.values()].sort((a, b) => b.total - a.total).map(group => {
+          const metrics = [`${group.total} recorded`, group.loss ? `${group.loss} lost` : '', group.escape ? `${group.escape} escaped` : '', group.online ? `${group.online} online hits` : ''].filter(Boolean).join(' • ');
+          const events = group.rows.sort((a, b) => Number(b.last_seen_at) - Number(a.last_seen_at)).map(row => {
+            const seen = new Date(Number(row.last_seen_at) || 0);
+            return `<div class="slink-war-log-event"><strong>${escape(String(row.outcome || '').replace('_', ' '))} × ${Number(row.event_count) || 0}</strong><br><a href="${profileUrl(row.defender_id)}" target="_blank" rel="noopener noreferrer">${escape(row.defender_name || `Player ${row.defender_id}`)} [${row.defender_id}]</a><br><span>${escape(seen.toLocaleDateString())} • ${escape(seen.toLocaleTimeString())}${row.observed_status ? ` • observed ${escape(row.observed_status)}` : ''}</span></div>`;
+          }).join('');
+          return `<details class="slink-war-log-person"><summary><span><strong>${escape(group.name)}${group.id ? ` [${group.id}]` : ''}</strong><br><small>${escape(metrics)}</small></span><span>Details</span></summary><div class="slink-war-log-events">${events}</div></details>`;
+        }).join('');
       }
 
       function settingsHtml() {
@@ -229,8 +291,11 @@
           }
         });
         const members = new Map([...(current?.runtime?.snapshot?.members || []), ...(current?.runtime?.outsideTargets || [])].map(member => [Number(member.id), member]));
+        const retals = new Map((current?.runtime?.snapshot?.retals || []).map(retal => [String(retal.attackId), retal]));
         for (const button of root.querySelectorAll('[data-war-copy]')) button.addEventListener('click', () => void copyCallout(members.get(Number(button.dataset.warCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
         for (const button of root.querySelectorAll('[data-war-paste]')) button.addEventListener('click', () => pasteCallout(members.get(Number(button.dataset.warPaste)), button));
+        for (const button of root.querySelectorAll('[data-war-retal-copy]')) button.addEventListener('click', () => void copyRetal(retals.get(String(button.dataset.warRetalCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
+        for (const button of root.querySelectorAll('[data-war-retal-paste]')) button.addEventListener('click', () => pasteRetal(retals.get(String(button.dataset.warRetalPaste)), button));
         for (const button of root.querySelectorAll('[data-war-claim]')) button.addEventListener('click', async () => {
           const member = members.get(Number(button.dataset.warClaim));
           const claim = (current?.runtime?.snapshot?.claims || []).find(row => Number(row.targetId) === Number(member?.id));
@@ -347,11 +412,13 @@
           currentIds.add(id);
           if (dismissed[id] || shownAlerts.has(id)) continue;
           shownAlerts.add(id);
+          const faction = retal.attackerFactionName || (retal.attackerFactionId ? `Faction ${retal.attackerFactionId}` : 'No faction');
+          const flags = [retal.isWar ? 'War hit' : '', retal.isRetal ? 'Retal hit' : '', retal.againstWarOpponent ? 'Current war opponent' : 'Outside faction'].filter(Boolean).join(' • ');
           context.ui.showAlert({
             id:`war-retal-${id}`,
             title:'SLINK Retaliation',
             subtitle:`${retal.attackerName || `Player ${retal.attackerId}`} / ${duration(Number(retal.expiresAt) - Math.floor(Date.now() / 1000))}`,
-            contentHtml:`<div><strong>${escape(retal.attackerName || `Player ${retal.attackerId}`)} [${retal.attackerId}]</strong></div><div>${retal.againstWarOpponent ? 'Current war opponent' : 'Retaliation available'}</div>`,
+            contentHtml:`<div><strong>${escape(retal.attackerName || `Player ${retal.attackerId}`)} [${retal.attackerId}]</strong></div><div>${escape(faction)}${retal.attackerFactionTag ? ` [${escape(retal.attackerFactionTag)}]` : ''}</div><div>${escape(flags || 'Retaliation available')}</div><div>Attacked: ${escape(retal.defenderName || `Player ${retal.defenderId}`)}${retal.defenderId ? ` [${retal.defenderId}]` : ''}</div><div>Status: ${escape(retal.attackerStatus || retal.attackerActivity || 'Unknown')}</div><div>Estimated BS: ${Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : 'Unknown'} • FF: ${Number.isFinite(retal.fairFight) ? retal.fairFight.toFixed(2) : 'Unknown'}</div>`,
             actions:[{ label:'Retaliate', href:attackUrl(retal.attackerId) }, { label:'Profile', href:profileUrl(retal.attackerId) }],
             onDismiss:async () => {
               dismissed[id] = Number(retal.expiresAt) || Math.floor(Date.now() / 1000) + 300;
