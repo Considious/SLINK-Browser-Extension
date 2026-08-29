@@ -4,6 +4,14 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.14.2 completes the queued War-target controls in both the extension
+dashboard and in-Torn panel. War targets can be filtered by a custom Fair Fight
+range and by Okay/not-Okay status, then sorted by availability or Fair Fight;
+those choices persist locally. Med-out claims now use an explicit target Torn ID
+and, for officers, an optional assignee Torn ID instead of per-card claim buttons.
+Stale Chrome contexts caused by updating the extension are also caught and shown
+as a useful reconnect message instead of an uncaught runtime-message failure.
+
 Version 0.14.1 polishes the War interface and closes several Torn-integration
 gaps. Retals now include faction, target, status, battle-stat and Fair Fight
 details with Copy, Torn-only Send, Attack, Profile, and per-player dismissal.

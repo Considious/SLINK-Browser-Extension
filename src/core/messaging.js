@@ -7,12 +7,25 @@
   let nextRequestId = 1;
 
   async function send(type, payload = {}) {
-    const response = await chrome.runtime.sendMessage({
-      channel: 'slink',
-      requestId: nextRequestId++,
-      type: String(type || ''),
-      payload
-    });
+    let response;
+    try {
+      if (!global.chrome?.runtime?.id) throw new Error('Extension context invalidated.');
+      response = await chrome.runtime.sendMessage({
+        channel: 'slink',
+        requestId: nextRequestId++,
+        type: String(type || ''),
+        payload
+      });
+    } catch (cause) {
+      const detail = String(cause?.message || cause || 'Chrome runtime messaging failed.');
+      const invalidated = /context invalidated|extension context|receiving end does not exist/i.test(detail);
+      const error = new Error(invalidated
+        ? 'The extension was updated while this page was open. Reopen the extension page or reload Torn manually; SLINK will never refresh Torn automatically.'
+        : `Could not contact the SLINK background service: ${detail}`);
+      error.code = invalidated ? 'SLINK_EXTENSION_CONTEXT_STALE' : 'SLINK_RUNTIME_UNAVAILABLE';
+      error.cause = cause;
+      throw error;
+    }
 
     if (!response?.ok) {
       const error = new Error(response?.error?.message || 'SLINK background request failed.');

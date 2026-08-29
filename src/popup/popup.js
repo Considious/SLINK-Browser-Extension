@@ -176,5 +176,6 @@
   });
 
   elements.refresh.addEventListener('click', refresh);
-  await refresh();
+  try { await refresh(); }
+  catch (error) { showError(error); }
 })();

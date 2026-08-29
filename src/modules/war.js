@@ -112,6 +112,7 @@
       let timer = null;
       let localError = '';
       let targetSort = 'availability';
+      let targetFilters = { minFF:1, maxFF:3, status:'all' };
       let audioContext = null;
       let alertOverlay = null;
       let lastAlertSignature = '';
@@ -557,8 +558,13 @@
       }
 
       function assignmentControls() {
-        if (!current?.session?.officer) return '';
-        return `<div class="slink-war-settings slink-war-note"><label>Assign claim to Torn ID<input id="slink-war-assignee-id" type="number" min="1" placeholder="Leave blank for yourself"></label><label>Member name<input id="slink-war-assignee-name" type="text" maxlength="80" placeholder="Optional"></label></div>`;
+        if (!current?.session?.authenticated) return '';
+        const officer = current.session.officer === true;
+        return `<div class="slink-war-settings slink-war-note"><label>Target Torn ID<input id="slink-war-claim-target-id" type="number" min="1" placeholder="Required"></label><label>Target name<input id="slink-war-claim-target-name" type="text" maxlength="80" placeholder="Optional"></label>${officer ? '<label>Assign to Torn ID<input id="slink-war-assignee-id" type="number" min="1" placeholder="Blank = yourself"></label><label>Assignee name<input id="slink-war-assignee-name" type="text" maxlength="80" placeholder="Optional"></label>' : ''}<div class="slink-war-settings-actions"><button id="slink-war-claim-submit" type="button">Claim med partner</button></div></div>`;
+      }
+
+      function targetFilterControls() {
+        return `<div class="slink-war-settings slink-war-note"><label>Minimum FF<input id="slink-war-filter-min" type="number" min="0" max="100" step="0.1" value="${targetFilters.minFF}"></label><label>Maximum FF<input id="slink-war-filter-max" type="number" min="0" max="100" step="0.1" value="${targetFilters.maxFF}"></label><label>Status<select id="slink-war-filter-status"><option value="all" ${targetFilters.status === 'all' ? 'selected' : ''}>All statuses</option><option value="okay" ${targetFilters.status === 'okay' ? 'selected' : ''}>Okay only</option><option value="notOkay" ${targetFilters.status === 'notOkay' ? 'selected' : ''}>Not okay only</option></select></label><label>Sort<select id="slink-war-filter-sort"><option value="availability" ${targetSort === 'availability' ? 'selected' : ''}>Availability</option><option value="fairFightDesc" ${targetSort === 'fairFightDesc' ? 'selected' : ''}>FF high to low</option><option value="fairFightAsc" ${targetSort === 'fairFightAsc' ? 'selected' : ''}>FF low to high</option></select></label></div>`;
       }
 
       async function copyCallout(member, button) {
@@ -746,20 +752,25 @@
       }
 
       function targetCards() {
-        const members = WAR.sortMembers(current?.runtime?.snapshot?.members || [], Date.now(), targetSort);
-        if (!members.length) return '<div class="slink-war-empty">No eligible targets in the latest shared snapshot.</div>';
-        return assignmentControls() + members.map(member => {
+        const minimum = Math.min(Number(targetFilters.minFF) || 1, Number(targetFilters.maxFF) || 3);
+        const maximum = Math.max(Number(targetFilters.minFF) || 1, Number(targetFilters.maxFF) || 3);
+        const members = WAR.sortMembers(current?.runtime?.snapshot?.members || [], Date.now(), targetSort).filter(member => {
+          const ff = Number(member.fairFight);
+          if (!Number.isFinite(ff) || ff < minimum || ff > maximum) return false;
+          const okay = /^okay$/i.test(String(member.statusState || '').trim());
+          return targetFilters.status === 'okay' ? okay : targetFilters.status === 'notOkay' ? !okay : true;
+        });
+        if (!members.length) return targetFilterControls() + assignmentControls() + '<div class="slink-war-empty">No targets match the current Fair Fight and status filters.</div>';
+        return targetFilterControls() + assignmentControls() + members.map(member => {
           const hospitalized = WAR.isHospitalized(member);
           const remaining = WAR.statusSeconds(member);
           const readyAt = hospitalized ? WAR.tctTime(member.statusUntil) : '';
-          const claim = (current?.runtime?.snapshot?.claims || []).find(row => Number(row.targetId) === Number(member.id));
-          const mine = Number(claim?.claimedById) === Number(current?.session?.userId);
           const gate = insideGate(member.id);
           return `<article class="slink-war-card" ${gate.active ? 'data-inside-blocked="true"' : ''}>
             <div class="slink-war-card-head"><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">${escape(member.name)} [${member.id}]</a><span>Lv ${member.level || '?'}</span></div>
             <div class="slink-war-meta"><span class="slink-war-pill ${member.activity === 'Online' ? 'slink-war-online' : ''}">${escape(member.activity || 'Unknown')}</span><span class="slink-war-pill ${hospitalized ? 'slink-war-hospital' : ''}">${escape(member.statusState || 'Okay')}${hospitalized ? ` ${duration(remaining)}${readyAt ? ` / ${readyAt} TCT` : ''}` : ''}</span><span class="slink-war-pill">Estimated BS ${Number.isFinite(member.battleStatsEstimate) ? SLINK.core.format.shortNumber(member.battleStatsEstimate) : '?'}</span><span class="slink-war-pill">FF ${Number.isFinite(member.fairFight) ? member.fairFight.toFixed(2) : '?'}</span>${memberContext(member)}</div>
             ${gate.active ? `<div class="slink-war-inside-disabled">${escape(insideGateMessage(gate))}</div>` : ''}
-            <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">${gate.active && gate.mode === 'block' ? 'INSIDES DISABLED' : 'Attack'}</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-paste="${member.id}" type="button">Paste to faction chat</button><button data-war-claim="${member.id}" type="button" ${claim && !mine && !current?.session?.officer ? 'disabled' : ''}>${claim ? (mine ? 'Release claim' : `Claimed: ${escape(claim.claimedByName || claim.claimedById)}`) : 'Claim med-out'}</button></div>
+            <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">${gate.active && gate.mode === 'block' ? 'INSIDES DISABLED' : 'Attack'}</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-paste="${member.id}" type="button">Paste to faction chat</button></div>
           </article>`;
         }).join('');
       }
@@ -951,27 +962,36 @@
         for (const button of root.querySelectorAll('[data-war-retal-send]')) button.addEventListener('click', () => void sendRetal(retals.get(String(button.dataset.warRetalSend)), button));
         for (const button of root.querySelectorAll('[data-war-retal-dismiss]')) button.addEventListener('click', () => void dismissRetal(retals.get(String(button.dataset.warRetalDismiss))));
         for (const link of root.querySelectorAll('[data-war-attack]')) link.addEventListener('click', event => void handleAttackLink(event, Number(link.dataset.warAttack)));
+        for (const id of ['slink-war-filter-min', 'slink-war-filter-max', 'slink-war-filter-status', 'slink-war-filter-sort']) root.querySelector(`#${id}`)?.addEventListener('change', async () => {
+          targetFilters = {
+            minFF:Math.max(0, Math.min(100, Number(root.querySelector('#slink-war-filter-min')?.value) || 0)),
+            maxFF:Math.max(0, Math.min(100, Number(root.querySelector('#slink-war-filter-max')?.value) || 3)),
+            status:root.querySelector('#slink-war-filter-status')?.value || 'all'
+          };
+          targetSort = root.querySelector('#slink-war-filter-sort')?.value || 'availability';
+          await SLINK.core.storage.set('ui.war.targetFilters.v1', { ...targetFilters, sort:targetSort });
+          render();
+        });
+        root.querySelector('#slink-war-claim-submit')?.addEventListener('click', async event => {
+          const button = event.currentTarget;
+          const targetId = Number(root.querySelector('#slink-war-claim-target-id')?.value) || 0;
+          if (!targetId) { localError='Enter the med-out target Torn ID.'; render(); return; }
+          const member = (current?.runtime?.snapshot?.members || []).find(row => Number(row.id) === targetId);
+          const targetName = String(root.querySelector('#slink-war-claim-target-name')?.value || '').trim() || member?.name || `Player ${targetId}`;
+          const assigneeId = current?.session?.officer ? Number(root.querySelector('#slink-war-assignee-id')?.value) || 0 : 0;
+          const assigneeName = current?.session?.officer ? String(root.querySelector('#slink-war-assignee-name')?.value || '').trim() : '';
+          button.disabled = true;
+          try {
+            current = await SLINK.core.messaging.send('war.claims.update', { operation:'claim', targetId, targetName, assigneeId, assigneeName });
+            localError = '';
+          } catch (error) { localError=SLINK.core.format.errorMessage(error); }
+          render();
+        });
         for (const button of root.querySelectorAll('[data-armory-request-resolve]')) button.addEventListener('click', async () => {
           try {
             current = await SLINK.core.messaging.send('war.armory.request', { operation:'resolve', requestId:button.dataset.armoryRequestResolve });
             localError = '';
             render();
-          } catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
-        });
-        for (const button of root.querySelectorAll('[data-war-claim]')) button.addEventListener('click', async () => {
-          const member = members.get(Number(button.dataset.warClaim));
-          const claim = (current?.runtime?.snapshot?.claims || []).find(row => Number(row.targetId) === Number(member?.id));
-          try {
-            const assigneeId = current?.session?.officer ? Number(root.querySelector('#slink-war-assignee-id')?.value) || 0 : 0;
-            const assigning = Boolean(assigneeId);
-            current = await SLINK.core.messaging.send('war.claims.update', {
-              operation:claim && !assigning ? 'release' : 'claim',
-              targetId:member.id,
-              targetName:member.name,
-              assigneeId,
-              assigneeName:assigning ? String(root.querySelector('#slink-war-assignee-name')?.value || '').trim() : ''
-            });
-            localError = ''; render();
           } catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
         for (const button of root.querySelectorAll('[data-war-release]')) button.addEventListener('click', async () => {
@@ -1168,6 +1188,9 @@
       current = await SLINK.core.messaging.send('war.status');
       dismissedRetalMap = await dismissedRetals();
       activeTab = await SLINK.core.storage.get('ui.war.activeTab.v1', 'targets');
+      const savedTargetFilters = await SLINK.core.storage.get('ui.war.targetFilters.v1', {});
+      targetFilters = { ...targetFilters, ...savedTargetFilters };
+      targetSort = savedTargetFilters.sort || targetSort;
       if (!['targets', 'outside', 'claims', 'armory', 'logs', 'settings'].includes(activeTab)) activeTab = 'targets';
       armoryMode = await SLINK.core.storage.get('war.armory.mode.v1', 'ranked-all');
       armoryWhitelist = new Set((await SLINK.core.storage.get('war.armory.whitelist.v1', [])).map(String));

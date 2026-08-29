@@ -15,6 +15,7 @@
   let activeTheme = SLINK.core.themes.get();
   let warLeader = false;
   let dismissedRetals = {};
+  let warTargetFilters = { minFF:1, maxFF:3, status:'all', sort:'availability' };
   const warLeaderClientId = `war-dashboard:${globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
   const INSIDE_WINDOWS = Object.freeze([[0, 100], [200, 250], [450, 500], [950, 1000], [2350, 2500], [4850, 5000], [9900, 10000]]);
 
@@ -106,7 +107,7 @@
     const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(member.id)}`;
     const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(member.id)}`;
     const remaining = SLINK.core.war.statusSeconds(member);
-    article.innerHTML = '<div class="target-head"><a></a><span class="level"></span></div><div class="target-meta"></div><div class="target-meta secondary-meta"></div><div class="target-actions"><a class="button" target="_blank" rel="noopener noreferrer">Attack</a><a class="button secondary" target="_blank" rel="noopener noreferrer">Profile</a><button class="secondary copy-war-target" type="button">Copy for faction chat</button><button class="secondary claim-war-target" type="button">Claim med-out</button></div>';
+    article.innerHTML = '<div class="target-head"><a></a><span class="level"></span></div><div class="target-meta"></div><div class="target-meta secondary-meta"></div><div class="target-actions"><a class="button" target="_blank" rel="noopener noreferrer">Attack</a><a class="button secondary" target="_blank" rel="noopener noreferrer">Profile</a><button class="secondary copy-war-target" type="button">Copy for faction chat</button></div>';
     const links = article.querySelectorAll('a');
     links[0].href = profile; links[0].textContent = `${member.name || 'Unknown'} [${member.id}]`;
     links[1].href = attack; links[2].href = profile;
@@ -127,41 +128,29 @@
     article.querySelector('.level').textContent = `Lv ${member.level || '?'}`;
     const readyAt = SLINK.core.war.isHospitalized(member) ? SLINK.core.war.tctTime(member.statusUntil) : '';
     for (const text of [member.activity || 'Unknown', member.statusState || 'Okay', SLINK.core.war.isHospitalized(member) ? `Hospital ${SLINK.core.format.formatHumanDuration(remaining)}${readyAt ? ` / ${readyAt} TCT` : ''}` : '', Number.isFinite(member.battleStatsEstimate) ? `Estimated BS ${SLINK.core.format.shortNumber(member.battleStatsEstimate)}` : 'Estimated BS ?', Number.isFinite(member.fairFight) ? `FF ${member.fairFight.toFixed(2)}` : 'FF ?'].filter(Boolean)) article.querySelector('.target-meta').append(pill(text));
-    article.querySelector('.secondary-meta').textContent = [member.statusDescription, member.lastActionRelative].filter(Boolean).join(' • ');
+    const statusDescription = String(member.statusDescription || '').trim();
+    const duplicateStatus = [member.statusState, member.activity].some(value => String(value || '').trim().toLowerCase() === statusDescription.toLowerCase());
+    article.querySelector('.secondary-meta').textContent = [duplicateStatus ? '' : statusDescription, member.lastActionRelative].filter(Boolean).join(' • ');
     const copyButton = article.querySelector('.copy-war-target');
     copyButton.addEventListener('click', async () => {
       await copyText(SLINK.core.war.factionCallout(member));
       copyButton.textContent = 'Copied';
       setTimeout(() => { if (copyButton.isConnected) copyButton.textContent = 'Copy for faction chat'; }, 1400);
     });
-    const claim = (war?.runtime?.snapshot?.claims || []).find(row => Number(row.targetId) === Number(member.id));
-    const claimButton = article.querySelector('.claim-war-target');
-    if (outside) {
-      claimButton.remove();
-      return article;
-    }
-    const mine = Number(claim?.claimedById) === Number(war?.session?.userId);
-    claimButton.textContent = claim ? (mine ? 'Release my claim' : `Claimed by ${claim.claimedByName || claim.claimedById}`) : 'Claim med-out';
-    claimButton.disabled = Boolean(claim && !mine && !war?.session?.officer);
-    claimButton.addEventListener('click', async () => {
-      try {
-        const assigneeId = war?.session?.officer ? Number(byId('claim-assignee-id').value) || 0 : 0;
-        const assigning = Boolean(assigneeId);
-        const operation = claim && !assigning ? 'release' : 'claim';
-        war = await SLINK.core.messaging.send('war.claims.update', {
-          operation,
-          targetId:member.id,
-          targetName:member.name,
-          assigneeId,
-          assigneeName:assigning ? byId('claim-assignee-name').value.trim() : ''
-        });
-        byId('war-action-message').textContent = operation === 'release'
-          ? `Released ${member.name}.`
-          : assigning ? `Assigned ${member.name} to Torn ID ${assigneeId}.` : `Claimed ${member.name} as your med-out target.`;
-        renderTargets(); renderWar();
-      } catch (error) { byId('war-action-message').textContent = errorText(error); }
-    });
     return article;
+  }
+
+  function filteredWarTargets(values) {
+    const minimum = Math.min(Number(warTargetFilters.minFF) || 1, Number(warTargetFilters.maxFF) || 3);
+    const maximum = Math.max(Number(warTargetFilters.minFF) || 1, Number(warTargetFilters.maxFF) || 3);
+    return SLINK.core.war.sortMembers(values || [], Date.now(), warTargetFilters.sort || 'availability').filter(member => {
+      const ff = Number(member.fairFight);
+      if (!Number.isFinite(ff) || ff < minimum || ff > maximum) return false;
+      const okay = /^okay$/i.test(String(member.statusState || '').trim());
+      if (warTargetFilters.status === 'okay' && !okay) return false;
+      if (warTargetFilters.status === 'notOkay' && okay) return false;
+      return true;
+    });
   }
 
   function claimCard(claim) {
@@ -431,9 +420,10 @@
     outsideTab.hidden = warTab.hidden;
     if ((targetView === 'leveling' && levelingTab.hidden) || ((targetView === 'war' || targetView === 'outside' || targetView === 'claims') && warTab.hidden)) targetView = levelingTab.hidden ? 'war' : 'leveling';
     for (const button of document.querySelectorAll('.target-tab')) button.classList.toggle('active', button.dataset.targetView === targetView);
-    byId('war-sort-row').hidden = targetView !== 'war';
+    byId('war-filter-row').hidden = targetView !== 'war';
     byId('outside-filter-row').hidden = targetView !== 'outside';
-    byId('claim-assignee-row').hidden = !war?.session?.officer || !['war', 'claims'].includes(targetView);
+    byId('claim-assignee-row').hidden = !war?.session?.authenticated || !['war', 'claims'].includes(targetView);
+    for (const field of document.querySelectorAll('.claim-officer-field')) field.hidden = !war?.session?.officer;
     if (targetView === 'claims') {
       const claims = war?.runtime?.snapshot?.claims || [];
       root.replaceChildren(...claims.map(claimCard));
@@ -445,10 +435,10 @@
       byId('target-deck-title').textContent = 'Outside targets';
       byId('target-summary').textContent = members.length ? `${members.length} FFScouter targets` : (war?.runtime?.outsideError || 'Choose a Fair Fight range and poll FFScouter');
     } else if (targetView === 'war') {
-      const members = SLINK.core.war.sortMembers(war?.runtime?.snapshot?.members || [], Date.now(), byId('war-target-sort').value);
+      const members = filteredWarTargets(war?.runtime?.snapshot?.members || []);
       root.replaceChildren(...members.map(warTargetCard));
       byId('target-deck-title').textContent = 'War targets';
-      byId('target-summary').textContent = members.length ? `${members.length} eligible opponents` : 'No War targets loaded';
+      byId('target-summary').textContent = members.length ? `${members.length} matching opponents` : 'No War targets match the current filters';
     } else {
       const targets = leveling?.runtime?.targets || [];
       root.replaceChildren(...targets.map(targetCard));
@@ -592,6 +582,11 @@
     system = status; leveling = status.leveling; war = status.war; contribution = status.contribution; contributionTerms = terms;
     dismissedRetals = await SLINK.core.storage.get('war.dismissedRetals.v1', {});
     dismissedRetals = Object.fromEntries(Object.entries(dismissedRetals || {}).filter(([, expiresAt]) => Number(expiresAt) > Math.floor(Date.now() / 1000)));
+    warTargetFilters = { ...warTargetFilters, ...(await SLINK.core.storage.get('ui.war.targetFilters.v1', {})) };
+    byId('war-min-ff').value = warTargetFilters.minFF;
+    byId('war-max-ff').value = warTargetFilters.maxFF;
+    byId('war-status-filter').value = warTargetFilters.status;
+    byId('war-target-sort').value = warTargetFilters.sort;
     system.levelingInTorn = await SLINK.core.storage.get('ui.modules.leveling.showInTorn', true);
     await SLINK.core.storage.set('ui.modules.contribution.showInTorn', false);
     byId('connection').textContent = status.worker.connected ? 'Worker connected' : 'Worker offline';
@@ -711,7 +706,34 @@
     } catch (error) { showError('war-error', error); } finally { setBusy(button, false); }
   });
   for (const button of document.querySelectorAll('[data-target-view]')) button.addEventListener('click', () => { targetView = button.dataset.targetView; renderTargets(); });
-  byId('war-target-sort').addEventListener('change', renderTargets);
+  for (const id of ['war-min-ff', 'war-max-ff', 'war-status-filter', 'war-target-sort']) byId(id).addEventListener('change', async () => {
+    warTargetFilters = {
+      minFF:Math.max(0, Math.min(100, Number(byId('war-min-ff').value) || 0)),
+      maxFF:Math.max(0, Math.min(100, Number(byId('war-max-ff').value) || 3)),
+      status:byId('war-status-filter').value,
+      sort:byId('war-target-sort').value
+    };
+    await SLINK.core.storage.set('ui.war.targetFilters.v1', warTargetFilters);
+    renderTargets();
+  });
+  byId('claim-submit').addEventListener('click', async event => {
+    const button = event.currentTarget;
+    const targetId = Number(byId('claim-target-id').value) || 0;
+    if (!targetId) { byId('war-action-message').textContent = 'Enter the med-out target Torn ID.'; return; }
+    const member = (war?.runtime?.snapshot?.members || []).find(row => Number(row.id) === targetId);
+    const targetName = byId('claim-target-name').value.trim() || member?.name || `Player ${targetId}`;
+    const assigneeId = war?.session?.officer ? Number(byId('claim-assignee-id').value) || 0 : 0;
+    const assigneeName = war?.session?.officer ? byId('claim-assignee-name').value.trim() : '';
+    setBusy(button, true);
+    try {
+      war = await SLINK.core.messaging.send('war.claims.update', { operation:'claim', targetId, targetName, assigneeId, assigneeName });
+      byId('war-action-message').textContent = assigneeId ? `Assigned ${targetName} [${targetId}] to Torn ID ${assigneeId}.` : `Claimed ${targetName} [${targetId}] as your med-out partner.`;
+      byId('claim-target-id').value = '';
+      byId('claim-target-name').value = '';
+      renderTargets(); renderWar();
+    } catch (error) { byId('war-action-message').textContent = errorText(error); }
+    finally { setBusy(button, false); }
+  });
   for (const button of document.querySelectorAll('[data-page-tab]')) button.addEventListener('click', () => switchPage(button.dataset.pageTab));
   byId('donation-form').addEventListener('submit', async event => { event.preventDefault(); const submit = byId('donation-submit'); setBusy(submit,true); byId('donation-message').textContent=''; try { contribution=await SLINK.core.messaging.send('contribution.donate',{apiKey:byId('donation-key').value,acceptTerms:byId('donation-accept').checked}); byId('donation-key').value=''; byId('donation-accept').checked=false; byId('donation-message').textContent='Public Only key validated and saved on SLINK servers in encrypted form.'; renderContribution(); } catch(error){ byId('donation-message').textContent=errorText(error); } finally{ setBusy(submit,false); } });
   byId('donation-revoke').addEventListener('click', async () => { if (!confirm('Revoke this saved donation and erase its encrypted key material?')) return; contribution=await SLINK.core.messaging.send('contribution.revoke'); byId('donation-message').textContent='Donation revoked and encrypted key material erased.'; renderContribution(); });
@@ -719,7 +741,13 @@
   byId('admin-lookup-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-lookup'); setBusy(button,true); byId('admin-message').textContent=''; try { adminUser=await SLINK.core.messaging.send('war.admin.permissions.get',{userId:byId('admin-user-id').value}); renderAdminScopes(adminUser.scopes); byId('admin-permissions-form').hidden=false; const identity=adminUser.faction_id ? ` Current faction: ${adminUser.faction_id}. Faction access is marked as inherited and does not create a personal grant row.` : ' No current faction entitlement was found; only direct grants are shown.'; byId('admin-message').textContent=`Loaded effective access for Torn ID ${adminUser.user_id}.${identity}${adminUser.identity_warning ? ` ${adminUser.identity_warning}` : ''}`; } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
   byId('admin-permissions-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-save'); setBusy(button,true); try { const scopes=[...byId('admin-scope-list').querySelectorAll('input[data-scope]:checked:not(:disabled)')].map(input=>input.dataset.scope); adminUser=await SLINK.core.messaging.send('war.admin.permissions.save',{userId:adminUser.user_id,scopes,hours:byId('admin-hours').value,note:byId('admin-note').value}); byId('admin-message').textContent=`Permissions saved for Torn ID ${adminUser.user_id}. They take effect on the user's next authentication.`; byId('admin-lookup-form').requestSubmit(); } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
 
-  await refresh();
+  try { await refresh(); }
+  catch (error) {
+    byId('connection').textContent = 'Extension background unavailable';
+    byId('connection').className = 'badge error';
+    showError('war-error', error);
+    showError('leveling-error', error);
+  }
   await claimWarLeader();
   setInterval(() => void claimWarLeader(), 5_000);
   addEventListener('visibilitychange', () => void claimWarLeader());
