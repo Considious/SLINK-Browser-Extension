@@ -25,15 +25,21 @@
     outsideTargets: 'war.outsideTargets.v1',
     lastOutsideAt: 'war.lastOutsideAt.v1',
     scheduledRoster: 'war.scheduledRoster.v1',
-    retalProfileCache: 'war.retalProfileCache.v1'
+    retalProfileCache: 'war.retalProfileCache.v1',
+    armoryMembers: 'war.armoryMembers.v1',
+    armoryMembersAt: 'war.armoryMembersAt.v1'
   });
   const STATUS_INTERVAL_MS = 10_000;
   const ATTACK_INTERVAL_MS = 30_000;
   const NO_WAR_DISCOVERY_INTERVAL_MS = 60 * 60 * 1000;
   const PREWAR_WINDOW_MS = 5 * 60 * 1000;
   const SCHEDULED_ROSTER_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+  const ARMORY_MEMBERS_MAX_AGE_MS = 60_000;
+  const LOCAL_LEADER_LEASE_MS = 15_000;
   let authenticating = null;
   let cycling = null;
+  let lastCycleStartedAt = 0;
+  let localLeader = { clientId:'', expiresAt:0 };
 
   function defaults() {
     return {
@@ -722,7 +728,8 @@
         opponent_faction_id:activeWar.opponentFactionId,
         mode:input.mode === 'termed' ? 'termed' : 'war',
         idleMinutes:Math.max(0, Math.min(60, Number(input.idleMinutes) || 0)),
-        insideHitCap:Math.max(0, Math.min(9999, Math.floor(Number(input.insideHitCap) || 0)))
+        insideHitCap:Math.max(0, Math.min(9999, Math.floor(Number(input.insideHitCap) || 0))),
+        insideBlockMode:['off', 'warn', 'block'].includes(input.insideBlockMode) ? input.insideBlockMode : 'warn'
       }
     });
     await setRuntime({ snapshot:{ ...((await runtime()).snapshot || {}), config:result.config, mode:result.config?.mode || 'war' } });
@@ -732,7 +739,7 @@
   async function updateClaim(input = {}) {
     const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
     if (!activeWar?.warId) throw new Error('An assigned or active ranked war is required to manage med-out claims.');
-    await workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/claims`, {
+    const result = await workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/claims`, {
       method:'POST',
       body:{
         opponent_faction_id:activeWar.opponentFactionId,
@@ -744,7 +751,9 @@
         minutes:Math.max(5, Math.min(180, Number(input.minutes) || 30))
       }
     });
-    return prepareCycle();
+    const currentRuntime = await runtime();
+    await setRuntime({ snapshot:{ ...(currentRuntime.snapshot || {}), claims:Array.isArray(result?.claims) ? result.claims : (currentRuntime.snapshot?.claims || []) } });
+    return publicStatus();
   }
 
   async function fetchLogs(activeWar, forceStored = false, pendingLogs = []) {
@@ -773,6 +782,9 @@
 
   async function prepareCycle(payload = {}) {
     if (cycling) return cycling;
+    const now = Date.now();
+    if (payload.manual !== true && now - lastCycleStartedAt < STATUS_INTERVAL_MS - 1_000) return publicStatus();
+    lastCycleStartedAt = now;
     cycling = (async () => {
       const currentSettings = await settings();
       const session = await ensureSession(false);
@@ -870,6 +882,89 @@
     }
   }
 
+  function claimLeader(input = {}) {
+    const clientId = String(input.clientId || '').trim().slice(0, 160);
+    if (!clientId) throw new Error('A War polling client ID is required.');
+    const now = Date.now();
+    if (!localLeader.clientId || localLeader.expiresAt <= now || localLeader.clientId === clientId) {
+      localLeader = { clientId, expiresAt:now + LOCAL_LEADER_LEASE_MS };
+      return { leader:true, expiresAt:localLeader.expiresAt };
+    }
+    return { leader:false, expiresAt:localLeader.expiresAt };
+  }
+
+  function releaseLeader(input = {}) {
+    const clientId = String(input.clientId || '').trim();
+    if (clientId && localLeader.clientId === clientId) localLeader = { clientId:'', expiresAt:0 };
+    return { released:true };
+  }
+
+  async function armoryMembers(force = false) {
+    await ensureSession(false);
+    const [cached, cachedAt] = await Promise.all([
+      SLINK.core.storage.get(KEYS.armoryMembers, []),
+      SLINK.core.storage.get(KEYS.armoryMembersAt, 0)
+    ]);
+    if (!force && Array.isArray(cached) && cached.length && Date.now() - Number(cachedAt) < ARMORY_MEMBERS_MAX_AGE_MS) {
+      return { members:cached, cached:true, fetchedAt:Number(cachedAt) };
+    }
+    const currentSettings = await settings();
+    const response = await tornRequest('/v2/faction/members', currentSettings.tornKey);
+    const source = response?.members ?? response?.faction?.members ?? [];
+    const rows = Array.isArray(source)
+      ? source
+      : Object.entries(source || {}).map(([id, member]) => ({ id, ...(member || {}) }));
+    const members = rows.map(row => {
+      const id = WAR.positiveInteger(row?.id ?? row?.user_id ?? row?.player_id);
+      if (!id) return null;
+      const position = row?.position;
+      const status = row?.status || {};
+      const lastAction = row?.last_action || row?.lastAction || {};
+      return {
+        id:String(id),
+        name:String(row?.name || id),
+        level:Number(row?.level) || 0,
+        rank:String(position?.name ?? row?.position_name ?? position ?? row?.rank ?? 'Member').trim() || 'Member',
+        statusState:String(status?.state || row?.status_state || 'Unknown'),
+        statusDescription:String(status?.description || row?.status_description || ''),
+        statusUntil:Number(status?.until || row?.status_until) || 0,
+        lastActionRelative:String(lastAction?.relative || row?.last_action_relative || 'Unknown'),
+        lastActionTimestamp:Number(lastAction?.timestamp || row?.last_action_timestamp) || 0
+      };
+    }).filter(Boolean);
+    if (!members.length) throw new Error('Torn returned no faction members. A faction-capable API key may be required.');
+    const fetchedAt = Date.now();
+    await Promise.all([
+      SLINK.core.storage.set(KEYS.armoryMembers, members),
+      SLINK.core.storage.set(KEYS.armoryMembersAt, fetchedAt)
+    ]);
+    return { members, cached:false, fetchedAt };
+  }
+
+  async function updateArmoryRequest(input = {}) {
+    const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
+    if (!activeWar?.warId) throw new Error('An assigned or active ranked war is required to request an armory item.');
+    const result = await workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/item-requests`, {
+      method:'POST',
+      body:{
+        opponent_faction_id:activeWar.opponentFactionId,
+        operation:input.operation === 'resolve' ? 'resolve' : 'request',
+        requestId:String(input.requestId || ''),
+        holderId:WAR.positiveInteger(input.holderId),
+        holderName:String(input.holderName || '').slice(0, 80),
+        itemName:String(input.itemName || '').slice(0, 120),
+        bonusName:String(input.bonusName || '').slice(0, 40),
+        armoryId:String(input.armoryId || '').slice(0, 80),
+        armoryUrl:String(input.armoryUrl || '').slice(0, 500),
+        holderStatus:String(input.holderStatus || '').slice(0, 120),
+        holderLastAction:String(input.holderLastAction || '').slice(0, 120)
+      }
+    });
+    const currentRuntime = await runtime();
+    await setRuntime({ snapshot:{ ...(currentRuntime.snapshot || {}), itemRequests:Array.isArray(result?.itemRequests) ? result.itemRequests : (currentRuntime.snapshot?.itemRequests || []) } });
+    return publicStatus();
+  }
+
   async function saveSettings(input = {}) {
     const current = await settings();
     const displayMode = ['extension', 'torn', 'hybrid'].includes(input.displayMode) ? input.displayMode : current.displayMode;
@@ -941,7 +1036,7 @@
         expiresAt:authenticated ? session.expiresAt : 0
       },
       permissions:SLINK.core.permissions.normalizeSnapshot(permissions || {}),
-      sharedConfig:currentRuntime?.snapshot?.config || { mode:currentSettings.warMode, idleMinutes:currentSettings.idleMinutes, insideHitCap:0, updatedBy:0, updatedAt:0 },
+      sharedConfig:currentRuntime?.snapshot?.config || { mode:currentSettings.warMode, idleMinutes:currentSettings.idleMinutes, insideHitCap:0, insideBlockMode:'warn', updatedBy:0, updatedAt:0 },
       activeWar,
       runtime:currentRuntime
     };
@@ -954,12 +1049,16 @@
       'war.terms': () => fetchTerms(true),
       'war.settings.save': saveSettings,
       'war.session.clear': async () => { await clearSession(); return publicStatus(); },
-      'war.active.detect': async payload => { const activeWar = await registerActiveWar(payload); return { activeWar, status:await publicStatus() }; },
+      'war.active.detect': async payload => { lastCycleStartedAt = 0; const activeWar = await registerActiveWar(payload); return { activeWar, status:await publicStatus() }; },
       'war.cycle.prepare': prepareCycle,
+      'war.leader.claim': claimLeader,
+      'war.leader.release': releaseLeader,
       'war.config.save': saveSharedConfig,
       'war.claims.update': updateClaim,
       'war.chain.report': chainReport,
       'war.outside.refresh': discoverOutsideTargets,
+      'war.armory.members': payload => armoryMembers(payload?.force === true),
+      'war.armory.request': updateArmoryRequest,
       'war.logs': async () => {
         const session = await ensureSession(false);
         if (!SLINK.core.permissions.hasScope(session, 'slink.war.officer') && !SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('slink.war.officer permission is required to view War logs.');

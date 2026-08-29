@@ -19,7 +19,6 @@ const SLINK = globalThis.SLINK_EXTENSION;
 const CONNECTION_ALARM = 'slink.worker.connection';
 const CONNECTION_ALARM_MINUTES = 15;
 const WAR_CYCLE_ALARM = 'slink.war.cycle';
-const WAR_CYCLE_ALARM_MINUTES = 0.5;
 
 function bootstrapPermissions() {
   return {
@@ -97,12 +96,9 @@ async function ensureConnectionAlarm() {
       periodInMinutes: CONNECTION_ALARM_MINUTES
     });
   }
-  if (!await chrome.alarms.get(WAR_CYCLE_ALARM)) {
-    await chrome.alarms.create(WAR_CYCLE_ALARM, {
-      delayInMinutes: WAR_CYCLE_ALARM_MINUTES,
-      periodInMinutes: WAR_CYCLE_ALARM_MINUTES
-    });
-  }
+  // War collection is demand-driven by one live extension page. Remove the
+  // legacy background alarm so a closed/idle UI never keeps polling.
+  await chrome.alarms.clear(WAR_CYCLE_ALARM);
 }
 
 async function connectionStatus() {
@@ -314,11 +310,6 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
-  if (alarm.name === WAR_CYCLE_ALARM) {
-    void SLINK.services.war.publicStatus()
-      .then(status => status.configured ? SLINK.services.war.prepareCycle() : null)
-      .catch(error => console.error('[SLINK] War cycle:', error));
-  }
 });
 
 void ensureDefaultState().catch(error => console.error('[SLINK] Default state:', error));

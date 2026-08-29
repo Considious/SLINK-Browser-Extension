@@ -13,6 +13,9 @@
   let targetView = 'leveling';
   let adminUser = null;
   let activeTheme = SLINK.core.themes.get();
+  let warLeader = false;
+  const warLeaderClientId = `war-dashboard:${globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
+  const INSIDE_WINDOWS = Object.freeze([[0, 100], [200, 250], [450, 500], [950, 1000], [2350, 2500], [4850, 5000], [9900, 10000]]);
 
   function setBusy(button, busy) {
     if (button) button.disabled = Boolean(busy);
@@ -59,6 +62,22 @@
     return `$${Math.max(0, Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits:0 })}`;
   }
 
+  function insideGate(targetId) {
+    const config = war?.sharedConfig || {};
+    const chain = war?.runtime?.panelStats?.chain;
+    const mode = ['off', 'warn', 'block'].includes(config.insideBlockMode) ? config.insideBlockMode : 'warn';
+    if (war?.activeWar?.phase !== 'active' || config.mode !== 'termed' || !chain || mode === 'off') return null;
+    const count = Math.max(0, Number(chain.current) || 0);
+    const range = INSIDE_WINDOWS.find(([minimum, maximum]) => count >= minimum && count <= maximum);
+    if (!range) return null;
+    const ids = new Set([...(war?.runtime?.snapshot?.opponentMemberIds || []), ...(war?.runtime?.snapshot?.members || []).map(member => member.id)].map(Number));
+    return ids.has(Number(targetId)) ? { mode, count, minimum:range[0], maximum:range[1] } : null;
+  }
+
+  function insideMessage(gate) {
+    return `INSIDE HITS DISABLED — chain ${gate.count} is inside the ${gate.minimum}–${gate.maximum} major bonus window.`;
+  }
+
   function targetCard(target) {
     const article = document.createElement('article');
     article.className = 'target';
@@ -78,6 +97,11 @@
   function warTargetCard(member, outside = false) {
     const article = document.createElement('article');
     article.className = 'target';
+    const gate = insideGate(member.id);
+    if (gate) {
+      article.style.outline = '3px solid var(--slink-error)';
+      article.style.boxShadow = '0 0 18px var(--slink-error)';
+    }
     const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(member.id)}`;
     const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(member.id)}`;
     const remaining = SLINK.core.war.statusSeconds(member);
@@ -85,6 +109,20 @@
     const links = article.querySelectorAll('a');
     links[0].href = profile; links[0].textContent = `${member.name || 'Unknown'} [${member.id}]`;
     links[1].href = attack; links[2].href = profile;
+    if (gate) {
+      links[1].textContent = gate.mode === 'block' ? 'INSIDES DISABLED' : 'Attack (warning)';
+      const warning = document.createElement('div');
+      warning.className = 'error';
+      warning.textContent = insideMessage(gate);
+      article.querySelector('.target-actions').before(warning);
+      links[1].addEventListener('click', async event => {
+        event.preventDefault();
+        if (gate.mode === 'warn' && confirm(`${insideMessage(gate)}\n\nOpen this target anyway?`)) {
+          await SLINK.core.storage.set('war.insideUnlock.v1', { targetId:Number(member.id), expiresAt:Date.now() + 2 * 60_000 });
+          window.open(attack, '_blank', 'noopener');
+        }
+      });
+    }
     article.querySelector('.level').textContent = `Lv ${member.level || '?'}`;
     const readyAt = SLINK.core.war.isHospitalized(member) ? SLINK.core.war.tctTime(member.statusUntil) : '';
     for (const text of [member.activity || 'Unknown', member.statusState || 'Okay', SLINK.core.war.isHospitalized(member) ? `Hospital ${SLINK.core.format.formatHumanDuration(remaining)}${readyAt ? ` / ${readyAt} TCT` : ''}` : '', Number.isFinite(member.battleStatsEstimate) ? `Estimated BS ${SLINK.core.format.shortNumber(member.battleStatsEstimate)}` : 'Estimated BS ?', Number.isFinite(member.fairFight) ? `FF ${member.fairFight.toFixed(2)}` : 'FF ?'].filter(Boolean)) article.querySelector('.target-meta').append(pill(text));
@@ -207,8 +245,17 @@
       div.className = 'retal-item retal-detail';
       const remaining = SLINK.core.format.formatHumanDuration(Number(retal.expiresAt) - Math.floor(Date.now() / 1000));
       div.innerHTML = '<div class="retal-head"><a target="_blank" rel="noopener noreferrer"></a><strong></strong></div><div class="retal-badges"></div><dl class="retal-report"></dl><div class="retal-actions"><button class="small secondary" type="button">Copy retal</button></div>';
-      div.querySelector('a').href = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(retal.attackerId)}`;
-      div.querySelector('a').textContent = `Retal: ${retal.attackerName || `Player ${retal.attackerId}`}`;
+      const retalAttack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(retal.attackerId)}`;
+      const retalGate = insideGate(retal.attackerId);
+      div.querySelector('a').href = retalAttack;
+      div.querySelector('a').textContent = `${retalGate ? 'INSIDE WARNING: ' : 'Retal: '}${retal.attackerName || `Player ${retal.attackerId}`}`;
+      if (retalGate) div.querySelector('a').addEventListener('click', async event => {
+        event.preventDefault();
+        if (retalGate.mode === 'warn' && confirm(`${insideMessage(retalGate)}\n\nOpen this target anyway?`)) {
+          await SLINK.core.storage.set('war.insideUnlock.v1', { targetId:Number(retal.attackerId), expiresAt:Date.now() + 2 * 60_000 });
+          window.open(retalAttack, '_blank', 'noopener');
+        }
+      });
       div.querySelector('.retal-head strong').textContent = remaining;
       const badges = div.querySelector('.retal-badges');
       for (const label of [retal.isWar ? 'War hit' : '', retal.isRetal ? 'Retal hit' : '', retal.againstWarOpponent ? 'Current war opponent' : 'Outside faction'].filter(Boolean)) badges.append(pill(label));
@@ -272,6 +319,33 @@
     }));
   }
 
+  function renderItemRequests() {
+    const requests = war?.runtime?.snapshot?.itemRequests || [];
+    const root = byId('war-item-requests');
+    root.replaceChildren(...requests.map(request => {
+      const item = document.createElement('div');
+      item.className = 'mini-item';
+      const text = document.createElement('span');
+      text.textContent = `${request.requesterName || `Player ${request.requesterId}`} requests ${request.bonusName || 'ranked'} ${request.itemName || 'item'} from ${request.holderName || `Player ${request.holderId}`} • ${request.holderStatus || 'Unknown'} • ${request.holderLastAction || 'Unknown'}`;
+      const open = document.createElement('a');
+      open.className = 'button small secondary';
+      open.target = '_blank'; open.rel = 'noopener noreferrer';
+      open.href = request.armoryUrl || 'https://www.torn.com/factions.php?step=your#/tab=armoury';
+      open.textContent = 'Open armory';
+      const dismiss = document.createElement('button');
+      dismiss.className = 'small secondary'; dismiss.type = 'button'; dismiss.textContent = 'Dismiss';
+      dismiss.addEventListener('click', async () => {
+        dismiss.disabled = true;
+        try {
+          war = await SLINK.core.messaging.send('war.armory.request', { operation:'resolve', requestId:request.requestId });
+          renderWar();
+        } catch (error) { showError('war-error', error); }
+      });
+      item.append(text, open, dismiss);
+      return item;
+    }));
+  }
+
   function renderWar() {
     const settings = war?.settings || {};
     const sharedConfig = war?.sharedConfig || {};
@@ -306,11 +380,14 @@
     byId('war-mode').value = sharedConfig.mode || settings.warMode || 'war';
     byId('war-idle-minutes').value = sharedConfig.idleMinutes ?? settings.idleMinutes ?? 5;
     byId('war-inside-cap').value = insideCap;
+    byId('war-inside-mode').value = sharedConfig.insideBlockMode || 'warn';
     byId('war-mode').disabled = !war?.session?.officer;
     byId('war-idle-minutes').disabled = !war?.session?.officer;
     byId('war-inside-cap').disabled = !war?.session?.officer;
+    byId('war-inside-mode').disabled = !war?.session?.officer;
+    byId('war-open-armory').hidden = !war?.session?.officer;
     byId('war-config-note').textContent = war?.session?.officer
-      ? 'War mode, idle filtering, and the inside-hit cap are shared faction-wide. Your other alert and display settings remain local.'
+      ? 'War mode, idle filtering, inside-hit cap, and the major-window inside gate are shared faction-wide. Your other alert and display settings remain local.'
       : `Faction-wide mode: ${sharedConfig.mode === 'termed' ? 'Termed war' : 'Real war'}. A slink.war.officer may change it.`;
     byId('war-turtle-minutes').value = settings.turtleMinutes || 5;
     byId('war-alert-sound').checked = settings.alertSound !== false;
@@ -320,7 +397,7 @@
     byId('war-turtle-alert').checked = settings.turtleAlert !== false;
     byId('outside-min-ff').value = settings.outsideMinFF || 1;
     byId('outside-max-ff').value = settings.outsideMaxFF || 3;
-    renderRetals(); renderLogs();
+    renderRetals(); renderLogs(); renderItemRequests();
     if (war?.runtime?.lastError) showError('war-error', war.runtime.lastError); else clearError('war-error');
   }
 
@@ -504,6 +581,19 @@
     if (hasScope('admin.*')) byId('diagnostic').textContent = formatDiagnostic(status.lastDiagnostic);
   }
 
+  async function claimWarLeader() {
+    if (document.visibilityState !== 'visible') {
+      if (warLeader) void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {});
+      warLeader = false;
+      return false;
+    }
+    try {
+      const result = await SLINK.core.messaging.send('war.leader.claim', { clientId:warLeaderClientId });
+      warLeader = result?.leader === true;
+    } catch { warLeader = false; }
+    return warLeader;
+  }
+
   async function saveModuleSettings(tornKey, ffKey, acceptTerms) {
     const tasks = [];
     if (byId('use-leveling').checked) tasks.push(SLINK.core.messaging.send('leveling.settings.save', {
@@ -566,7 +656,12 @@
   byId('reset-position').addEventListener('click', event => restoreTornGui(event.currentTarget));
   byId('war-reset-position').addEventListener('click', event => restoreTornGui(event.currentTarget));
   byId('refresh-targets').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { leveling = await SLINK.core.messaging.send('leveling.activity.touch'); const result = await SLINK.core.messaging.send('leveling.cycle.prepare',{contribute:false}); leveling = result.status; renderLeveling(); renderTargets(); } catch (error) { showError('leveling-error', error); } finally { setBusy(button, false); } });
-  byId('war-refresh').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { war = await SLINK.core.messaging.send('war.cycle.prepare',{forceOpponentRefresh:true}); renderWar(); renderTargets(); } catch (error) { showError('war-error', error); } finally { setBusy(button, false); } });
+  byId('war-refresh').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { war = await SLINK.core.messaging.send('war.cycle.prepare',{forceOpponentRefresh:true,manual:true}); renderWar(); renderTargets(); } catch (error) { showError('war-error', error); } finally { setBusy(button, false); } });
+  byId('war-open-armory').addEventListener('click', async () => {
+    await SLINK.core.storage.set('ui.war.requestedTab', 'armory');
+    window.open('https://www.torn.com/factions.php?step=your#/tab=armoury', '_blank', 'noopener');
+    byId('war-action-message').textContent = 'Opened Faction Armoury. Use the officer-only Armory tab in the in-Torn War panel.';
+  });
   byId('copy-chain-report').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('war-action-message').textContent = '';
     try {
@@ -589,8 +684,8 @@
         turtleAlert:byId('war-turtle-alert').checked,
         turtleMinutes:byId('war-turtle-minutes').value
       });
-      if (war?.session?.officer) war = await SLINK.core.messaging.send('war.config.save', { mode:byId('war-mode').value, idleMinutes:byId('war-idle-minutes').value, insideHitCap:byId('war-inside-cap').value });
-      war = await SLINK.core.messaging.send('war.cycle.prepare');
+      if (war?.session?.officer) war = await SLINK.core.messaging.send('war.config.save', { mode:byId('war-mode').value, idleMinutes:byId('war-idle-minutes').value, insideHitCap:byId('war-inside-cap').value, insideBlockMode:byId('war-inside-mode').value });
+      war = await SLINK.core.messaging.send('war.cycle.prepare', { manual:true });
       byId('war-action-message').textContent = war?.session?.officer ? 'Local alerts and faction-wide War settings saved.' : 'Local War display and alert settings saved.';
       renderWar(); renderTargets();
     } catch (error) { showError('war-error', error); } finally { setBusy(button, false); }
@@ -605,6 +700,19 @@
   byId('admin-permissions-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-save'); setBusy(button,true); try { const scopes=[...byId('admin-scope-list').querySelectorAll('input[data-scope]:checked:not(:disabled)')].map(input=>input.dataset.scope); adminUser=await SLINK.core.messaging.send('war.admin.permissions.save',{userId:adminUser.user_id,scopes,hours:byId('admin-hours').value,note:byId('admin-note').value}); byId('admin-message').textContent=`Permissions saved for Torn ID ${adminUser.user_id}. They take effect on the user's next authentication.`; byId('admin-lookup-form').requestSubmit(); } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
 
   await refresh();
-  setInterval(async () => { if (!war?.configured) return; try { war=await SLINK.core.messaging.send('war.cycle.prepare'); renderWar(); if(targetView==='war'||targetView==='claims')renderTargets(); } catch(error){ showError('war-error',error); } },10_000);
+  await claimWarLeader();
+  setInterval(() => void claimWarLeader(), 5_000);
+  addEventListener('visibilitychange', () => void claimWarLeader());
+  setInterval(async () => {
+    if (!war?.configured) return;
+    try {
+      war = warLeader
+        ? await SLINK.core.messaging.send('war.cycle.prepare')
+        : await SLINK.core.messaging.send('war.status');
+      renderWar();
+      if (targetView === 'war' || targetView === 'claims') renderTargets();
+    } catch (error) { showError('war-error', error); }
+  }, 10_000);
+  addEventListener('pagehide', () => { void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {}); }, { once:true });
 })();
 

@@ -52,6 +52,7 @@ const chrome = {
   alarms: {
     async create(name, details) { alarms.set(name, { name, ...details }); },
     async get(name) { return alarms.get(name); },
+    async clear(name) { return alarms.delete(name); },
     onAlarm
   },
   permissions: {
@@ -66,7 +67,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.12.0' }; },
+    getManifest() { return { version: '0.14.0' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -238,7 +239,13 @@ context = vm.createContext({
       };
       if (url.pathname.endsWith('/logs') && url.searchParams.get('include_stored') !== '0') warStoredLogReads++;
     } else if (url.hostname === 'api.torn.com') {
-      if (url.pathname === '/v2/faction/46978/rankedwars') body = {
+      if (url.pathname === '/v2/faction/members') body = {
+        members:[
+          { id:3853023, name:'Considious', level:100, position:'Leader', status:{ state:'Okay' }, last_action:{ relative:'1 minute ago', timestamp:1 } },
+          { id:1234567, name:'Faction Member', level:20, position:{ name:'Member' }, status:{ state:'Hospital', description:'Hospitalized', until:2000 }, last_action:{ relative:'5 minutes ago', timestamp:2 } }
+        ]
+      };
+      else if (url.pathname === '/v2/faction/46978/rankedwars') body = {
         rankedwars:assignedWarStart ? [{
           id:'scheduled-test',
           war:{ start:Math.floor(assignedWarStart / 1000), end:0 },
@@ -408,6 +415,17 @@ assert(warSaved.ok && warSaved.data.session.authenticated, 'War settings did not
 assert(warSaved.data.session.factionCapable, 'Faction attack capability was not persisted.');
 assert(warSaved.data.permissions.scopes.includes('slink.war'), 'War product scope was not persisted.');
 assert(!JSON.stringify(warSaved.data).includes('war-test-key'), 'Public War state leaked the Torn API key.');
+const armoryMembers = await send('war.armory.members');
+assert(armoryMembers.ok && armoryMembers.data.members.length === 2, 'Officer Armory route did not return the faction roster.');
+assert(armoryMembers.data.members[0].rank === 'Leader', 'Armory roster did not normalize faction positions.');
+assert(armoryMembers.data.members[0].statusState, 'Armory roster omitted player status.');
+const firstWarLeader = await send('war.leader.claim', { clientId:'war-client-a' });
+const secondWarLeader = await send('war.leader.claim', { clientId:'war-client-b' });
+assert(firstWarLeader.ok && firstWarLeader.data.leader, 'First War client did not acquire the polling lease.');
+assert(secondWarLeader.ok && !secondWarLeader.data.leader, 'Two War clients acquired the polling lease simultaneously.');
+await send('war.leader.release', { clientId:'war-client-a' });
+const replacementWarLeader = await send('war.leader.claim', { clientId:'war-client-b' });
+assert(replacementWarLeader.ok && replacementWarLeader.data.leader, 'War polling lease was not transferred after release.');
 
 assignedWarStart = Date.now() + 60 * 60 * 1000;
 const scheduledCycle = await send('war.cycle.prepare', { forceOpponentRefresh:true });

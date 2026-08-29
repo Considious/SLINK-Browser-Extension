@@ -114,5 +114,16 @@ assert(uiShellSource.includes('ui.main.collapsed') && uiShellSource.includes('bu
 assert(uiShellSource.includes('async function restore()'), 'Torn UI shell does not provide an in-place recovery path.');
 assert(!uiShellSource.includes('Pop out') && !uiShellSource.includes('setPopped'), 'The broken Torn module pop-out control is still packaged.');
 assert(read('src/background/service-worker.js').includes("'ui.torn.restore'"), 'The extension cannot repush its GUI to open Torn tabs.');
+const warModuleSource = read('src/modules/war.js');
+const warServiceSource = read('src/background/war-service.js');
+const serviceWorkerSource = read('src/background/service-worker.js');
+assert(warModuleSource.includes("activeTab === 'armory'") && warModuleSource.includes('pageIsFocused()'), 'The in-Torn War module is missing its focused-page Armory Recaller.');
+assert(warModuleSource.includes('.item-action [data-role="retrieve"].active') && warModuleSource.includes('.retrieve-cont .retrieve-yes'), 'The Armory Recaller does not use Torn\'s explicit retrieve and confirmation controls.');
+assert(warServiceSource.includes("'war.armory.members'") && warServiceSource.includes("'war.armory.request'"), 'The extension is missing its cached Armory status or request routes.');
+assert(warModuleSource.includes('Request ${bonusName}') && warModuleSource.includes('/^(revitalize|warlord)$/i'), 'Warlord and Revitalize item requests are not inserted into the Torn armory.');
+assert(warModuleSource.includes('NO INSIDE HITS DURING MAJOR BONUS WINDOWS') && warModuleSource.includes('INSIDE_WINDOWS'), 'The Termed-war major-window inside gate is missing.');
+assert(warServiceSource.includes("'war.leader.claim'") && warServiceSource.includes('LOCAL_LEADER_LEASE_MS'), 'War collection does not use one extension-wide polling owner.');
+assert(serviceWorkerSource.includes('chrome.alarms.clear(WAR_CYCLE_ALARM)') && !serviceWorkerSource.includes('SLINK.services.war.prepareCycle()'), 'The legacy background War poller is still active.');
+assert(dashboardHtml.includes('id="war-open-armory"') && dashboardSource.includes("ui.war.requestedTab"), 'The extension dashboard is missing its Torn-only Armory launcher.');
 
 console.log(`Validated Manifest V3 extension ${manifest.version} (${listFiles(path.join(root, 'src')).length} source files).`);

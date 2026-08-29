@@ -4,6 +4,19 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.14.0 makes War collection demand-driven with one polling owner across
+all open Torn tabs and the extension dashboard. It removes the legacy background
+War alarm, adds a second background throttle, adds faction-wide Termed-war
+major-bonus inside gates, and adds transient Warlord/Revitalize armory requests
+with holder status. Requests live only in the per-war coordinator and expire;
+they do not create D1 rows.
+
+Version 0.13.0 adds the officer-only Armory Recaller to the in-Torn War panel.
+It reuses the proven one-item-per-click workflow, preserves the 12-hour member
+cache and borrower whitelist, and refuses to scan or click unless Torn is the
+focused page. The standalone dashboard only opens the Recaller in Torn; it
+cannot perform armory actions itself.
+
 Version 0.12.0 replaces the broken Torn module pop-out with a reliable
 **Restore GUI in Torn** action. It clears off-screen panel and bubble positions,
 reopens the shell, and reapplies Extension-only, Hybrid, or Torn display changes
