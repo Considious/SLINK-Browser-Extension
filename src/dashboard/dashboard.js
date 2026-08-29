@@ -14,6 +14,7 @@
   let adminUser = null;
   let activeTheme = SLINK.core.themes.get();
   let warLeader = false;
+  let dismissedRetals = {};
   const warLeaderClientId = `war-dashboard:${globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
   const INSIDE_WINDOWS = Object.freeze([[0, 100], [200, 250], [450, 500], [950, 1000], [2350, 2500], [4850, 5000], [9900, 10000]]);
 
@@ -231,7 +232,11 @@
 
   function renderRetals() {
     const root = byId('war-retals');
-    const retals = war?.runtime?.snapshot?.retals || [];
+    const now = Math.floor(Date.now() / 1000);
+    const retals = (war?.runtime?.snapshot?.retals || []).filter(retal => {
+      const key = `user:${Number(retal.attackerId) || String(retal.attackId || '')}`;
+      return Number(retal.expiresAt) > now && !dismissedRetals[key] && !dismissedRetals[String(retal.attackId)];
+    });
     byId('retal-summary').textContent = retals.length ? `${retals.length} active retaliation opportunit${retals.length === 1 ? 'y' : 'ies'}` : 'No active retaliation opportunities';
     if (!retals.length) {
       const empty = document.createElement('p');
@@ -244,12 +249,15 @@
       const div = document.createElement('article');
       div.className = 'retal-item retal-detail';
       const remaining = SLINK.core.format.formatHumanDuration(Number(retal.expiresAt) - Math.floor(Date.now() / 1000));
-      div.innerHTML = '<div class="retal-head"><a target="_blank" rel="noopener noreferrer"></a><strong></strong></div><div class="retal-badges"></div><dl class="retal-report"></dl><div class="retal-actions"><button class="small secondary" type="button">Copy retal</button></div>';
+      div.innerHTML = '<button class="retal-dismiss" type="button" title="Dismiss alerts for this player" aria-label="Dismiss this player">×</button><div class="retal-head"><a target="_blank" rel="noopener noreferrer"></a><strong></strong></div><div class="retal-badges"></div><dl class="retal-report"></dl><div class="retal-actions"><button class="small secondary retal-copy" type="button">📋 Copy</button><a class="button small retal-attack" target="_blank" rel="noopener noreferrer">⚔ ATTACK</a><a class="button small secondary retal-profile" target="_blank" rel="noopener noreferrer">Profile</a></div>';
       const retalAttack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(retal.attackerId)}`;
+      const retalProfile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(retal.attackerId)}`;
       const retalGate = insideGate(retal.attackerId);
-      div.querySelector('a').href = retalAttack;
-      div.querySelector('a').textContent = `${retalGate ? 'INSIDE WARNING: ' : 'Retal: '}${retal.attackerName || `Player ${retal.attackerId}`}`;
-      if (retalGate) div.querySelector('a').addEventListener('click', async event => {
+      div.querySelector('.retal-head a').href = retalProfile;
+      div.querySelector('.retal-head a').textContent = `${retal.attackerName || `Player ${retal.attackerId}`} [${retal.attackerId}]`;
+      div.querySelector('.retal-profile').href = retalProfile;
+      div.querySelector('.retal-attack').href = retalAttack;
+      if (retalGate) div.querySelector('.retal-attack').addEventListener('click', async event => {
         event.preventDefault();
         if (retalGate.mode === 'warn' && confirm(`${insideMessage(retalGate)}\n\nOpen this target anyway?`)) {
           await SLINK.core.storage.set('war.insideUnlock.v1', { targetId:Number(retal.attackerId), expiresAt:Date.now() + 2 * 60_000 });
@@ -258,7 +266,7 @@
       });
       div.querySelector('.retal-head strong').textContent = remaining;
       const badges = div.querySelector('.retal-badges');
-      for (const label of [retal.isWar ? 'War hit' : '', retal.isRetal ? 'Retal hit' : '', retal.againstWarOpponent ? 'Current war opponent' : 'Outside faction'].filter(Boolean)) badges.append(pill(label));
+      for (const label of [retal.isWar ? 'War hit' : '', retal.isRetal ? 'Retal hit' : ''].filter(Boolean)) badges.append(pill(label));
       const faction = retal.attackerFactionName || (retal.attackerFactionId ? `Faction ${retal.attackerFactionId}` : 'No faction');
       const details = [
         ['Faction', `${faction}${retal.attackerFactionTag ? ` [${retal.attackerFactionTag}]` : ''}`],
@@ -273,10 +281,15 @@
         const dd = document.createElement('dd'); dd.textContent = value;
         report.append(dt, dd);
       }
-      div.querySelector('button').addEventListener('click', async event => {
-        const flags = [retal.isWar ? 'War hit' : '', retal.isRetal ? 'Retal hit' : '', retal.againstWarOpponent ? 'current war opponent' : 'outside faction'].filter(Boolean).join(' / ');
+      div.querySelector('.retal-copy').addEventListener('click', async event => {
+        const flags = [retal.isWar ? 'War hit' : '', retal.isRetal ? 'Retal hit' : ''].filter(Boolean).join(' / ');
         await copyText(`🚨 Retal: ${retal.attackerName || `Player ${retal.attackerId}`} [${retal.attackerId}] • ${faction} • ${flags} • attacked ${retal.defenderName || `Player ${retal.defenderId}`} [${retal.defenderId}] • status ${retal.attackerStatus || retal.attackerActivity || 'Unknown'} • BS ${Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : '?'} • FF ${Number.isFinite(retal.fairFight) ? retal.fairFight.toFixed(2) : '?'} • https://www.torn.com/page.php?sid=attack&user2ID=${retal.attackerId}`);
         event.currentTarget.textContent = 'Copied';
+      });
+      div.querySelector('.retal-dismiss').addEventListener('click', async () => {
+        dismissedRetals[`user:${Number(retal.attackerId) || String(retal.attackId || '')}`] = Number(retal.expiresAt) || now + 300;
+        await SLINK.core.storage.set('war.dismissedRetals.v1', dismissedRetals);
+        renderRetals();
       });
       return div;
     }));
@@ -326,7 +339,11 @@
       const item = document.createElement('div');
       item.className = 'mini-item';
       const text = document.createElement('span');
-      text.textContent = `${request.requesterName || `Player ${request.requesterId}`} requests ${request.bonusName || 'ranked'} ${request.itemName || 'item'} from ${request.holderName || `Player ${request.holderId}`} • ${request.holderStatus || 'Unknown'} • ${request.holderLastAction || 'Unknown'}`;
+      const rawName = String(request.requesterName || '').trim();
+      const requesterName = Number(request.requesterId) === Number(war?.session?.userId) && war?.session?.userName
+        ? war.session.userName
+        : (!rawName || rawName === String(request.requesterId) || rawName.toLowerCase() === `player ${request.requesterId}`.toLowerCase() ? 'Player' : rawName);
+      text.textContent = `${requesterName} [${request.requesterId}] requests ${request.bonusName || 'ranked'} ${request.itemName || 'item'} from ${request.holderName || `Player ${request.holderId}`} • ${request.holderStatus || 'Unknown'} • ${request.holderLastAction || 'Unknown'}`;
       const open = document.createElement('a');
       open.className = 'button small secondary';
       open.target = '_blank'; open.rel = 'noopener noreferrer';
@@ -368,7 +385,8 @@
     byId('war-mug-summary').textContent = Number(stats.mugs)
       ? `Mugs ${money(stats.mugTotal)} total • ${money(stats.mugMin)} min • ${money(stats.mugAverage)} avg • ${money(stats.mugMax)} max`
       : 'Mug totals appear after a mug.';
-    byId('war-retal-count').textContent = snapshot.retals?.length || 0;
+    const now = Math.floor(Date.now() / 1000);
+    byId('war-retal-count').textContent = (snapshot.retals || []).filter(retal => Number(retal.expiresAt) > now && !dismissedRetals[`user:${Number(retal.attackerId) || String(retal.attackId || '')}`] && !dismissedRetals[String(retal.attackId)]).length;
     const chain = stats.chain;
     byId('war-chain').textContent = chain?.current ? `${chain.current}${chain.target ? `/${chain.target}` : ''}${chain.secondsLeft ? ` • ${SLINK.core.format.formatHumanDuration(chain.secondsLeft)}` : ''}` : 'No active chain';
     const turtle = stats.turtle;
@@ -572,6 +590,8 @@
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
     system = status; leveling = status.leveling; war = status.war; contribution = status.contribution; contributionTerms = terms;
+    dismissedRetals = await SLINK.core.storage.get('war.dismissedRetals.v1', {});
+    dismissedRetals = Object.fromEntries(Object.entries(dismissedRetals || {}).filter(([, expiresAt]) => Number(expiresAt) > Math.floor(Date.now() / 1000)));
     system.levelingInTorn = await SLINK.core.storage.get('ui.modules.leveling.showInTorn', true);
     await SLINK.core.storage.set('ui.modules.contribution.showInTorn', false);
     byId('connection').textContent = status.worker.connected ? 'Worker connected' : 'Worker offline';

@@ -4,6 +4,16 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.14.1 polishes the War interface and closes several Torn-integration
+gaps. Retals now include faction, target, status, battle-stat and Fair Fight
+details with Copy, Torn-only Send, Attack, Profile, and per-player dismissal.
+The collapsed SLINK bubble flashes red for active retals and shows an officer-only
+armory alert state. The panel remembers its active module and War tab across Torn
+navigation, the inside gate now covers Torn's profile Attack button, and armory
+status/requests use a distinct SLINK column without overwriting Torn's Action
+column. All attack links now use Torn's current `page.php?sid=attack&user2ID=`
+route; obsolete loader routes are rejected by build validation.
+
 Version 0.14.0 makes War collection demand-driven with one polling owner across
 all open Torn tabs and the extension dashboard. It removes the legacy background
 War alarm, adds a second background throttle, adds faction-wide Termed-war

@@ -67,7 +67,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.14.0' }; },
+    getManifest() { return { version: '0.14.1' }; },
     onInstalled,
     onMessage,
     onStartup

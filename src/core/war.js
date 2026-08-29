@@ -60,7 +60,7 @@
     if (!member) return '';
     const escape = SLINK.core.format.escapeHtml;
     const profile = `https://www.torn.com/profiles.php?XID=${member.id}`;
-    const attack = `https://www.torn.com/loader2.php?sid=getInAttack&user2ID=${member.id}`;
+    const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${member.id}`;
     const details = [
       `<a href="${attack}">Attack</a>`,
       `Status: ${escape(member.statusState || 'Okay')} / ${escape(member.activity)}`

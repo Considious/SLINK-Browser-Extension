@@ -19,6 +19,14 @@
     .bubble-coil span:nth-child(2) { top:5px; }
     .bubble-coil span:nth-child(3) { top:10px; }
     .bubble-coil span:nth-child(4) { top:15px; }
+    .bubble-alert-icon { display:none; font-size:23px; line-height:1; filter:drop-shadow(0 0 5px currentColor); }
+    .bubble-alert-count { display:none; position:absolute; right:-3px; top:-4px; min-width:18px; height:18px; padding:1px 4px; border:2px solid #fff; border-radius:999px; background:#d51919; color:#fff; font:bold 10px/12px Arial,sans-serif; }
+    .bubble[data-alert-kind] .bubble-coil { display:none; }
+    .bubble[data-alert-kind] .bubble-alert-icon, .bubble[data-alert-kind] .bubble-alert-count { display:block; }
+    .bubble[data-alert-kind="retal"] { border-color:#ff5a5a; background:#5f0606; color:#fff; animation:slinkBubbleRetal .65s ease-in-out infinite alternate; }
+    .bubble[data-alert-kind="armory"] { border-color:#ffb24b; background:#4d2600; color:#fff; animation:slinkBubbleArmory .85s ease-in-out infinite alternate; }
+    @keyframes slinkBubbleRetal { to { background:#b20d0d; box-shadow:0 0 8px #fff,0 0 26px #f00; transform:scale(1.08); } }
+    @keyframes slinkBubbleArmory { to { background:#875000; box-shadow:0 0 8px #fff,0 0 24px #ff8a00; transform:scale(1.06); } }
     :host([data-slink-theme="slink-dark"]) .bubble { background:linear-gradient(145deg,#3478b9,#172f4c); }
     .main { right:12px; top:88px; }
     .popup { left:12px; top:88px; }
@@ -91,13 +99,23 @@
     bubble.className = 'bubble';
     bubble.title = 'Open SLINK';
     bubble.setAttribute('aria-label', 'Open SLINK panel');
-    bubble.innerHTML = '<span class="bubble-coil" aria-hidden="true"><span></span><span></span><span></span><span></span></span>';
+    bubble.innerHTML = '<span class="bubble-coil" aria-hidden="true"><span></span><span></span><span></span><span></span></span><span class="bubble-alert-icon" aria-hidden="true"></span><span class="bubble-alert-count" aria-hidden="true"></span>';
     shadow.append(main.element, bubble);
     const views = new Map();
     const alerts = new Map();
     let hidden = false;
     let collapsed = false;
     let activeId = '';
+    let preferredActiveId = '';
+
+    function setBubbleAlert(kind = '', count = 0) {
+      const normalized = ['retal', 'armory'].includes(String(kind)) && Number(count) > 0 ? String(kind) : '';
+      if (normalized) bubble.dataset.alertKind = normalized; else delete bubble.dataset.alertKind;
+      bubble.querySelector('.bubble-alert-icon').textContent = normalized === 'retal' ? '🚨' : normalized === 'armory' ? '🔫' : '';
+      bubble.querySelector('.bubble-alert-count').textContent = normalized ? String(Math.min(99, Math.max(1, Number(count) || 1))) : '';
+      bubble.title = normalized === 'retal' ? `${count} active retaliation alert${Number(count) === 1 ? '' : 's'}` : normalized === 'armory' ? `${count} active armory request${Number(count) === 1 ? '' : 's'}` : 'Open SLINK';
+      bubble.setAttribute('aria-label', bubble.title);
+    }
 
     function createWindow(kind, title, subtitle) {
       const element = document.createElement('section');
@@ -149,9 +167,13 @@
       });
     }
 
-    function setActive(id) {
+    function setActive(id, persist = false) {
       if (!views.has(id)) return;
       activeId = id;
+      if (persist) {
+        preferredActiveId = id;
+        void SLINK.core.storage.set('ui.main.activeModule', id);
+      }
       for (const [moduleId, view] of views) {
         view.element.hidden = moduleId !== id;
         view.tab?.setAttribute('aria-selected', String(moduleId === id));
@@ -161,7 +183,7 @@
     function refreshShell() {
       const docked = [...views.values()];
       if (!docked.some(view => view.id === activeId)) activeId = docked[0]?.id || '';
-      if (activeId) setActive(activeId);
+      if (activeId) setActive(activeId, false);
       tabs.hidden = docked.length < 2;
       main.element.hidden = hidden || collapsed || docked.length === 0;
       bubble.hidden = hidden || !collapsed || views.size === 0;
@@ -271,7 +293,7 @@
       tabs.append(tab); main.element.append(element);
       const view = { id:module.id, title:module.title, element, tab };
       views.set(module.id, view);
-      tab.addEventListener('click', () => setActive(module.id));
+      tab.addEventListener('click', () => setActive(module.id, true));
       const moduleStyle = document.createElement('style'); shadow.append(moduleStyle);
       const content = element.querySelector('.content'); const status = element.querySelector('.status'); const actions = element.querySelector('.actions');
       const api = {
@@ -303,18 +325,24 @@
         },
         showAlert,
         dismissAlert,
+        setBubbleAlert,
         remove() { view.tab.remove(); element.remove(); moduleStyle.remove(); views.delete(module.id); refreshShell(); },
         ui: null
       };
       api.ui = api;
       view.api = Object.freeze(api);
       if (!activeId) activeId = module.id;
+      if (preferredActiveId === module.id) activeId = module.id;
       refreshShell();
       return view.api;
     }
 
     const bubbleMover = makeBubbleMovable();
     main.element.querySelector('.hide').addEventListener('click', () => void setCollapsed(true));
+    void SLINK.core.storage.get('ui.main.activeModule', '').then(value => {
+      preferredActiveId = String(value || '');
+      if (views.has(preferredActiveId)) setActive(preferredActiveId, false);
+    });
     void SLINK.core.storage.get('ui.main.collapsed', false).then(value => setCollapsed(Boolean(value), false));
     async function restore() {
       await Promise.all([
@@ -335,6 +363,7 @@
       createModuleView,
       dismissAlert,
       showAlert,
+      setBubbleAlert,
       setTheme,
       setCollapsed,
       setHidden(value) { hidden = Boolean(value); refreshShell(); },

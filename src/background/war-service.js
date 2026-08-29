@@ -997,14 +997,23 @@
   }
 
   async function publicStatus() {
-    const [currentSettings, currentRuntime, terms, accepted, session, activeWar, permissions] = await Promise.all([
+    const [currentSettings, currentRuntime, terms, accepted, session, activeWar, permissions, armoryRoster] = await Promise.all([
       settings(), runtime(), fetchTerms().catch(() => ({ version:WAR.TERMS_VERSION, sha256:WAR.TERMS_SHA256, documentUrl:'', summary:'' })),
       acceptedCurrentTerms().catch(() => false),
       SLINK.core.storage.get(KEYS.session, null),
       SLINK.core.storage.get(KEYS.activeWar, null),
-      SLINK.core.storage.get(KEYS.permissions, null)
+      SLINK.core.storage.get(KEYS.permissions, null),
+      SLINK.core.storage.get(KEYS.armoryMembers, [])
     ]);
     const authenticated = Boolean(session?.token && Number(session.expiresAt) > Date.now());
+    const rosterNames = new Map((Array.isArray(armoryRoster) ? armoryRoster : []).map(member => [Number(member.id), String(member.name || '').trim()]));
+    const itemRequests = (currentRuntime?.snapshot?.itemRequests || []).map(request => {
+      const requesterId = Number(request.requesterId) || 0;
+      const rawName = String(request.requesterName || '').trim();
+      const generic = !rawName || rawName === String(requesterId) || rawName.toLowerCase() === `player ${requesterId}`.toLowerCase();
+      return { ...request, requesterName:generic ? (rosterNames.get(requesterId) || (requesterId === Number(session?.userId) ? String(session?.userName || '') : '') || 'Player') : rawName };
+    });
+    const publicRuntime = { ...(currentRuntime || {}), snapshot:{ ...(currentRuntime?.snapshot || {}), itemRequests } };
     return {
       configured:Boolean(currentSettings.tornKey && accepted),
       settings:{
@@ -1038,7 +1047,7 @@
       permissions:SLINK.core.permissions.normalizeSnapshot(permissions || {}),
       sharedConfig:currentRuntime?.snapshot?.config || { mode:currentSettings.warMode, idleMinutes:currentSettings.idleMinutes, insideHitCap:0, insideBlockMode:'warn', updatedBy:0, updatedAt:0 },
       activeWar,
-      runtime:currentRuntime
+      runtime:publicRuntime
     };
   }
 
