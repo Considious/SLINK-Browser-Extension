@@ -230,8 +230,8 @@
         root.querySelector('#leveling-show-terms')?.addEventListener('click', () => { termsOpen = true; render(); });
         root.querySelector('#leveling-hide-terms')?.addEventListener('click', () => { termsOpen = false; render(); });
         root.querySelector('#leveling-clear-session')?.addEventListener('click', async () => {
-          current = await SLINK.core.messaging.send('leveling.session.clear');
-          render();
+          try { current = await SLINK.core.messaging.send('leveling.session.clear'); localError = ''; render(); }
+          catch (error) { localError = SLINK.core.format.errorMessage(error); render(); }
         });
         root.querySelector('#leveling-hide-all')?.addEventListener('click', async () => {
           const confirmed = global.confirm(

@@ -52,7 +52,8 @@
         });
         root.querySelector('#donation-revoke')?.addEventListener('click', async () => {
           if (!confirm('Revoke this donation? The encrypted key material will be erased and can no longer be used.')) return;
-          state = await SLINK.core.messaging.send('contribution.revoke'); render();
+          try { state = await SLINK.core.messaging.send('contribution.revoke'); render(); }
+          catch (error) { context.ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
         });
         root.querySelector('#donation-replace')?.addEventListener('click', async () => { state = { configured:false, donation:null }; render(); });
       }

@@ -35,6 +35,7 @@ const chrome = {
     async contains() { return true; }
   },
   runtime: {
+    id: 'test-extension',
     async sendMessage() { return { ok: true, data: { echoed: true } }; }
   }
 };
@@ -77,7 +78,8 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.14.2', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.14.3', 'Unexpected runtime version.');
+assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
 
@@ -213,6 +215,13 @@ const routed = await new Promise(resolve => {
   assert(keptOpen === true, 'Async message route did not keep the channel open.');
 });
 assert(routed.ok && routed.data.value === 7, 'Message router returned the wrong response.');
+
+delete context.chrome.runtime.id;
+const staleResult = await Promise.race([
+  SLINK.core.messaging.send('stale').then(() => 'resolved', () => 'rejected'),
+  new Promise(resolve => setTimeout(() => resolve('suspended'), 20))
+]);
+assert(staleResult === 'suspended', 'An obsolete extension page rejected instead of becoming quietly inactive.');
 
 console.log('Core storage, required hosts, scopes, modules, HTTP guard, limiter, and messaging checks passed.');
 

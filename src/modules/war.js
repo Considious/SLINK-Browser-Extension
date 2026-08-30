@@ -1009,7 +1009,10 @@
             localError = ''; render();
           } catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
-        root.querySelector('#slink-war-clear')?.addEventListener('click', async () => { current = await SLINK.core.messaging.send('war.session.clear'); render(); });
+        root.querySelector('#slink-war-clear')?.addEventListener('click', async () => {
+          try { current = await SLINK.core.messaging.send('war.session.clear'); localError=''; render(); }
+          catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
+        });
         root.querySelector('#slink-war-save')?.addEventListener('click', async () => {
           try {
             current = await SLINK.core.messaging.send('war.settings.save', {

@@ -132,7 +132,7 @@ assert(warModuleSource.includes('slink-war-filter-min') && warModuleSource.inclu
 assert(dashboardHtml.includes('id="claim-target-id"') && dashboardHtml.includes('id="claim-assignee-id"') && dashboardHtml.includes('id="claim-submit"'), 'The extension dashboard is missing explicit target-to-assignee med-out controls.');
 assert(warModuleSource.includes('slink-war-claim-target-id') && warModuleSource.includes('slink-war-claim-submit'), 'The in-Torn War panel is missing explicit Torn-ID med-out claiming.');
 assert(!dashboardSource.includes('claim-war-target') && !warModuleSource.includes('data-war-claim='), 'Legacy per-target med-out buttons remain in the War target cards.');
-assert(read('src/core/messaging.js').includes('SLINK_EXTENSION_CONTEXT_STALE'), 'Stale extension contexts are not converted into a user-safe runtime error.');
+assert(read('src/core/messaging.js').includes('suspendStaleContext') && read('src/core/messaging.js').includes('staleContextPromise'), 'Obsolete extension pages do not become quietly inactive after an update.');
 assert(!listFiles(path.join(root, 'src')).some(file => /\.(?:js|mjs|html)$/i.test(file) && /(?:loader2?\.php|\/loader)/i.test(fs.readFileSync(file, 'utf8'))), 'An obsolete Torn loader URL remains in the extension.');
 assert(warServiceSource.includes("'war.leader.claim'") && warServiceSource.includes('LOCAL_LEADER_LEASE_MS'), 'War collection does not use one extension-wide polling owner.');
 assert(serviceWorkerSource.includes('chrome.alarms.clear(WAR_CYCLE_ALARM)') && !serviceWorkerSource.includes('SLINK.services.war.prepareCycle()'), 'The legacy background War poller is still active.');

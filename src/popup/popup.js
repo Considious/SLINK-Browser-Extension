@@ -175,7 +175,7 @@
     }
   });
 
-  elements.refresh.addEventListener('click', refresh);
+  elements.refresh.addEventListener('click', () => void refresh().catch(showError));
   try { await refresh(); }
   catch (error) { showError(error); }
 })();

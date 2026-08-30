@@ -4,6 +4,13 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.14.3 prevents obsolete extension pages from generating repeated Chrome
+errors after an update. When Chrome invalidates an old dashboard, popup, or Torn
+content-script context, that old page now becomes quietly inactive instead of
+catching the runtime failure and throwing a replacement exception. A missing
+background receiver is retried once before a genuine service error is reported,
+and previously unguarded clear/revoke actions now handle failures locally.
+
 Version 0.14.2 completes the queued War-target controls in both the extension
 dashboard and in-Torn panel. War targets can be filtered by a custom Fair Fight
 range and by Okay/not-Okay status, then sorted by availability or Fair Fight;
