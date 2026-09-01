@@ -10,6 +10,7 @@ importScripts(
   '../core/worker-client.js',
   '../core/torn-api-limiter.js',
   'theme-service.js',
+  'player-stats-service.js',
   'leveling-service.js',
   'war-service.js',
   'contribution-service.js'
@@ -99,6 +100,7 @@ async function ensureConnectionAlarm() {
   // War collection is demand-driven by one live extension page. Remove the
   // legacy background alarm so a closed/idle UI never keeps polling.
   await chrome.alarms.clear(WAR_CYCLE_ALARM);
+  await SLINK.services.playerStats.ensureAlarm();
 }
 
 async function connectionStatus() {
@@ -289,6 +291,7 @@ const routes = {
   ...SLINK.services.leveling.routes,
   ...SLINK.services.war.routes,
   ...SLINK.services.themes.routes,
+  ...SLINK.services.playerStats.routes,
   ...SLINK.services.contributionRoutes
 };
 
@@ -310,6 +313,12 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
+  if (alarm.name === SLINK.services.playerStats.ALARM) {
+    void SLINK.services.playerStats.status().then(status => {
+      if (status.configured) return SLINK.services.playerStats.refresh(true);
+      return null;
+    }).catch(error => console.error('[SLINK] Daily player stats:', error));
+  }
 });
 
 void ensureDefaultState().catch(error => console.error('[SLINK] Default state:', error));

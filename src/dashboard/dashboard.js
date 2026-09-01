@@ -8,6 +8,7 @@
   let war = null;
   let contribution = null;
   let contributionTerms = null;
+  let playerStats = null;
   let termsExpanded = false;
   let accessExpanded = null;
   let targetView = 'leveling';
@@ -62,6 +63,79 @@
 
   function money(value) {
     return `$${Math.max(0, Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits:0 })}`;
+  }
+
+  function statValue(value, days, { decimals = 0 } = {}) {
+    if (value === null || value === undefined || value === '') return '—';
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    const formatted = number.toLocaleString('en-US', { minimumFractionDigits:decimals, maximumFractionDigits:decimals });
+    return `${formatted} (${(number / days).toFixed(2)}/d)`;
+  }
+
+  function activityAverage(seconds, days) {
+    if (seconds === null || seconds === undefined || seconds === '') return '—';
+    const value = Number(seconds);
+    if (!Number.isFinite(value)) return '—';
+    return `${(value / 3600 / days).toFixed(2)}h/d`;
+  }
+
+  function signedMoney(value, days = 0) {
+    if (value === null || value === undefined || value === '') return '—';
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    const prefix = number > 0 ? '+' : number < 0 ? '−' : '';
+    const absolute = `$${Math.abs(number).toLocaleString('en-US', { maximumFractionDigits:0 })}`;
+    const daily = days > 1 ? ` (${prefix}$${Math.abs(number / days).toLocaleString('en-US', { maximumFractionDigits:0 })}/d)` : '';
+    return `${prefix}${absolute}${daily}`;
+  }
+
+  function setTrend(id, value, text) {
+    const element = byId(id);
+    element.textContent = text;
+    element.classList.toggle('positive', Number(value) > 0);
+    element.classList.toggle('negative', Number(value) < 0);
+  }
+
+  function renderPlayerStats() {
+    const snapshot = playerStats?.data;
+    const seven = snapshot?.periods?.[7] || {};
+    const thirty = snapshot?.periods?.[30] || {};
+    const pairs = [
+      ['ps-xanax', 'xanax', 0],
+      ['ps-cans', 'energyDrinks', 0],
+      ['ps-refills', 'refills', 0],
+      ['ps-attacks', 'attacks', 0],
+      ['ps-respect', 'respect', 2],
+      ['ps-retals', 'retals', 0]
+    ];
+    for (const [id, property, decimals] of pairs) {
+      byId(`${id}-7`).textContent = statValue(seven[property], 7, { decimals });
+      byId(`${id}-30`).textContent = statValue(thirty[property], 30, { decimals });
+    }
+    byId('ps-activity-7').textContent = activityAverage(seven.activitySeconds, 7);
+    byId('ps-activity-30').textContent = activityAverage(thirty.activitySeconds, 30);
+    byId('ps-networth').textContent = snapshot?.networth?.current !== null && snapshot?.networth?.current !== undefined && Number.isFinite(Number(snapshot.networth.current)) ? money(snapshot.networth.current) : '—';
+    setTrend('ps-networth-yesterday', snapshot?.networth?.yesterday, signedMoney(snapshot?.networth?.yesterday));
+    setTrend('ps-networth-day-before', snapshot?.networth?.dayBeforeYesterday, signedMoney(snapshot?.networth?.dayBeforeYesterday));
+    setTrend('ps-networth-7', snapshot?.networth?.sevenDays, signedMoney(snapshot?.networth?.sevenDays, 7));
+    setTrend('ps-networth-30', snapshot?.networth?.thirtyDays, signedMoney(snapshot?.networth?.thirtyDays, 30));
+    for (const [id, property] of [['ps-work-manual','manualLabor'],['ps-work-intelligence','intelligence'],['ps-work-endurance','endurance'],['ps-work-total','total']]) {
+      const value = snapshot?.workstats?.[property];
+      byId(id).textContent = value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value).toLocaleString('en-US') : '—';
+    }
+    byId('ps-armory-balance').textContent = snapshot?.armoryBalance !== null && snapshot?.armoryBalance !== undefined && Number.isFinite(Number(snapshot.armoryBalance)) ? money(snapshot.armoryBalance) : '—';
+    byId('player-stats-status').textContent = !playerStats?.configured
+      ? 'Add a Limited Access Torn API key above to load your private stats.'
+      : snapshot
+        ? 'One combined current pull plus four historical Torn snapshots; stored only in this browser.'
+        : 'No player snapshot has been collected yet.';
+    byId('player-stats-updated').textContent = snapshot?.refreshedAt
+      ? `Updated ${new Date(snapshot.refreshedAt).toLocaleString()} • daily after 00:00 TCT`
+      : 'Updates daily after 00:00 TCT';
+    const error = playerStats?.error || '';
+    byId('player-stats-error').textContent = error;
+    byId('player-stats-error').hidden = !error;
   }
 
   function insideGate(targetId) {
@@ -573,13 +647,14 @@
   }
 
   async function refresh() {
-    const [status, terms, themeRecord] = await Promise.all([
+    const [status, terms, themeRecord, statsStatus] = await Promise.all([
       SLINK.core.messaging.send('system.status'),
       SLINK.core.messaging.send('contribution.terms').catch(() => null),
-      SLINK.core.messaging.send('themes.catalog').catch(() => null)
+      SLINK.core.messaging.send('themes.catalog').catch(() => null),
+      SLINK.core.messaging.send('playerStats.status', { refreshIfStale:true }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null }))
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
-    system = status; leveling = status.leveling; war = status.war; contribution = status.contribution; contributionTerms = terms;
+    system = status; leveling = status.leveling; war = status.war; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus;
     dismissedRetals = await SLINK.core.storage.get('war.dismissedRetals.v1', {});
     dismissedRetals = Object.fromEntries(Object.entries(dismissedRetals || {}).filter(([, expiresAt]) => Number(expiresAt) > Math.floor(Date.now() / 1000)));
     warTargetFilters = { ...warTargetFilters, ...(await SLINK.core.storage.get('ui.war.targetFilters.v1', {})) };
@@ -592,7 +667,7 @@
     byId('connection').textContent = status.worker.connected ? 'Worker connected' : 'Worker offline';
     byId('connection').className = status.worker.connected ? 'badge ready' : 'badge error';
     await applySavedTheme();
-    renderAccess(); renderLeveling(); renderWar(); renderTargets(); renderContribution(); renderAccessTabs();
+    renderAccess(); renderLeveling(); renderWar(); renderTargets(); renderContribution(); renderPlayerStats(); renderAccessTabs();
     if (hasScope('admin.*')) byId('diagnostic').textContent = formatDiagnostic(status.lastDiagnostic);
   }
 
@@ -628,6 +703,18 @@
   }
 
   byId('refresh-all').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { await refresh(); } finally { setBusy(button, false); } });
+  byId('player-stats-refresh').addEventListener('click', async event => {
+    const button = event.currentTarget;
+    setBusy(button, true);
+    byId('player-stats-error').hidden = true;
+    try {
+      playerStats = await SLINK.core.messaging.send('playerStats.refresh');
+      renderPlayerStats();
+    } catch (error) {
+      playerStats = { ...(playerStats || {}), error:errorText(error) };
+      renderPlayerStats();
+    } finally { setBusy(button, false); }
+  });
   byId('toggle-access').addEventListener('click', () => { accessExpanded = !accessExpanded; renderAccess(); });
   byId('toggle-shared-terms').addEventListener('click', () => { termsExpanded = !termsExpanded; renderAccess(); });
   byId('theme-options').addEventListener('click', async event => {

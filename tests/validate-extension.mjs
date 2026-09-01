@@ -106,6 +106,9 @@ for (const match of dashboardSource.matchAll(/byId\('([^']+)'\)/g)) {
 }
 assert(/function setBusy\(button, busy\)\s*{\s*if \(button\)/.test(dashboardSource), 'Dashboard busy-state helper must tolerate removed or unavailable controls.');
 assert(dashboardHtml.includes('id="theme-options"'), 'Dashboard theme selector is missing.');
+assert(dashboardHtml.includes('id="player-stats-refresh"') && dashboardHtml.includes('id="ps-armory-balance"'), 'The compact player-stat panel is missing.');
+assert(read('src/background/player-stats-service.js').includes("'playerStats.refresh'") && read('src/background/player-stats-service.js').includes('personalstats,money,workstats'), 'The local daily Torn player-stat collector is missing or not combined.');
+assert(!read('src/background/player-stats-service.js').includes('workerClient') && !read('src/background/player-stats-service.js').includes('D1'), 'Player stats must not use a SLINK Worker or D1.');
 assert(read('src/background/theme-service.js').includes('/api/themes'), 'Background theme catalog route is missing.');
 assert(!manifest.host_permissions.some(origin => /githubusercontent|github\.com/.test(origin)), 'The extension must receive theme data through its existing Worker, not direct GitHub host access.');
 const uiShellSource = read('src/content/ui-shell.js');

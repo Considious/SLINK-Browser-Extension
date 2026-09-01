@@ -4,6 +4,15 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.15.0 replaces the reserved center module with compact private player
+stats. One combined Torn `/v2/user` request supplies the current personal stats,
+working stats, and personal faction-armory balance; four historical personal-stat
+snapshots calculate true 1-, 2-, 7-, and 30-day changes. The panel shows Xanax,
+energy cans, refills, attacks, respect, retals, activity, networth trends, working
+stats, and armory funds. Values are cached only in the browser, refresh once each
+Torn day shortly after 00:00 TCT, and can be refreshed manually. No SLINK Worker
+or D1 storage participates in this feature.
+
 Version 0.14.3 prevents obsolete extension pages from generating repeated Chrome
 errors after an update. When Chrome invalidates an old dashboard, popup, or Torn
 content-script context, that old page now becomes quietly inactive instead of

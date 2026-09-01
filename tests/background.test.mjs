@@ -21,6 +21,7 @@ let sharedInsideHitCap = 0;
 let warClaims = [];
 let assignedWarStart = 0;
 let uiRestoreMessages = 0;
+let playerStatsRequests = 0;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -67,7 +68,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.14.3' }; },
+    getManifest() { return { version: '0.15.0' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -239,7 +240,38 @@ context = vm.createContext({
       };
       if (url.pathname.endsWith('/logs') && url.searchParams.get('include_stored') !== '0') warStoredLogReads++;
     } else if (url.hostname === 'api.torn.com') {
-      if (url.pathname === '/v2/faction/members') body = {
+      const playerTotals = {
+        xantaken:100,
+        energydrinkused:120,
+        refills:80,
+        attackswon:1000,
+        respectforfaction:5000,
+        retals:40,
+        timeplayed:1_000_000,
+        networth:5_000_000_000
+      };
+      if (url.pathname === '/v2/user' && url.searchParams.get('selections')?.includes('personalstats')) {
+        playerStatsRequests += 1;
+        body = {
+          personalstats:Object.entries(playerTotals).map(([name, value]) => ({ name, value, timestamp:Math.floor(Date.now() / 1000) })),
+          money:{ faction:123_456_789 },
+          workstats:{ manual_labor:111_111, intelligence:222_222, endurance:333_333, total:666_666 }
+        };
+      } else if (url.pathname === '/v2/user/personalstats') {
+        playerStatsRequests += 1;
+        const today = Math.floor(Date.now() / 86_400_000) * 86_400_000;
+        const requested = Number(url.searchParams.get('timestamp')) * 1000;
+        const days = Math.max(0, Math.round((today - requested) / 86_400_000));
+        const networthHistory = { 1:4_900_000_000, 2:4_850_000_000, 7:4_500_000_000, 30:3_000_000_000 };
+        const rates = { xantaken:1, energydrinkused:2, refills:1, attackswon:10, respectforfaction:20, retals:1, timeplayed:7200 };
+        body = {
+          personalstats:Object.entries(playerTotals).map(([name, value]) => ({
+            name,
+            value:name === 'networth' ? (networthHistory[days] ?? value) : value - (rates[name] || 0) * days,
+            timestamp:Math.floor(requested / 1000)
+          }))
+        };
+      } else if (url.pathname === '/v2/faction/members') body = {
         members:[
           { id:3853023, name:'Considious', level:100, position:'Leader', status:{ state:'Okay' }, last_action:{ relative:'1 minute ago', timestamp:1 } },
           { id:1234567, name:'Faction Member', level:20, position:{ name:'Member' }, status:{ state:'Hospital', description:'Hospitalized', until:2000 }, last_action:{ relative:'5 minutes ago', timestamp:2 } }
@@ -313,6 +345,7 @@ assert(onAlarm.listeners.length === 1, 'Alarm listener was not registered.');
 assert(values.get('slink.ui.pagePanelHidden') === false, 'Default page-panel state was not created.');
 assert(values.get('slink.permissions.snapshot')?.scopes?.length === 0, 'Unauthenticated bootstrap must not invent server scopes.');
 assert(alarms.has('slink.worker.connection'), 'Worker connection alarm was not created.');
+assert(alarms.has('slink.playerStats.daily'), 'Daily local player-stat alarm was not created.');
 assert(values.get('slink.worker.lastStatus')?.connected === true, 'Automatic Worker connection was not persisted.');
 assert(values.get('slink.themes.catalog.v1')?.catalog?.revision === 'test.remote.1', 'Remote theme catalog was not cached locally.');
 
@@ -374,6 +407,21 @@ assert(saved.ok && saved.data.session.authenticated, 'Leveling settings did not 
 assert(saved.data.permissions.scopes.includes('admin.*'), 'Worker-issued admin scope was not persisted.');
 assert(!JSON.stringify(saved.data).includes('torn-test-key'), 'Public Leveling state leaked the Torn API key.');
 assert(!JSON.stringify(saved.data).includes('signed-test-session'), 'Public Leveling state leaked the Worker session token.');
+
+const dailyStats = await send('playerStats.refresh');
+assert(dailyStats.ok && dailyStats.data.data.periods[7].xanax === 7, 'Seven-day Xanax usage was not calculated from Torn history.');
+assert(dailyStats.data.data.periods[30].energyDrinks === 60, 'Thirty-day energy-can usage was not calculated from Torn history.');
+assert(dailyStats.data.data.periods[7].activitySeconds === 50_400, 'Seven-day activity was not calculated from Torn history.');
+assert(dailyStats.data.data.networth.yesterday === 100_000_000, 'Yesterday networth change was incorrect.');
+assert(dailyStats.data.data.networth.dayBeforeYesterday === 50_000_000, 'Day-before-yesterday networth change was incorrect.');
+assert(dailyStats.data.data.networth.sevenDays === 500_000_000, 'Seven-day networth change was incorrect.');
+assert(dailyStats.data.data.networth.thirtyDays === 2_000_000_000, 'Thirty-day networth change was incorrect.');
+assert(dailyStats.data.data.workstats.total === 666_666, 'Working stats were not read from the combined Torn request.');
+assert(dailyStats.data.data.armoryBalance === 123_456_789, 'Personal faction armory balance was not read from the combined Torn request.');
+assert(playerStatsRequests === 5, 'Daily player stats did not use exactly one combined current call and four historical calls.');
+assert(!JSON.stringify(dailyStats.data).includes('torn-test-key'), 'Player-stat response leaked the local Torn key.');
+const cachedStats = await send('playerStats.status', { refreshIfStale:true });
+assert(cachedStats.ok && playerStatsRequests === 5, 'A same-day dashboard status reread the Torn API instead of local storage.');
 
 const prepared = await send('leveling.cycle.prepare');
 assert(prepared.ok && prepared.data.status.runtime.targets.length === 1, 'Leveling cycle did not load recommendations.');
