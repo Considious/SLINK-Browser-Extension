@@ -65,12 +65,23 @@
     return `$${Math.max(0, Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits:0 })}`;
   }
 
-  function statValue(value, days, { decimals = 0 } = {}) {
-    if (value === null || value === undefined || value === '') return '—';
+  function setPeriodValue(id, value, days, { decimals = 0 } = {}) {
+    const element = byId(id);
+    element.replaceChildren();
+    if (value === null || value === undefined || value === '') {
+      element.textContent = '—';
+      return;
+    }
     const number = Number(value);
-    if (!Number.isFinite(number)) return '—';
-    const formatted = number.toLocaleString('en-US', { minimumFractionDigits:decimals, maximumFractionDigits:decimals });
-    return `${formatted} (${(number / days).toFixed(2)}/d)`;
+    if (!Number.isFinite(number)) {
+      element.textContent = '—';
+      return;
+    }
+    const total = document.createElement('span');
+    total.textContent = number.toLocaleString('en-US', { minimumFractionDigits:0, maximumFractionDigits:decimals });
+    const average = document.createElement('small');
+    average.textContent = `${(number / days).toFixed(2)}/d`;
+    element.append(total, average);
   }
 
   function activityAverage(seconds, days) {
@@ -80,19 +91,26 @@
     return `${(value / 3600 / days).toFixed(2)}h/d`;
   }
 
-  function signedMoney(value, days = 0) {
+  function signedMoney(value) {
     if (value === null || value === undefined || value === '') return '—';
     const number = Number(value);
     if (!Number.isFinite(number)) return '—';
     const prefix = number > 0 ? '+' : number < 0 ? '−' : '';
     const absolute = `$${Math.abs(number).toLocaleString('en-US', { maximumFractionDigits:0 })}`;
-    const daily = days > 1 ? ` (${prefix}$${Math.abs(number / days).toLocaleString('en-US', { maximumFractionDigits:0 })}/d)` : '';
-    return `${prefix}${absolute}${daily}`;
+    return `${prefix}${absolute}`;
   }
 
-  function setTrend(id, value, text) {
+  function setTrend(id, value, days = 0) {
     const element = byId(id);
-    element.textContent = text;
+    element.replaceChildren();
+    const total = document.createElement('span');
+    total.textContent = signedMoney(value);
+    element.append(total);
+    if (days > 1 && value !== null && value !== undefined && Number.isFinite(Number(value))) {
+      const average = document.createElement('small');
+      average.textContent = `${signedMoney(Number(value) / days)}/d`;
+      element.append(average);
+    }
     element.classList.toggle('positive', Number(value) > 0);
     element.classList.toggle('negative', Number(value) < 0);
   }
@@ -110,16 +128,16 @@
       ['ps-retals', 'retals', 0]
     ];
     for (const [id, property, decimals] of pairs) {
-      byId(`${id}-7`).textContent = statValue(seven[property], 7, { decimals });
-      byId(`${id}-30`).textContent = statValue(thirty[property], 30, { decimals });
+      setPeriodValue(`${id}-7`, seven[property], 7, { decimals });
+      setPeriodValue(`${id}-30`, thirty[property], 30, { decimals });
     }
     byId('ps-activity-7').textContent = activityAverage(seven.activitySeconds, 7);
     byId('ps-activity-30').textContent = activityAverage(thirty.activitySeconds, 30);
     byId('ps-networth').textContent = snapshot?.networth?.current !== null && snapshot?.networth?.current !== undefined && Number.isFinite(Number(snapshot.networth.current)) ? money(snapshot.networth.current) : '—';
-    setTrend('ps-networth-yesterday', snapshot?.networth?.yesterday, signedMoney(snapshot?.networth?.yesterday));
-    setTrend('ps-networth-day-before', snapshot?.networth?.dayBeforeYesterday, signedMoney(snapshot?.networth?.dayBeforeYesterday));
-    setTrend('ps-networth-7', snapshot?.networth?.sevenDays, signedMoney(snapshot?.networth?.sevenDays, 7));
-    setTrend('ps-networth-30', snapshot?.networth?.thirtyDays, signedMoney(snapshot?.networth?.thirtyDays, 30));
+    setTrend('ps-networth-yesterday', snapshot?.networth?.yesterday);
+    setTrend('ps-networth-day-before', snapshot?.networth?.dayBeforeYesterday);
+    setTrend('ps-networth-7', snapshot?.networth?.sevenDays, 7);
+    setTrend('ps-networth-30', snapshot?.networth?.thirtyDays, 30);
     for (const [id, property] of [['ps-work-manual','manualLabor'],['ps-work-intelligence','intelligence'],['ps-work-endurance','endurance'],['ps-work-total','total']]) {
       const value = snapshot?.workstats?.[property];
       byId(id).textContent = value !== null && value !== undefined && Number.isFinite(Number(value)) ? Number(value).toLocaleString('en-US') : '—';

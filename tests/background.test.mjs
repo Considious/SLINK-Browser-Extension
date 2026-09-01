@@ -68,7 +68,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.15.0' }; },
+    getManifest() { return { version: '0.15.1' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -254,7 +254,7 @@ context = vm.createContext({
         playerStatsRequests += 1;
         body = {
           personalstats:Object.entries(playerTotals).map(([name, value]) => ({ name, value, timestamp:Math.floor(Date.now() / 1000) })),
-          money:{ faction:123_456_789 },
+          money:{ faction:{ money:123_456_789, points:321 } },
           workstats:{ manual_labor:111_111, intelligence:222_222, endurance:333_333, total:666_666 }
         };
       } else if (url.pathname === '/v2/user/personalstats') {

@@ -2,7 +2,7 @@
   'use strict';
 
   const SLINK = global.SLINK_EXTENSION;
-  const CACHE_KEY = 'playerStats.daily.v1';
+  const CACHE_KEY = 'playerStats.daily.v2';
   const DAILY_ALARM = 'slink.playerStats.daily';
   const DAY_MS = 24 * 60 * 60 * 1000;
   const RESET_DELAY_MS = 5 * 60 * 1000;
@@ -118,7 +118,12 @@
         endurance:finite(workstats.endurance),
         total:finite(workstats.total)
       },
-      armoryBalance:finite(money.faction)
+      armoryBalance:finite(
+        money?.faction?.money ??
+        money?.faction_balance?.money ??
+        currentResponse?.factionBalance?.money ??
+        (typeof money?.faction === 'number' ? money.faction : null)
+      )
     };
   }
 

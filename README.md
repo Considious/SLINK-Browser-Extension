@@ -4,6 +4,12 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.15.1 tightens the compact player-stat layout: the 7- and 30-day
+totals now align beneath their headers with smaller daily averages, and the
+Networth period labels remain on one line. It also reads the current Torn v2
+faction balance from the documented `money.faction.money` object and refreshes
+the local cache format so the corrected balance appears immediately.
+
 Version 0.15.0 replaces the reserved center module with compact private player
 stats. One combined Torn `/v2/user` request supplies the current personal stats,
 working stats, and personal faction-armory balance; four historical personal-stat
