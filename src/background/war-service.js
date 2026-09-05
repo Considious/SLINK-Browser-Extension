@@ -130,15 +130,7 @@
   }
 
   async function recomputePermissions() {
-    const [leveling, war] = await Promise.all([
-      SLINK.core.storage.get('permissions.leveling', null),
-      SLINK.core.storage.get(KEYS.permissions, null)
-    ]);
-    const combined = SLINK.core.permissions.combineSnapshots(leveling, war, {
-      userId:null, roles:['foundation'], scopes:[], source:'local-bootstrap', issuedAt:Date.now(), expiresAt:0
-    });
-    await SLINK.core.storage.set('permissions.snapshot', combined);
-    return combined;
+    return SLINK.core.permissions.recomputeStoredSnapshot();
   }
 
   async function clearSession() {
@@ -1073,42 +1065,6 @@
         if (!SLINK.core.permissions.hasScope(session, 'slink.war.officer') && !SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('slink.war.officer permission is required to view War logs.');
         const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
         return activeWar?.warId ? (await fetchLogs(activeWar, true)).rows : [];
-      },
-      'war.admin.scopes': async () => {
-        const session = await ensureSession(false);
-        if (!SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('admin.* permission is required.');
-        return workerRequest('/api/admin/scopes');
-      },
-      'war.admin.permissions.get': async payload => {
-        const session = await ensureSession(false);
-        if (!SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('admin.* permission is required.');
-        const userId = WAR.positiveInteger(payload?.userId);
-        if (!userId) throw new Error('Enter a valid Torn user ID.');
-        let factionIdValue = 0;
-        let identityWarning = '';
-        try {
-          const currentSettings = await settings();
-          const profile = await tornRequest(
-            `/v2/user/${userId}/basic`,
-            currentSettings.tornKey
-          );
-          factionIdValue = profileFactionId(profile);
-        } catch (error) {
-          identityWarning = `Current faction could not be checked: ${SLINK.core.format.errorMessage(error)}`;
-        }
-        const query = factionIdValue > 0 ? `?faction_id=${factionIdValue}` : '';
-        const result = await workerRequest(`/api/admin/users/${userId}/permissions${query}`);
-        return { ...result, identity_warning:identityWarning };
-      },
-      'war.admin.permissions.save': async payload => {
-        const session = await ensureSession(false);
-        if (!SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('admin.* permission is required.');
-        const userId = WAR.positiveInteger(payload?.userId);
-        if (!userId) throw new Error('Enter a valid Torn user ID.');
-        return workerRequest(`/api/admin/users/${userId}/permissions`, {
-          method:'POST',
-          body:{ scopes:Array.isArray(payload?.scopes) ? payload.scopes : [], hours:payload?.hours, note:payload?.note }
-        });
       }
     }),
     prepareCycle,

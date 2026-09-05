@@ -3,6 +3,7 @@ importScripts(
   '../core/format.js',
   '../core/storage.js',
   '../core/permissions.js',
+  '../core/adhd.js',
   '../core/themes.js',
   '../core/messaging.js',
   '../core/http.js',
@@ -10,6 +11,8 @@ importScripts(
   '../core/worker-client.js',
   '../core/torn-api-limiter.js',
   'theme-service.js',
+  'permission-service.js',
+  'adhd-service.js',
   'player-stats-service.js',
   'leveling-service.js',
   'war-service.js',
@@ -33,24 +36,27 @@ function bootstrapPermissions() {
 }
 
 async function getPermissionSnapshot() {
-  const [leveling, war, stored] = await Promise.all([
+  const [leveling, war, access, stored] = await Promise.all([
     SLINK.core.storage.get('permissions.leveling', null),
     SLINK.core.storage.get('permissions.war', null),
+    SLINK.core.storage.get('permissions.access', null),
     SLINK.core.storage.get('permissions.snapshot', null)
   ]);
-  if (!leveling && !war) return SLINK.core.permissions.normalizeSnapshot(stored || bootstrapPermissions());
-  const combined = SLINK.core.permissions.combineSnapshots(leveling, war, bootstrapPermissions());
+  if (!leveling && !war && !access) return SLINK.core.permissions.normalizeSnapshot(stored || bootstrapPermissions());
+  const combined = SLINK.core.permissions.combineSnapshots(leveling, war, access, bootstrapPermissions());
   await SLINK.core.storage.set('permissions.snapshot', combined);
   return combined;
 }
 
 async function ensureDefaultState() {
-  const [storedCombined, storedLeveling, storedWar, levelingSession, warSession] = await Promise.all([
+  const [storedCombined, storedLeveling, storedWar, storedAccess, levelingSession, warSession, accessSession] = await Promise.all([
     SLINK.core.storage.get('permissions.snapshot', null),
     SLINK.core.storage.get('permissions.leveling', null),
     SLINK.core.storage.get('permissions.war', null),
+    SLINK.core.storage.get('permissions.access', null),
     SLINK.core.storage.get('leveling.session.v1', null),
-    SLINK.core.storage.get('war.session.v1', null)
+    SLINK.core.storage.get('war.session.v1', null),
+    SLINK.core.storage.get('access.session.v1', null)
   ]);
   const legacy = SLINK.core.permissions.normalizeSnapshot(storedCombined || bootstrapPermissions());
   const leveling = storedLeveling || (
@@ -79,11 +85,24 @@ async function ensureDefaultState() {
         }
       : null
   );
+  const access = storedAccess || (
+    accessSession?.token && Number(accessSession.expiresAt) > Date.now()
+      ? {
+          userId:accessSession.userId,
+          roles:accessSession.roles,
+          scopes:accessSession.scopes,
+          source:'migrated-permission-session',
+          issuedAt:Date.now(),
+          expiresAt:accessSession.expiresAt
+        }
+      : null
+  );
   if (leveling && !storedLeveling) await SLINK.core.storage.set('permissions.leveling', leveling);
   if (war && !storedWar) await SLINK.core.storage.set('permissions.war', war);
+  if (access && !storedAccess) await SLINK.core.storage.set('permissions.access', access);
   await SLINK.core.storage.set(
     'permissions.snapshot',
-    SLINK.core.permissions.combineSnapshots(leveling, war, bootstrapPermissions())
+    SLINK.core.permissions.combineSnapshots(leveling, war, access, bootstrapPermissions())
   );
   if (await SLINK.core.storage.get('ui.pagePanelHidden', undefined) === undefined) {
     await SLINK.core.storage.set('ui.pagePanelHidden', false);
@@ -100,6 +119,7 @@ async function ensureConnectionAlarm() {
   // War collection is demand-driven by one live extension page. Remove the
   // legacy background alarm so a closed/idle UI never keeps polling.
   await chrome.alarms.clear(WAR_CYCLE_ALARM);
+  await SLINK.services.adhd.ensureAlarm();
   await SLINK.services.playerStats.ensureAlarm();
 }
 
@@ -156,7 +176,7 @@ async function capabilityStatus() {
 }
 
 async function recordDiagnostic(source) {
-  const [worker, contributionWorker, warWorker, capabilities, tornApiUsage, alarm, pageInjection, leveling, war] = await Promise.all([
+  const [worker, contributionWorker, warWorker, capabilities, tornApiUsage, alarm, pageInjection, leveling, war, adhd] = await Promise.all([
     SLINK.core.workerClient.probe({ deep: true }),
     SLINK.services.contribution.health(),
     SLINK.services.war.health(),
@@ -165,7 +185,8 @@ async function recordDiagnostic(source) {
     chrome.alarms.get(CONNECTION_ALARM),
     SLINK.core.storage.get('diagnostics.pageInjection', null),
     SLINK.services.leveling.publicStatus(),
-    SLINK.services.war.publicStatus()
+    SLINK.services.war.publicStatus(),
+    SLINK.services.adhd.publicStatus(false)
   ]);
   await SLINK.core.storage.set('worker.lastStatus', worker);
 
@@ -199,6 +220,7 @@ async function recordDiagnostic(source) {
       status: war.runtime.status,
       worker: warWorker
     },
+    adhd:{ configured:adhd.configured, permitted:adhd.permitted, activeAlerts:adhd.activeAlerts.length, lastError:adhd.lastError },
     capabilities,
     tornApiUsage
   };
@@ -227,12 +249,14 @@ const routes = {
   },
 
   async 'system.status'() {
-    const [permissions, capabilities, lastDiagnostic, tornApiUsage, worker] = await Promise.all([
+    const [permissions, capabilities, lastDiagnostic, tornApiUsage, worker, access, adhd] = await Promise.all([
       getPermissionSnapshot(),
       capabilityStatus(),
       SLINK.core.storage.get('diagnostics.lastRun', null),
       SLINK.core.tornApiLimiter.getUsage(),
-      connectionStatus()
+      connectionStatus(),
+      SLINK.services.permissionAccess.status().catch(error => ({ configured:false, error:SLINK.core.format.errorMessage(error) })),
+      SLINK.services.adhd.publicStatus(true)
     ]);
     return {
       permissions,
@@ -240,6 +264,8 @@ const routes = {
       lastDiagnostic,
       tornApiUsage,
       worker,
+      access,
+      adhd,
       leveling: await SLINK.services.leveling.publicStatus(),
       war: await SLINK.services.war.publicStatus(),
       contribution: await SLINK.services.contribution.status().catch(() => ({ configured:false, donation:null }))
@@ -290,6 +316,8 @@ const routes = {
 
   ...SLINK.services.leveling.routes,
   ...SLINK.services.war.routes,
+  ...SLINK.services.permissionAccess.routes,
+  ...SLINK.services.adhd.routes,
   ...SLINK.services.themes.routes,
   ...SLINK.services.playerStats.routes,
   ...SLINK.services.contributionRoutes
@@ -313,6 +341,9 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
+  if (alarm.name === SLINK.services.adhd.ALARM) {
+    void SLINK.services.adhd.publicStatus(true).catch(error => console.error('[SLINK] ADHD alerts:', error));
+  }
   if (alarm.name === SLINK.services.playerStats.ALARM) {
     void SLINK.services.playerStats.status().then(status => {
       if (status.configured) return SLINK.services.playerStats.refresh(true);

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.15.1",
-  "description": "Shared Live Intelligence NetworK with SLINK Leveling and War tools for Torn.",
+  "version": "0.16.0",
+  "description": "Shared Live Intelligence NetworK with Combat and ADHD reminder tools for Torn.",
   "permissions": [
     "alarms",
     "storage"
@@ -37,6 +37,7 @@
         "src/core/format.js",
         "src/core/storage.js",
         "src/core/permissions.js",
+        "src/core/adhd.js",
         "src/core/themes.js",
         "src/core/messaging.js",
         "src/core/modules.js",
@@ -44,6 +45,7 @@
         "src/content/ui-shell.js",
         "src/modules/leveling.js",
         "src/modules/war.js",
+        "src/modules/adhd.js",
         "src/modules/contribution.js",
         "src/content/content-script.js"
       ]

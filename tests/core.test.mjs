@@ -68,6 +68,7 @@ for (const file of [
   'src/core/format.js',
   'src/core/storage.js',
   'src/core/permissions.js',
+  'src/core/adhd.js',
   'src/core/war.js',
   'src/core/themes.js',
   'src/core/messaging.js',
@@ -78,7 +79,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.15.1', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.16.0', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -117,6 +118,17 @@ const combinedPermissions = permissions.combineSnapshots(
 );
 assert(combinedPermissions.scopes.join(',') === 'admin.*,slink.level,slink.war', 'Product scopes were not combined without duplication.');
 assert(!permissions.combineSnapshots({ userId:1, scopes:['expired.product'], expiresAt:Date.now() - 1 }).scopes.length, 'Expired product scopes remained visible.');
+assert(SLINK.core.adhd.marketWatchLimit({ userId:12, scopes:['slink.adhd.marketwatch.5','slink.adhd.marketwatch.15'] }) === 15, 'Highest ADHD market-watch tier was not selected.');
+const adhdSettings = SLINK.core.adhd.defaultSettings();
+const partialCity = SLINK.core.adhd.cityProgress({ cityItemsBought:575, cityItemsAtReset:500 }, adhdSettings);
+assert(partialCity.bought === 75 && partialCity.remaining === 25 && !partialCity.complete, 'Shared city purchase progress was calculated incorrectly.');
+const completeCity = SLINK.core.adhd.cityProgress({ cityItemsBought:600, cityItemsAtReset:500 }, adhdSettings);
+assert(completeCity.bought === 100 && completeCity.complete, 'The shared 100-item city cap did not complete all city reminders.');
+assert(!SLINK.core.adhd.buildAlerts({ fetchedAt:Date.now(), cityItemsBought:600, cityItemsAtReset:500, data:{} }, adhdSettings).some(alert => alert.id === 'cityItem'), 'A city reminder remained after the shared daily cap was met.');
+const cityStockSettings = SLINK.core.adhd.normalizeSettings({ cityStockAlerts:{ 392:true } });
+const cityStockSnapshot = { fetchedAt:Date.now(), cityItemsBought:575, cityItemsAtReset:500, data:{}, cityShops:{ cityshops:[{ name:"Big Al's Gun Shop", items:[{ id:392, price:200, stock:{ current:123, default:500 } }] }] } };
+assert(SLINK.core.adhd.buildAlerts(cityStockSnapshot, cityStockSettings).some(alert => alert.id === 'cityStock:392'), 'Enabled city stock did not produce an alert below the shared cap.');
+assert(!SLINK.core.adhd.buildAlerts({ ...cityStockSnapshot, cityItemsBought:600 }, cityStockSettings).some(alert => alert.id.startsWith('cityStock:')), 'City stock alerts remained after the shared 100-item cap.');
 assert(SLINK.core.war.makeWarId(46978, 46999, 1_777_000_000) === 'rw_46978_46999_1777000000', 'Second-based War identity was changed.');
 assert(SLINK.core.war.makeWarId(46978, 46999, 1_777_000_000_000) === 'rw_46978_46999_1777000000', 'Millisecond-based War identity was not normalized.');
 assert(SLINK.core.war.sortMembers([

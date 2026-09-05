@@ -4,6 +4,26 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.16.0 begins the permission-gated ADHD Dashboard as a separate
+**ADHD Alerts** page and optional in-Torn module. The first release uses only
+Torn API data—no page scraping—for energy, nerve, cooldown, mission, travel,
+education, organized-crime, casino-token, refill, and daily city reminders.
+Alert settings, timer snapshots, city totals, snoozes, and purchase detection
+remain in extension-local storage; the Contribution Worker receives only the
+Torn identity check and returns signed permissions.
+
+City purchases now use one shared Torn-day cap: every item bought from any city
+shop contributes toward the same 100-item total. At 100, the general city
+reminder and every enabled stock alert (Pepper Spray, Empty Blood Bags,
+Chainsaws, Beer, Lollipops, and Blank DVDs) stop together until reset. A single
+manual completion button handles delayed API updates; there are no per-item
+completion flags. Enabled stock alerts use Torn's city-shops API no more than
+once per five minutes and stop requesting it after the shared cap is complete.
+
+The existing permission catalog gains `slink.adhd.alerts` plus future
+Market/Bazaar Watch tiers at 5, 10, 15, and 20 slots. Version 0.16.0 displays
+the signed tier but intentionally does not start market polling yet.
+
 Version 0.15.1 tightens the compact player-stat layout: the 7- and 30-day
 totals now align beneath their headers with smaller daily averages, and the
 Networth period labels remain on one line. It also reads the current Torn v2
@@ -214,7 +234,7 @@ SLINK uses two separate permission layers:
 1. **Browser capabilities** control which browser APIs and remote origins the installed extension may access. Torn, Torn API, FFScouter, and the SLINK Worker are core dependencies and are granted together at installation. There are no separate in-app permission buttons.
 2. **SLINK scopes** are supplied by the authenticated SLINK Worker and control which modules and server operations the Torn user may use.
 
-Before authentication, the extension has no SLINK server scopes. Torn authentication establishes identity, while the standalone `slink-permissions` D1 database supplies product access. Current Slinky's members receive `slink.level` and `slink.war` automatically; users outside the faction may receive either product scope through an active purchased or manual grant. A successful faction-attack capability probe adds the temporary `slink.war.faction` scope for that War session. Faction-wide War control and retained logs require `slink.war.officer`. Considious also receives `admin.*`; diagnostics and permission management are not exposed without that signed scope. Each Worker signs its product scopes into its own session, and the extension combines them only for module visibility.
+Before authentication, the extension has no SLINK server scopes. Torn authentication establishes identity, while the standalone `slink-permissions` D1 database supplies product access. Current Slinky's members receive `slink.level`, `slink.war`, and basic `slink.adhd.alerts` access automatically; users outside the faction may receive product scopes through an active purchased or manual grant. ADHD Market/Bazaar Watch capacity uses the highest assigned `slink.adhd.marketwatch.5`, `.10`, `.15`, or `.20` tier. A successful faction-attack capability probe adds the temporary `slink.war.faction` scope for that War session. Faction-wide War control and retained logs require `slink.war.officer`. Considious also receives `admin.*`; diagnostics and permission management are not exposed without that signed scope. Each Worker signs its product scopes into its own session, and the extension combines them only for module visibility.
 
 `admin.*` exposes the zero routine API-contribution override in both the Torn panel and full dashboard. The Worker rejects a zero-capacity claim from any session without that scope. Authentication still performs one Torn key validation, and Leveling may refresh the administrator's own battle stats locally; the override applies to routine shared-service contribution checks.
 

@@ -25,8 +25,10 @@
     .bubble[data-alert-kind] .bubble-alert-icon, .bubble[data-alert-kind] .bubble-alert-count { display:block; }
     .bubble[data-alert-kind="retal"] { border-color:#ff5a5a; background:#5f0606; color:#fff; animation:slinkBubbleRetal .65s ease-in-out infinite alternate; }
     .bubble[data-alert-kind="armory"] { border-color:#ffb24b; background:#4d2600; color:#fff; animation:slinkBubbleArmory .85s ease-in-out infinite alternate; }
+    .bubble[data-alert-kind="adhd"] { border-color:var(--slink-warning); background:var(--slink-bg-control); color:var(--slink-warning); animation:slinkBubbleAdhd 1s ease-in-out infinite alternate; }
     @keyframes slinkBubbleRetal { to { background:#b20d0d; box-shadow:0 0 8px #fff,0 0 26px #f00; transform:scale(1.08); } }
     @keyframes slinkBubbleArmory { to { background:#875000; box-shadow:0 0 8px #fff,0 0 24px #ff8a00; transform:scale(1.06); } }
+    @keyframes slinkBubbleAdhd { to { box-shadow:0 0 8px #fff,0 0 22px var(--slink-warning); transform:scale(1.05); } }
     :host([data-slink-theme="slink-dark"]) .bubble { background:linear-gradient(145deg,#3478b9,#172f4c); }
     .main { right:12px; top:88px; }
     .popup { left:12px; top:88px; }
@@ -107,13 +109,22 @@
     let collapsed = false;
     let activeId = '';
     let preferredActiveId = '';
+    const bubbleAlertSources = new Map();
 
-    function setBubbleAlert(kind = '', count = 0) {
-      const normalized = ['retal', 'armory'].includes(String(kind)) && Number(count) > 0 ? String(kind) : '';
+    function setBubbleAlert(kind = '', count = 0, source = 'default') {
+      const sourceId = String(source || 'default');
+      const candidate = ['retal', 'armory', 'adhd'].includes(String(kind)) && Number(count) > 0
+        ? { kind:String(kind), count:Number(count) }
+        : null;
+      if (candidate) bubbleAlertSources.set(sourceId, candidate); else bubbleAlertSources.delete(sourceId);
+      const priority = { retal:3, armory:2, adhd:1 };
+      const selected = [...bubbleAlertSources.values()].sort((left, right) => priority[right.kind] - priority[left.kind])[0] || null;
+      const normalized = selected?.kind || '';
+      count = selected?.count || 0;
       if (normalized) bubble.dataset.alertKind = normalized; else delete bubble.dataset.alertKind;
-      bubble.querySelector('.bubble-alert-icon').textContent = normalized === 'retal' ? '🚨' : normalized === 'armory' ? '🔫' : '';
+      bubble.querySelector('.bubble-alert-icon').textContent = normalized === 'retal' ? '🚨' : normalized === 'armory' ? '🔫' : normalized === 'adhd' ? '🔔' : '';
       bubble.querySelector('.bubble-alert-count').textContent = normalized ? String(Math.min(99, Math.max(1, Number(count) || 1))) : '';
-      bubble.title = normalized === 'retal' ? `${count} active retaliation alert${Number(count) === 1 ? '' : 's'}` : normalized === 'armory' ? `${count} active armory request${Number(count) === 1 ? '' : 's'}` : 'Open SLINK';
+      bubble.title = normalized === 'retal' ? `${count} active retaliation alert${Number(count) === 1 ? '' : 's'}` : normalized === 'armory' ? `${count} active armory request${Number(count) === 1 ? '' : 's'}` : normalized === 'adhd' ? `${count} active ADHD reminder${Number(count) === 1 ? '' : 's'}` : 'Open SLINK';
       bubble.setAttribute('aria-label', bubble.title);
     }
 

@@ -1,15 +1,15 @@
 # SLINK Browser Extension Privacy Policy
 
 **Effective date:** August 26, 2026  
-**Last updated:** August 26, 2026
+**Last updated:** September 5, 2026
 
 ## Scope and purpose
 
 This Privacy Policy applies to the SLINK Browser Extension ("SLINK"). SLINK's
-single purpose is to provide Torn players with combat-assistance and
-faction-war coordination features, including Leveling recommendations, War
-targets and status information, retaliation alerts, med-out claims, and
-related coordination tools.
+single purpose is to provide Torn players with combat-assistance,
+faction-war coordination, and personal reminder features, including Leveling
+recommendations, War targets and status information, retaliation alerts,
+med-out claims, private API-backed timers, and related coordination tools.
 
 SLINK is an independent project and is not produced, endorsed, or operated by
 Torn, FFScouter, Google, or Cloudflare.
@@ -57,7 +57,10 @@ Depending on the enabled modules and API access level, SLINK may process:
   counters;
 - faction and opposing-faction identifiers and member information;
 - target observations contributed to shared Leveling or War services;
-- med-out claims and user-triggered faction-chat callouts; and
+- med-out claims and user-triggered faction-chat callouts;
+- personal bars, cooldowns, travel, education, organized-crime status,
+  missions, casino tokens, refill availability, daily city purchase totals,
+  and optionally selected city-shop stock; and
 - timestamps showing recent interaction with SLINK, used to stop unnecessary
   polling when the extension is idle.
 
@@ -110,6 +113,12 @@ stored in `chrome.storage.local` on the user's device. Local information remains
 until the user removes it through SLINK, clears the extension's data, or
 uninstalls the extension. Session tokens also expire according to their issued
 expiration time.
+
+ADHD alert settings, timer snapshots, city purchase baselines and totals,
+snoozes, and city-shop stock results remain local. They are not sent to or
+stored by a SLINK Worker. The applicable SLINK Worker receives the Torn API key
+only during authentication to verify identity and return signed permission
+scopes; the ordinary key is not retained remotely.
 
 ### SLINK services
 

@@ -6,6 +6,8 @@
   let system = null;
   let leveling = null;
   let war = null;
+  let access = null;
+  let adhd = null;
   let contribution = null;
   let contributionTerms = null;
   let playerStats = null;
@@ -269,17 +271,19 @@
   function renderAccess() {
     const levelAccepted = leveling?.terms?.accepted === true;
     const warAccepted = war?.terms?.accepted === true;
+    const adhdAccepted = access?.terms?.accepted === true;
     byId('use-leveling').checked = leveling?.settings?.hasTornKey === true;
     byId('use-war').checked = war?.settings?.hasTornKey === true;
-    byId('shared-torn-key').placeholder = levelAccepted || warAccepted ? 'Saved locally — leave blank to keep' : 'Enter once for selected SLINK modules';
+    byId('use-adhd').checked = access?.settings?.enabled === true && access?.settings?.hasTornKey === true;
+    byId('shared-torn-key').placeholder = levelAccepted || warAccepted || adhdAccepted ? 'Saved locally — leave blank to keep' : 'Enter once for selected SLINK modules';
     byId('shared-ff-key').placeholder = leveling?.settings?.hasFfKey || war?.settings?.hasFfKey ? 'Saved locally — leave blank to keep' : 'Optional FFScouter key';
-    const terms = leveling?.terms || war?.terms || {};
+    const terms = leveling?.terms || war?.terms || access?.terms || {};
     byId('shared-terms-summary').textContent = terms.summary || war?.terms?.summary || 'Current SLINK terms are loading.';
     byId('shared-terms-link').href = terms.documentUrl || war?.terms?.documentUrl || '#';
-    byId('shared-terms-state').textContent = `Leveling: ${levelAccepted ? 'accepted' : 'acceptance required'} / War: ${warAccepted ? 'accepted' : 'acceptance required'}`;
-    byId('shared-terms-full').hidden = !termsExpanded && levelAccepted && warAccepted;
+    byId('shared-terms-state').textContent = `Leveling: ${levelAccepted ? 'accepted' : 'acceptance required'} / War: ${warAccepted ? 'accepted' : 'acceptance required'} / ADHD: ${adhdAccepted ? 'accepted' : 'acceptance required'}`;
+    byId('shared-terms-full').hidden = !termsExpanded && levelAccepted && warAccepted && adhdAccepted;
     byId('toggle-shared-terms').textContent = byId('shared-terms-full').hidden ? 'View terms' : 'Hide terms';
-    const authenticated = [leveling?.session, war?.session].find(session => session?.authenticated);
+    const authenticated = [leveling?.session, war?.session, access?.session].find(session => session?.authenticated);
     byId('identity-state').textContent = authenticated ? `Torn ID ${authenticated.userId}` : 'Enter a key to unlock access';
     if (accessExpanded === null) accessExpanded = !authenticated;
     const compact = Boolean(authenticated && !accessExpanded);
@@ -287,9 +291,86 @@
     byId('access-config').hidden = compact;
     byId('toggle-access').textContent = compact ? 'API & access settings' : authenticated ? 'Collapse' : 'Setup required';
     byId('toggle-access').disabled = !authenticated && accessExpanded;
+    const enabledModules = [leveling?.settings?.hasTornKey ? 'Leveling' : '', war?.settings?.hasTornKey ? 'War' : '', access?.settings?.enabled && access?.settings?.hasTornKey ? 'ADHD Alerts' : ''].filter(Boolean);
     byId('access-summary').textContent = compact
-      ? `${leveling?.settings?.hasTornKey ? 'Leveling' : ''}${leveling?.settings?.hasTornKey && war?.settings?.hasTornKey ? ' + ' : ''}${war?.settings?.hasTornKey ? 'War' : ''} enabled with locally saved credentials.`
+      ? `${enabledModules.join(' + ') || 'No modules'} enabled with locally saved credentials.`
       : 'Enter each local credential once, then choose which SLINK modules may use it.';
+  }
+
+  function relativeTime(timestamp) {
+    if (!Number(timestamp)) return 'not checked yet';
+    const seconds = Math.max(0, Math.floor((Date.now() - Number(timestamp)) / 1000));
+    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    return `${Math.floor(seconds / 3600)}h ago`;
+  }
+
+  function renderAdhd() {
+    const permitted = adhd?.permitted === true;
+    const configured = adhd?.configured === true;
+    const alerts = Array.isArray(adhd?.activeAlerts) ? adhd.activeAlerts : [];
+    const badge = byId('adhd-permission-state');
+    badge.textContent = permitted ? 'ADHD access active' : `Requires ${adhd?.requiredScope || SLINK.core.adhd.ALERT_SCOPE}`;
+    badge.className = permitted ? 'badge ready' : 'badge error';
+    byId('adhd-active-count').textContent = alerts.length;
+    byId('adhd-city-count').textContent = adhd?.city?.bought ?? '—';
+    byId('adhd-api-usage').textContent = `${adhd?.tornApiUsage?.count || 0}/${adhd?.tornApiUsage?.limit || 60}`;
+    byId('adhd-next-check').textContent = Number(adhd?.nextRefreshAt) ? new Date(adhd.nextRefreshAt).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }) : '—';
+    byId('adhd-status').textContent = !configured
+      ? 'Enable ADHD Alerts in API & feature access to begin.'
+      : adhd?.fetchedAt ? `Private timers last updated ${relativeTime(adhd.fetchedAt)}. Stats refresh only when the next timer is due.` : 'Ready for the first API refresh.';
+    byId('adhd-error').textContent = adhd?.lastError || '';
+    byId('adhd-error').hidden = !adhd?.lastError;
+    const purchase = adhd?.lastPurchase;
+    byId('adhd-last-purchase').textContent = purchase
+      ? `Last detected city purchase: ${Number(purchase.count) || 0} item${Number(purchase.count) === 1 ? '' : 's'} at ${new Date(purchase.at).toLocaleTimeString()} • ${Number(purchase.totalToday) || 0}/100 today.`
+      : adhd?.city?.complete ? 'The shared 100-item daily city cap is complete. All city-item alerts are paused until reset.' : 'No city purchase change recorded yet.';
+    byId('adhd-city-done').disabled = Boolean(adhd?.city?.complete);
+    byId('adhd-city-done').textContent = adhd?.city?.complete ? 'City cap complete for today' : 'I hit 100 — hide city alerts today';
+
+    const settings = SLINK.core.adhd.normalizeSettings(adhd?.settings || {});
+    byId('adhd-medical-hours').value = settings.medicalThresholdHours;
+    byId('adhd-booster-hours').value = settings.boosterThresholdHours;
+    byId('adhd-landing-minutes').value = settings.landingLeadMinutes;
+    byId('adhd-show-in-torn').checked = Boolean(system?.adhdInTorn);
+    byId('adhd-alert-toggles').replaceChildren(...SLINK.core.adhd.ALERT_DEFINITIONS.map(definition => {
+      const label = document.createElement('label');
+      label.className = 'adhd-alert-toggle';
+      const input = document.createElement('input');
+      input.type = 'checkbox'; input.dataset.alertId = definition.id; input.checked = settings.enabled[definition.id] !== false;
+      const span = document.createElement('span'); span.textContent = definition.label;
+      label.append(input, span); return label;
+    }));
+    byId('adhd-city-stock-toggles').replaceChildren(...SLINK.core.adhd.CITY_SHOP_TARGETS.map(target => {
+      const label = document.createElement('label');
+      label.className = 'adhd-alert-toggle';
+      const input = document.createElement('input');
+      input.type = 'checkbox'; input.dataset.cityStockId = target.id; input.checked = settings.cityStockAlerts[target.id] === true;
+      const span = document.createElement('span'); span.textContent = `${target.label} · ${target.shop}`;
+      label.append(input, span); return label;
+    }));
+    const list = byId('adhd-alert-list');
+    if (!alerts.length) {
+      const empty = document.createElement('div'); empty.className = 'adhd-empty';
+      empty.textContent = adhd?.fetchedAt ? 'You’re caught up. No active API reminders.' : 'No timer snapshot has been collected yet.';
+      list.replaceChildren(empty);
+    } else {
+      list.replaceChildren(...alerts.map(alert => {
+        const card = document.createElement('article'); card.className = 'adhd-alert-card'; card.dataset.tone = alert.tone || '';
+        const copy = document.createElement('div');
+        const title = document.createElement('strong'); title.textContent = alert.title || 'Reminder';
+        const detail = document.createElement('p'); detail.textContent = alert.detail || '';
+        copy.append(title, detail);
+        const actions = document.createElement('div'); actions.className = 'adhd-alert-actions';
+        for (const [label, href] of alert.links || []) {
+          const link = document.createElement('a'); link.className = 'button small secondary'; link.href = String(href); link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = String(label || 'Open'); actions.append(link);
+        }
+        const snooze = document.createElement('button'); snooze.type = 'button'; snooze.className = 'small secondary'; snooze.textContent = 'Snooze 1h';
+        snooze.addEventListener('click', async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs:60 * 60_000 }); renderAdhd(); });
+        actions.append(snooze); card.append(copy, actions); return card;
+      }));
+    }
+    byId('adhd-market-tier').textContent = adhd?.marketWatchLimit ? `${adhd.marketWatchLimit} watch slots unlocked` : 'No watch tier';
   }
 
   function renderLeveling() {
@@ -660,7 +741,9 @@
       `Permissions database: ${report.worker?.permissionsDatabase || 'not checked'}`,
       `War Worker: ${report.war?.worker?.connected ? 'CONNECTED' : 'OFFLINE'}`,
       `War database: ${report.war?.worker?.database || 'not checked'}`,
-      `War coordinator: ${report.war?.worker?.coordinator || 'not checked'}`
+      `War coordinator: ${report.war?.worker?.coordinator || 'not checked'}`,
+      `ADHD Alerts: ${report.adhd?.configured ? (report.adhd?.permitted ? `READY (${report.adhd.activeAlerts || 0} active)` : 'PERMISSION DENIED') : 'NOT CONFIGURED'}`,
+      `ADHD last error: ${report.adhd?.lastError || 'none'}`
     ].join('\n');
   }
 
@@ -672,7 +755,7 @@
       SLINK.core.messaging.send('playerStats.status', { refreshIfStale:true }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null }))
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
-    system = status; leveling = status.leveling; war = status.war; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus;
+    system = status; leveling = status.leveling; war = status.war; access = status.access; adhd = status.adhd; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus;
     dismissedRetals = await SLINK.core.storage.get('war.dismissedRetals.v1', {});
     dismissedRetals = Object.fromEntries(Object.entries(dismissedRetals || {}).filter(([, expiresAt]) => Number(expiresAt) > Math.floor(Date.now() / 1000)));
     warTargetFilters = { ...warTargetFilters, ...(await SLINK.core.storage.get('ui.war.targetFilters.v1', {})) };
@@ -681,11 +764,12 @@
     byId('war-status-filter').value = warTargetFilters.status;
     byId('war-target-sort').value = warTargetFilters.sort;
     system.levelingInTorn = await SLINK.core.storage.get('ui.modules.leveling.showInTorn', true);
+    system.adhdInTorn = await SLINK.core.storage.get('ui.modules.adhd.showInTorn', true);
     await SLINK.core.storage.set('ui.modules.contribution.showInTorn', false);
     byId('connection').textContent = status.worker.connected ? 'Worker connected' : 'Worker offline';
     byId('connection').className = status.worker.connected ? 'badge ready' : 'badge error';
     await applySavedTheme();
-    renderAccess(); renderLeveling(); renderWar(); renderTargets(); renderContribution(); renderPlayerStats(); renderAccessTabs();
+    renderAccess(); renderLeveling(); renderWar(); renderTargets(); renderContribution(); renderPlayerStats(); renderAdhd(); renderAccessTabs();
     if (hasScope('admin.*')) byId('diagnostic').textContent = formatDiagnostic(status.lastDiagnostic);
   }
 
@@ -715,6 +799,11 @@
       alertPanelFlash:byId('war-alert-panel').checked, alertPageFlash:byId('war-alert-page').checked, chainAlert:byId('war-chain-alert').checked,
       turtleAlert:byId('war-turtle-alert').checked, turtleMinutes:byId('war-turtle-minutes').value, acceptTerms:acceptTerms && !war?.terms?.accepted
     })); else if (war?.settings?.hasTornKey) tasks.push(SLINK.core.messaging.send('war.settings.save', { clearTornKey:true, clearFfKey:true }).then(() => SLINK.core.messaging.send('war.session.clear')));
+    if (byId('use-adhd').checked) tasks.push(SLINK.core.messaging.send('access.settings.save', {
+      enabled:true,
+      tornKey,
+      acceptTerms:acceptTerms && !access?.terms?.accepted
+    })); else if (access?.settings?.hasTornKey || access?.settings?.enabled) tasks.push(SLINK.core.messaging.send('access.settings.save', { enabled:false, clearTornKey:true }).then(() => SLINK.core.messaging.send('access.session.clear')));
     const results = await Promise.allSettled(tasks);
     const failures = results.filter(result => result.status === 'rejected');
     if (failures.length) throw new Error(failures.map(result => errorText(result.reason)).join(' / '));
@@ -747,18 +836,18 @@
   byId('access-form').addEventListener('submit', async event => {
     event.preventDefault(); const submit = byId('save-access'); setBusy(submit, true); byId('access-message').textContent = '';
     try {
-      if (!byId('use-leveling').checked && !byId('use-war').checked) throw new Error('Choose at least one SLINK module for this key.');
-      const needsTerms = (byId('use-leveling').checked && !leveling?.terms?.accepted) || (byId('use-war').checked && !war?.terms?.accepted);
+      if (!byId('use-leveling').checked && !byId('use-war').checked && !byId('use-adhd').checked) throw new Error('Choose at least one SLINK module for this key.');
+      const needsTerms = (byId('use-leveling').checked && !leveling?.terms?.accepted) || (byId('use-war').checked && !war?.terms?.accepted) || (byId('use-adhd').checked && !access?.terms?.accepted);
       if (needsTerms && !byId('accept-shared-terms').checked) throw new Error('Accept the current SLINK terms before verification.');
       await saveModuleSettings(byId('shared-torn-key').value.trim(), byId('shared-ff-key').value.trim(), byId('accept-shared-terms').checked);
-      if ((byId('use-leveling').checked && byId('page-panel').checked) || (byId('use-war').checked && byId('war-display-mode').value !== 'extension')) await SLINK.core.storage.set('ui.pagePanelHidden', false);
+      if ((byId('use-leveling').checked && byId('page-panel').checked) || (byId('use-war').checked && byId('war-display-mode').value !== 'extension') || (byId('use-adhd').checked && byId('adhd-show-in-torn').checked)) await SLINK.core.storage.set('ui.pagePanelHidden', false);
       byId('shared-torn-key').value = ''; byId('shared-ff-key').value = ''; byId('accept-shared-terms').checked = false;
       byId('access-message').textContent = 'Saved locally and verified. Available features are now unlocked by signed SLINK permissions.';
       accessExpanded = false;
       await refresh();
     } catch (error) { byId('access-message').textContent = errorText(error); } finally { setBusy(submit, false); }
   });
-  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true})]); await SLINK.core.messaging.send('leveling.session.clear'); await SLINK.core.messaging.send('war.session.clear'); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
+  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('access.settings.save',{enabled:false,clearTornKey:true})]); await Promise.all([SLINK.core.messaging.send('leveling.session.clear'),SLINK.core.messaging.send('war.session.clear'),SLINK.core.messaging.send('access.session.clear')]); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
   byId('page-panel').addEventListener('change', async event => { await SLINK.core.storage.set('ui.modules.leveling.showInTorn', event.currentTarget.checked); if (event.currentTarget.checked) await SLINK.core.storage.set('ui.pagePanelHidden', false); system.levelingInTorn = event.currentTarget.checked; });
   byId('reset-position').textContent = 'Restore GUI in Torn';
   byId('war-reset-position').textContent = 'Restore GUI in Torn';
@@ -839,19 +928,59 @@
     } catch (error) { byId('war-action-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
   });
+  byId('adhd-refresh').addEventListener('click', async event => {
+    const button = event.currentTarget; setBusy(button, true); byId('adhd-error').hidden = true;
+    try { adhd = await SLINK.core.messaging.send('adhd.refresh'); renderAdhd(); }
+    catch (error) { byId('adhd-error').textContent = errorText(error); byId('adhd-error').hidden = false; }
+    finally { setBusy(button, false); }
+  });
+  byId('adhd-save-settings').addEventListener('click', async event => {
+    const button = event.currentTarget; setBusy(button, true); byId('adhd-settings-message').textContent = '';
+    try {
+      const enabled = Object.fromEntries([...byId('adhd-alert-toggles').querySelectorAll('input[data-alert-id]')].map(input => [input.dataset.alertId, input.checked]));
+      const cityStockAlerts = Object.fromEntries([...byId('adhd-city-stock-toggles').querySelectorAll('input[data-city-stock-id]')].map(input => [input.dataset.cityStockId, input.checked]));
+      adhd = await SLINK.core.messaging.send('adhd.settings.save', {
+        medicalThresholdHours:byId('adhd-medical-hours').value,
+        boosterThresholdHours:byId('adhd-booster-hours').value,
+        landingLeadMinutes:byId('adhd-landing-minutes').value,
+        enabled,
+        cityStockAlerts
+      });
+      await SLINK.core.storage.set('ui.modules.adhd.showInTorn', byId('adhd-show-in-torn').checked);
+      if (byId('adhd-show-in-torn').checked) await SLINK.core.storage.set('ui.pagePanelHidden', false);
+      system.adhdInTorn = byId('adhd-show-in-torn').checked;
+      byId('adhd-settings-message').textContent = 'ADHD alert settings saved locally.';
+      renderAdhd();
+    } catch (error) { byId('adhd-settings-message').textContent = errorText(error); }
+    finally { setBusy(button, false); }
+  });
+  byId('adhd-city-done').addEventListener('click', async event => {
+    if (!confirm('Hide every city-item reminder until the next Torn reset? Use this only if the API total is lagging after you reached the shared 100-item cap.')) return;
+    const button = event.currentTarget; setBusy(button, true);
+    try { adhd = await SLINK.core.messaging.send('adhd.city.acknowledge'); byId('adhd-settings-message').textContent = 'All city-item alerts are hidden until the next reset.'; renderAdhd(); }
+    catch (error) { byId('adhd-settings-message').textContent = errorText(error); }
+    finally { setBusy(button, false); }
+  });
   for (const button of document.querySelectorAll('[data-page-tab]')) button.addEventListener('click', () => switchPage(button.dataset.pageTab));
   byId('donation-form').addEventListener('submit', async event => { event.preventDefault(); const submit = byId('donation-submit'); setBusy(submit,true); byId('donation-message').textContent=''; try { contribution=await SLINK.core.messaging.send('contribution.donate',{apiKey:byId('donation-key').value,acceptTerms:byId('donation-accept').checked}); byId('donation-key').value=''; byId('donation-accept').checked=false; byId('donation-message').textContent='Public Only key validated and saved on SLINK servers in encrypted form.'; renderContribution(); } catch(error){ byId('donation-message').textContent=errorText(error); } finally{ setBusy(submit,false); } });
   byId('donation-revoke').addEventListener('click', async () => { if (!confirm('Revoke this saved donation and erase its encrypted key material?')) return; try { contribution=await SLINK.core.messaging.send('contribution.revoke'); byId('donation-message').textContent='Donation revoked and encrypted key material erased.'; renderContribution(); } catch(error) { byId('donation-message').textContent=errorText(error); } });
   byId('run-diagnostic').addEventListener('click', async event => { const button=event.currentTarget; setBusy(button,true); try { byId('diagnostic').textContent=formatDiagnostic(await SLINK.core.messaging.send('diagnostics.run')); } catch(error){ byId('diagnostic').textContent=errorText(error); } finally{ setBusy(button,false); } });
-  byId('admin-lookup-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-lookup'); setBusy(button,true); byId('admin-message').textContent=''; try { adminUser=await SLINK.core.messaging.send('war.admin.permissions.get',{userId:byId('admin-user-id').value}); renderAdminScopes(adminUser.scopes); byId('admin-permissions-form').hidden=false; const identity=adminUser.faction_id ? ` Current faction: ${adminUser.faction_id}. Faction access is marked as inherited and does not create a personal grant row.` : ' No current faction entitlement was found; only direct grants are shown.'; byId('admin-message').textContent=`Loaded effective access for Torn ID ${adminUser.user_id}.${identity}${adminUser.identity_warning ? ` ${adminUser.identity_warning}` : ''}`; } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
-  byId('admin-permissions-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-save'); setBusy(button,true); try { const scopes=[...byId('admin-scope-list').querySelectorAll('input[data-scope]:checked:not(:disabled)')].map(input=>input.dataset.scope); adminUser=await SLINK.core.messaging.send('war.admin.permissions.save',{userId:adminUser.user_id,scopes,hours:byId('admin-hours').value,note:byId('admin-note').value}); byId('admin-message').textContent=`Permissions saved for Torn ID ${adminUser.user_id}. They take effect on the user's next authentication.`; byId('admin-lookup-form').requestSubmit(); } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
+  byId('admin-lookup-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-lookup'); setBusy(button,true); byId('admin-message').textContent=''; try { adminUser=await SLINK.core.messaging.send('access.admin.permissions.get',{userId:byId('admin-user-id').value}); renderAdminScopes(adminUser.scopes); byId('admin-permissions-form').hidden=false; const identity=adminUser.faction_id ? ` Current faction: ${adminUser.faction_id}. Faction access is marked as inherited and does not create a personal grant row.` : ' No current faction entitlement was found; only direct grants are shown.'; byId('admin-message').textContent=`Loaded effective access for Torn ID ${adminUser.user_id}.${identity}${adminUser.identity_warning ? ` ${adminUser.identity_warning}` : ''}`; } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
+  byId('admin-permissions-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-save'); setBusy(button,true); try { const scopes=[...byId('admin-scope-list').querySelectorAll('input[data-scope]:checked:not(:disabled)')].map(input=>input.dataset.scope); adminUser=await SLINK.core.messaging.send('access.admin.permissions.save',{userId:adminUser.user_id,scopes,hours:byId('admin-hours').value,note:byId('admin-note').value}); byId('admin-message').textContent=`Permissions saved for Torn ID ${adminUser.user_id}. They take effect on the user's next authentication.`; byId('admin-lookup-form').requestSubmit(); } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
 
-  try { await refresh(); }
+  try {
+    await refresh();
+    const requestedPage = await SLINK.core.storage.get('ui.dashboard.activePage', 'workspace');
+    await SLINK.core.storage.remove('ui.dashboard.activePage');
+    switchPage(['workspace', 'alerts', 'admin', 'diagnostics'].includes(requestedPage) ? requestedPage : 'workspace');
+  }
   catch (error) {
     byId('connection').textContent = 'Extension background unavailable';
     byId('connection').className = 'badge error';
     showError('war-error', error);
     showError('leveling-error', error);
+    byId('adhd-error').textContent = errorText(error);
+    byId('adhd-error').hidden = false;
   }
   await claimWarLeader();
   setInterval(() => void claimWarLeader(), 5_000);
@@ -866,6 +995,11 @@
       if (targetView === 'war' || targetView === 'claims') renderTargets();
     } catch (error) { showError('war-error', error); }
   }, 10_000);
+  setInterval(async () => {
+    if (!adhd?.configured) return;
+    try { adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:true }); renderAdhd(); }
+    catch (error) { byId('adhd-error').textContent = errorText(error); byId('adhd-error').hidden = false; }
+  }, 30_000);
   addEventListener('pagehide', () => { void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {}); }, { once:true });
 })();
 

@@ -140,11 +140,7 @@
   async function clearSession() {
     await SLINK.core.storage.remove(KEYS.session);
     await SLINK.core.storage.remove('permissions.leveling');
-    const combined = SLINK.core.permissions.combineSnapshots(
-      await SLINK.core.storage.get('permissions.war', null),
-      { userId:null, roles:['foundation'], scopes:[], source:'local-bootstrap', issuedAt:Date.now(), expiresAt:0 }
-    );
-    await SLINK.core.storage.set('permissions.snapshot', combined);
+    await SLINK.core.permissions.recomputeStoredSnapshot();
   }
 
   async function clearContributorSession() {
@@ -234,10 +230,7 @@
           expiresAt: session.expiresAt
         };
         await SLINK.core.storage.set('permissions.leveling', snapshot);
-        await SLINK.core.storage.set('permissions.snapshot', SLINK.core.permissions.combineSnapshots(
-          snapshot,
-          await SLINK.core.storage.get('permissions.war', null)
-        ));
+        await SLINK.core.permissions.recomputeStoredSnapshot();
       }
       return session;
     })();

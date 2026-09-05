@@ -107,6 +107,14 @@ for (const match of dashboardSource.matchAll(/byId\('([^']+)'\)/g)) {
 assert(/function setBusy\(button, busy\)\s*{\s*if \(button\)/.test(dashboardSource), 'Dashboard busy-state helper must tolerate removed or unavailable controls.');
 assert(dashboardHtml.includes('id="theme-options"'), 'Dashboard theme selector is missing.');
 assert(dashboardHtml.includes('id="player-stats-refresh"') && dashboardHtml.includes('id="ps-armory-balance"'), 'The compact player-stat panel is missing.');
+assert(dashboardHtml.includes('data-dashboard-page="alerts"') && dashboardHtml.includes('id="use-adhd"') && dashboardHtml.includes('id="adhd-city-done"'), 'The separate ADHD Alerts dashboard page or its global city completion control is missing.');
+assert(read('src/core/adhd.js').includes('bought >= 100') && !read('src/core/adhd.js').includes('cityItemDone'), 'City-item reminders must use one shared 100-item daily cap, not per-item completion flags.');
+assert(read('src/background/adhd-service.js').includes("'adhd.city.acknowledge'") && read('src/background/adhd-service.js').includes('cityItemsAtReset'), 'The local ADHD service is missing its global city cap or reset baseline.');
+const permissionService = read('src/background/permission-service.js');
+assert(permissionService.includes('/api/permissions/auth'), 'ADHD access is not backed by the existing signed permissions service.');
+assert(permissionService.includes("requestJson('contributionWorker'"), 'Generic permissions are not routed through the Contribution Worker.');
+assert(!permissionService.includes("requestJson('warWorker'"), 'Generic permissions still depend on the War Worker.');
+assert(!read('src/background/adhd-service.js').includes('workerClient') && !read('src/background/adhd-service.js').includes('D1'), 'Private ADHD timer and city data must remain local instead of using Worker or D1 storage.');
 assert(read('src/background/player-stats-service.js').includes("'playerStats.refresh'") && read('src/background/player-stats-service.js').includes('personalstats,money,workstats'), 'The local daily Torn player-stat collector is missing or not combined.');
 assert(!read('src/background/player-stats-service.js').includes('workerClient') && !read('src/background/player-stats-service.js').includes('D1'), 'Player stats must not use a SLINK Worker or D1.');
 assert(read('src/background/theme-service.js').includes('/api/themes'), 'Background theme catalog route is missing.');
@@ -114,7 +122,7 @@ assert(!manifest.host_permissions.some(origin => /githubusercontent|github\.com/
 const uiShellSource = read('src/content/ui-shell.js');
 assert(uiShellSource.includes('setTheme'), 'Torn UI shell does not support live themes.');
 assert(uiShellSource.includes('ui.main.collapsed') && uiShellSource.includes('bubble-coil'), 'Torn UI shell does not provide the persistent theme-aware collapse bubble.');
-assert(uiShellSource.includes('setBubbleAlert') && uiShellSource.includes('data-alert-kind="retal"') && uiShellSource.includes('data-alert-kind="armory"'), 'The collapse bubble is missing retal or officer armory alert states.');
+assert(uiShellSource.includes('setBubbleAlert') && uiShellSource.includes('data-alert-kind="retal"') && uiShellSource.includes('data-alert-kind="armory"') && uiShellSource.includes('data-alert-kind="adhd"'), 'The collapse bubble is missing retal, officer armory, or ADHD alert states.');
 assert(uiShellSource.includes('ui.main.activeModule'), 'The Torn shell does not remember the selected SLINK module.');
 assert(uiShellSource.includes('async function restore()'), 'Torn UI shell does not provide an in-place recovery path.');
 assert(!uiShellSource.includes('Pop out') && !uiShellSource.includes('setPopped'), 'The broken Torn module pop-out control is still packaged.');

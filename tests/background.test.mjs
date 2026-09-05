@@ -22,6 +22,8 @@ let warClaims = [];
 let assignedWarStart = 0;
 let uiRestoreMessages = 0;
 let playerStatsRequests = 0;
+let adhdCityItemsBought = 575;
+let adhdCityShopRequests = 0;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -68,7 +70,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.15.1' }; },
+    getManifest() { return { version: '0.16.0' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -173,6 +175,17 @@ context = vm.createContext({
         ok:true, version:'2026-08-23', document_url:'https://example.test/donation-terms', document_sha256:'terms-hash',
         disclosure_version:'2026-08-23', disclosure_sha256:'summary-hash', summary:'Encrypted offline donation test.'
       };
+      if (url.pathname === '/api/permissions/terms') body = { ok:true, terms:{ version:'2026-08-24', sha256:'72a933d69ec99cabeb92b426208e9d0c47e90acaf960818e0b4da38f3f2f5b0a', url:'https://example.test/terms', summary:'Permission disclosure.' } };
+      if (url.pathname === '/api/permissions/auth') body = { ok:true, session_token:'signed-access-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:['admin.*','slink.adhd.alerts','slink.adhd.marketwatch.20'] };
+      if (url.pathname === '/api/admin/scopes') body = { ok:true, scopes:[{ scope:'slink.level', category:'Products', title:'SLINK Leveling' }, { scope:'slink.war', category:'Products', title:'SLINK War' }, { scope:'slink.war.officer', category:'War permissions', title:'SLINK War Officer' }, { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow' }] };
+      if (/^\/api\/admin\/users\/\d+\/permissions$/.test(url.pathname)) {
+        const selected = options.method === 'POST' ? new Set(JSON.parse(options.body || '{}').scopes || []) : new Set(['slink.level']);
+        body = { ok:true, user_id:Number(url.pathname.split('/')[4]), faction_id:46978, scopes:[
+          { scope:'slink.level', category:'Products', title:'SLINK Leveling', description:'Leveling access', active:selected.has('slink.level'), status:selected.has('slink.level') ? 'active' : 'not_granted', expires_at:selected.has('slink.level') ? Date.now() + 86_400_000 : null },
+          { scope:'slink.war', category:'Products', title:'SLINK War', description:'War access', active:selected.has('slink.war'), status:selected.has('slink.war') ? 'active' : 'not_granted', expires_at:selected.has('slink.war') ? Date.now() + 86_400_000 : null },
+          { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow', description:'Purple and green theme', active:selected.has('slink.theme.underglow'), status:selected.has('slink.theme.underglow') ? 'active' : 'not_granted', expires_at:selected.has('slink.theme.underglow') ? Date.now() + 86_400_000 : null }
+        ] };
+      }
       if (url.pathname === '/api/donations' && options.method === 'POST') {
         contributionActive = true;
         body = { ok:true, donated:true, user_id:3853023, access_type:'Public Only', status:'active', terms_version:'2026-08-23', donated_at:new Date().toISOString(), management_token:'management-secret' };
@@ -192,15 +205,6 @@ context = vm.createContext({
         { id:'slinky-black-chrome', label:'Slinky Black Chrome', description:'Chrome.', scope:'slink.theme.black-chrome', ornament:'coil', swatch:['#111111','#777777','#eeeeee'], tokens:{ '--slink-accent':'#777777' } }
       ] } };
       if (url.pathname === '/api/auth') body = { ok:true, session_token:'signed-war-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:['admin.*','slink.war','slink.war.faction'] };
-      if (url.pathname === '/api/admin/scopes') body = { ok:true, scopes:[{ scope:'slink.level', category:'Products', title:'SLINK Leveling' }, { scope:'slink.war', category:'Products', title:'SLINK War' }, { scope:'slink.war.officer', category:'War permissions', title:'SLINK War Officer' }, { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow' }] };
-      if (/^\/api\/admin\/users\/\d+\/permissions$/.test(url.pathname)) {
-        const selected = options.method === 'POST' ? new Set(JSON.parse(options.body || '{}').scopes || []) : new Set(['slink.level']);
-        body = { ok:true, user_id:Number(url.pathname.split('/')[4]), scopes:[
-          { scope:'slink.level', category:'Products', title:'SLINK Leveling', description:'Leveling access', active:selected.has('slink.level'), status:selected.has('slink.level') ? 'active' : 'not_granted', expires_at:selected.has('slink.level') ? Date.now() + 86_400_000 : null },
-          { scope:'slink.war', category:'Products', title:'SLINK War', description:'War access', active:selected.has('slink.war'), status:selected.has('slink.war') ? 'active' : 'not_granted', expires_at:selected.has('slink.war') ? Date.now() + 86_400_000 : null },
-          { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow', description:'Purple and green theme', active:selected.has('slink.theme.underglow'), status:selected.has('slink.theme.underglow') ? 'active' : 'not_granted', expires_at:selected.has('slink.theme.underglow') ? Date.now() + 86_400_000 : null }
-        ] };
-      }
       if (url.pathname.endsWith('/heartbeat')) body = { ok:true, collectStatus:true, collectAttacks:true, statusCollectorAvailable:true, attackCollectorAvailable:true };
       if (url.pathname.endsWith('/status')) {
         warStatusSubmissions++;
@@ -250,7 +254,22 @@ context = vm.createContext({
         timeplayed:1_000_000,
         networth:5_000_000_000
       };
-      if (url.pathname === '/v2/user' && url.searchParams.get('selections')?.includes('personalstats')) {
+      if (url.pathname === '/v2/user' && url.searchParams.get('selections')?.includes('bars')) {
+        body = {
+          bars:{ energy:{ current:100, maximum:100, full_time:0 }, nerve:{ current:25, maximum:50, full_time:300 } },
+          cooldowns:{ drug:0, medical:7200, booster:14_400 },
+          travel:{ time_left:0 },
+          education:{ current:null },
+          organizedcrime:null,
+          refills:{ energy:{ available:true }, nerve:{ available:false } },
+          missions:{ givers:[] },
+          casino:{ tokens:0 },
+          profile:{ faction_id:46978, status:{ state:'Okay' } },
+          races:[],
+          enlistedcars:[],
+          personalstats:[{ name:'cityitemsbought', value:adhdCityItemsBought, timestamp:Math.floor(Date.now() / 1000) }]
+        };
+      } else if (url.pathname === '/v2/user' && url.searchParams.get('selections')?.includes('personalstats')) {
         playerStatsRequests += 1;
         body = {
           personalstats:Object.entries(playerTotals).map(([name, value]) => ({ name, value, timestamp:Math.floor(Date.now() / 1000) })),
@@ -258,6 +277,9 @@ context = vm.createContext({
           workstats:{ manual_labor:111_111, intelligence:222_222, endurance:333_333, total:666_666 }
         };
       } else if (url.pathname === '/v2/user/personalstats') {
+        if (url.searchParams.get('stat') === 'cityitemsbought') {
+          body = { personalstats:[{ name:'cityitemsbought', value:500, timestamp:Number(url.searchParams.get('timestamp')) || Math.floor(Date.now() / 1000) }] };
+        } else {
         playerStatsRequests += 1;
         const today = Math.floor(Date.now() / 86_400_000) * 86_400_000;
         const requested = Number(url.searchParams.get('timestamp')) * 1000;
@@ -271,6 +293,7 @@ context = vm.createContext({
             timestamp:Math.floor(requested / 1000)
           }))
         };
+        }
       } else if (url.pathname === '/v2/faction/members') body = {
         members:[
           { id:3853023, name:'Considious', level:100, position:'Leader', status:{ state:'Okay' }, last_action:{ relative:'1 minute ago', timestamp:1 } },
@@ -298,9 +321,14 @@ context = vm.createContext({
       else if (url.pathname.endsWith('/battlestats')) body = {
         battlestats: { strength: 100, defense: 100, speed: 100, dexterity: 100, total: 400 }
       };
+      else if (url.pathname === '/v2/torn/cityshops') {
+        adhdCityShopRequests += 1;
+        body = { cityshops:[{ id:1, name:"Big Al's Gun Shop", items:[{ id:392, price:200, stock:{ current:123, default:500 } }] }] };
+      }
       else if (url.pathname.endsWith('/snapshot')) body = 'id,name\n123,Target\n';
       else body = {
         profile: {
+          faction_id: 46978,
           status: {
             state: tornStatusState,
             description: tornStatusState,
@@ -346,6 +374,7 @@ assert(values.get('slink.ui.pagePanelHidden') === false, 'Default page-panel sta
 assert(values.get('slink.permissions.snapshot')?.scopes?.length === 0, 'Unauthenticated bootstrap must not invent server scopes.');
 assert(alarms.has('slink.worker.connection'), 'Worker connection alarm was not created.');
 assert(alarms.has('slink.playerStats.daily'), 'Daily local player-stat alarm was not created.');
+assert(alarms.has('slink.adhd.alerts'), 'ADHD scheduler alarm was not created.');
 assert(values.get('slink.worker.lastStatus')?.connected === true, 'Automatic Worker connection was not persisted.');
 assert(values.get('slink.themes.catalog.v1')?.catalog?.revision === 'test.remote.1', 'Remote theme catalog was not cached locally.');
 
@@ -407,6 +436,26 @@ assert(saved.ok && saved.data.session.authenticated, 'Leveling settings did not 
 assert(saved.data.permissions.scopes.includes('admin.*'), 'Worker-issued admin scope was not persisted.');
 assert(!JSON.stringify(saved.data).includes('torn-test-key'), 'Public Leveling state leaked the Torn API key.');
 assert(!JSON.stringify(saved.data).includes('signed-test-session'), 'Public Leveling state leaked the Worker session token.');
+
+const accessSaved = await send('access.settings.save', {
+  enabled:true,
+  acceptTerms:true
+});
+assert(accessSaved.ok && accessSaved.data.session.authenticated, 'ADHD permission-only session did not authenticate.');
+assert(!JSON.stringify(accessSaved.data).includes('torn-test-key'), 'Public ADHD access state leaked the shared local Torn API key.');
+await send('adhd.settings.save', { cityStockAlerts:{ 392:true } });
+const adhdRefreshed = await send('adhd.refresh');
+assert(adhdRefreshed.ok && adhdRefreshed.data.permitted, 'ADHD API alerts did not honor the signed permission scope.');
+assert(adhdRefreshed.data.city.bought === 75 && !adhdRefreshed.data.city.complete, 'ADHD city progress did not combine all purchases into one daily total.');
+assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'cityStock:392') && adhdCityShopRequests === 1, 'Enabled city stock was not checked below the shared cap.');
+assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'energyFull'), 'Combined Torn timer response did not create an expected ADHD alert.');
+assert(adhdRefreshed.data.marketWatchLimit === 20, 'Highest signed ADHD market-watch tier was not exposed.');
+assert(!JSON.stringify(adhdRefreshed.data).includes('torn-test-key'), 'ADHD public status leaked the local Torn key.');
+adhdCityItemsBought = 600;
+const adhdComplete = await send('adhd.refresh');
+assert(adhdComplete.ok && adhdComplete.data.city.bought === 100 && adhdComplete.data.city.complete, 'ADHD city progress did not apply the single shared 100-item daily cap.');
+assert(!adhdComplete.data.activeAlerts.some(alert => alert.id === 'cityItem' || alert.id.startsWith('cityStock:')), 'A city reminder remained active after the total purchase cap was reached.');
+assert(adhdCityShopRequests === 1, 'City stock API was called after the shared daily purchase cap was reached.');
 
 const dailyStats = await send('playerStats.refresh');
 assert(dailyStats.ok && dailyStats.data.data.periods[7].xanax === 7, 'Seven-day Xanax usage was not calculated from Torn history.');
@@ -520,9 +569,9 @@ assert(secondWarCycle.ok, 'Second War refresh failed.');
 assert(warStoredLogReads === 1, 'War panels reread persisted D1 logs before the ten-minute cache expired.');
 assert(values.get('slink.permissions.snapshot')?.scopes.includes('slink.level'), 'War authentication discarded the Leveling scope.');
 assert(values.get('slink.permissions.snapshot')?.scopes.includes('slink.war'), 'Combined permissions omitted the War scope.');
-const adminPermissions = await send('war.admin.permissions.get', { userId:1234567 });
+const adminPermissions = await send('access.admin.permissions.get', { userId:1234567 });
 assert(adminPermissions.ok && adminPermissions.data.user_id === 1234567, 'Admin permission lookup failed.');
-const updatedPermissions = await send('war.admin.permissions.save', { userId:1234567, scopes:['slink.level','slink.war','slink.theme.underglow'], hours:24, note:'Test grant' });
+const updatedPermissions = await send('access.admin.permissions.save', { userId:1234567, scopes:['slink.level','slink.war','slink.theme.underglow'], hours:24, note:'Test grant' });
 assert(updatedPermissions.ok && updatedPermissions.data.scopes.find(scope => scope.scope === 'slink.war').active, 'Admin permission update failed.');
 assert(updatedPermissions.data.scopes.find(scope => scope.scope === 'slink.theme.underglow').active, 'Theme permission update failed.');
 

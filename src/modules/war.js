@@ -1088,7 +1088,7 @@
         if (active && signature !== lastAlertSignature && settings.alertSound) playAlertTone();
         lastAlertSignature = active ? signature : '';
         if (fullUi) context.ui.getContentElement()?.closest('.window')?.classList.toggle('slink-war-alerting', active && settings.alertPanelFlash);
-        context.ui.setBubbleAlert(retals.length ? 'retal' : itemRequests.length ? 'armory' : '', retals.length || itemRequests.length);
+        context.ui.setBubbleAlert(retals.length ? 'retal' : itemRequests.length ? 'armory' : '', retals.length || itemRequests.length, 'war');
         setPageAlert(active);
       }
 
@@ -1240,7 +1240,7 @@
         clearProfileAttackGate();
         pageStyleElement?.remove();
         pageStyleElement = null;
-        context.ui.setBubbleAlert('', 0);
+        context.ui.setBubbleAlert('', 0, 'war');
         setPageAlert(false);
         document.removeEventListener('pointerdown', unlockAudio);
         document.removeEventListener('click', handleProfileAttack, true);

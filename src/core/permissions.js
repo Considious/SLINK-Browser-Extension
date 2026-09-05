@@ -99,6 +99,25 @@
     });
   }
 
+  async function recomputeStoredSnapshot() {
+    if (!SLINK.core.storage) throw new Error('SLINK storage must load before permission snapshots are recomputed.');
+    const snapshots = await Promise.all([
+      SLINK.core.storage.get('permissions.leveling', null),
+      SLINK.core.storage.get('permissions.war', null),
+      SLINK.core.storage.get('permissions.access', null)
+    ]);
+    const combined = combineSnapshots(...snapshots, {
+      userId:null,
+      roles:['foundation'],
+      scopes:[],
+      source:'local-bootstrap',
+      issuedAt:Date.now(),
+      expiresAt:0
+    });
+    await SLINK.core.storage.set('permissions.snapshot', combined);
+    return combined;
+  }
+
   function getCapability(name) {
     const capability = BROWSER_CAPABILITIES[String(name || '')];
     if (!capability) throw new Error(`Unknown browser capability: ${name}`);
@@ -112,6 +131,7 @@
     hasAllScopes,
     hasScope,
     normalizeSnapshot,
+    recomputeStoredSnapshot,
     requireScopes,
     scopeMatches
   }));
