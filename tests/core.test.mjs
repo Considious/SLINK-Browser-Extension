@@ -79,7 +79,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.16.0', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.16.1', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -129,6 +129,27 @@ const cityStockSettings = SLINK.core.adhd.normalizeSettings({ cityStockAlerts:{ 
 const cityStockSnapshot = { fetchedAt:Date.now(), cityItemsBought:575, cityItemsAtReset:500, data:{}, cityShops:{ cityshops:[{ name:"Big Al's Gun Shop", items:[{ id:392, price:200, stock:{ current:123, default:500 } }] }] } };
 assert(SLINK.core.adhd.buildAlerts(cityStockSnapshot, cityStockSettings).some(alert => alert.id === 'cityStock:392'), 'Enabled city stock did not produce an alert below the shared cap.');
 assert(!SLINK.core.adhd.buildAlerts({ ...cityStockSnapshot, cityItemsBought:600 }, cityStockSettings).some(alert => alert.id.startsWith('cityStock:')), 'City stock alerts remained after the shared 100-item cap.');
+const modifier = [{ effect:'Addiction', type:'addiction', value:-5 }];
+const efficiencySnapshot = {
+  fetchedAt:Date.now(), cityItemsBought:600, cityItemsAtReset:500,
+  data:{
+    cooldowns:{ drug:0, medical:0, booster:0 },
+    missions:{ givers:[{ contracts:[{ status:'accepted', title:'One' }, { status:'Accepted', title:'Two' }, { status:'ACCEPTED', title:'Three' }] }] },
+    refills:{ energy:{ available:true }, nerve:{ available:true } },
+    stocks:[{ id:7, bonus:{ available:true } }],
+    battlestats:{ strength:{ modifiers:modifier }, defense:{ modifiers:modifier }, speed:{ modifiers:modifier }, dexterity:{ modifiers:modifier } }
+  },
+  cluster:{ crimes:{ crimes:{ skill:100, uniques:[] } }, subcrimes:{ subcrimes:[{ id:44, name:'Jewelry Store' }] }, status:{ shoplifting:[{ id:44, status:[{ title:'Cameras', disabled:true }, { title:'Guard', disabled:true }] }] } }
+};
+const efficiencyAlerts = SLINK.core.adhd.buildAlerts(efficiencySnapshot, adhdSettings);
+assert(efficiencyAlerts.find(alert => alert.id === 'missions')?.title.includes('cap reached'), 'Three accepted missions did not produce the mission-cap warning.');
+assert(efficiencyAlerts.some(alert => alert.id === 'stockBenefits'), 'Ready API stock benefit did not produce an alert.');
+assert(efficiencyAlerts.some(alert => alert.id === 'playerAddiction'), 'Battle-stat addiction modifier did not produce an alert.');
+assert(efficiencyAlerts.some(alert => alert.id === 'clusterRing'), 'Cluster Ring API status did not produce an alert.');
+assert(efficiencyAlerts.find(alert => alert.id === 'drugCooldown')?.links.some(link => link[0] === 'Faction Armory'), 'Cooldown alert omitted the faction armory link.');
+const soundOnly = SLINK.core.adhd.normalizeSettings({ enabled:{ drugCooldown:false }, soundEnabled:{ drugCooldown:true } });
+assert(!SLINK.core.adhd.buildAlerts(efficiencySnapshot, soundOnly).some(alert => alert.id === 'drugCooldown'), 'A hidden alert remained visible.');
+assert(SLINK.core.adhd.buildAlerts(efficiencySnapshot, soundOnly, Date.now(), { includeHidden:true }).some(alert => alert.id === 'drugCooldown'), 'A sound-only alert was unavailable to the sound notifier.');
 assert(SLINK.core.war.makeWarId(46978, 46999, 1_777_000_000) === 'rw_46978_46999_1777000000', 'Second-based War identity was changed.');
 assert(SLINK.core.war.makeWarId(46978, 46999, 1_777_000_000_000) === 'rw_46978_46999_1777000000', 'Millisecond-based War identity was not normalized.');
 assert(SLINK.core.war.sortMembers([

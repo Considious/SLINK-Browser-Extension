@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.16.0",
-  "description": "Shared Live Intelligence NetworK with Combat and ADHD reminder tools for Torn.",
+  "version": "0.16.1",
+  "description": "Shared Live Intelligence NetworK with Combat and Efficiency reminder tools for Torn.",
   "permissions": [
     "alarms",
     "storage"

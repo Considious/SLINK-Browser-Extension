@@ -24,6 +24,8 @@ let uiRestoreMessages = 0;
 let playerStatsRequests = 0;
 let adhdCityItemsBought = 575;
 let adhdCityShopRequests = 0;
+let adhdCityCurrentRequests = 0;
+let adhdCityBaselineRequests = 0;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -70,7 +72,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.16.0' }; },
+    getManifest() { return { version: '0.16.1' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -267,7 +269,13 @@ context = vm.createContext({
           profile:{ faction_id:46978, status:{ state:'Okay' } },
           races:[],
           enlistedcars:[],
-          personalstats:[{ name:'cityitemsbought', value:adhdCityItemsBought, timestamp:Math.floor(Date.now() / 1000) }]
+          stocks:[{ id:1, shares:1_000_000, bonus:{ available:true, increment:1, progress:7, frequency:7 }, transactions:[] }],
+          battlestats:{
+            strength:{ value:100, modifiers:[{ effect:'Addiction', type:'addiction', value:-5 }] },
+            defense:{ value:100, modifiers:[{ effect:'Addiction', type:'addiction', value:-5 }] },
+            speed:{ value:100, modifiers:[{ effect:'Addiction', type:'addiction', value:-5 }] },
+            dexterity:{ value:100, modifiers:[{ effect:'Addiction', type:'addiction', value:-5 }] }
+          }
         };
       } else if (url.pathname === '/v2/user' && url.searchParams.get('selections')?.includes('personalstats')) {
         playerStatsRequests += 1;
@@ -278,7 +286,10 @@ context = vm.createContext({
         };
       } else if (url.pathname === '/v2/user/personalstats') {
         if (url.searchParams.get('stat') === 'cityitemsbought') {
-          body = { personalstats:[{ name:'cityitemsbought', value:500, timestamp:Number(url.searchParams.get('timestamp')) || Math.floor(Date.now() / 1000) }] };
+          const historical = url.searchParams.has('timestamp');
+          if (historical) adhdCityBaselineRequests += 1;
+          else adhdCityCurrentRequests += 1;
+          body = { personalstats:[{ name:'cityitemsbought', value:historical ? 500 : adhdCityItemsBought, timestamp:Number(url.searchParams.get('timestamp')) || Math.floor(Date.now() / 1000) }] };
         } else {
         playerStatsRequests += 1;
         const today = Math.floor(Date.now() / 86_400_000) * 86_400_000;
@@ -321,6 +332,9 @@ context = vm.createContext({
       else if (url.pathname.endsWith('/battlestats')) body = {
         battlestats: { strength: 100, defense: 100, speed: 100, dexterity: 100, total: 400 }
       };
+      else if (url.pathname === '/v2/user/4/crimes') body = { crimes:{ skill:100, uniques:[] } };
+      else if (url.pathname === '/v2/torn/4/subcrimes') body = { subcrimes:[{ id:44, name:'Jewelry Store' }] };
+      else if (url.pathname === '/v2/torn/shoplifting') body = { shoplifting:[{ id:44, status:[{ title:'Cameras', disabled:false }, { title:'Guard', disabled:false }] }] };
       else if (url.pathname === '/v2/torn/cityshops') {
         adhdCityShopRequests += 1;
         body = { cityshops:[{ id:1, name:"Big Al's Gun Shop", items:[{ id:392, price:200, stock:{ current:123, default:500 } }] }] };
@@ -443,12 +457,19 @@ const accessSaved = await send('access.settings.save', {
 });
 assert(accessSaved.ok && accessSaved.data.session.authenticated, 'ADHD permission-only session did not authenticate.');
 assert(!JSON.stringify(accessSaved.data).includes('torn-test-key'), 'Public ADHD access state leaked the shared local Torn API key.');
-await send('adhd.settings.save', { cityStockAlerts:{ 392:true } });
+await send('adhd.settings.save', { cityStockAlerts:{ 392:true }, soundEnabled:{ energyFull:true } });
 const adhdRefreshed = await send('adhd.refresh');
 assert(adhdRefreshed.ok && adhdRefreshed.data.permitted, 'ADHD API alerts did not honor the signed permission scope.');
 assert(adhdRefreshed.data.city.bought === 75 && !adhdRefreshed.data.city.complete, 'ADHD city progress did not combine all purchases into one daily total.');
 assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'cityStock:392') && adhdCityShopRequests === 1, 'Enabled city stock was not checked below the shared cap.');
 assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'energyFull'), 'Combined Torn timer response did not create an expected ADHD alert.');
+assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'stockBenefits'), 'Ready API stock benefit did not create an Efficiency alert.');
+assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'playerAddiction'), 'API battle-stat addiction did not create an Efficiency alert.');
+assert(adhdCityCurrentRequests === 1 && adhdCityBaselineRequests === 1, 'City totals did not use the dedicated current and reset-baseline personalstats routes.');
+const firstSound = await send('adhd.sound.claim');
+const repeatedSound = await send('adhd.sound.claim');
+assert(firstSound.ok && firstSound.data.play && firstSound.data.alertIds.includes('energyFull'), 'A newly active sound-enabled alert was not claimed.');
+assert(repeatedSound.ok && repeatedSound.data.play === false, 'An unchanged alert repeated its sound.');
 assert(adhdRefreshed.data.marketWatchLimit === 20, 'Highest signed ADHD market-watch tier was not exposed.');
 assert(!JSON.stringify(adhdRefreshed.data).includes('torn-test-key'), 'ADHD public status leaked the local Torn key.');
 adhdCityItemsBought = 600;
@@ -456,6 +477,7 @@ const adhdComplete = await send('adhd.refresh');
 assert(adhdComplete.ok && adhdComplete.data.city.bought === 100 && adhdComplete.data.city.complete, 'ADHD city progress did not apply the single shared 100-item daily cap.');
 assert(!adhdComplete.data.activeAlerts.some(alert => alert.id === 'cityItem' || alert.id.startsWith('cityStock:')), 'A city reminder remained active after the total purchase cap was reached.');
 assert(adhdCityShopRequests === 1, 'City stock API was called after the shared daily purchase cap was reached.');
+assert(adhdCityCurrentRequests === 2 && adhdCityBaselineRequests === 1, 'Daily baseline was refetched or the current city total was not refreshed.');
 
 const dailyStats = await send('playerStats.refresh');
 assert(dailyStats.ok && dailyStats.data.data.periods[7].xanax === 7, 'Seven-day Xanax usage was not calculated from Torn history.');

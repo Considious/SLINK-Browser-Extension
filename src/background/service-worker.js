@@ -342,7 +342,7 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
   if (alarm.name === SLINK.services.adhd.ALARM) {
-    void SLINK.services.adhd.publicStatus(true).catch(error => console.error('[SLINK] ADHD alerts:', error));
+    void SLINK.services.adhd.publicStatus(true).catch(error => console.error('[SLINK] Efficiency alerts:', error));
   }
   if (alarm.name === SLINK.services.playerStats.ALARM) {
     void SLINK.services.playerStats.status().then(status => {

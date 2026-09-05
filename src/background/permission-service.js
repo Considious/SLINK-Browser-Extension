@@ -61,7 +61,7 @@
         || String(levelingSettings?.tornKey || '').trim()
         || String(warSettings?.tornKey || '').trim();
       if (requiredScope === SLINK.core.adhd.ALERT_SCOPE && !currentSettings.enabled) {
-        const error = new Error('Enable ADHD Alerts first.');
+        const error = new Error('Enable Efficiency first.');
         error.code = 'SLINK_ADHD_KEY_REQUIRED';
         throw error;
       }
@@ -72,7 +72,7 @@
       }
       const terms = await fetchTerms();
       if (!await acceptedCurrentTerms(terms)) {
-        const error = new Error('Review and accept the current SLINK API & Data Terms for ADHD Alerts.');
+        const error = new Error('Review and accept the current SLINK API & Data Terms for Efficiency.');
         error.code = 'SLINK_ADHD_TERMS_REQUIRED';
         throw error;
       }

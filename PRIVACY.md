@@ -114,8 +114,8 @@ until the user removes it through SLINK, clears the extension's data, or
 uninstalls the extension. Session tokens also expire according to their issued
 expiration time.
 
-ADHD alert settings, timer snapshots, city purchase baselines and totals,
-snoozes, and city-shop stock results remain local. They are not sent to or
+Efficiency alert settings, optional custom notification audio, timer snapshots,
+city purchase baselines and totals, snoozes, and city-shop stock results remain local. They are not sent to or
 stored by a SLINK Worker. The applicable SLINK Worker receives the Torn API key
 only during authentication to verify identity and return signed permission
 scopes; the ordinary key is not retained remotely.

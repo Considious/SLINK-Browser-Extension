@@ -4,15 +4,19 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
-Version 0.16.0 begins the permission-gated ADHD Dashboard as a separate
-**ADHD Alerts** page and optional in-Torn module. The first release uses only
-Torn API data—no page scraping—for energy, nerve, cooldown, mission, travel,
-education, organized-crime, casino-token, refill, and daily city reminders.
-Alert settings, timer snapshots, city totals, snoozes, and purchase detection
-remain in extension-local storage; the Contribution Worker receives only the
-Torn identity check and returns signed permissions.
+Version 0.16.1 expands the permission-gated Efficiency dashboard as a separate
+**Efficiency** page and optional in-Torn module. It uses only Torn API data—no
+page scraping—for energy, nerve, cooldown, mission, travel, education,
+organized-crime, casino-token, refill, stock-benefit, player-addiction,
+Cluster Ring, and daily city reminders. Every alert has independent Visible
+and Sound switches, five-minute and one-hour snoozes, three bundled tones, and
+an optional custom audio file stored only in the extension. Alert settings,
+timer snapshots, city totals, snoozes, and purchase detection remain in
+extension-local storage; the Contribution Worker receives only the Torn
+identity check and returns signed permissions.
 
-City purchases now use one shared Torn-day cap: every item bought from any city
+City purchases use the dedicated Torn v2 `user/personalstats` route and one
+shared Torn-day cap: every item bought from any city
 shop contributes toward the same 100-item total. At 100, the general city
 reminder and every enabled stock alert (Pepper Spray, Empty Blood Bags,
 Chainsaws, Beer, Lollipops, and Blank DVDs) stop together until reset. A single
@@ -21,7 +25,7 @@ completion flags. Enabled stock alerts use Torn's city-shops API no more than
 once per five minutes and stop requesting it after the shared cap is complete.
 
 The existing permission catalog gains `slink.adhd.alerts` plus future
-Market/Bazaar Watch tiers at 5, 10, 15, and 20 slots. Version 0.16.0 displays
+Market/Bazaar Watch tiers at 5, 10, 15, and 20 slots. Version 0.16.1 displays
 the signed tier but intentionally does not start market polling yet.
 
 Version 0.15.1 tightens the compact player-stat layout: the 7- and 30-day

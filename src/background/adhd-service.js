@@ -6,9 +6,10 @@
   const ALARM = 'slink.adhd.alerts';
   const KEYS = Object.freeze({
     settings:'adhd.settings.v1',
-    runtime:'adhd.runtime.v1'
+    runtime:'adhd.runtime.v1',
+    soundState:'adhd.sound.state.v1'
   });
-  const USER_SELECTIONS = 'bars,cooldowns,travel,education,organizedcrime,refills,missions,casino,profile,races,enlistedcars,personalstats';
+  const USER_SELECTIONS = 'bars,cooldowns,travel,education,organizedcrime,refills,missions,casino,profile,races,enlistedcars,stocks,battlestats';
   let refreshing = null;
 
   async function settings() {
@@ -54,8 +55,14 @@
   function combinedUrl() {
     const url = new URL('https://api.torn.com/v2/user');
     url.searchParams.set('selections', USER_SELECTIONS);
+    url.searchParams.set('comment', 'SLINK Efficiency alerts');
+    return url.href;
+  }
+
+  function cityCurrentUrl() {
+    const url = new URL('https://api.torn.com/v2/user/personalstats');
     url.searchParams.set('stat', 'cityitemsbought');
-    url.searchParams.set('comment', 'SLINK ADHD alerts');
+    url.searchParams.set('comment', 'SLINK Efficiency city total');
     return url.href;
   }
 
@@ -63,14 +70,40 @@
     const url = new URL('https://api.torn.com/v2/user/personalstats');
     url.searchParams.set('stat', 'cityitemsbought');
     url.searchParams.set('timestamp', String(Math.floor(day * ADHD.DAY_MS / 1000)));
-    url.searchParams.set('comment', 'SLINK ADHD city reset baseline');
+    url.searchParams.set('comment', 'SLINK Efficiency city reset baseline');
     return url.href;
   }
 
   function cityShopsUrl() {
     const url = new URL('https://api.torn.com/v2/torn/cityshops');
-    url.searchParams.set('comment', 'SLINK ADHD city stock alerts');
+    url.searchParams.set('comment', 'SLINK Efficiency city stock alerts');
     return url.href;
+  }
+
+  function apiUrl(path, comment) {
+    const url = new URL(`https://api.torn.com/v2/${path}`);
+    url.searchParams.set('comment', comment);
+    return url.href;
+  }
+
+  async function clusterSnapshot(previous, key, settingsValue, now, force) {
+    const enabled = settingsValue.enabled.clusterRing !== false || settingsValue.soundEnabled.clusterRing === true;
+    if (!enabled) return previous || null;
+    let cluster = previous && typeof previous === 'object' ? { ...previous } : {};
+    if (!cluster.crimes || Number(cluster.crimesFetchedAt || 0) + ADHD.DAY_MS <= now) {
+      cluster.crimes = await tornJson(apiUrl('user/4/crimes', 'SLINK Cluster Ring progress'), key);
+      cluster.crimesFetchedAt = now;
+    }
+    if (ADHD.clusterRingAchieved(cluster.crimes)) return cluster;
+    if (!cluster.subcrimes || Number(cluster.subcrimesFetchedAt || 0) + 7 * ADHD.DAY_MS <= now) {
+      cluster.subcrimes = await tornJson(apiUrl('torn/4/subcrimes', 'SLINK Cluster Ring map'), key);
+      cluster.subcrimesFetchedAt = now;
+    }
+    if (force || !cluster.status || Number(cluster.statusFetchedAt || 0) + 5 * 60_000 <= now) {
+      cluster.status = await tornJson(apiUrl('torn/shoplifting', 'SLINK Cluster Ring status'), key);
+      cluster.statusFetchedAt = now;
+    }
+    return cluster;
   }
 
   async function requireAccess() {
@@ -91,11 +124,15 @@
       try {
         await requireAccess();
         const key = await accessKey();
-        if (!key) throw new Error('Enable ADHD Alerts and save your Torn API key first.');
+        if (!key) throw new Error('Enable Efficiency and save your Torn API key first.');
         const now = Date.now();
         const day = ADHD.utcDay(now);
-        const data = await tornJson(combinedUrl(), key);
-        const cityItemsBought = ADHD.personalStat(data, 'cityitemsbought');
+        const currentSettings = await settings();
+        const [data, cityCurrent] = await Promise.all([
+          tornJson(combinedUrl(), key),
+          tornJson(cityCurrentUrl(), key)
+        ]);
+        const cityItemsBought = ADHD.personalStat(cityCurrent, 'cityitemsbought');
         let cityItemsAtReset = currentRuntime.snapshot?.day === day
           ? currentRuntime.snapshot.cityItemsAtReset
           : null;
@@ -111,9 +148,9 @@
         if (previous?.day === day && Number.isFinite(Number(previous.cityItemsBought)) && cityItemsBought > Number(previous.cityItemsBought)) {
           lastPurchase = { at:now, count:cityItemsBought - Number(previous.cityItemsBought), totalToday:Math.max(0, cityItemsBought - cityItemsAtReset) };
         }
-        const currentSettings = await settings();
         const progress = ADHD.cityProgress({ cityItemsBought, cityItemsAtReset }, currentSettings, now);
-        const cityStockEnabled = ADHD.CITY_SHOP_TARGETS.some(target => currentSettings.cityStockAlerts[target.id] === true);
+        const cityStockEnabled = ADHD.CITY_SHOP_TARGETS.some(target => currentSettings.cityStockAlerts[target.id] === true
+          || currentSettings.soundEnabled[`cityStock:${target.id}`] === true);
         let cityShops = null;
         if (!progress.complete && cityStockEnabled) {
           const previousShops = currentRuntime.snapshot?.day === day ? currentRuntime.snapshot.cityShops : null;
@@ -121,7 +158,14 @@
             ? previousShops
             : { ...(await tornJson(cityShopsUrl(), key)), fetchedAt:now };
         }
-        const snapshot = { day, fetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityShops };
+        let cluster = currentRuntime.snapshot?.cluster || null;
+        try {
+          cluster = await clusterSnapshot(cluster, key, currentSettings, now, force);
+          if (cluster?.lastError) cluster = { ...cluster, lastError:'' };
+        } catch (clusterError) {
+          cluster = { ...(cluster || {}), lastError:SLINK.core.format.errorMessage(clusterError), lastErrorAt:now };
+        }
+        const snapshot = { day, fetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityShops, cluster };
         await saveRuntime({
           fetchedAt:now,
           nextRefreshAt:ADHD.nextRefreshAt(snapshot, currentSettings, now),
@@ -143,8 +187,14 @@
     const previous = await settings();
     const enabled = { ...previous.enabled };
     if (input.enabled && typeof input.enabled === 'object') {
-      for (const definition of ADHD.ALERT_DEFINITIONS) {
-        if (Object.hasOwn(input.enabled, definition.id)) enabled[definition.id] = input.enabled[definition.id] !== false;
+      for (const id of ADHD.ALL_ALERT_IDS) {
+        if (Object.hasOwn(input.enabled, id)) enabled[id] = input.enabled[id] !== false;
+      }
+    }
+    const soundEnabled = { ...previous.soundEnabled };
+    if (input.soundEnabled && typeof input.soundEnabled === 'object') {
+      for (const id of ADHD.ALL_ALERT_IDS) {
+        if (Object.hasOwn(input.soundEnabled, id)) soundEnabled[id] = input.soundEnabled[id] === true;
       }
     }
     const cityStockAlerts = { ...previous.cityStockAlerts };
@@ -158,7 +208,11 @@
       medicalThresholdHours:Object.hasOwn(input, 'medicalThresholdHours') ? input.medicalThresholdHours : previous.medicalThresholdHours,
       boosterThresholdHours:Object.hasOwn(input, 'boosterThresholdHours') ? input.boosterThresholdHours : previous.boosterThresholdHours,
       landingLeadMinutes:Object.hasOwn(input, 'landingLeadMinutes') ? input.landingLeadMinutes : previous.landingLeadMinutes,
+      playerAddictionThreshold:Object.hasOwn(input, 'playerAddictionThreshold') ? input.playerAddictionThreshold : previous.playerAddictionThreshold,
       enabled,
+      soundEnabled,
+      soundChoice:Object.hasOwn(input, 'soundChoice') ? input.soundChoice : previous.soundChoice,
+      customSoundDataUrl:Object.hasOwn(input, 'customSoundDataUrl') ? input.customSoundDataUrl : previous.customSoundDataUrl,
       cityStockAlerts
     });
     await SLINK.core.storage.set(KEYS.settings, next);
@@ -176,12 +230,32 @@
 
   async function snooze(input = {}) {
     const id = String(input.id || '').trim();
-    if (!ADHD.ALERT_DEFINITIONS.some(definition => definition.id === id) && !/^cityStock:\d+$/.test(id)) throw new Error('Unknown ADHD alert.');
+    if (!ADHD.ALERT_DEFINITIONS.some(definition => definition.id === id) && !/^cityStock:\d+$/.test(id)) throw new Error('Unknown Efficiency alert.');
     const durationMs = Math.min(ADHD.DAY_MS, Math.max(60_000, Number(input.durationMs) || 60 * 60_000));
     const next = await settings();
     next.snoozedUntil[id] = Date.now() + durationMs;
     await SLINK.core.storage.set(KEYS.settings, next);
     return publicStatus(false);
+  }
+
+  async function claimSound() {
+    const [currentSettings, currentRuntime, previous] = await Promise.all([
+      settings(), runtime(), SLINK.core.storage.get(KEYS.soundState, { activeIds:[] })
+    ]);
+    const candidates = currentRuntime.snapshot
+      ? ADHD.buildAlerts(currentRuntime.snapshot, currentSettings, Date.now(), { includeHidden:true })
+        .filter(alert => currentSettings.soundEnabled[alert.id] === true)
+      : [];
+    const activeIds = candidates.map(alert => alert.id).sort();
+    const oldIds = new Set(Array.isArray(previous?.activeIds) ? previous.activeIds : []);
+    const newAlerts = candidates.filter(alert => !oldIds.has(alert.id));
+    await SLINK.core.storage.set(KEYS.soundState, { activeIds, updatedAt:Date.now() });
+    return {
+      play:newAlerts.length > 0,
+      alertIds:newAlerts.map(alert => alert.id),
+      soundChoice:currentSettings.soundChoice,
+      customSoundDataUrl:currentSettings.soundChoice === 'custom' ? currentSettings.customSoundDataUrl : ''
+    };
   }
 
   async function publicStatus(refreshIfDue = true) {
@@ -224,7 +298,8 @@
     'adhd.refresh':() => refresh(true),
     'adhd.settings.save':saveSettings,
     'adhd.city.acknowledge':acknowledgeCity,
-    'adhd.alert.snooze':snooze
+    'adhd.alert.snooze':snooze,
+    'adhd.sound.claim':claimSound
   });
 
   SLINK.define('services', 'adhd', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, routes }));

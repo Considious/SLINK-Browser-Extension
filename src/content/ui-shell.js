@@ -124,7 +124,7 @@
       if (normalized) bubble.dataset.alertKind = normalized; else delete bubble.dataset.alertKind;
       bubble.querySelector('.bubble-alert-icon').textContent = normalized === 'retal' ? '🚨' : normalized === 'armory' ? '🔫' : normalized === 'adhd' ? '🔔' : '';
       bubble.querySelector('.bubble-alert-count').textContent = normalized ? String(Math.min(99, Math.max(1, Number(count) || 1))) : '';
-      bubble.title = normalized === 'retal' ? `${count} active retaliation alert${Number(count) === 1 ? '' : 's'}` : normalized === 'armory' ? `${count} active armory request${Number(count) === 1 ? '' : 's'}` : normalized === 'adhd' ? `${count} active ADHD reminder${Number(count) === 1 ? '' : 's'}` : 'Open SLINK';
+      bubble.title = normalized === 'retal' ? `${count} active retaliation alert${Number(count) === 1 ? '' : 's'}` : normalized === 'armory' ? `${count} active armory request${Number(count) === 1 ? '' : 's'}` : normalized === 'adhd' ? `${count} active Efficiency reminder${Number(count) === 1 ? '' : 's'}` : 'Open SLINK';
       bubble.setAttribute('aria-label', bubble.title);
     }
 

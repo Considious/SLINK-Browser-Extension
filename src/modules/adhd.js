@@ -2,7 +2,7 @@
   'use strict';
 
   const SLINK = global.SLINK_EXTENSION;
-  if (!SLINK) throw new Error('SLINK runtime must load before ADHD Alerts.');
+  if (!SLINK) throw new Error('SLINK runtime must load before Efficiency.');
 
   function relativeTime(timestamp) {
     if (!Number(timestamp)) return 'not checked yet';
@@ -12,7 +12,7 @@
 
   SLINK.modules.register({
     id:'adhd',
-    title:'ADHD Alerts',
+    title:'Efficiency',
     requiredScopes:[SLINK.core.adhd.ALERT_SCOPE],
     defaultShowInTorn:true,
     matches:url => url.hostname === 'www.torn.com',
@@ -36,7 +36,7 @@
       function render(status) {
         current = status;
         const alerts = Array.isArray(status?.activeAlerts) ? status.activeAlerts : [];
-        ui.setStatus(status?.lastError || (status?.configured ? `API timers updated ${relativeTime(status.fetchedAt)}` : 'Enable ADHD Alerts from the extension dashboard.'), status?.lastError ? 'error' : status?.configured ? 'ready' : 'normal');
+        ui.setStatus(status?.lastError || (status?.configured ? `API timers updated ${relativeTime(status.fetchedAt)}` : 'Enable Efficiency from the extension dashboard.'), status?.lastError ? 'error' : status?.configured ? 'ready' : 'normal');
         const root = ui.getContentElement();
         root.replaceChildren();
         const summary = document.createElement('div');
@@ -68,11 +68,13 @@
           for (const [label, href] of alert.links || []) {
             const anchor = document.createElement('a'); anchor.href = String(href); anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; anchor.textContent = String(label || 'Open'); links.append(anchor);
           }
-          const snooze = document.createElement('button'); snooze.type = 'button'; snooze.textContent = 'Snooze 1h';
-          snooze.addEventListener('click', async () => {
-            render(await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs:60 * 60_000 }));
-          });
-          links.append(snooze);
+          for (const [label, durationMs] of [['Snooze 5m', 5 * 60_000], ['Snooze 1h', 60 * 60_000]]) {
+            const snooze = document.createElement('button'); snooze.type = 'button'; snooze.textContent = label;
+            snooze.addEventListener('click', async () => {
+              render(await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }));
+            });
+            links.append(snooze);
+          }
           if (alert.id === 'cityItem') {
             const done = document.createElement('button'); done.type = 'button'; done.textContent = 'Bought — hide today';
             done.addEventListener('click', async () => render(await SLINK.core.messaging.send('adhd.city.acknowledge')));
@@ -85,14 +87,26 @@
       }
 
       async function load(refreshIfDue = true) {
-        try { render(await SLINK.core.messaging.send('adhd.status', { refreshIfDue })); }
+        try {
+          render(await SLINK.core.messaging.send('adhd.status', { refreshIfDue }));
+          try {
+            const claim = await SLINK.core.messaging.send('adhd.sound.claim');
+            if (claim?.play) await SLINK.core.adhd.playNotificationSound(claim);
+          } catch {}
+        }
         catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
       }
 
       ui.setActions([
         { id:'refresh', label:'Refresh', onClick:async event => {
           event.currentTarget.disabled = true;
-          try { render(await SLINK.core.messaging.send('adhd.refresh')); }
+          try {
+            render(await SLINK.core.messaging.send('adhd.refresh'));
+            try {
+              const claim = await SLINK.core.messaging.send('adhd.sound.claim');
+              if (claim?.play) await SLINK.core.adhd.playNotificationSound(claim);
+            } catch {}
+          }
           catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
           finally { event.currentTarget.disabled = false; }
         } },

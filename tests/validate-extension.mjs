@@ -108,6 +108,8 @@ assert(/function setBusy\(button, busy\)\s*{\s*if \(button\)/.test(dashboardSour
 assert(dashboardHtml.includes('id="theme-options"'), 'Dashboard theme selector is missing.');
 assert(dashboardHtml.includes('id="player-stats-refresh"') && dashboardHtml.includes('id="ps-armory-balance"'), 'The compact player-stat panel is missing.');
 assert(dashboardHtml.includes('data-dashboard-page="alerts"') && dashboardHtml.includes('id="use-adhd"') && dashboardHtml.includes('id="adhd-city-done"'), 'The separate ADHD Alerts dashboard page or its global city completion control is missing.');
+assert(dashboardHtml.includes('>Efficiency<') && dashboardHtml.includes('id="adhd-sound-choice"') && dashboardHtml.includes('id="adhd-custom-sound"'), 'Efficiency naming or notification-sound controls are missing.');
+assert(dashboardSource.includes('Snooze 5m') && dashboardSource.includes('Snooze 1h') && dashboardSource.includes('dataset.alertSoundId'), 'Per-alert sound controls or both snooze options are missing.');
 assert(read('src/core/adhd.js').includes('bought >= 100') && !read('src/core/adhd.js').includes('cityItemDone'), 'City-item reminders must use one shared 100-item daily cap, not per-item completion flags.');
 assert(read('src/background/adhd-service.js').includes("'adhd.city.acknowledge'") && read('src/background/adhd-service.js').includes('cityItemsAtReset'), 'The local ADHD service is missing its global city cap or reset baseline.');
 const permissionService = read('src/background/permission-service.js');

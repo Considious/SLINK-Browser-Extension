@@ -18,6 +18,8 @@
   let activeTheme = SLINK.core.themes.get();
   let warLeader = false;
   let dismissedRetals = {};
+  let pendingCustomSoundDataUrl = null;
+  let soundClaiming = false;
   let warTargetFilters = { minFF:1, maxFF:3, status:'all', sort:'availability' };
   const warLeaderClientId = `war-dashboard:${globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
   const INSIDE_WINDOWS = Object.freeze([[0, 100], [200, 250], [450, 500], [950, 1000], [2350, 2500], [4850, 5000], [9900, 10000]]);
@@ -291,7 +293,7 @@
     byId('access-config').hidden = compact;
     byId('toggle-access').textContent = compact ? 'API & access settings' : authenticated ? 'Collapse' : 'Setup required';
     byId('toggle-access').disabled = !authenticated && accessExpanded;
-    const enabledModules = [leveling?.settings?.hasTornKey ? 'Leveling' : '', war?.settings?.hasTornKey ? 'War' : '', access?.settings?.enabled && access?.settings?.hasTornKey ? 'ADHD Alerts' : ''].filter(Boolean);
+    const enabledModules = [leveling?.settings?.hasTornKey ? 'Leveling' : '', war?.settings?.hasTornKey ? 'War' : '', access?.settings?.enabled && access?.settings?.hasTornKey ? 'Efficiency' : ''].filter(Boolean);
     byId('access-summary').textContent = compact
       ? `${enabledModules.join(' + ') || 'No modules'} enabled with locally saved credentials.`
       : 'Enter each local credential once, then choose which SLINK modules may use it.';
@@ -310,14 +312,14 @@
     const configured = adhd?.configured === true;
     const alerts = Array.isArray(adhd?.activeAlerts) ? adhd.activeAlerts : [];
     const badge = byId('adhd-permission-state');
-    badge.textContent = permitted ? 'ADHD access active' : `Requires ${adhd?.requiredScope || SLINK.core.adhd.ALERT_SCOPE}`;
+    badge.textContent = permitted ? 'Efficiency access active' : `Requires ${adhd?.requiredScope || SLINK.core.adhd.ALERT_SCOPE}`;
     badge.className = permitted ? 'badge ready' : 'badge error';
     byId('adhd-active-count').textContent = alerts.length;
     byId('adhd-city-count').textContent = adhd?.city?.bought ?? '—';
     byId('adhd-api-usage').textContent = `${adhd?.tornApiUsage?.count || 0}/${adhd?.tornApiUsage?.limit || 60}`;
     byId('adhd-next-check').textContent = Number(adhd?.nextRefreshAt) ? new Date(adhd.nextRefreshAt).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }) : '—';
     byId('adhd-status').textContent = !configured
-      ? 'Enable ADHD Alerts in API & feature access to begin.'
+      ? 'Enable Efficiency in API & feature access to begin.'
       : adhd?.fetchedAt ? `Private timers last updated ${relativeTime(adhd.fetchedAt)}. Stats refresh only when the next timer is due.` : 'Ready for the first API refresh.';
     byId('adhd-error').textContent = adhd?.lastError || '';
     byId('adhd-error').hidden = !adhd?.lastError;
@@ -332,22 +334,25 @@
     byId('adhd-medical-hours').value = settings.medicalThresholdHours;
     byId('adhd-booster-hours').value = settings.boosterThresholdHours;
     byId('adhd-landing-minutes').value = settings.landingLeadMinutes;
+    byId('adhd-addiction-threshold').value = settings.playerAddictionThreshold;
+    byId('adhd-sound-choice').value = settings.soundChoice;
+    const customSound = pendingCustomSoundDataUrl === null ? settings.customSoundDataUrl : pendingCustomSoundDataUrl;
+    byId('adhd-custom-sound-state').textContent = customSound ? 'Custom audio saved locally.' : 'No custom audio uploaded.';
     byId('adhd-show-in-torn').checked = Boolean(system?.adhdInTorn);
     byId('adhd-alert-toggles').replaceChildren(...SLINK.core.adhd.ALERT_DEFINITIONS.map(definition => {
-      const label = document.createElement('label');
-      label.className = 'adhd-alert-toggle';
-      const input = document.createElement('input');
-      input.type = 'checkbox'; input.dataset.alertId = definition.id; input.checked = settings.enabled[definition.id] !== false;
-      const span = document.createElement('span'); span.textContent = definition.label;
-      label.append(input, span); return label;
+      const row = document.createElement('div'); row.className = 'adhd-alert-toggle';
+      const label = document.createElement('span'); label.textContent = definition.label;
+      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.dataset.alertVisibleId = definition.id; visible.checked = settings.enabled[definition.id] !== false; visible.title = `Show ${definition.label}`;
+      const sound = document.createElement('input'); sound.type = 'checkbox'; sound.dataset.alertSoundId = definition.id; sound.checked = settings.soundEnabled[definition.id] === true; sound.title = `Sound for ${definition.label}`;
+      row.append(label, visible, sound); return row;
     }));
     byId('adhd-city-stock-toggles').replaceChildren(...SLINK.core.adhd.CITY_SHOP_TARGETS.map(target => {
-      const label = document.createElement('label');
-      label.className = 'adhd-alert-toggle';
-      const input = document.createElement('input');
-      input.type = 'checkbox'; input.dataset.cityStockId = target.id; input.checked = settings.cityStockAlerts[target.id] === true;
-      const span = document.createElement('span'); span.textContent = `${target.label} · ${target.shop}`;
-      label.append(input, span); return label;
+      const id = `cityStock:${target.id}`;
+      const row = document.createElement('div'); row.className = 'adhd-alert-toggle';
+      const label = document.createElement('span'); label.textContent = `${target.label} · ${target.shop}`;
+      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.dataset.cityVisibleId = target.id; visible.checked = settings.cityStockAlerts[target.id] === true && settings.enabled[id] !== false; visible.title = `Show ${target.label}`;
+      const sound = document.createElement('input'); sound.type = 'checkbox'; sound.dataset.citySoundId = target.id; sound.checked = settings.soundEnabled[id] === true; sound.title = `Sound for ${target.label}`;
+      row.append(label, visible, sound); return row;
     }));
     const list = byId('adhd-alert-list');
     if (!alerts.length) {
@@ -365,12 +370,26 @@
         for (const [label, href] of alert.links || []) {
           const link = document.createElement('a'); link.className = 'button small secondary'; link.href = String(href); link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = String(label || 'Open'); actions.append(link);
         }
-        const snooze = document.createElement('button'); snooze.type = 'button'; snooze.className = 'small secondary'; snooze.textContent = 'Snooze 1h';
-        snooze.addEventListener('click', async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs:60 * 60_000 }); renderAdhd(); });
-        actions.append(snooze); card.append(copy, actions); return card;
+        for (const [label, durationMs] of [['Snooze 5m', 5 * 60_000], ['Snooze 1h', 60 * 60_000]]) {
+          const snooze = document.createElement('button'); snooze.type = 'button'; snooze.className = 'small secondary'; snooze.textContent = label;
+          snooze.addEventListener('click', async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }); renderAdhd(); });
+          actions.append(snooze);
+        }
+        card.append(copy, actions); return card;
       }));
     }
     byId('adhd-market-tier').textContent = adhd?.marketWatchLimit ? `${adhd.marketWatchLimit} watch slots unlocked` : 'No watch tier';
+    void claimAdhdSound();
+  }
+
+  async function claimAdhdSound() {
+    if (soundClaiming) return;
+    soundClaiming = true;
+    try {
+      const claim = await SLINK.core.messaging.send('adhd.sound.claim');
+      if (claim?.play) await SLINK.core.adhd.playNotificationSound(claim);
+    } catch {}
+    finally { soundClaiming = false; }
   }
 
   function renderLeveling() {
@@ -742,8 +761,8 @@
       `War Worker: ${report.war?.worker?.connected ? 'CONNECTED' : 'OFFLINE'}`,
       `War database: ${report.war?.worker?.database || 'not checked'}`,
       `War coordinator: ${report.war?.worker?.coordinator || 'not checked'}`,
-      `ADHD Alerts: ${report.adhd?.configured ? (report.adhd?.permitted ? `READY (${report.adhd.activeAlerts || 0} active)` : 'PERMISSION DENIED') : 'NOT CONFIGURED'}`,
-      `ADHD last error: ${report.adhd?.lastError || 'none'}`
+      `Efficiency: ${report.adhd?.configured ? (report.adhd?.permitted ? `READY (${report.adhd.activeAlerts || 0} active)` : 'PERMISSION DENIED') : 'NOT CONFIGURED'}`,
+      `Efficiency last error: ${report.adhd?.lastError || 'none'}`
     ].join('\n');
   }
 
@@ -937,22 +956,58 @@
   byId('adhd-save-settings').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('adhd-settings-message').textContent = '';
     try {
-      const enabled = Object.fromEntries([...byId('adhd-alert-toggles').querySelectorAll('input[data-alert-id]')].map(input => [input.dataset.alertId, input.checked]));
-      const cityStockAlerts = Object.fromEntries([...byId('adhd-city-stock-toggles').querySelectorAll('input[data-city-stock-id]')].map(input => [input.dataset.cityStockId, input.checked]));
+      const enabled = Object.fromEntries([...document.querySelectorAll('input[data-alert-visible-id]')].map(input => [input.dataset.alertVisibleId, input.checked]));
+      const soundEnabled = Object.fromEntries([...document.querySelectorAll('input[data-alert-sound-id]')].map(input => [input.dataset.alertSoundId, input.checked]));
+      const cityVisible = Object.fromEntries([...document.querySelectorAll('input[data-city-visible-id]')].map(input => [input.dataset.cityVisibleId, input.checked]));
+      const citySound = Object.fromEntries([...document.querySelectorAll('input[data-city-sound-id]')].map(input => [input.dataset.citySoundId, input.checked]));
+      const cityStockAlerts = {};
+      for (const target of SLINK.core.adhd.CITY_SHOP_TARGETS) {
+        const id = `cityStock:${target.id}`;
+        enabled[id] = cityVisible[target.id] === true;
+        soundEnabled[id] = citySound[target.id] === true;
+        cityStockAlerts[target.id] = enabled[id] || soundEnabled[id];
+      }
+      const soundChoice = byId('adhd-sound-choice').value;
+      const customSoundDataUrl = pendingCustomSoundDataUrl === null ? adhd?.settings?.customSoundDataUrl || '' : pendingCustomSoundDataUrl;
+      if (soundChoice === 'custom' && !customSoundDataUrl) throw new Error('Upload custom audio before selecting Custom.');
       adhd = await SLINK.core.messaging.send('adhd.settings.save', {
         medicalThresholdHours:byId('adhd-medical-hours').value,
         boosterThresholdHours:byId('adhd-booster-hours').value,
         landingLeadMinutes:byId('adhd-landing-minutes').value,
+        playerAddictionThreshold:byId('adhd-addiction-threshold').value,
         enabled,
+        soundEnabled,
+        soundChoice,
+        customSoundDataUrl,
         cityStockAlerts
       });
       await SLINK.core.storage.set('ui.modules.adhd.showInTorn', byId('adhd-show-in-torn').checked);
       if (byId('adhd-show-in-torn').checked) await SLINK.core.storage.set('ui.pagePanelHidden', false);
       system.adhdInTorn = byId('adhd-show-in-torn').checked;
-      byId('adhd-settings-message').textContent = 'ADHD alert settings saved locally.';
+      pendingCustomSoundDataUrl = null;
+      byId('adhd-settings-message').textContent = 'Efficiency alert settings saved locally.';
       renderAdhd();
     } catch (error) { byId('adhd-settings-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
+  });
+  byId('adhd-custom-sound').addEventListener('change', event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!String(file.type || '').startsWith('audio/')) { byId('adhd-settings-message').textContent = 'Choose an audio file.'; event.target.value = ''; return; }
+    if (file.size > 2 * 1024 * 1024) { byId('adhd-settings-message').textContent = 'Custom audio must be 2 MB or smaller.'; event.target.value = ''; return; }
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      pendingCustomSoundDataUrl = String(reader.result || '');
+      byId('adhd-sound-choice').value = 'custom';
+      byId('adhd-custom-sound-state').textContent = `${file.name} ready to save locally.`;
+      byId('adhd-settings-message').textContent = 'Click Save alert settings to keep this sound.';
+    });
+    reader.readAsDataURL(file);
+  });
+  byId('adhd-preview-sound').addEventListener('click', async () => {
+    const customSoundDataUrl = pendingCustomSoundDataUrl === null ? adhd?.settings?.customSoundDataUrl || '' : pendingCustomSoundDataUrl;
+    try { await SLINK.core.adhd.playNotificationSound({ soundChoice:byId('adhd-sound-choice').value, customSoundDataUrl }); }
+    catch (error) { byId('adhd-settings-message').textContent = errorText(error); }
   });
   byId('adhd-city-done').addEventListener('click', async event => {
     if (!confirm('Hide every city-item reminder until the next Torn reset? Use this only if the API total is lagging after you reached the shared 100-item cap.')) return;
