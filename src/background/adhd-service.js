@@ -80,6 +80,12 @@
     return url.href;
   }
 
+  function stockCatalogUrl() {
+    const url = new URL('https://api.torn.com/v2/torn/stocks');
+    url.searchParams.set('comment', 'SLINK Efficiency stock names');
+    return url.href;
+  }
+
   function apiUrl(path, comment) {
     const url = new URL(`https://api.torn.com/v2/${path}`);
     url.searchParams.set('comment', comment);
@@ -158,6 +164,25 @@
             ? previousShops
             : { ...(await tornJson(cityShopsUrl(), key)), fetchedAt:now };
         }
+        let stockCatalog = currentRuntime.snapshot?.stockCatalog || null;
+        const hasAvailableStockBenefit = (Array.isArray(data?.stocks) ? data.stocks : [])
+          .some(stock => stock?.bonus?.available === true);
+        const catalogRetryAt = Math.max(
+          Number(stockCatalog?.fetchedAt || 0) + ADHD.DAY_MS,
+          Number(stockCatalog?.lastAttemptAt || 0) + 60 * 60_000
+        );
+        if (hasAvailableStockBenefit && catalogRetryAt <= now) {
+          try {
+            stockCatalog = { ...(await tornJson(stockCatalogUrl(), key)), fetchedAt:now, lastAttemptAt:now, lastError:'' };
+          } catch (stockError) {
+            stockCatalog = {
+              ...(stockCatalog || {}),
+              lastAttemptAt:now,
+              lastError:SLINK.core.format.errorMessage(stockError),
+              lastErrorAt:now
+            };
+          }
+        }
         let cluster = currentRuntime.snapshot?.cluster || null;
         try {
           cluster = await clusterSnapshot(cluster, key, currentSettings, now, force);
@@ -165,7 +190,7 @@
         } catch (clusterError) {
           cluster = { ...(cluster || {}), lastError:SLINK.core.format.errorMessage(clusterError), lastErrorAt:now };
         }
-        const snapshot = { day, fetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityShops, cluster };
+        const snapshot = { day, fetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityShops, stockCatalog, cluster };
         await saveRuntime({
           fetchedAt:now,
           nextRefreshAt:ADHD.nextRefreshAt(snapshot, currentSettings, now),

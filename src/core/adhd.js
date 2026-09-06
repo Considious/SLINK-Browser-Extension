@@ -18,11 +18,14 @@
     Object.freeze({ id:956, label:'Blank DVDs', shop:'Cyber Force', href:'https://www.torn.com/shops.php?step=cyberforce' })
   ]);
   const ALERT_DEFINITIONS = Object.freeze([
-    Object.freeze({ id:'drugCooldown', label:'Drug ready' }),
-    Object.freeze({ id:'nerveFull', label:'Nerve full' }),
+    Object.freeze({ id:'energyRefill', label:'Energy refill' }),
+    Object.freeze({ id:'nerveRefill', label:'Nerve refill' }),
     Object.freeze({ id:'energyFull', label:'Energy full' }),
-    Object.freeze({ id:'medicalCooldown', label:'Medical / blood bags' }),
+    Object.freeze({ id:'nerveFull', label:'Nerve full' }),
     Object.freeze({ id:'boosterCooldown', label:'Booster ready' }),
+    Object.freeze({ id:'medicalCooldown', label:'Medical / blood bags' }),
+    Object.freeze({ id:'drugCooldown', label:'Drug ready' }),
+    Object.freeze({ id:'playerAddiction', label:'Player addiction' }),
     Object.freeze({ id:'missions', label:'Mission unfinished' }),
     Object.freeze({ id:'cityItem', label:'Buy 100 city items' }),
     Object.freeze({ id:'raceOrFly', label:'Race or fly' }),
@@ -30,10 +33,7 @@
     Object.freeze({ id:'organizedCrime', label:'Join an OC' }),
     Object.freeze({ id:'education', label:'Start an education' }),
     Object.freeze({ id:'casinoTokens', label:'Spend casino tokens' }),
-    Object.freeze({ id:'energyRefill', label:'Energy refill' }),
-    Object.freeze({ id:'nerveRefill', label:'Nerve refill' }),
     Object.freeze({ id:'stockBenefits', label:'Stock benefits ready' }),
-    Object.freeze({ id:'playerAddiction', label:'Player addiction' }),
     Object.freeze({ id:'clusterRing', label:'Cluster Ring window' })
   ]);
   const ALL_ALERT_IDS = Object.freeze([
@@ -214,9 +214,25 @@
     return modifiers.length ? Math.max(...modifiers.map(modifier => Math.abs(Number(modifier.value)))) : 0;
   }
 
-  function stockBenefitsReady(stocks) {
+  function stockBenefitsReady(stocks, catalog) {
     const rows = Array.isArray(stocks) ? stocks : [];
-    return rows.filter(stock => stock?.bonus?.available === true);
+    const catalogRows = Array.isArray(catalog?.stocks) ? catalog.stocks : Array.isArray(catalog) ? catalog : [];
+    const byId = new Map(catalogRows.map(stock => [Number(stock?.id), stock]));
+    return rows.flatMap(stock => {
+      const definition = byId.get(Number(stock?.id));
+      if (stock?.bonus?.available !== true || definition?.bonus?.passive !== false) return [];
+      return [{
+        ...stock,
+        name:String(definition?.name || '').trim(),
+        acronym:String(definition?.acronym || '').trim(),
+        benefitDescription:String(definition?.bonus?.description || '').trim()
+      }];
+    });
+  }
+
+  function chatAnchor(href, label) {
+    const escape = SLINK.core.format.escapeHtml;
+    return `<a href="${escape(href)}">${escape(label)}</a>`;
   }
 
   function clusterRingAchieved(crimes) {
@@ -252,7 +268,7 @@
     const organizedCrime = body.organizedcrime ?? body.organizedCrime;
     const refills = body.refills || {};
     const casino = body.casino || {};
-    const readyStocks = stockBenefitsReady(body.stocks);
+    const readyStocks = stockBenefitsReady(body.stocks, snapshot.stockCatalog);
     const playerAddiction = addictionPercentFromBattleStats(body);
     const travelSeconds = Number(travel?.arrival_at) * 1000 > now
       ? Math.ceil((Number(travel.arrival_at) * 1000 - now) / 1000)
@@ -269,7 +285,8 @@
         title:`${item.label} in stock at ${item.shopName || item.shop}`,
         detail:`${Number(item.stock).toLocaleString()} available${item.defaultStock !== null ? ` (normal restock ${Number(item.defaultStock).toLocaleString()})` : ''}. ${progress.bought ?? 0} / 100 total city items bought today.`,
         tone:'urgent',
-        links:[[item.shopName || item.shop, item.href]]
+        links:[[item.shopName || item.shop, item.href]],
+        shareText:`City Stock | ${SLINK.core.format.escapeHtml(item.label)} | ${Number(item.stock).toLocaleString()} available at ${SLINK.core.format.escapeHtml(item.shopName || item.shop)}${Number(item.price) > 0 ? ` | $${Number(item.price).toLocaleString()} each` : ''} | ${progress.bought ?? 0}/100 city items bought | ${chatAnchor(item.href, item.shopName || item.shop)}`
       }));
     const away = ['traveling', 'abroad'].includes(String(profile?.status?.state || '').toLowerCase()) || Number(travelSeconds) > 0;
     const activeRace = raceActive(body.races);
@@ -289,7 +306,7 @@
       { id:'casinoTokens', active:Number(casino?.tokens) > 0, title:'Spend casino tokens', detail:`${Number(casino?.tokens || 0).toLocaleString()} token${Number(casino?.tokens) === 1 ? '' : 's'} available`, tone:'daily', links:[['Casino','https://www.torn.com/casino.php']] },
       { id:'energyRefill', active:refillUsed(refills, 'energy') === false, title:'Energy refill is unused', detail:'Your daily point refill is still available.', tone:'daily', links:[['Points','https://www.torn.com/points.php'],['Faction Armory',ARMORY_URL]] },
       { id:'nerveRefill', active:refillUsed(refills, 'nerve') === false, title:'Nerve refill is unused', detail:'Your daily point refill is still available.', tone:'daily', links:[['Points','https://www.torn.com/points.php'],['Faction Armory',ARMORY_URL]] },
-      { id:'stockBenefits', active:readyStocks.length > 0, title:readyStocks.length === 1 ? 'A stock benefit is ready' : `${readyStocks.length} stock benefits are ready`, detail:readyStocks.map(stock => `Stock ${stock.id}`).join(', '), tone:'ready', links:[['Stock market','https://www.torn.com/page.php?sid=stocks']] },
+      { id:'stockBenefits', active:readyStocks.length > 0, title:readyStocks.length === 1 ? 'A stock benefit is ready' : `${readyStocks.length} stock benefits are ready`, detail:readyStocks.map(stock => stock.name ? `${stock.name}${stock.acronym ? ` (${stock.acronym})` : ''}` : stock.acronym || `Stock ${stock.id}`).join(', '), tone:'ready', links:[['Stock market','https://www.torn.com/page.php?sid=stocks']] },
       { id:'playerAddiction', active:playerAddiction !== null && playerAddiction >= settings.playerAddictionThreshold, title:'Player addiction needs attention', detail:`${playerAddiction ?? 0}% battle-stat penalty — alert threshold ${settings.playerAddictionThreshold}%`, tone:'urgent', links:[['Travel','https://www.torn.com/travelagency.php']] },
       { id:'clusterRing', active:clusterRingReady(snapshot.cluster), title:'Cluster Ring security window is open', detail:'Torn reports the Jewelry Store cameras and guard are disabled. Shoplifting skill 100 and 0% Jewelry Store notoriety are still required.', tone:'urgent', links:[['Shoplift','https://www.torn.com/page.php?sid=crimes#/shoplifting']] },
       ...cityStockAlerts

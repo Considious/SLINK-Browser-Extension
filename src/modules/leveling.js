@@ -80,6 +80,9 @@
   SLINK.modules.register({
     id: 'leveling',
     title: 'SLINK Leveling',
+    shortTitle:'Leveling',
+    group:'combat',
+    groupTitle:'Combat',
     defaultShowInTorn: true,
     requiredScopes: ['slink.level'],
     matches: url => url.hostname === 'www.torn.com',

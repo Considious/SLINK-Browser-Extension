@@ -16,6 +16,9 @@
     const normalized = Object.freeze({
       id,
       title: String(definition.title || id),
+      shortTitle:String(definition.shortTitle || definition.title || id),
+      group:String(definition.group || 'other'),
+      groupTitle:String(definition.groupTitle || definition.group || 'Other'),
       defaultShowInTorn: definition.defaultShowInTorn !== false,
       requiredScopes: Object.freeze([...(definition.requiredScopes || [])]),
       matches: typeof definition.matches === 'function' ? definition.matches : () => true,

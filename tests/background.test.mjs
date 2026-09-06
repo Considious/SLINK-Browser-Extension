@@ -26,6 +26,7 @@ let adhdCityItemsBought = 575;
 let adhdCityShopRequests = 0;
 let adhdCityCurrentRequests = 0;
 let adhdCityBaselineRequests = 0;
+let adhdStockCatalogRequests = 0;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -72,7 +73,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.16.1' }; },
+    getManifest() { return { version: '0.16.2' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -269,7 +270,7 @@ context = vm.createContext({
           profile:{ faction_id:46978, status:{ state:'Okay' } },
           races:[],
           enlistedcars:[],
-          stocks:[{ id:1, shares:1_000_000, bonus:{ available:true, increment:1, progress:7, frequency:7 }, transactions:[] }],
+          stocks:[{ id:1, shares:1_000_000, bonus:{ available:true, increment:1, progress:7, frequency:7 }, transactions:[] }, { id:25, shares:1_000_000, bonus:{ available:true, increment:0, progress:0, frequency:0 }, transactions:[] }],
           battlestats:{
             strength:{ value:100, modifiers:[{ effect:'Addiction', type:'addiction', value:-5 }] },
             defense:{ value:100, modifiers:[{ effect:'Addiction', type:'addiction', value:-5 }] },
@@ -338,6 +339,13 @@ context = vm.createContext({
       else if (url.pathname === '/v2/torn/cityshops') {
         adhdCityShopRequests += 1;
         body = { cityshops:[{ id:1, name:"Big Al's Gun Shop", items:[{ id:392, price:200, stock:{ current:123, default:500 } }] }] };
+      }
+      else if (url.pathname === '/v2/torn/stocks') {
+        adhdStockCatalogRequests += 1;
+        body = { stocks:[
+          { id:1, name:'Torn & Shanghai Banking', acronym:'TSB', bonus:{ passive:false, frequency:7, requirement:1_000_000, description:'Cash dividend' } },
+          { id:25, name:'West Side University', acronym:'WSU', bonus:{ passive:true, frequency:0, requirement:1_000_000, description:'Passive education bonus' } }
+        ] };
       }
       else if (url.pathname.endsWith('/snapshot')) body = 'id,name\n123,Target\n';
       else body = {
@@ -464,6 +472,8 @@ assert(adhdRefreshed.data.city.bought === 75 && !adhdRefreshed.data.city.complet
 assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'cityStock:392') && adhdCityShopRequests === 1, 'Enabled city stock was not checked below the shared cap.');
 assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'energyFull'), 'Combined Torn timer response did not create an expected ADHD alert.');
 assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'stockBenefits'), 'Ready API stock benefit did not create an Efficiency alert.');
+assert(adhdRefreshed.data.activeAlerts.find(alert => alert.id === 'stockBenefits')?.detail.includes('Torn & Shanghai Banking (TSB)'), 'Collectible stock benefit did not use its Torn catalog name.');
+assert(!adhdRefreshed.data.activeAlerts.find(alert => alert.id === 'stockBenefits')?.detail.includes('WSU') && adhdStockCatalogRequests === 1, 'Passive stock benefit was not excluded or the stock catalog was fetched repeatedly.');
 assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'playerAddiction'), 'API battle-stat addiction did not create an Efficiency alert.');
 assert(adhdCityCurrentRequests === 1 && adhdCityBaselineRequests === 1, 'City totals did not use the dedicated current and reset-baseline personalstats routes.');
 const firstSound = await send('adhd.sound.claim');

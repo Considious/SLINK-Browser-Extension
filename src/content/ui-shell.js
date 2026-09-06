@@ -41,7 +41,11 @@
     button { min-height:30px; border:1px solid var(--slink-border-soft); border-radius:6px; background:var(--slink-bg-control); color:var(--slink-text); cursor:pointer; }
     button:hover { filter:brightness(1.15); }
     .icon-button { width:30px; padding:0; }
-    .tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; overflow:auto; padding:6px 7px; border-bottom:1px solid var(--slink-border-soft); }
+    .groups,.tabs { display:grid; gap:4px; overflow:auto; padding:6px 7px; border-bottom:1px solid var(--slink-border-soft); }
+    .groups { grid-template-columns:repeat(2,minmax(0,1fr)); padding-bottom:4px; background:var(--slink-bg-raised); }
+    .tabs { grid-template-columns:repeat(3,minmax(0,1fr)); padding-top:4px; }
+    .group-tab { min-height:29px; padding:3px 7px; color:var(--slink-muted); font-weight:700; }
+    .group-tab[aria-selected="true"] { border-color:var(--slink-accent-alt); background:var(--slink-selected-bg); color:var(--slink-text); box-shadow:0 0 10px var(--slink-glow-right); }
     .tab { flex:1 0 auto; min-height:27px; padding:3px 7px; color:var(--slink-muted); }
     .tab[aria-selected="true"] { border-color:var(--slink-border); background:var(--slink-accent); color:var(--slink-text); }
     .module-head { display:flex; align-items:center; gap:7px; padding:6px 9px 0; }
@@ -93,9 +97,13 @@
     const main = createWindow('main', options.title || 'SLINK', options.subtitle || 'Extension systems');
     main.element.querySelector('.hide').textContent = '−';
     main.element.querySelector('.hide').title = 'Collapse SLINK to a movable bubble';
+    const groups = document.createElement('nav');
+    groups.className = 'groups';
+    groups.setAttribute('aria-label', 'SLINK sections');
     const tabs = document.createElement('nav');
     tabs.className = 'tabs';
-    main.head.after(tabs);
+    tabs.setAttribute('aria-label', 'SLINK tools');
+    main.head.after(groups, tabs);
     const bubble = document.createElement('button');
     bubble.type = 'button';
     bubble.className = 'bubble';
@@ -104,10 +112,12 @@
     bubble.innerHTML = '<span class="bubble-coil" aria-hidden="true"><span></span><span></span><span></span><span></span></span><span class="bubble-alert-icon" aria-hidden="true"></span><span class="bubble-alert-count" aria-hidden="true"></span>';
     shadow.append(main.element, bubble);
     const views = new Map();
+    const groupButtons = new Map();
     const alerts = new Map();
     let hidden = false;
     let collapsed = false;
     let activeId = '';
+    let activeGroup = '';
     let preferredActiveId = '';
     const bubbleAlertSources = new Map();
 
@@ -181,21 +191,33 @@
     function setActive(id, persist = false) {
       if (!views.has(id)) return;
       activeId = id;
+      activeGroup = views.get(id).group;
       if (persist) {
         preferredActiveId = id;
         void SLINK.core.storage.set('ui.main.activeModule', id);
       }
       for (const [moduleId, view] of views) {
         view.element.hidden = moduleId !== id;
+        view.tab.hidden = view.group !== activeGroup;
         view.tab?.setAttribute('aria-selected', String(moduleId === id));
       }
+      for (const [groupId, button] of groupButtons) button.setAttribute('aria-selected', String(groupId === activeGroup));
+    }
+
+    function setActiveGroup(groupId, persist = true) {
+      const matches = [...views.values()].filter(view => view.group === groupId);
+      if (!matches.length) return;
+      const preferred = matches.find(view => view.id === preferredActiveId);
+      setActive((preferred || matches[0]).id, persist);
     }
 
     function refreshShell() {
       const docked = [...views.values()];
       if (!docked.some(view => view.id === activeId)) activeId = docked[0]?.id || '';
       if (activeId) setActive(activeId, false);
-      tabs.hidden = docked.length < 2;
+      const activeViews = docked.filter(view => view.group === activeGroup);
+      groups.hidden = groupButtons.size < 2;
+      tabs.hidden = activeViews.length === 0;
       main.element.hidden = hidden || collapsed || docked.length === 0;
       bubble.hidden = hidden || !collapsed || views.size === 0;
       for (const alert of alerts.values()) alert.element.hidden = hidden;
@@ -300,9 +322,20 @@
       element.innerHTML = `<div class="module-head"><strong></strong></div><div class="status" role="status"></div><div class="content"></div><div class="actions"></div>`;
       element.querySelector('strong').textContent = module.title;
       const tab = document.createElement('button');
-      tab.className = 'tab'; tab.type = 'button'; tab.textContent = module.title; tab.setAttribute('role', 'tab');
+      tab.className = 'tab'; tab.type = 'button'; tab.textContent = module.shortTitle || module.title; tab.setAttribute('role', 'tab');
       tabs.append(tab); main.element.append(element);
-      const view = { id:module.id, title:module.title, element, tab };
+      const group = String(module.group || 'other');
+      if (!groupButtons.has(group)) {
+        const groupButton = document.createElement('button');
+        groupButton.className = 'group-tab';
+        groupButton.type = 'button';
+        groupButton.textContent = String(module.groupTitle || group);
+        groupButton.setAttribute('role', 'tab');
+        groupButton.addEventListener('click', () => setActiveGroup(group, true));
+        groupButtons.set(group, groupButton);
+        groups.append(groupButton);
+      }
+      const view = { id:module.id, title:module.title, group, element, tab };
       views.set(module.id, view);
       tab.addEventListener('click', () => setActive(module.id, true));
       const moduleStyle = document.createElement('style'); shadow.append(moduleStyle);
@@ -337,7 +370,14 @@
         showAlert,
         dismissAlert,
         setBubbleAlert,
-        remove() { view.tab.remove(); element.remove(); moduleStyle.remove(); views.delete(module.id); refreshShell(); },
+        remove() {
+          view.tab.remove(); element.remove(); moduleStyle.remove(); views.delete(module.id);
+          if (![...views.values()].some(candidate => candidate.group === view.group)) {
+            groupButtons.get(view.group)?.remove();
+            groupButtons.delete(view.group);
+          }
+          refreshShell();
+        },
         ui: null
       };
       api.ui = api;

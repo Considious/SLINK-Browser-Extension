@@ -119,6 +119,9 @@ assert(!permissionService.includes("requestJson('warWorker'"), 'Generic permissi
 assert(!read('src/background/adhd-service.js').includes('workerClient') && !read('src/background/adhd-service.js').includes('D1'), 'Private ADHD timer and city data must remain local instead of using Worker or D1 storage.');
 assert(read('src/background/player-stats-service.js').includes("'playerStats.refresh'") && read('src/background/player-stats-service.js').includes('personalstats,money,workstats'), 'The local daily Torn player-stat collector is missing or not combined.');
 assert(!read('src/background/player-stats-service.js').includes('workerClient') && !read('src/background/player-stats-service.js').includes('D1'), 'Player stats must not use a SLINK Worker or D1.');
+assert(read('src/modules/adhd.js').includes('Send to Faction') && read('src/modules/adhd.js').includes('focusedTornPage'), 'Torn-only city-stock copy/send controls are missing.');
+assert(!dashboardSource.includes('Send to Faction'), 'The extension dashboard must not offer direct Faction Chat sending.');
+assert(read('src/background/adhd-service.js').includes('/v2/torn/stocks') && read('src/core/adhd.js').includes('bonus?.passive !== false'), 'Stock alerts do not use Torn catalog names or still include passive benefits.');
 assert(read('src/background/theme-service.js').includes('/api/themes'), 'Background theme catalog route is missing.');
 assert(!manifest.host_permissions.some(origin => /githubusercontent|github\.com/.test(origin)), 'The extension must receive theme data through its existing Worker, not direct GitHub host access.');
 const uiShellSource = read('src/content/ui-shell.js');
@@ -126,6 +129,8 @@ assert(uiShellSource.includes('setTheme'), 'Torn UI shell does not support live 
 assert(uiShellSource.includes('ui.main.collapsed') && uiShellSource.includes('bubble-coil'), 'Torn UI shell does not provide the persistent theme-aware collapse bubble.');
 assert(uiShellSource.includes('setBubbleAlert') && uiShellSource.includes('data-alert-kind="retal"') && uiShellSource.includes('data-alert-kind="armory"') && uiShellSource.includes('data-alert-kind="adhd"'), 'The collapse bubble is missing retal, officer armory, or ADHD alert states.');
 assert(uiShellSource.includes('ui.main.activeModule'), 'The Torn shell does not remember the selected SLINK module.');
+assert(uiShellSource.includes("groups.className = 'groups'") && uiShellSource.includes('setActiveGroup'), 'The Torn shell is missing its Combat/Efficiency navigation level.');
+assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/player-stats.js')), 'Player Stats is missing from the in-Torn Combat tools.');
 assert(uiShellSource.includes('async function restore()'), 'Torn UI shell does not provide an in-place recovery path.');
 assert(!uiShellSource.includes('Pop out') && !uiShellSource.includes('setPopped'), 'The broken Torn module pop-out control is still packaged.');
 assert(read('src/background/service-worker.js').includes("'ui.torn.restore'"), 'The extension cannot repush its GUI to open Torn tabs.');

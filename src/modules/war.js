@@ -100,6 +100,9 @@
   SLINK.modules.register({
     id:'war',
     title:'SLINK War',
+    shortTitle:'War',
+    group:'combat',
+    groupTitle:'Combat',
     defaultShowInTorn:true,
     requiredScopes:['slink.war'],
     matches:url => url.hostname === 'www.torn.com',

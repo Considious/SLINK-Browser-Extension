@@ -79,7 +79,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.16.1', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.16.2', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -128,6 +128,7 @@ assert(!SLINK.core.adhd.buildAlerts({ fetchedAt:Date.now(), cityItemsBought:600,
 const cityStockSettings = SLINK.core.adhd.normalizeSettings({ cityStockAlerts:{ 392:true } });
 const cityStockSnapshot = { fetchedAt:Date.now(), cityItemsBought:575, cityItemsAtReset:500, data:{}, cityShops:{ cityshops:[{ name:"Big Al's Gun Shop", items:[{ id:392, price:200, stock:{ current:123, default:500 } }] }] } };
 assert(SLINK.core.adhd.buildAlerts(cityStockSnapshot, cityStockSettings).some(alert => alert.id === 'cityStock:392'), 'Enabled city stock did not produce an alert below the shared cap.');
+assert(SLINK.core.adhd.buildAlerts(cityStockSnapshot, cityStockSettings).find(alert => alert.id === 'cityStock:392')?.shareText.includes('<a href="https://www.torn.com/bigalgunshop.php">Big Al&#39;s Gun Shop</a>'), 'City stock chat text omitted its safe HTML shop link.');
 assert(!SLINK.core.adhd.buildAlerts({ ...cityStockSnapshot, cityItemsBought:600 }, cityStockSettings).some(alert => alert.id.startsWith('cityStock:')), 'City stock alerts remained after the shared 100-item cap.');
 const modifier = [{ effect:'Addiction', type:'addiction', value:-5 }];
 const efficiencySnapshot = {
@@ -136,14 +137,17 @@ const efficiencySnapshot = {
     cooldowns:{ drug:0, medical:0, booster:0 },
     missions:{ givers:[{ contracts:[{ status:'accepted', title:'One' }, { status:'Accepted', title:'Two' }, { status:'ACCEPTED', title:'Three' }] }] },
     refills:{ energy:{ available:true }, nerve:{ available:true } },
-    stocks:[{ id:7, bonus:{ available:true } }],
+    stocks:[{ id:7, bonus:{ available:true, frequency:7 } }, { id:25, bonus:{ available:true, frequency:0 } }],
     battlestats:{ strength:{ modifiers:modifier }, defense:{ modifiers:modifier }, speed:{ modifiers:modifier }, dexterity:{ modifiers:modifier } }
   },
+  stockCatalog:{ stocks:[{ id:7, name:'Collectible Industries', acronym:'COL', bonus:{ passive:false } }, { id:25, name:'West Side University', acronym:'WSU', bonus:{ passive:true } }] },
   cluster:{ crimes:{ crimes:{ skill:100, uniques:[] } }, subcrimes:{ subcrimes:[{ id:44, name:'Jewelry Store' }] }, status:{ shoplifting:[{ id:44, status:[{ title:'Cameras', disabled:true }, { title:'Guard', disabled:true }] }] } }
 };
 const efficiencyAlerts = SLINK.core.adhd.buildAlerts(efficiencySnapshot, adhdSettings);
 assert(efficiencyAlerts.find(alert => alert.id === 'missions')?.title.includes('cap reached'), 'Three accepted missions did not produce the mission-cap warning.');
 assert(efficiencyAlerts.some(alert => alert.id === 'stockBenefits'), 'Ready API stock benefit did not produce an alert.');
+assert(efficiencyAlerts.find(alert => alert.id === 'stockBenefits')?.detail.includes('Collectible Industries (COL)'), 'Collectible stock alert did not use its catalog name.');
+assert(!efficiencyAlerts.find(alert => alert.id === 'stockBenefits')?.detail.includes('WSU'), 'Passive stock benefit was incorrectly treated as collectible.');
 assert(efficiencyAlerts.some(alert => alert.id === 'playerAddiction'), 'Battle-stat addiction modifier did not produce an alert.');
 assert(efficiencyAlerts.some(alert => alert.id === 'clusterRing'), 'Cluster Ring API status did not produce an alert.');
 assert(efficiencyAlerts.find(alert => alert.id === 'drugCooldown')?.links.some(link => link[0] === 'Faction Armory'), 'Cooldown alert omitted the faction armory link.');

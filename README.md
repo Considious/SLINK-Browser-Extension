@@ -4,6 +4,17 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.16.2 reorganizes the in-Torn SLINK panel into Combat and Efficiency
+sections. Combat now contains Leveling, War, and the private daily Player Stats
+view; Efficiency contains Alerts and leaves room for a later Merits tab. Torn
+alert links now use consistent outlined button styling. City-stock reminders add
+the ADHD Dashboard's compact Copy and explicitly user-triggered Send to Faction
+controls only inside a focused Torn page—the extension dashboard never sends to
+chat. Stock alerts use Torn's public stock catalog for real names and exclude
+benefits marked passive by Torn, so permanent effects such as WSU are not shown
+as collectible payouts. Alert switches are paired in two columns to reduce the
+settings panel's height.
+
 Version 0.16.1 expands the permission-gated Efficiency dashboard as a separate
 **Efficiency** page and optional in-Torn module. It uses only Torn API data—no
 page scraping—for energy, nerve, cooldown, mission, travel, education,
