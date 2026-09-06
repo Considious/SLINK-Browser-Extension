@@ -7,6 +7,8 @@
   const ui = SLINK.core.uiShell.createShell({ title:'SLINK', subtitle:'Shared Live Intelligence NetworK' });
   let initialized = false;
   let restarting = null;
+  let apiLedgerSyncing = false;
+  let apiLedgerTimer = null;
 
   ui.setHidden(await SLINK.core.storage.get('ui.pagePanelHidden', false));
 
@@ -30,6 +32,37 @@
       modulePresentation,
       moduleVisible: module => SLINK.core.storage.get(`ui.modules.${module.id}.showInTorn`, module.defaultShowInTorn)
     });
+  }
+
+  function readSharedApiLedger() {
+    try {
+      const parsed = JSON.parse(global.localStorage.getItem('considious:torn-api-ledger:v1') || 'null');
+      return parsed && typeof parsed === 'object' ? parsed : { events:[], cooldownUntil:0 };
+    } catch {
+      return { events:[], cooldownUntil:0 };
+    }
+  }
+
+  async function syncSharedApiLedger() {
+    if (apiLedgerSyncing || !global.chrome?.runtime?.id) return;
+    apiLedgerSyncing = true;
+    const synchronize = async (writeBack) => {
+      const response = await SLINK.core.messaging.send('tornApi.sync', { ledger:readSharedApiLedger() });
+      if (writeBack && response?.ledger) global.localStorage.setItem('considious:torn-api-ledger:v1', JSON.stringify(response.ledger));
+    };
+    try {
+      if (global.navigator?.locks?.request) {
+        await global.navigator.locks.request('considious-torn-api-limiter-v1', { mode:'exclusive' }, () => synchronize(true));
+      } else {
+        // Import TornLib's usage without overwriting its ledger when this
+        // browser cannot provide an atomic cross-script lock.
+        await synchronize(false);
+      }
+    } catch (error) {
+      if (global.chrome?.runtime?.id) console.debug('[SLINK] Shared Torn API ledger sync paused:', error);
+    } finally {
+      apiLedgerSyncing = false;
+    }
   }
 
   async function reloadThemeAndPermissions() {
@@ -105,7 +138,13 @@
     const permissions = await reloadThemeAndPermissions();
     await startModules(permissions);
     initialized = true;
+    await syncSharedApiLedger();
+    apiLedgerTimer = global.setInterval(() => void syncSharedApiLedger(), 2_000);
   } catch (error) {
     console.error('[SLINK] Content startup:', error);
   }
+
+  global.addEventListener('pagehide', () => {
+    if (apiLedgerTimer) global.clearInterval(apiLedgerTimer);
+  }, { once:true });
 })(globalThis);

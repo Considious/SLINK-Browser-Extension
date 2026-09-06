@@ -4,6 +4,23 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.17.0 adds an Efficiency **Merits** tab to both the extension dashboard
+and the in-Torn SLINK panel. It combines Torn's achieved Honors and Medals with
+personal-stat counters, displays only the next unearned award in each tier
+family, and keeps later thresholds visible on the same tile. Attack, defend,
+player-escape, enemy-escape, faction-respect, criminal-offense, level, networth,
+commitment, and finishing-hit objectives receive live progress where Torn
+provides a trustworthy counter; ambiguous objectives remain explicitly
+unavailable instead of being guessed. Up to three active farms can be pinned.
+The local refresh interval defaults to 15 minutes, is configurable, and includes
+a manual refresh; the full public award catalog is cached for seven days.
+
+The extension's Torn API limiter now exchanges its timestamp-only request ledger
+with TornLib on Torn pages using TornLib's existing local-storage key and browser
+lock. This lets both clients account for one another without sharing API keys or
+responses. Efficiency's “updated ago” labels now tick every second without
+causing extra Torn API calls.
+
 Version 0.16.2 reorganizes the in-Torn SLINK panel into Combat and Efficiency
 sections. Combat now contains Leveling, War, and the private daily Player Stats
 view; Efficiency contains Alerts and leaves room for a later Merits tab. Torn

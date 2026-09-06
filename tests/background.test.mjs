@@ -73,7 +73,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.16.2' }; },
+    getManifest() { return { version: '0.17.0' }; },
     onInstalled,
     onMessage,
     onStartup
@@ -278,6 +278,14 @@ context = vm.createContext({
             dexterity:{ value:100, modifiers:[{ effect:'Addiction', type:'addiction', value:-5 }] }
           }
         };
+      } else if (url.pathname === '/v2/user' && url.searchParams.get('selections') === 'profile,faction,medals,honors,merits') {
+        body = { profile:{ id:3853023, level:68, rank:'Outstanding', age:4200, awards:200, spouse:{ days_married:500 } }, faction:{ id:46978, days_in_faction:800 }, medals:[{ id:1 }], honors:[], merits:{ available:4 } };
+      } else if (url.pathname === '/v2/torn' && url.searchParams.get('selections') === 'medals,honors') {
+        body = { medals:[
+          { id:1, name:'Anti Social', description:'Win 50 attacks', type:{ id:'ATK', title:'Attacking' } },
+          { id:2, name:'Happy Slapper', description:'Win 250 attacks', type:{ id:'ATK', title:'Attacking' } },
+          { id:3, name:'Scar Maker', description:'Win 500 attacks', type:{ id:'ATK', title:'Attacking' } }
+        ], honors:[{ id:50, name:'Close Escape', description:'Successfully escape from 50 foes', type:{ id:2, title:'Attacking' } }] };
       } else if (url.pathname === '/v2/user' && url.searchParams.get('selections')?.includes('personalstats')) {
         playerStatsRequests += 1;
         body = {
@@ -291,6 +299,8 @@ context = vm.createContext({
           if (historical) adhdCityBaselineRequests += 1;
           else adhdCityCurrentRequests += 1;
           body = { personalstats:[{ name:'cityitemsbought', value:historical ? 500 : adhdCityItemsBought, timestamp:Number(url.searchParams.get('timestamp')) || Math.floor(Date.now() / 1000) }] };
+        } else if (url.searchParams.get('cat') === 'all') {
+          body = { personalstats:{ attacking:{ attacks:{ won:100 }, defends:{ won:44 }, escapes:{ player:27, foes:4 } }, finishing_hits:{ pistols:125 } } };
         } else {
         playerStatsRequests += 1;
         const today = Math.floor(Date.now() / 86_400_000) * 86_400_000;
@@ -437,6 +447,8 @@ const injection = await send(
   { id: 'test', tab: { id: 7, url: 'https://www.torn.com/index.php' } }
 );
 assert(injection.ok && injection.data.tabId === 7, 'Torn page injection was not recorded.');
+const sharedLedger = await send('tornApi.sync', { ledger:{ events:[{ at:Date.now(), id:'tornlib:test', script:'Test userscript', endpoint:'/v2/user' }] } }, { tab:{ id:7, url:'https://www.torn.com/index.php' } });
+assert(sharedLedger.ok && sharedLedger.data.usage.byScript['Test userscript'] === 1, 'TornLib usage was not merged into the extension API ledger.');
 values.set('slink.ui.main.position', { left:9999, top:9999 });
 values.set('slink.ui.bubble.position', { left:9999, top:9999 });
 values.set('slink.ui.main.collapsed', true);
@@ -465,6 +477,12 @@ const accessSaved = await send('access.settings.save', {
 });
 assert(accessSaved.ok && accessSaved.data.session.authenticated, 'ADHD permission-only session did not authenticate.');
 assert(!JSON.stringify(accessSaved.data).includes('torn-test-key'), 'Public ADHD access state leaked the shared local Torn API key.');
+const meritsRefreshed = await send('merits.refresh');
+assert(meritsRefreshed.ok && meritsRefreshed.data.permitted, 'Merits did not honor the existing signed Efficiency permission.');
+assert(meritsRefreshed.data.goals.find(goal => goal.name === 'Happy Slapper')?.progress?.rows?.[0]?.current === 100, 'Merit progress did not use the Torn personal-stat counter.');
+const meritsPinned = await send('merits.pin', { key:'medal:2' });
+assert(meritsPinned.ok && meritsPinned.data.pinned.length === 1, 'A Merit farm could not be pinned.');
+assert(!JSON.stringify(meritsRefreshed.data).includes('torn-test-key'), 'Merit status leaked the local Torn API key.');
 await send('adhd.settings.save', { cityStockAlerts:{ 392:true }, soundEnabled:{ energyFull:true } });
 const adhdRefreshed = await send('adhd.refresh');
 assert(adhdRefreshed.ok && adhdRefreshed.data.permitted, 'ADHD API alerts did not honor the signed permission scope.');

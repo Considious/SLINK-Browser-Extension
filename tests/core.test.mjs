@@ -69,6 +69,7 @@ for (const file of [
   'src/core/storage.js',
   'src/core/permissions.js',
   'src/core/adhd.js',
+  'src/core/merits.js',
   'src/core/war.js',
   'src/core/themes.js',
   'src/core/messaging.js',
@@ -79,7 +80,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.16.2', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.17.0', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -119,6 +120,39 @@ const combinedPermissions = permissions.combineSnapshots(
 assert(combinedPermissions.scopes.join(',') === 'admin.*,slink.level,slink.war', 'Product scopes were not combined without duplication.');
 assert(!permissions.combineSnapshots({ userId:1, scopes:['expired.product'], expiresAt:Date.now() - 1 }).scopes.length, 'Expired product scopes remained visible.');
 assert(SLINK.core.adhd.marketWatchLimit({ userId:12, scopes:['slink.adhd.marketwatch.5','slink.adhd.marketwatch.15'] }) === 15, 'Highest ADHD market-watch tier was not selected.');
+const meritStats = SLINK.core.merits.numericPersonalStats({ personalstats:{ attacking:{ attacks:{ won:100 }, defends:{ won:44 }, escapes:{ player:27, foes:4 }, faction:{ respect:31_262 } }, crimes:{ offenses:{ total:10_100 } }, finishing_hits:{ pistols:125 } } });
+const meritSnapshot = {
+  medals:[{ id:1 }, { id:30 }], honors:[], merits:{ available:4 },
+  catalogMedals:[
+    { id:1, name:'Anti Social', description:'Win 50 attacks', type:{ id:'ATK', title:'Attacking' } },
+    { id:2, name:'Happy Slapper', description:'Win 250 attacks', type:{ id:'ATK', title:'Attacking' } },
+    { id:3, name:'Scar Maker', description:'Win 500 attacks', type:{ id:'ATK', title:'Attacking' } },
+    { id:10, name:'Bouncer', description:'Successfully defended against 50 attacks', type:{ id:'ATK', title:'Attacking' } },
+    { id:11, name:'Brick Wall', description:'Successfully defended against 250 attacks', type:{ id:'ATK', title:'Attacking' } },
+    { id:20, name:'Close Escape', description:'Successfully escape from 50 foes', type:{ id:'ATK', title:'Attacking' } },
+    { id:21, name:'Foo Smasher', description:'Have 50 enemies escape from you during an attack', type:{ id:'ATK', title:'Attacking' } },
+    { id:30, name:'Troublemaker', description:'Commit a total of 100 criminal offenses', type:{ id:'CRM', title:'Crimes' } },
+    { id:31, name:'Legendary Lawbreaker', description:'Commit a total of 10,000 criminal offenses', type:{ id:'CRM', title:'Crimes' } },
+    { id:40, name:'Celebrity', description:'Reach the rank of Celebrity', type:{ id:'RNK', title:'Rank' } },
+    { id:41, name:'Supreme', description:'Reach the rank of Supreme', type:{ id:'RNK', title:'Rank' } },
+    { id:50, name:'Committed', description:'Be married for 1,000 days', type:{ id:'COM', title:'Commitment' } }
+  ],
+  catalogHonors:[],
+  personalStats:meritStats,
+  finishingHits:{ pistols:125 },
+  profile:{ level:68, age:4200, daysMarried:100, factionDays:600, rank:'Outstanding', rankIndex:17 }
+};
+const meritView = SLINK.core.merits.buildView(meritSnapshot, { pinned:['medal:2'], refreshMinutes:15 });
+const attackGoal = meritView.goals.find(goal => goal.name === 'Happy Slapper');
+assert(attackGoal?.progress?.rows?.[0]?.current === 100 && attackGoal.progress.rows[0].target === 250, 'Attack medal progress did not use the matching Torn personal-stat counter.');
+assert(attackGoal.laterMilestones.some(row => row.name === 'Scar Maker'), 'Later attack tiers were not collapsed under the next milestone.');
+assert(meritView.goals.some(goal => goal.name === 'Bouncer'), 'Defend medals were incorrectly merged with attack medals.');
+assert(meritView.goals.find(goal => goal.name === 'Bouncer')?.progress?.rows?.[0]?.current === 44, 'Defend progress did not use successful defends.');
+assert(meritView.goals.some(goal => goal.name === 'Close Escape') && meritView.goals.some(goal => goal.name === 'Foo Smasher'), 'Player escapes and enemy escapes were incorrectly merged.');
+assert(meritView.goals.find(goal => goal.name === 'Legendary Lawbreaker')?.progress?.rows?.[0]?.current === 10_100, 'Criminal-offense progress did not use Torn personal stats.');
+assert(meritView.goals.find(goal => goal.name === 'Celebrity')?.progress?.rows?.[0]?.target === 18, 'Rank medals were not grouped or mapped to Torn rank progression.');
+assert(meritView.goals.find(goal => goal.name === 'Committed')?.progress?.rows?.[0]?.current === 100, 'Marriage commitment did not use profile days married.');
+assert(meritView.pinned.length === 1 && meritView.pinned[0].key === 'medal:2', 'Pinned Merit farm was not preserved.');
 const adhdSettings = SLINK.core.adhd.defaultSettings();
 const partialCity = SLINK.core.adhd.cityProgress({ cityItemsBought:575, cityItemsAtReset:500 }, adhdSettings);
 assert(partialCity.bought === 75 && partialCity.remaining === 25 && !partialCity.complete, 'Shared city purchase progress was calculated incorrectly.');

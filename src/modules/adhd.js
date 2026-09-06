@@ -7,7 +7,7 @@
   function relativeTime(timestamp) {
     if (!Number(timestamp)) return 'not checked yet';
     const seconds = Math.max(0, Math.floor((Date.now() - Number(timestamp)) / 1000));
-    return seconds < 60 ? `${seconds}s ago` : seconds < 3600 ? `${Math.floor(seconds / 60)}m ago` : `${Math.floor(seconds / 3600)}h ago`;
+    return seconds < 60 ? `${seconds}s ago` : seconds < 3600 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s ago` : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m ago`;
   }
 
   SLINK.modules.register({
@@ -23,6 +23,7 @@
       const ui = context.ui;
       let stopped = false;
       let timer = null;
+      let clockTimer = null;
       let current = null;
       let chatShareArm = null;
 
@@ -154,10 +155,15 @@
         });
       }
 
+      function updateStatus() {
+        if (!current) return;
+        ui.setStatus(current?.lastError || (current?.configured ? `API timers updated ${relativeTime(current.fetchedAt)}` : 'Enable Efficiency from the extension dashboard.'), current?.lastError ? 'error' : current?.configured ? 'ready' : 'normal');
+      }
+
       function render(status) {
         current = status;
         const alerts = Array.isArray(status?.activeAlerts) ? status.activeAlerts : [];
-        ui.setStatus(status?.lastError || (status?.configured ? `API timers updated ${relativeTime(status.fetchedAt)}` : 'Enable Efficiency from the extension dashboard.'), status?.lastError ? 'error' : status?.configured ? 'ready' : 'normal');
+        updateStatus();
         const root = ui.getContentElement();
         root.replaceChildren();
         const summary = document.createElement('div');
@@ -268,10 +274,12 @@
       ]);
       await load(true);
       timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
+      clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
       return {
         stop() {
           stopped = true;
           if (timer) global.clearInterval(timer);
+          if (clockTimer) global.clearInterval(clockTimer);
           ui.setBubbleAlert('', 0, 'adhd');
         },
         status:() => current

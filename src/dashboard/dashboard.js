@@ -11,6 +11,7 @@
   let contribution = null;
   let contributionTerms = null;
   let playerStats = null;
+  let merits = null;
   let termsExpanded = false;
   let accessExpanded = null;
   let targetView = 'leveling';
@@ -303,8 +304,8 @@
     if (!Number(timestamp)) return 'not checked yet';
     const seconds = Math.max(0, Math.floor((Date.now() - Number(timestamp)) / 1000));
     if (seconds < 60) return `${seconds}s ago`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s ago`;
+    return `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m ago`;
   }
 
   function renderAdhd() {
@@ -318,9 +319,7 @@
     byId('adhd-city-count').textContent = adhd?.city?.bought ?? '—';
     byId('adhd-api-usage').textContent = `${adhd?.tornApiUsage?.count || 0}/${adhd?.tornApiUsage?.limit || 60}`;
     byId('adhd-next-check').textContent = Number(adhd?.nextRefreshAt) ? new Date(adhd.nextRefreshAt).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }) : '—';
-    byId('adhd-status').textContent = !configured
-      ? 'Enable Efficiency in API & feature access to begin.'
-      : adhd?.fetchedAt ? `Private timers last updated ${relativeTime(adhd.fetchedAt)}. Stats refresh only when the next timer is due.` : 'Ready for the first API refresh.';
+    updateAdhdClock();
     byId('adhd-error').textContent = adhd?.lastError || '';
     byId('adhd-error').hidden = !adhd?.lastError;
     const purchase = adhd?.lastPurchase;
@@ -380,6 +379,91 @@
     }
     byId('adhd-market-tier').textContent = adhd?.marketWatchLimit ? `${adhd.marketWatchLimit} watch slots unlocked` : 'No watch tier';
     void claimAdhdSound();
+  }
+
+  function updateAdhdClock() {
+    if (!adhd) return;
+    byId('adhd-status').textContent = !adhd.configured
+      ? 'Enable Efficiency in API & feature access to begin.'
+      : adhd.fetchedAt ? `Private timers last updated ${relativeTime(adhd.fetchedAt)}. Stats refresh only when the next timer is due.` : 'Ready for the first API refresh.';
+  }
+
+  function meritProgressElement(progress) {
+    const root = document.createElement('div');
+    if (!progress?.rows?.length) {
+      root.className = 'merit-no-counter';
+      root.textContent = 'No reliable live counter from Torn.';
+      return root;
+    }
+    const percent = Math.min(100, ...progress.rows.map(row => Math.floor(Number(row.current) / Number(row.target) * 100)));
+    const head = document.createElement('div'); head.className = 'merit-progress-head';
+    const strong = document.createElement('strong'); strong.textContent = `${percent}%`;
+    const detail = document.createElement('span');
+    detail.innerHTML = progress.rows.map(row => {
+      const current = Math.max(0, Number(row.current) || 0);
+      const target = Math.max(0, Number(row.target) || 0);
+      const left = Math.max(0, target - current);
+      return `${current.toLocaleString('en-US', { maximumFractionDigits:1 })} / ${target.toLocaleString('en-US', { maximumFractionDigits:1 })} ${SLINK.core.format.escapeHtml(row.label)}${left ? ` · ${left.toLocaleString('en-US', { maximumFractionDigits:1 })} left` : ''}`;
+    }).join('<br>');
+    const meter = document.createElement('div'); meter.className = 'merit-progress-meter';
+    const fill = document.createElement('i'); fill.style.width = `${percent}%`; meter.append(fill);
+    head.append(strong, detail); root.append(head, meter); return root;
+  }
+
+  function meritCard(goal, pinned = false) {
+    const card = document.createElement('article'); card.className = `merit-card${pinned ? ' pinned' : ''}`;
+    const head = document.createElement('div'); head.className = 'merit-card-head';
+    const identity = document.createElement('div');
+    const title = document.createElement('strong'); title.textContent = goal.name || 'Unnamed award';
+    const kind = document.createElement('small'); kind.textContent = `${goal.kind === 'medal' ? 'Medal' : 'Honor'}${goal?.type?.title ? ` · ${goal.type.title}` : ''}`;
+    identity.append(title, kind);
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'small secondary'; button.dataset.meritPin = goal.key;
+    button.textContent = merits?.settings?.pinned?.includes(goal.key) ? 'Unpin' : 'Pin';
+    button.disabled = !merits?.settings?.pinned?.includes(goal.key) && (merits?.pinned?.length || 0) >= SLINK.core.merits.TRACK_LIMIT;
+    head.append(identity, button);
+    const description = document.createElement('p'); description.textContent = goal.description || 'Torn did not provide a requirement.';
+    card.append(head, description, meritProgressElement(goal.progress));
+    if (goal.laterMilestones?.length) {
+      const later = document.createElement('small'); later.className = 'merit-later';
+      later.textContent = `Later: ${goal.laterMilestones.slice(0, 8).map(row => `${row.name}${row.targets?.length ? ` ${row.targets.map(value => Number(value).toLocaleString('en-US')).join(' / ')}` : ''}`).join(' · ')}`;
+      card.append(later);
+    }
+    return card;
+  }
+
+  function updateMeritsClock() {
+    if (!merits) return;
+    byId('merits-status').textContent = !merits.configured
+      ? 'Enable Efficiency in API & feature access to begin.'
+      : merits.fetchedAt ? `Award progress updated ${relativeTime(merits.fetchedAt)} · automatic every ${merits.settings?.refreshMinutes || 15} minutes.` : 'Ready for the first award refresh.';
+  }
+
+  function renderMerits() {
+    if (!merits) return;
+    const permitted = merits.permitted === true;
+    const badge = byId('merits-permission-state');
+    badge.textContent = permitted ? 'Merit access active' : `Requires ${merits.requiredScope || SLINK.core.merits.REQUIRED_SCOPE}`;
+    badge.className = permitted ? 'badge ready' : 'badge error';
+    byId('merits-earned').textContent = Number(merits.completedCount || 0).toLocaleString('en-US');
+    byId('merits-next').textContent = Number(merits.goals?.length || 0).toLocaleString('en-US');
+    byId('merits-pinned').textContent = `${merits.pinned?.length || 0}/${SLINK.core.merits.TRACK_LIMIT}`;
+    byId('merits-api-usage').textContent = `${merits.tornApiUsage?.count || 0}/${merits.tornApiUsage?.limit || 60}`;
+    byId('merits-filter').value = merits.settings?.filter || 'all';
+    byId('merits-refresh-minutes').value = String(merits.settings?.refreshMinutes || 15);
+    byId('merits-error').textContent = merits.lastError || '';
+    byId('merits-error').hidden = !merits.lastError;
+    updateMeritsClock();
+    const pinned = merits.pinned || [];
+    byId('merits-pinned-section').hidden = !pinned.length;
+    byId('merits-pinned-count').textContent = `${pinned.length}/${SLINK.core.merits.TRACK_LIMIT}`;
+    byId('merits-pinned-list').replaceChildren(...pinned.map(goal => meritCard(goal, true)));
+    const goals = (merits.goals || []).filter(goal => !merits.settings?.pinned?.includes(goal.key));
+    if (goals.length) byId('merits-goal-list').replaceChildren(...goals.map(goal => meritCard(goal)));
+    else {
+      const empty = document.createElement('div'); empty.className = 'merit-empty';
+      empty.textContent = merits.fetchedAt ? 'No incomplete awards match this filter.' : 'Refresh Merits to load your award catalog and progress.';
+      byId('merits-goal-list').replaceChildren(empty);
+    }
   }
 
   async function claimAdhdSound() {
@@ -744,6 +828,13 @@
     for (const button of document.querySelectorAll('[data-page-tab]')) button.classList.toggle('active', button.dataset.pageTab === name);
   }
 
+  function switchEfficiency(name) {
+    const selected = name === 'merits' ? 'merits' : 'alerts';
+    for (const panel of document.querySelectorAll('[data-efficiency-panel]')) panel.hidden = panel.dataset.efficiencyPanel !== selected;
+    for (const button of document.querySelectorAll('[data-efficiency-view]')) button.classList.toggle('active', button.dataset.efficiencyView === selected);
+    void SLINK.core.storage.set('ui.efficiency.activeView', selected);
+  }
+
   function formatDiagnostic(report) {
     if (!report) return 'Run a diagnostic to inspect the extension and Workers.';
     return [
@@ -767,14 +858,15 @@
   }
 
   async function refresh() {
-    const [status, terms, themeRecord, statsStatus] = await Promise.all([
+    const [status, terms, themeRecord, statsStatus, meritsStatus] = await Promise.all([
       SLINK.core.messaging.send('system.status'),
       SLINK.core.messaging.send('contribution.terms').catch(() => null),
       SLINK.core.messaging.send('themes.catalog').catch(() => null),
-      SLINK.core.messaging.send('playerStats.status', { refreshIfStale:true }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null }))
+      SLINK.core.messaging.send('playerStats.status', { refreshIfStale:true }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null })),
+      SLINK.core.messaging.send('merits.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), goals:[], pinned:[], settings:SLINK.core.merits.defaultSettings() }))
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
-    system = status; leveling = status.leveling; war = status.war; access = status.access; adhd = status.adhd; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus;
+    system = status; leveling = status.leveling; war = status.war; access = status.access; adhd = status.adhd; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus; merits = meritsStatus;
     dismissedRetals = await SLINK.core.storage.get('war.dismissedRetals.v1', {});
     dismissedRetals = Object.fromEntries(Object.entries(dismissedRetals || {}).filter(([, expiresAt]) => Number(expiresAt) > Math.floor(Date.now() / 1000)));
     warTargetFilters = { ...warTargetFilters, ...(await SLINK.core.storage.get('ui.war.targetFilters.v1', {})) };
@@ -788,7 +880,7 @@
     byId('connection').textContent = status.worker.connected ? 'Worker connected' : 'Worker offline';
     byId('connection').className = status.worker.connected ? 'badge ready' : 'badge error';
     await applySavedTheme();
-    renderAccess(); renderLeveling(); renderWar(); renderTargets(); renderContribution(); renderPlayerStats(); renderAdhd(); renderAccessTabs();
+    renderAccess(); renderLeveling(); renderWar(); renderTargets(); renderContribution(); renderPlayerStats(); renderAdhd(); renderMerits(); renderAccessTabs();
     if (hasScope('admin.*')) byId('diagnostic').textContent = formatDiagnostic(status.lastDiagnostic);
   }
 
@@ -953,6 +1045,28 @@
     catch (error) { byId('adhd-error').textContent = errorText(error); byId('adhd-error').hidden = false; }
     finally { setBusy(button, false); }
   });
+  byId('merits-refresh').addEventListener('click', async event => {
+    const button = event.currentTarget; setBusy(button, true); byId('merits-error').hidden = true;
+    try { merits = await SLINK.core.messaging.send('merits.refresh'); renderMerits(); }
+    catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
+    finally { setBusy(button, false); }
+  });
+  for (const select of [byId('merits-filter'), byId('merits-refresh-minutes')]) select.addEventListener('change', async () => {
+    try {
+      merits = await SLINK.core.messaging.send('merits.settings.save', {
+        filter:byId('merits-filter').value,
+        refreshMinutes:byId('merits-refresh-minutes').value
+      });
+      renderMerits();
+    } catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
+  });
+  for (const list of [byId('merits-pinned-list'), byId('merits-goal-list')]) list.addEventListener('click', async event => {
+    const button = event.target.closest('[data-merit-pin]');
+    if (!button) return;
+    setBusy(button, true);
+    try { merits = await SLINK.core.messaging.send('merits.pin', { key:button.dataset.meritPin }); renderMerits(); }
+    catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
+  });
   byId('adhd-save-settings').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('adhd-settings-message').textContent = '';
     try {
@@ -1017,6 +1131,7 @@
     finally { setBusy(button, false); }
   });
   for (const button of document.querySelectorAll('[data-page-tab]')) button.addEventListener('click', () => switchPage(button.dataset.pageTab));
+  for (const button of document.querySelectorAll('[data-efficiency-view]')) button.addEventListener('click', () => switchEfficiency(button.dataset.efficiencyView));
   byId('donation-form').addEventListener('submit', async event => { event.preventDefault(); const submit = byId('donation-submit'); setBusy(submit,true); byId('donation-message').textContent=''; try { contribution=await SLINK.core.messaging.send('contribution.donate',{apiKey:byId('donation-key').value,acceptTerms:byId('donation-accept').checked}); byId('donation-key').value=''; byId('donation-accept').checked=false; byId('donation-message').textContent='Public Only key validated and saved on SLINK servers in encrypted form.'; renderContribution(); } catch(error){ byId('donation-message').textContent=errorText(error); } finally{ setBusy(submit,false); } });
   byId('donation-revoke').addEventListener('click', async () => { if (!confirm('Revoke this saved donation and erase its encrypted key material?')) return; try { contribution=await SLINK.core.messaging.send('contribution.revoke'); byId('donation-message').textContent='Donation revoked and encrypted key material erased.'; renderContribution(); } catch(error) { byId('donation-message').textContent=errorText(error); } });
   byId('run-diagnostic').addEventListener('click', async event => { const button=event.currentTarget; setBusy(button,true); try { byId('diagnostic').textContent=formatDiagnostic(await SLINK.core.messaging.send('diagnostics.run')); } catch(error){ byId('diagnostic').textContent=errorText(error); } finally{ setBusy(button,false); } });
@@ -1028,6 +1143,7 @@
     const requestedPage = await SLINK.core.storage.get('ui.dashboard.activePage', 'workspace');
     await SLINK.core.storage.remove('ui.dashboard.activePage');
     switchPage(['workspace', 'alerts', 'admin', 'diagnostics'].includes(requestedPage) ? requestedPage : 'workspace');
+    switchEfficiency(await SLINK.core.storage.get('ui.efficiency.activeView', 'alerts'));
   }
   catch (error) {
     byId('connection').textContent = 'Extension background unavailable';
@@ -1055,6 +1171,12 @@
     try { adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:true }); renderAdhd(); }
     catch (error) { byId('adhd-error').textContent = errorText(error); byId('adhd-error').hidden = false; }
   }, 30_000);
+  setInterval(async () => {
+    if (!merits?.configured) return;
+    try { merits = await SLINK.core.messaging.send('merits.status', { refreshIfDue:true }); renderMerits(); }
+    catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
+  }, 60_000);
+  setInterval(() => { updateAdhdClock(); updateMeritsClock(); }, 1_000);
   addEventListener('pagehide', () => { void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {}); }, { once:true });
 })();
 

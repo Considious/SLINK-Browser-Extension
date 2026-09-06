@@ -4,6 +4,7 @@ importScripts(
   '../core/storage.js',
   '../core/permissions.js',
   '../core/adhd.js',
+  '../core/merits.js',
   '../core/themes.js',
   '../core/messaging.js',
   '../core/http.js',
@@ -13,6 +14,7 @@ importScripts(
   'theme-service.js',
   'permission-service.js',
   'adhd-service.js',
+  'merits-service.js',
   'player-stats-service.js',
   'leveling-service.js',
   'war-service.js',
@@ -296,6 +298,16 @@ const routes = {
     return injection;
   },
 
+  async 'tornApi.sync'(payload, sender) {
+    const pageUrl = new URL(String(sender?.tab?.url || ''));
+    if (pageUrl.hostname !== 'www.torn.com') {
+      const error = new Error('The shared Torn API ledger can only be synchronized from Torn.');
+      error.code = 'SLINK_CONTENT_ORIGIN_DENIED';
+      throw error;
+    }
+    return SLINK.core.tornApiLimiter.syncShared(payload);
+  },
+
   async 'ui.torn.restore'() {
     return restoreTornUi();
   },
@@ -318,6 +330,7 @@ const routes = {
   ...SLINK.services.war.routes,
   ...SLINK.services.permissionAccess.routes,
   ...SLINK.services.adhd.routes,
+  ...SLINK.services.merits.routes,
   ...SLINK.services.themes.routes,
   ...SLINK.services.playerStats.routes,
   ...SLINK.services.contributionRoutes
@@ -343,6 +356,7 @@ chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
   if (alarm.name === SLINK.services.adhd.ALARM) {
     void SLINK.services.adhd.publicStatus(true).catch(error => console.error('[SLINK] Efficiency alerts:', error));
+    void SLINK.services.merits.publicStatus(true).catch(error => console.error('[SLINK] Merits:', error));
   }
   if (alarm.name === SLINK.services.playerStats.ALARM) {
     void SLINK.services.playerStats.status().then(status => {
