@@ -338,6 +338,7 @@
     const customSound = pendingCustomSoundDataUrl === null ? settings.customSoundDataUrl : pendingCustomSoundDataUrl;
     byId('adhd-custom-sound-state').textContent = customSound ? 'Custom audio saved locally.' : 'No custom audio uploaded.';
     byId('adhd-show-in-torn').checked = Boolean(system?.adhdInTorn);
+    byId('adhd-open-new-tab').checked = settings.openLinksInNewTab === true;
     byId('adhd-alert-toggles').replaceChildren(...SLINK.core.adhd.ALERT_DEFINITIONS.map(definition => {
       const row = document.createElement('div'); row.className = 'adhd-alert-toggle';
       const label = document.createElement('span'); label.textContent = definition.label;
@@ -1093,6 +1094,7 @@
         soundEnabled,
         soundChoice,
         customSoundDataUrl,
+        openLinksInNewTab:byId('adhd-open-new-tab').checked,
         cityStockAlerts
       });
       await SLINK.core.storage.set('ui.modules.adhd.showInTorn', byId('adhd-show-in-torn').checked);

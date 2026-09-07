@@ -80,7 +80,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.17.0', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.17.1', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -154,6 +154,8 @@ assert(meritView.goals.find(goal => goal.name === 'Celebrity')?.progress?.rows?.
 assert(meritView.goals.find(goal => goal.name === 'Committed')?.progress?.rows?.[0]?.current === 100, 'Marriage commitment did not use profile days married.');
 assert(meritView.pinned.length === 1 && meritView.pinned[0].key === 'medal:2', 'Pinned Merit farm was not preserved.');
 const adhdSettings = SLINK.core.adhd.defaultSettings();
+assert(adhdSettings.openLinksInNewTab === false, 'Torn alert links must default to the current tab.');
+assert(SLINK.core.adhd.normalizeSettings({ openLinksInNewTab:true }).openLinksInNewTab === true, 'New-tab preference was not normalized.');
 const partialCity = SLINK.core.adhd.cityProgress({ cityItemsBought:575, cityItemsAtReset:500 }, adhdSettings);
 assert(partialCity.bought === 75 && partialCity.remaining === 25 && !partialCity.complete, 'Shared city purchase progress was calculated incorrectly.');
 const completeCity = SLINK.core.adhd.cityProgress({ cityItemsBought:600, cityItemsAtReset:500 }, adhdSettings);
@@ -178,6 +180,14 @@ const efficiencySnapshot = {
   cluster:{ crimes:{ crimes:{ skill:100, uniques:[] } }, subcrimes:{ subcrimes:[{ id:44, name:'Jewelry Store' }] }, status:{ shoplifting:[{ id:44, status:[{ title:'Cameras', disabled:true }, { title:'Guard', disabled:true }] }] } }
 };
 const efficiencyAlerts = SLINK.core.adhd.buildAlerts(efficiencySnapshot, adhdSettings);
+const waitingRaceSnapshot = {
+  fetchedAt:Date.now(),
+  cityItemsBought:600,
+  cityItemsAtReset:500,
+  data:{ enlistedcars:[], races:[], profile:{ status:{ state:'Okay', description:'Waiting for a race', details:'' } } }
+};
+assert(!SLINK.core.adhd.buildAlerts(waitingRaceSnapshot, adhdSettings).some(alert => alert.id === 'raceOrFly'), 'Waiting for a race was treated as available to join another race.');
+assert(SLINK.core.adhd.raceActive([{ status:'in_progress' }], {}), 'An in-progress race was not detected from race history.');
 assert(efficiencyAlerts.find(alert => alert.id === 'missions')?.title.includes('cap reached'), 'Three accepted missions did not produce the mission-cap warning.');
 assert(efficiencyAlerts.some(alert => alert.id === 'stockBenefits'), 'Ready API stock benefit did not produce an alert.');
 assert(efficiencyAlerts.find(alert => alert.id === 'stockBenefits')?.detail.includes('Collectible Industries (COL)'), 'Collectible stock alert did not use its catalog name.');

@@ -72,6 +72,7 @@
       soundEnabled:Object.fromEntries(ALL_ALERT_IDS.map(id => [id, false])),
       soundChoice:'chime',
       customSoundDataUrl:'',
+      openLinksInNewTab:false,
       cityStockAlerts:Object.fromEntries(CITY_SHOP_TARGETS.map(target => [target.id, false])),
       snoozedUntil:{},
       cityDoneDay:null
@@ -91,6 +92,7 @@
       soundEnabled:{ ...defaults.soundEnabled, ...(input?.soundEnabled && typeof input.soundEnabled === 'object' ? input.soundEnabled : {}) },
       soundChoice:['chime', 'bell', 'urgent', 'custom'].includes(String(input?.soundChoice || '')) ? String(input.soundChoice) : defaults.soundChoice,
       customSoundDataUrl:/^data:audio\//i.test(String(input?.customSoundDataUrl || '')) ? String(input.customSoundDataUrl) : '',
+      openLinksInNewTab:input?.openLinksInNewTab === true,
       cityStockAlerts:{ ...defaults.cityStockAlerts, ...(input?.cityStockAlerts && typeof input.cityStockAlerts === 'object' ? input.cityStockAlerts : {}) },
       snoozedUntil:{ ...(input?.snoozedUntil && typeof input.snoozedUntil === 'object' ? input.snoozedUntil : {}) },
       cityDoneDay:Number.isInteger(Number(input?.cityDoneDay)) ? Number(input.cityDoneDay) : null
@@ -199,9 +201,28 @@
     return CITY_SHOP_TARGETS.map(target => found.get(target.id) || { ...target, stock:null, defaultStock:null, price:0 });
   }
 
-  function raceActive(races) {
+  function raceActive(races, profileStatus = {}) {
     const rows = Array.isArray(races) ? races : [];
-    return rows.some(race => /^(?:open|in[_ -]?progress|waiting|scheduled|pending)$/i.test(String(race?.status || '')));
+    const raceStates = rows.flatMap(race => [
+      race?.status,
+      race?.state,
+      race?.status?.state,
+      race?.status?.description,
+      race?.description
+    ]);
+    const playerStates = [
+      profileStatus?.state,
+      profileStatus?.description,
+      profileStatus?.details,
+      typeof profileStatus === 'string' ? profileStatus : ''
+    ];
+    return [...raceStates, ...playerStates].some(value => {
+      const text = String(value ?? '').trim();
+      return /^(?:open|in[_ -]?progress|waiting|scheduled|pending)$/i.test(text)
+        || /\bwaiting\s+for\s+(?:a\s+)?race\b/i.test(text)
+        || /\b(?:currently\s+)?in\s+(?:a\s+)?race\b/i.test(text)
+        || /\brace\s+(?:in[_ -]?progress|waiting|scheduled|pending)\b/i.test(text);
+    });
   }
 
   function addictionPercentFromBattleStats(body) {
@@ -289,7 +310,7 @@
         shareText:`City Stock | ${SLINK.core.format.escapeHtml(item.label)} | ${Number(item.stock).toLocaleString()} available at ${SLINK.core.format.escapeHtml(item.shopName || item.shop)}${Number(item.price) > 0 ? ` | $${Number(item.price).toLocaleString()} each` : ''} | ${progress.bought ?? 0}/100 city items bought | ${chatAnchor(item.href, item.shopName || item.shop)}`
       }));
     const away = ['traveling', 'abroad'].includes(String(profile?.status?.state || '').toLowerCase()) || Number(travelSeconds) > 0;
-    const activeRace = raceActive(body.races);
+    const activeRace = raceActive(body.races, profile.status);
     const racewayKnown = Array.isArray(body.enlistedcars) || Array.isArray(body.races);
     const alerts = [
       { id:'drugCooldown', active:drug === 0, title:'Drug cooldown is clear', detail:'You can take a drug now.', tone:'ready', links:[['Items','https://www.torn.com/item.php'],['Faction Armory',`${ARMORY_URL}&start=0&sub=drugs`]] },
@@ -395,6 +416,7 @@
     normalizeSettings,
     personalStat,
     playNotificationSound,
+    raceActive,
     refillUsed,
     stockBenefitsReady,
     utcDay

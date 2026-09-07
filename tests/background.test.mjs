@@ -27,6 +27,7 @@ let adhdCityShopRequests = 0;
 let adhdCityCurrentRequests = 0;
 let adhdCityBaselineRequests = 0;
 let adhdStockCatalogRequests = 0;
+let optionsPageOpens = 0;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -73,7 +74,8 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.17.0' }; },
+    getManifest() { return { version: '0.17.1' }; },
+    async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
     onStartup
@@ -456,6 +458,9 @@ const restoredUi = await send('ui.torn.restore');
 assert(restoredUi.ok && restoredUi.data.restored === 1 && uiRestoreMessages === 1, 'Torn GUI restore was not delivered to the open Torn tab.');
 assert(!values.has('slink.ui.main.position') && !values.has('slink.ui.bubble.position'), 'Torn GUI restore kept off-screen coordinates.');
 assert(!values.has('slink.ui.main.collapsed') && values.get('slink.ui.pagePanelHidden') === false, 'Torn GUI restore did not reopen the interface.');
+const openedSettings = await send('ui.dashboard.open', { page:'alerts', efficiencyView:'alerts' });
+assert(openedSettings.ok && openedSettings.data.opened && optionsPageOpens === 1, 'Torn GUI settings did not open the extension dashboard.');
+assert(values.get('slink.ui.dashboard.activePage') === 'alerts' && values.get('slink.ui.efficiency.activeView') === 'alerts', 'Torn GUI settings did not select Efficiency alerts.');
 
 const saved = await send('leveling.settings.save', {
   tornKey: 'torn-test-key',
@@ -483,7 +488,8 @@ assert(meritsRefreshed.data.goals.find(goal => goal.name === 'Happy Slapper')?.p
 const meritsPinned = await send('merits.pin', { key:'medal:2' });
 assert(meritsPinned.ok && meritsPinned.data.pinned.length === 1, 'A Merit farm could not be pinned.');
 assert(!JSON.stringify(meritsRefreshed.data).includes('torn-test-key'), 'Merit status leaked the local Torn API key.');
-await send('adhd.settings.save', { cityStockAlerts:{ 392:true }, soundEnabled:{ energyFull:true } });
+const adhdSettingsSaved = await send('adhd.settings.save', { cityStockAlerts:{ 392:true }, soundEnabled:{ energyFull:true }, openLinksInNewTab:true });
+assert(adhdSettingsSaved.ok && adhdSettingsSaved.data.settings.openLinksInNewTab === true, 'Torn alert new-tab preference was not saved.');
 const adhdRefreshed = await send('adhd.refresh');
 assert(adhdRefreshed.ok && adhdRefreshed.data.permitted, 'ADHD API alerts did not honor the signed permission scope.');
 assert(adhdRefreshed.data.city.bought === 75 && !adhdRefreshed.data.city.complete, 'ADHD city progress did not combine all purchases into one daily total.');

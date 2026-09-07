@@ -238,6 +238,7 @@
       soundEnabled,
       soundChoice:Object.hasOwn(input, 'soundChoice') ? input.soundChoice : previous.soundChoice,
       customSoundDataUrl:Object.hasOwn(input, 'customSoundDataUrl') ? input.customSoundDataUrl : previous.customSoundDataUrl,
+      openLinksInNewTab:Object.hasOwn(input, 'openLinksInNewTab') ? input.openLinksInNewTab : previous.openLinksInNewTab,
       cityStockAlerts
     });
     await SLINK.core.storage.set(KEYS.settings, next);

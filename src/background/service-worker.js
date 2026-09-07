@@ -312,6 +312,21 @@ const routes = {
     return restoreTornUi();
   },
 
+  async 'ui.dashboard.open'(payload = {}) {
+    const page = ['workspace', 'alerts', 'admin', 'diagnostics'].includes(String(payload.page))
+      ? String(payload.page)
+      : 'workspace';
+    await SLINK.core.storage.set('ui.dashboard.activePage', page);
+    if (page === 'alerts') {
+      const efficiencyView = ['alerts', 'merits'].includes(String(payload.efficiencyView))
+        ? String(payload.efficiencyView)
+        : 'alerts';
+      await SLINK.core.storage.set('ui.efficiency.activeView', efficiencyView);
+    }
+    await chrome.runtime.openOptionsPage();
+    return { opened:true, page };
+  },
+
   async 'diagnostics.run'() {
     await requireAdminPermission();
     return recordDiagnostic('manual');

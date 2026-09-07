@@ -139,6 +139,8 @@ assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/pl
 assert(uiShellSource.includes('async function restore()'), 'Torn UI shell does not provide an in-place recovery path.');
 assert(!uiShellSource.includes('Pop out') && !uiShellSource.includes('setPopped'), 'The broken Torn module pop-out control is still packaged.');
 assert(read('src/background/service-worker.js').includes("'ui.torn.restore'"), 'The extension cannot repush its GUI to open Torn tabs.');
+assert(read('src/background/service-worker.js').includes("'ui.dashboard.open'") && read('src/modules/adhd.js').includes("SLINK.core.messaging.send('ui.dashboard.open'"), 'The Torn Efficiency settings button is not routed through the background worker.');
+assert(dashboardHtml.includes('id="adhd-open-new-tab"') && read('src/modules/adhd.js').includes("openLinksInNewTab === true ? '_blank' : '_self'"), 'Torn Efficiency alert link behavior is not configurable.');
 const warModuleSource = read('src/modules/war.js');
 const warServiceSource = read('src/background/war-service.js');
 const serviceWorkerSource = read('src/background/service-worker.js');

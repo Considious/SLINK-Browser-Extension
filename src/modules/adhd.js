@@ -193,7 +193,9 @@
           const detail = document.createElement('span'); detail.textContent = alert.detail || '';
           const links = document.createElement('div'); links.className = 'slink-adhd-links';
           for (const [label, href] of alert.links || []) {
-            const anchor = document.createElement('a'); anchor.href = String(href); anchor.target = '_blank'; anchor.rel = 'noopener noreferrer'; anchor.textContent = String(label || 'Open'); links.append(anchor);
+            const anchor = document.createElement('a'); anchor.href = String(href); anchor.target = status?.settings?.openLinksInNewTab === true ? '_blank' : '_self';
+            if (anchor.target === '_blank') anchor.rel = 'noopener noreferrer';
+            anchor.textContent = String(label || 'Open'); links.append(anchor);
           }
           if (alert.shareText) {
             const copy = document.createElement('button'); copy.type = 'button'; copy.textContent = 'Copy'; copy.title = 'Copy the compact city-stock listing and HTML link';
@@ -267,9 +269,13 @@
           catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
           finally { event.currentTarget.disabled = false; }
         } },
-        { id:'settings', label:'Settings', onClick:async () => {
-          await SLINK.core.storage.set('ui.dashboard.activePage', 'alerts');
-          await chrome.runtime.openOptionsPage();
+        { id:'settings', label:'Settings', onClick:async event => {
+          event.currentTarget.disabled = true;
+          try {
+            await SLINK.core.messaging.send('ui.dashboard.open', { page:'alerts', efficiencyView:'alerts' });
+          }
+          catch (error) { ui.setStatus(`Could not open settings: ${SLINK.core.format.errorMessage(error)}`, 'error'); }
+          finally { event.currentTarget.disabled = false; }
         } }
       ]);
       await load(true);
