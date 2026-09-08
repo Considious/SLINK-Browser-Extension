@@ -66,6 +66,14 @@
         : primaryMessage);
       error.code = 'SLINK_HTTP_ERROR';
       error.status = response.status;
+      const retryAfter = response.headers?.get?.('retry-after');
+      if (retryAfter) {
+        const seconds = Number(retryAfter);
+        const date = Date.parse(retryAfter);
+        error.retryAfterMs = Number.isFinite(seconds)
+          ? Math.max(0, seconds * 1_000)
+          : Number.isFinite(date) ? Math.max(0, date - Date.now()) : 0;
+      }
       error.data = data;
       throw error;
     }

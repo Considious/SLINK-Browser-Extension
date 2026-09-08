@@ -113,6 +113,9 @@ assert(dashboardHtml.includes('>Efficiency<') && dashboardHtml.includes('id="adh
 assert(dashboardHtml.includes('data-efficiency-view="merits"') && dashboardHtml.includes('id="merits-refresh-minutes"') && dashboardHtml.includes('id="merits-pinned-list"'), 'Efficiency is missing its Merits tab, refresh control, or three-goal farm list.');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/merits.js')), 'Merits is missing from the in-Torn Efficiency tools.');
 assert(dashboardHtml.includes('data-efficiency-view="market"') && dashboardHtml.includes('id="market-watch-form"') && dashboardHtml.includes('id="market-quick-buy"'), 'Efficiency is missing its Market Watch tab, editor, or quick-buy control.');
+assert(dashboardHtml.includes('id="market-watch-type"') && dashboardHtml.includes('>Points Market<') && dashboardHtml.includes('id="market-watch-item-id"') && dashboardHtml.includes('id="market-item-suggestions"'), 'Market Watch is missing Points Market or its ID-backed searchable item selector.');
+assert(dashboardSource.includes('settings.lastPriority') && dashboardSource.includes('selectMarketItem'), 'Market Watch does not preserve the selected priority or bind catalog choices to Torn IDs.');
+assert(read('src/dashboard/dashboard.css').includes('.market-watch-list{display:grid;grid-template-columns:repeat(3'), 'Market watches are not presented in a three-column desktop grid.');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/core/market.js') && entry.js?.includes('src/modules/market.js')), 'Market Watch is missing from the in-Torn Efficiency tools.');
 const marketServiceSource = read('src/background/market-service.js');
 const marketModuleSource = read('src/modules/market.js');

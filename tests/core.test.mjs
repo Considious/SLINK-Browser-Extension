@@ -81,7 +81,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.0', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.1', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -121,6 +121,7 @@ const combinedPermissions = permissions.combineSnapshots(
 assert(combinedPermissions.scopes.join(',') === 'admin.*,slink.level,slink.war', 'Product scopes were not combined without duplication.');
 assert(!permissions.combineSnapshots({ userId:1, scopes:['expired.product'], expiresAt:Date.now() - 1 }).scopes.length, 'Expired product scopes remained visible.');
 assert(SLINK.core.adhd.marketWatchLimit({ userId:12, scopes:['slink.adhd.marketwatch.5','slink.adhd.marketwatch.15'] }) === 15, 'Highest ADHD market-watch tier was not selected.');
+assert(SLINK.core.adhd.marketWatchLimit({ userId:12, scopes:['slink.adhd.marketwatch.40'] }) === 40, 'Forty-slot ADHD market-watch tier was not selected.');
 const marketCatalog = SLINK.core.market.catalogItems({ items:[
   { id:1, name:'Current Shops', type:'Drug', is_tradable:true, value:{ market_price:100, shops:[{ country:'Torn', shop:'Bits n Bobs', sell_price:125 }, { country:'Mexico', shop:'Market', sell_price:110 }] } },
   { id:2, name:'Legacy Shop', type:'Other', is_tradable:true, value:{ market_price:200, sell_price:220, vendor:{ name:'Old Shop', country:'Torn' } } }
@@ -128,9 +129,16 @@ const marketCatalog = SLINK.core.market.catalogItems({ items:[
 assert(marketCatalog[0].shopSellPrice === 125 && marketCatalog[0].shopSellName === 'Bits n Bobs', 'Market catalog did not use the current Torn value.shops[] sell price.');
 assert(marketCatalog[1].shopSellPrice === 220, 'Legacy shop-price compatibility fallback failed.');
 const marketSettings = SLINK.core.market.normalizeSettings({ watches:[{ uid:'one', itemId:1, label:'Current Shops', maxPrice:90, marketEnabled:true, bazaarEnabled:true }] });
+assert(SLINK.core.market.normalizeSettings({ lastPriority:'low' }).lastPriority === 'low', 'Last Market Watch priority was not preserved.');
+assert(SLINK.core.market.TORN_PRIORITY_LIMITS.high === 60 && SLINK.core.market.TORN_PRIORITY_LIMITS.normal === 50 && SLINK.core.market.TORN_PRIORITY_LIMITS.low === 40, 'Market priority API headroom did not match the dashboard scheduler.');
+const cacheNext = SLINK.core.market.itemMarketNextCheckAt({ fetchedAt:1_000_000, cacheTimestamp:1_000, cacheDelayMs:30_000 });
+assert(cacheNext === 1_031_000, 'Item Market scheduling did not use cache timestamp + delay + one second.');
 const marketDeals = SLINK.core.market.opportunityRows({ catalog:{ items:marketCatalog }, results:{ one:{ market:{ listings:[{ price:80, quantity:3 }] }, bazaar:{ listings:[{ sellerId:44, sellerName:'Seller', price:85, quantity:2, href:'https://www.torn.com/bazaar.php?userId=44&itemId=1&price=85&slinkHighlight=1#/' }] } } } }, marketSettings);
 assert(marketDeals.length === 2 && marketDeals.every(row => row.shareText.includes('shop sell $125')), 'Market/Bazaar deal copy omitted the Torn shop sell price.');
 assert(marketDeals.find(row => row.source === 'Item Market')?.href.includes('page.php?sid=ItemMarket'), 'Item Market deal uses an obsolete Torn route.');
+const pointsSettings = SLINK.core.market.normalizeSettings({ watches:[{ uid:'points', marketType:'points', maxPrice:45_000 }] });
+const pointsDeals = SLINK.core.market.opportunityRows({ results:{ points:{ points:{ listings:[{ price:44_000, quantity:1_000 }] } } } }, pointsSettings);
+assert(pointsDeals.length === 1 && pointsDeals[0].href === 'https://www.torn.com/pmarket.php', 'Points Market watch did not create the correct API-backed deal.');
 const meritStats = SLINK.core.merits.numericPersonalStats({ personalstats:{ attacking:{ attacks:{ won:100 }, defends:{ won:44 }, escapes:{ player:27, foes:4 }, faction:{ respect:31_262 } }, crimes:{ offenses:{ total:10_100 } }, finishing_hits:{ pistols:125 } } });
 const meritSnapshot = {
   medals:[{ id:1 }, { id:30 }], honors:[], merits:{ available:4 },

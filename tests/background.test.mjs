@@ -31,6 +31,7 @@ let optionsPageOpens = 0;
 let marketCatalogRequests = 0;
 let itemMarketRequests = 0;
 let weaverMarketRequests = 0;
+let pointsMarketRequests = 0;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -78,7 +79,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.0' }; },
+    getManifest() { return { version: '0.18.1' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -185,7 +186,7 @@ context = vm.createContext({
         disclosure_version:'2026-08-23', disclosure_sha256:'summary-hash', summary:'Encrypted offline donation test.'
       };
       if (url.pathname === '/api/permissions/terms') body = { ok:true, terms:{ version:'2026-08-24', sha256:'72a933d69ec99cabeb92b426208e9d0c47e90acaf960818e0b4da38f3f2f5b0a', url:'https://example.test/terms', summary:'Permission disclosure.' } };
-      if (url.pathname === '/api/permissions/auth') body = { ok:true, session_token:'signed-access-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:['admin.*','slink.adhd.alerts','slink.adhd.marketwatch.20'] };
+      if (url.pathname === '/api/permissions/auth') body = { ok:true, session_token:'signed-access-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:['admin.*','slink.adhd.alerts','slink.adhd.marketwatch.40'] };
       if (url.pathname === '/api/admin/scopes') body = { ok:true, scopes:[{ scope:'slink.level', category:'Products', title:'SLINK Leveling' }, { scope:'slink.war', category:'Products', title:'SLINK War' }, { scope:'slink.war.officer', category:'War permissions', title:'SLINK War Officer' }, { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow' }] };
       if (/^\/api\/admin\/users\/\d+\/permissions$/.test(url.pathname)) {
         const selected = options.method === 'POST' ? new Set(JSON.parse(options.body || '{}').scopes || []) : new Set(['slink.level']);
@@ -290,6 +291,9 @@ context = vm.createContext({
           { id:1, name:'Test Xanax', type:'Drug', is_tradable:true, value:{ market_price:100, shops:[{ country:'Torn', shop:'Bits n Bobs', sell_price:125 }] } },
           { id:2, name:'Test Can', type:'Energy Drink', is_tradable:true, value:{ market_price:100, shops:[{ country:'Torn', shop:'Bits n Bobs', sell_price:130 }] } }
         ] };
+      } else if (url.pathname === '/v2/market' && url.searchParams.get('selections') === 'pointsmarket') {
+        pointsMarketRequests += 1;
+        body = { pointsmarket:{ listings:[{ cost:44_000, quantity:1_000 }] } };
       } else if (/^\/v2\/market\/\d+\/itemmarket$/.test(url.pathname)) {
         itemMarketRequests += 1;
         body = { itemmarket:{ listings:[{ price:80, amount:3 }] } };
@@ -505,8 +509,12 @@ assert(firstMarketWatch.data.opportunities.every(row => row.shareText.includes('
 const secondMarketWatch = await send('market.watch.save', { itemId:2, maxPrice:90, priority:'normal', marketEnabled:true, bazaarEnabled:true });
 const secondUid = secondMarketWatch.data.settings.watches.find(watch => watch.itemId === 2)?.uid;
 const editedMarketWatch = await send('market.watch.save', { uid:secondUid, itemId:2, maxPrice:95, priority:'normal', marketEnabled:true, bazaarEnabled:true });
-assert(editedMarketWatch.ok && editedMarketWatch.data.marketWatchLimit === 20, 'Signed Market Watch tier was not enforced or exposed.');
-assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverMarketRequests === 3, 'Editing one watch force-refreshed unrelated watches or bypassed the local catalog cache.');
+assert(editedMarketWatch.ok && editedMarketWatch.data.marketWatchLimit === 40, 'Signed Market Watch tier was not enforced or exposed.');
+assert(editedMarketWatch.data.settings.lastPriority === 'normal', 'Saved Market Watch priority was not remembered for the next watch.');
+assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverMarketRequests >= 1 && weaverMarketRequests <= 3, 'Editing one watch force-refreshed unrelated watches, bypassed the local catalog cache, or ignored Weaver spacing.');
+const pointsMarketWatch = await send('market.watch.save', { marketType:'points', maxPrice:45_000, priority:'low' });
+assert(pointsMarketWatch.ok && pointsMarketRequests === 1 && pointsMarketWatch.data.opportunities.some(row => row.source === 'Points Market'), 'Points Market did not use its combined API watch.');
+assert(pointsMarketWatch.data.settings.lastPriority === 'low', 'The most recently selected priority did not carry forward.');
 assert(!JSON.stringify(editedMarketWatch.data).includes('torn-test-key'), 'Market Watch public status leaked the local Torn API key.');
 const meritsRefreshed = await send('merits.refresh');
 assert(meritsRefreshed.ok && meritsRefreshed.data.permitted, 'Merits did not honor the existing signed Efficiency permission.');
@@ -530,7 +538,7 @@ const firstSound = await send('adhd.sound.claim');
 const repeatedSound = await send('adhd.sound.claim');
 assert(firstSound.ok && firstSound.data.play && firstSound.data.alertIds.includes('energyFull'), 'A newly active sound-enabled alert was not claimed.');
 assert(repeatedSound.ok && repeatedSound.data.play === false, 'An unchanged alert repeated its sound.');
-assert(adhdRefreshed.data.marketWatchLimit === 20, 'Highest signed ADHD market-watch tier was not exposed.');
+assert(adhdRefreshed.data.marketWatchLimit === 40, 'Highest signed ADHD market-watch tier was not exposed.');
 assert(!JSON.stringify(adhdRefreshed.data).includes('torn-test-key'), 'ADHD public status leaked the local Torn key.');
 adhdCityItemsBought = 600;
 const adhdComplete = await send('adhd.refresh');

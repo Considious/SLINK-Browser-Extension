@@ -392,9 +392,61 @@
   function resetMarketWatchForm() {
     byId('market-watch-form').reset();
     byId('market-watch-uid').value = '';
-    byId('market-watch-priority').value = 'normal';
+    byId('market-watch-type').value = 'item';
+    byId('market-watch-item-id').value = '';
+    byId('market-watch-item-meta').textContent = 'The Torn item list loads automatically.';
+    byId('market-item-suggestions').hidden = true;
+    byId('market-watch-priority').value = SLINK.core.market.normalizePriority(market?.settings?.lastPriority);
     byId('market-watch-market').checked = true;
     byId('market-watch-bazaar').checked = true;
+    syncMarketWatchType();
+  }
+
+  function marketCatalog() {
+    return Array.isArray(market?.catalog?.items) ? market.catalog.items : [];
+  }
+
+  function marketItemLabel(item) {
+    const shop = Number(item?.shopSellPrice) > 0
+      ? ` · shop sell $${Number(item.shopSellPrice).toLocaleString()}${item.shopSellName ? ` at ${item.shopSellName}` : ''}`
+      : '';
+    return `${item?.name || 'Unknown item'} [${Number(item?.id) || 0}]${shop}`;
+  }
+
+  function selectMarketItem(item) {
+    byId('market-watch-item').value = item?.name || '';
+    byId('market-watch-item-id').value = item?.id || '';
+    byId('market-watch-item-meta').textContent = item ? marketItemLabel(item) : 'Choose a Torn item from the suggestions.';
+    byId('market-item-suggestions').hidden = true;
+  }
+
+  function renderMarketSuggestions(query = '') {
+    const root = byId('market-item-suggestions');
+    const needle = String(query || '').trim().toLocaleLowerCase();
+    const items = marketCatalog().filter(item => !needle || String(item.name).toLocaleLowerCase().includes(needle))
+      .sort((left, right) => {
+        const a = String(left.name).toLocaleLowerCase().startsWith(needle) ? 0 : 1;
+        const b = String(right.name).toLocaleLowerCase().startsWith(needle) ? 0 : 1;
+        return a - b || String(left.name).localeCompare(String(right.name));
+      }).slice(0, 30);
+    root.replaceChildren(...items.map(item => {
+      const option = document.createElement('button'); option.type = 'button'; option.className = 'market-item-option'; option.dataset.marketItemId = item.id;
+      const name = document.createElement('strong'); name.textContent = `${item.name} [${item.id}]`;
+      const detail = document.createElement('small'); detail.textContent = Number(item.shopSellPrice) > 0
+        ? `Shop sell $${Number(item.shopSellPrice).toLocaleString()}${item.shopSellName ? ` at ${item.shopSellName}` : ''}`
+        : `${item.type || 'Item'} · no shop sell price`;
+      option.append(name, detail); return option;
+    }));
+    root.hidden = !items.length || byId('market-watch-type').value === 'points';
+  }
+
+  function syncMarketWatchType() {
+    const points = byId('market-watch-type').value === 'points';
+    byId('market-item-picker').hidden = points;
+    byId('market-watch-item').required = !points;
+    byId('market-watch-sources').hidden = points;
+    byId('market-watch-price-label').textContent = points ? 'Maximum price per point' : 'Maximum price';
+    if (points) byId('market-item-suggestions').hidden = true;
   }
 
   function updateMarketClock() {
@@ -422,21 +474,16 @@
     byId('market-error').hidden = !market.lastError;
     byId('market-show-in-torn').checked = settings.showInTorn;
     byId('market-quick-buy').checked = settings.quickBuyEnabled;
-    byId('market-item-options').replaceChildren(...catalog.map(item => {
-      const option = document.createElement('option');
-      option.value = item.name;
-      option.label = `${item.type} · ID ${item.id}${Number(item.shopSellPrice) > 0 ? ` · shop sell $${Number(item.shopSellPrice).toLocaleString()}` : ''}`;
-      option.dataset.itemId = item.id;
-      return option;
-    }));
+    if (!byId('market-watch-uid').value) byId('market-watch-priority').value = settings.lastPriority;
     byId('market-watch-save').disabled = !market.permitted || watches.length >= Number(market.marketWatchLimit || 0) && !byId('market-watch-uid').value;
     const watchList = byId('market-watch-list');
     watchList.replaceChildren(...(watches.length ? watches.map(watch => {
       const item = catalog.find(row => Number(row.id) === Number(watch.itemId));
       const row = document.createElement('article'); row.className = 'market-watch-card';
       const copy = document.createElement('div');
-      const title = document.createElement('strong'); title.textContent = watch.label || item?.name || `Item ${watch.itemId}`;
-      const detail = document.createElement('span'); detail.textContent = `Target $${Number(watch.maxPrice).toLocaleString()} · ${watch.priority} · ${watch.marketEnabled ? 'Item Market' : ''}${watch.marketEnabled && watch.bazaarEnabled ? ' + ' : ''}${watch.bazaarEnabled ? 'Weaver Bazaar' : ''}${Number(item?.shopSellPrice) > 0 ? ` · shop sell $${Number(item.shopSellPrice).toLocaleString()}${item.shopSellName ? ` at ${item.shopSellName}` : ''}` : ''}`;
+      const title = document.createElement('strong'); title.textContent = watch.marketType === 'points' ? 'Points Market' : `${watch.label || item?.name || `Item ${watch.itemId}`} [${watch.itemId}]`;
+      const sources = watch.marketType === 'points' ? 'Points Market · every 30s' : `${watch.marketEnabled ? 'Item Market' : ''}${watch.marketEnabled && watch.bazaarEnabled ? ' + ' : ''}${watch.bazaarEnabled ? 'Weaver Bazaar' : ''}`;
+      const detail = document.createElement('span'); detail.textContent = `Target $${Number(watch.maxPrice).toLocaleString()} · ${watch.priority} · ${sources}${Number(item?.shopSellPrice) > 0 ? ` · shop sell $${Number(item.shopSellPrice).toLocaleString()}${item.shopSellName ? ` at ${item.shopSellName}` : ''}` : ''}`;
       copy.append(title, detail);
       const actions = document.createElement('div'); actions.className = 'row-actions';
       const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'small secondary'; edit.dataset.marketEdit = watch.uid; edit.textContent = 'Edit';
@@ -1127,25 +1174,55 @@
     catch (error) { byId('market-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
   });
+  byId('market-watch-type').addEventListener('change', syncMarketWatchType);
+  byId('market-watch-item').addEventListener('focus', event => renderMarketSuggestions(event.currentTarget.value));
+  byId('market-watch-item').addEventListener('input', event => {
+    const selected = marketCatalog().find(item => String(item.id) === byId('market-watch-item-id').value);
+    if (!selected || selected.name !== event.currentTarget.value) byId('market-watch-item-id').value = '';
+    renderMarketSuggestions(event.currentTarget.value);
+  });
+  byId('market-watch-item').addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || byId('market-item-suggestions').hidden) return;
+    const first = byId('market-item-suggestions').querySelector('[data-market-item-id]');
+    if (!first) return;
+    event.preventDefault(); selectMarketItem(marketCatalog().find(item => String(item.id) === first.dataset.marketItemId));
+  });
+  byId('market-item-suggestions').addEventListener('mousedown', event => event.preventDefault());
+  byId('market-item-suggestions').addEventListener('click', event => {
+    const option = event.target.closest('[data-market-item-id]');
+    if (option) selectMarketItem(marketCatalog().find(item => String(item.id) === option.dataset.marketItemId));
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('#market-item-picker')) byId('market-item-suggestions').hidden = true;
+  });
   byId('market-watch-form').addEventListener('submit', async event => {
     event.preventDefault();
     const button = byId('market-watch-save'); setBusy(button, true); byId('market-message').textContent = '';
     try {
-      if (!byId('market-watch-market').checked && !byId('market-watch-bazaar').checked) throw new Error('Select Item Market, Weaver Bazaar, or both.');
-      const name = byId('market-watch-item').value.trim().toLocaleLowerCase();
-      const item = (market?.catalog?.items || []).find(row => String(row.name || '').trim().toLocaleLowerCase() === name);
-      if (!item) throw new Error('Choose an item from the loaded Torn API item list.');
+      const marketType = byId('market-watch-type').value === 'points' ? 'points' : 'item';
+      if (marketType === 'item' && !byId('market-watch-market').checked && !byId('market-watch-bazaar').checked) throw new Error('Select Item Market, Weaver Bazaar, or both.');
+      let item = null;
+      if (marketType === 'item') {
+        item = marketCatalog().find(row => String(row.id) === byId('market-watch-item-id').value);
+        if (!item) {
+          const name = byId('market-watch-item').value.trim().toLocaleLowerCase();
+          item = marketCatalog().find(row => String(row.name || '').trim().toLocaleLowerCase() === name);
+        }
+        if (!item) throw new Error('Choose an item from the Torn API suggestions.');
+      }
       market = await SLINK.core.messaging.send('market.watch.save', {
         uid:byId('market-watch-uid').value || `watch-${globalThis.crypto?.randomUUID?.() || Date.now()}`,
-        itemId:item.id,
-        label:item.name,
+        marketType,
+        itemId:item?.id || 0,
+        label:item?.name || 'Points',
         maxPrice:byId('market-watch-price').value,
         priority:byId('market-watch-priority').value,
-        marketEnabled:byId('market-watch-market').checked,
-        bazaarEnabled:byId('market-watch-bazaar').checked,
+        marketEnabled:marketType === 'points' || byId('market-watch-market').checked,
+        bazaarEnabled:marketType === 'item' && byId('market-watch-bazaar').checked,
         enabled:true
       });
-      resetMarketWatchForm(); byId('market-message').textContent = `${item.name} watch saved.`; renderMarket();
+      const savedName = marketType === 'points' ? 'Points Market' : item.name;
+      resetMarketWatchForm(); byId('market-message').textContent = `${savedName} watch saved.`; renderMarket();
     } catch (error) { byId('market-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
   });
@@ -1165,7 +1242,9 @@
     const remove = event.target.closest('[data-market-remove]');
     if (edit) {
       const watch = market?.settings?.watches?.find(row => row.uid === edit.dataset.marketEdit); if (!watch) return;
-      byId('market-watch-uid').value = watch.uid; byId('market-watch-item').value = watch.label; byId('market-watch-price').value = watch.maxPrice; byId('market-watch-priority').value = watch.priority; byId('market-watch-market').checked = watch.marketEnabled; byId('market-watch-bazaar').checked = watch.bazaarEnabled; byId('market-watch-save').disabled = false; byId('market-watch-item').focus();
+      byId('market-watch-uid').value = watch.uid; byId('market-watch-type').value = watch.marketType || 'item'; byId('market-watch-price').value = watch.maxPrice; byId('market-watch-priority').value = watch.priority; byId('market-watch-market').checked = watch.marketEnabled; byId('market-watch-bazaar').checked = watch.bazaarEnabled; byId('market-watch-save').disabled = false;
+      if (watch.marketType !== 'points') selectMarketItem(marketCatalog().find(item => Number(item.id) === Number(watch.itemId)) || { id:watch.itemId, name:watch.label });
+      syncMarketWatchType(); byId('market-watch-price').focus();
     }
     if (remove) {
       const watch = market?.settings?.watches?.find(row => row.uid === remove.dataset.marketRemove); if (!watch || !confirm(`Remove the ${watch.label} watch?`)) return;

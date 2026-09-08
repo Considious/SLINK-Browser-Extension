@@ -107,12 +107,15 @@
           await saveLedger(ledger);
           return Object.freeze({ reservedAt:now, count:ledger.events.length, limit });
         }
+        const nextEvent = ledger.events[0]?.at + WINDOW_MS + 25 || now + 250;
         if (!wait) {
           const error = new Error('The shared Torn API limit is currently full.');
           error.code = 'SLINK_TORN_API_LIMIT';
+          error.retryAfterMs = Math.max(50, Math.max(nextEvent, ledger.cooldownUntil || 0) - now);
+          error.usage = ledger.events.length;
+          error.limit = limit;
           throw error;
         }
-        const nextEvent = ledger.events[0]?.at + WINDOW_MS + 25 || now + 250;
         const delay = Math.max(50, Math.min(5_000, Math.max(nextEvent, ledger.cooldownUntil || 0) - now));
         await new Promise(resolve => setTimeout(resolve, delay));
       }

@@ -4,12 +4,26 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.18.1 brings Market Watch scheduling and setup in line with the
+original ADHD Dashboard. Torn Item Market checks now follow the API's global
+cache timestamp plus its reported delay and one safety second. High, normal,
+and low priorities consume up to 60, 50, and 40 calls from the shared local
+60-call ledger respectively; active deals temporarily rise to high priority.
+Weaver uses the dashboard's 35/70/140-second priority cadence, 80-call rolling
+budget, request spacing, and `Retry-After` backoff. Points Market is available
+as one combined 30-second API watch.
+
+The permission ladder now supports 5-slot steps through 40. The item catalog
+loads automatically into a searchable picker that stores Torn IDs internally
+and displays names, IDs, and shop sell prices. Item Market and Weaver controls
+are grouped, saved priorities carry forward to the next watch, and watch cards
+use a responsive three/two/one-column layout.
+
 Version 0.18.0 adds permission-tiered **Market** and **Bazaar Watch** tools to
 the Efficiency dashboard and the in-Torn panel. Watch data comes only from
 Torn's v2 Item Market API and Weaver's marketplace JSON API; listing prices are
 never scraped from Torn pages. The extension's local Torn API limiter schedules
-high-, normal-, and low-priority watches at one-, five-, and fifteen-minute
-intervals and does not force unrelated watches to refresh when one watch is
+high-, normal-, and low-priority watches and does not force unrelated watches to refresh when one watch is
 edited. Watch settings, catalog data, and results remain in local extension
 storage; SLINK services only authenticate the signed 5/10/15/20-item permission
 tier.

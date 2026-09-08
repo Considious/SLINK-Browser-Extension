@@ -7,7 +7,7 @@
   const DAY_MS = 24 * 60 * 60 * 1000;
   const ALERT_SCOPE = 'slink.adhd.alerts';
   const MARKET_SCOPE_PREFIX = 'slink.adhd.marketwatch.';
-  const MARKET_TIERS = Object.freeze([5, 10, 15, 20]);
+  const MARKET_TIERS = Object.freeze([5, 10, 15, 20, 25, 30, 35, 40]);
   const ARMORY_URL = 'https://www.torn.com/factions.php?step=your#/tab=armoury';
   const CITY_SHOP_TARGETS = Object.freeze([
     Object.freeze({ id:392, label:'Pepper Spray', shop:"Big Al's Gun Shop", href:'https://www.torn.com/bigalgunshop.php' }),
