@@ -34,14 +34,15 @@ assert(!JSON.stringify(manifest).includes('<all_urls>'), 'The extension must not
 assert(manifest.permissions.includes('storage'), 'Storage permission is required.');
 assert(manifest.permissions.includes('alarms'), 'Alarms permission is required.');
 assert(
-  manifest.host_permissions.length === 6 &&
+  manifest.host_permissions.length === 7 &&
   manifest.host_permissions.includes('https://www.torn.com/*') &&
   manifest.host_permissions.includes('https://api.torn.com/*') &&
   manifest.host_permissions.includes('https://ffscouter.com/*') &&
+  manifest.host_permissions.includes('https://weav3r.dev/*') &&
   manifest.host_permissions.includes('https://slinkyleveling.richard-johnson554.workers.dev/*') &&
   manifest.host_permissions.includes('https://slinkcontributionworker.richard-johnson554.workers.dev/*') &&
   manifest.host_permissions.includes('https://slinkwarworker.richard-johnson554.workers.dev/*'),
-  'Required host access must include Torn, Torn API, FFScouter, and all SLINK Workers.'
+  'Required host access must include Torn, Torn API, FFScouter, Weaver, and all SLINK Workers.'
 );
 assert(
   !Object.prototype.hasOwnProperty.call(manifest, 'optional_host_permissions'),
@@ -111,6 +112,16 @@ assert(dashboardHtml.includes('data-dashboard-page="alerts"') && dashboardHtml.i
 assert(dashboardHtml.includes('>Efficiency<') && dashboardHtml.includes('id="adhd-sound-choice"') && dashboardHtml.includes('id="adhd-custom-sound"'), 'Efficiency naming or notification-sound controls are missing.');
 assert(dashboardHtml.includes('data-efficiency-view="merits"') && dashboardHtml.includes('id="merits-refresh-minutes"') && dashboardHtml.includes('id="merits-pinned-list"'), 'Efficiency is missing its Merits tab, refresh control, or three-goal farm list.');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/merits.js')), 'Merits is missing from the in-Torn Efficiency tools.');
+assert(dashboardHtml.includes('data-efficiency-view="market"') && dashboardHtml.includes('id="market-watch-form"') && dashboardHtml.includes('id="market-quick-buy"'), 'Efficiency is missing its Market Watch tab, editor, or quick-buy control.');
+assert(manifest.content_scripts.some(entry => entry.js?.includes('src/core/market.js') && entry.js?.includes('src/modules/market.js')), 'Market Watch is missing from the in-Torn Efficiency tools.');
+const marketServiceSource = read('src/background/market-service.js');
+const marketModuleSource = read('src/modules/market.js');
+assert(marketServiceSource.includes('/v2/market/') && marketServiceSource.includes("requestJson('weaver'") && marketServiceSource.includes('/v2/torn/items'), 'Market/Bazaar Watch is not sourced from the declared JSON APIs.');
+assert(!marketServiceSource.includes('workerClient') && !marketServiceSource.includes('D1'), 'Private Market/Bazaar Watch data must remain local instead of using a SLINK Worker or D1.');
+assert(marketModuleSource.includes('SLINK Buy') && marketModuleSource.includes('data-slink-market-highlight'), 'Torn listing highlights or the custom buy control are missing.');
+assert(marketModuleSource.includes('Send list to Faction') && marketModuleSource.includes('focusedTornPage'), 'Torn-only Market Watch faction sharing is missing.');
+assert(!dashboardSource.includes('Send list to Faction'), 'The extension dashboard must not offer direct Market Watch Faction Chat sending.');
+assert(read('src/core/market.js').includes('value?.shops') && read('src/core/market.js').includes('shop sell'), 'Current Torn shop sell-price support is missing from Market Watch.');
 assert(read('src/core/merits.js').includes('TRACK_LIMIT = 3') && read('src/background/merits-service.js').includes("'merits.pin'"), 'Merit pinning is missing or no longer limited to three active farms.');
 assert(!read('src/background/merits-service.js').includes('workerClient') && !read('src/background/merits-service.js').includes('D1'), 'Private Merit progress must remain local instead of using a SLINK Worker or D1.');
 assert(read('src/content/content-script.js').includes('considious:torn-api-ledger:v1') && read('src/content/content-script.js').includes('considious-torn-api-limiter-v1'), 'The extension is not coordinating Torn API usage with TornLib.');

@@ -4,6 +4,7 @@ importScripts(
   '../core/storage.js',
   '../core/permissions.js',
   '../core/adhd.js',
+  '../core/market.js',
   '../core/merits.js',
   '../core/themes.js',
   '../core/messaging.js',
@@ -14,6 +15,7 @@ importScripts(
   'theme-service.js',
   'permission-service.js',
   'adhd-service.js',
+  'market-service.js',
   'merits-service.js',
   'player-stats-service.js',
   'leveling-service.js',
@@ -122,6 +124,7 @@ async function ensureConnectionAlarm() {
   // legacy background alarm so a closed/idle UI never keeps polling.
   await chrome.alarms.clear(WAR_CYCLE_ALARM);
   await SLINK.services.adhd.ensureAlarm();
+  await SLINK.services.market.ensureAlarm();
   await SLINK.services.playerStats.ensureAlarm();
 }
 
@@ -318,7 +321,7 @@ const routes = {
       : 'workspace';
     await SLINK.core.storage.set('ui.dashboard.activePage', page);
     if (page === 'alerts') {
-      const efficiencyView = ['alerts', 'merits'].includes(String(payload.efficiencyView))
+      const efficiencyView = ['alerts', 'market', 'merits'].includes(String(payload.efficiencyView))
         ? String(payload.efficiencyView)
         : 'alerts';
       await SLINK.core.storage.set('ui.efficiency.activeView', efficiencyView);
@@ -345,6 +348,7 @@ const routes = {
   ...SLINK.services.war.routes,
   ...SLINK.services.permissionAccess.routes,
   ...SLINK.services.adhd.routes,
+  ...SLINK.services.market.routes,
   ...SLINK.services.merits.routes,
   ...SLINK.services.themes.routes,
   ...SLINK.services.playerStats.routes,
@@ -372,6 +376,9 @@ chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === SLINK.services.adhd.ALARM) {
     void SLINK.services.adhd.publicStatus(true).catch(error => console.error('[SLINK] Efficiency alerts:', error));
     void SLINK.services.merits.publicStatus(true).catch(error => console.error('[SLINK] Merits:', error));
+  }
+  if (alarm.name === SLINK.services.market.ALARM) {
+    void SLINK.services.market.publicStatus(true).catch(error => console.error('[SLINK] Market Watch:', error));
   }
   if (alarm.name === SLINK.services.playerStats.ALARM) {
     void SLINK.services.playerStats.status().then(status => {

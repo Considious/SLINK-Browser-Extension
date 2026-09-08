@@ -120,6 +120,13 @@ stored by a SLINK Worker. The applicable SLINK Worker receives the Torn API key
 only during authentication to verify identity and return signed permission
 scopes; the ordinary key is not retained remotely.
 
+Market and Bazaar Watch settings, item catalogs, listing results, highlights,
+and shop-price comparisons also remain in local extension storage. Torn Item
+Market data is requested directly from the Torn API using the user's locally
+stored key. Bazaar listing data is requested directly from Weaver's public JSON
+API; SLINK does not send the user's Torn key to Weaver. SLINK Workers receive
+only the authentication request needed to return the signed watch-count tier.
+
 ### SLINK services
 
 SLINK services may retain identity and permission records, accepted-terms
@@ -142,6 +149,8 @@ Information is shared only as necessary with:
 - **Torn API**, to retrieve data authorized by the user's Torn API key;
 - **FFScouter**, when the user supplies an FFScouter key and enables features
   that require Fair Fight data;
+- **Weaver**, when the user enables a Bazaar Watch, to retrieve public Bazaar
+  listing data for the selected Torn item;
 - **SLINK Workers**, to authenticate users, enforce permissions, coordinate
   Leveling and War data, manage claims, and operate optional API contribution;
   and
@@ -153,7 +162,7 @@ does not share information with advertising platforms or data brokers.
 
 ## Security
 
-SLINK uses HTTPS for transmissions to Torn, FFScouter, and SLINK services.
+SLINK uses HTTPS for transmissions to Torn, FFScouter, Weaver, and SLINK services.
 Remote requests are restricted to the specific HTTPS origins declared in the
 extension manifest. All extension-executed code is packaged with the extension;
 remote responses are treated as data and are not executed as code.

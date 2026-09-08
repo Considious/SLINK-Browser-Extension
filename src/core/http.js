@@ -7,6 +7,7 @@
   const CAPABILITY_ORIGINS = Object.freeze({
     tornApi: 'https://api.torn.com',
     ffscouter: 'https://ffscouter.com',
+    weaver: 'https://weav3r.dev',
     slinkWorker: 'https://slinkyleveling.richard-johnson554.workers.dev',
     contributionWorker: 'https://slinkcontributionworker.richard-johnson554.workers.dev',
     warWorker: 'https://slinkwarworker.richard-johnson554.workers.dev'

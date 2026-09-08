@@ -28,6 +28,9 @@ let adhdCityCurrentRequests = 0;
 let adhdCityBaselineRequests = 0;
 let adhdStockCatalogRequests = 0;
 let optionsPageOpens = 0;
+let marketCatalogRequests = 0;
+let itemMarketRequests = 0;
+let weaverMarketRequests = 0;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -67,6 +70,7 @@ const chrome = {
       return origins.every(origin => [
         'https://api.torn.com/*',
         'https://ffscouter.com/*',
+        'https://weav3r.dev/*',
         'https://slinkyleveling.richard-johnson554.workers.dev/*',
         'https://slinkcontributionworker.richard-johnson554.workers.dev/*',
         'https://slinkwarworker.richard-johnson554.workers.dev/*'
@@ -74,7 +78,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.17.1' }; },
+    getManifest() { return { version: '0.18.0' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -280,6 +284,15 @@ context = vm.createContext({
             dexterity:{ value:100, modifiers:[{ effect:'Addiction', type:'addiction', value:-5 }] }
           }
         };
+      } else if (url.pathname === '/v2/torn/items') {
+        marketCatalogRequests += 1;
+        body = { items:[
+          { id:1, name:'Test Xanax', type:'Drug', is_tradable:true, value:{ market_price:100, shops:[{ country:'Torn', shop:'Bits n Bobs', sell_price:125 }] } },
+          { id:2, name:'Test Can', type:'Energy Drink', is_tradable:true, value:{ market_price:100, shops:[{ country:'Torn', shop:'Bits n Bobs', sell_price:130 }] } }
+        ] };
+      } else if (/^\/v2\/market\/\d+\/itemmarket$/.test(url.pathname)) {
+        itemMarketRequests += 1;
+        body = { itemmarket:{ listings:[{ price:80, amount:3 }] } };
       } else if (url.pathname === '/v2/user' && url.searchParams.get('selections') === 'profile,faction,medals,honors,merits') {
         body = { profile:{ id:3853023, level:68, rank:'Outstanding', age:4200, awards:200, spouse:{ days_married:500 } }, faction:{ id:46978, days_in_faction:800 }, medals:[{ id:1 }], honors:[], merits:{ available:4 } };
       } else if (url.pathname === '/v2/torn' && url.searchParams.get('selections') === 'medals,honors') {
@@ -370,6 +383,9 @@ context = vm.createContext({
           }
         }
       };
+    } else if (url.hostname === 'weav3r.dev') {
+      weaverMarketRequests += 1;
+      body = { listings:[{ sellerId:44, sellerName:'Bazaar Seller', price:85, quantity:2, updatedAt:Date.now() }] };
     } else if (url.hostname === 'ffscouter.com') {
       body = [
         { player_id:123, fair_fight:2, bs_estimate:1000, source:'FFScouter' },
@@ -409,6 +425,7 @@ assert(values.get('slink.permissions.snapshot')?.scopes?.length === 0, 'Unauthen
 assert(alarms.has('slink.worker.connection'), 'Worker connection alarm was not created.');
 assert(alarms.has('slink.playerStats.daily'), 'Daily local player-stat alarm was not created.');
 assert(alarms.has('slink.adhd.alerts'), 'ADHD scheduler alarm was not created.');
+assert(alarms.has('slink.market.watch'), 'Market Watch scheduler alarm was not created.');
 assert(values.get('slink.worker.lastStatus')?.connected === true, 'Automatic Worker connection was not persisted.');
 assert(values.get('slink.themes.catalog.v1')?.catalog?.revision === 'test.remote.1', 'Remote theme catalog was not cached locally.');
 
@@ -482,6 +499,15 @@ const accessSaved = await send('access.settings.save', {
 });
 assert(accessSaved.ok && accessSaved.data.session.authenticated, 'ADHD permission-only session did not authenticate.');
 assert(!JSON.stringify(accessSaved.data).includes('torn-test-key'), 'Public ADHD access state leaked the shared local Torn API key.');
+const firstMarketWatch = await send('market.watch.save', { itemId:1, maxPrice:90, priority:'normal', marketEnabled:true, bazaarEnabled:true });
+assert(firstMarketWatch.ok && firstMarketWatch.data.opportunities.length === 2, 'API-only Item Market and Weaver Bazaar results did not create watch opportunities.');
+assert(firstMarketWatch.data.opportunities.every(row => row.shareText.includes('shop sell $125')), 'Market Watch did not expose Torn shop sell pricing.');
+const secondMarketWatch = await send('market.watch.save', { itemId:2, maxPrice:90, priority:'normal', marketEnabled:true, bazaarEnabled:true });
+const secondUid = secondMarketWatch.data.settings.watches.find(watch => watch.itemId === 2)?.uid;
+const editedMarketWatch = await send('market.watch.save', { uid:secondUid, itemId:2, maxPrice:95, priority:'normal', marketEnabled:true, bazaarEnabled:true });
+assert(editedMarketWatch.ok && editedMarketWatch.data.marketWatchLimit === 20, 'Signed Market Watch tier was not enforced or exposed.');
+assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverMarketRequests === 3, 'Editing one watch force-refreshed unrelated watches or bypassed the local catalog cache.');
+assert(!JSON.stringify(editedMarketWatch.data).includes('torn-test-key'), 'Market Watch public status leaked the local Torn API key.');
 const meritsRefreshed = await send('merits.refresh');
 assert(meritsRefreshed.ok && meritsRefreshed.data.permitted, 'Merits did not honor the existing signed Efficiency permission.');
 assert(meritsRefreshed.data.goals.find(goal => goal.name === 'Happy Slapper')?.progress?.rows?.[0]?.current === 100, 'Merit progress did not use the Torn personal-stat counter.');

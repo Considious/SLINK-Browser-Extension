@@ -16,6 +16,11 @@
       optional: false,
       origins: Object.freeze(['https://ffscouter.com/*'])
     }),
+    weaver: Object.freeze({
+      label: 'Weaver API',
+      optional: false,
+      origins: Object.freeze(['https://weav3r.dev/*'])
+    }),
     slinkWorker: Object.freeze({
       label: 'SLINK Worker',
       optional: false,

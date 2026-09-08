@@ -21,6 +21,7 @@
       groupTitle:String(definition.groupTitle || definition.group || 'Other'),
       defaultShowInTorn: definition.defaultShowInTorn !== false,
       requiredScopes: Object.freeze([...(definition.requiredScopes || [])]),
+      permissionTest: typeof definition.permissionTest === 'function' ? definition.permissionTest : null,
       matches: typeof definition.matches === 'function' ? definition.matches : () => true,
       start: definition.start,
       stop: typeof definition.stop === 'function' ? definition.stop : null
@@ -49,6 +50,10 @@
       }
       if (!SLINK.core.permissions.hasAllScopes(context.permissions, module.requiredScopes)) {
         denied.push({ id: module.id, requiredScopes: [...module.requiredScopes] });
+        continue;
+      }
+      if (module.permissionTest && !module.permissionTest(context.permissions)) {
+        denied.push({ id:module.id, requiredScopes:['slink.adhd.marketwatch.<tier>'] });
         continue;
       }
 

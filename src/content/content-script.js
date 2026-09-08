@@ -102,8 +102,9 @@
     if (changes[collapsedKey]) void ui.setCollapsed(Boolean(changes[collapsedKey].newValue), false);
     const levelingVisibilityKey = SLINK.core.storage.fullKey('ui.modules.leveling.showInTorn');
     const adhdVisibilityKey = SLINK.core.storage.fullKey('ui.modules.adhd.showInTorn');
+    const marketVisibilityKey = SLINK.core.storage.fullKey('ui.modules.market.showInTorn');
     const warSettingsKey = SLINK.core.storage.fullKey('war.settings.v1');
-    if (initialized && (changes[levelingVisibilityKey] || changes[adhdVisibilityKey] || changes[warSettingsKey])) {
+    if (initialized && (changes[levelingVisibilityKey] || changes[adhdVisibilityKey] || changes[marketVisibilityKey] || changes[warSettingsKey])) {
       void restartModules().catch(error => console.error('[SLINK] Could not apply the Torn GUI mode in place:', error));
     }
     const permissionsKey = SLINK.core.storage.fullKey('permissions.snapshot');

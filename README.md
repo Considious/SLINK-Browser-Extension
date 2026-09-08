@@ -4,6 +4,24 @@ Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
 [Privacy Policy](PRIVACY.md)
 
+Version 0.18.0 adds permission-tiered **Market** and **Bazaar Watch** tools to
+the Efficiency dashboard and the in-Torn panel. Watch data comes only from
+Torn's v2 Item Market API and Weaver's marketplace JSON API; listing prices are
+never scraped from Torn pages. The extension's local Torn API limiter schedules
+high-, normal-, and low-priority watches at one-, five-, and fifteen-minute
+intervals and does not force unrelated watches to refresh when one watch is
+edited. Watch settings, catalog data, and results remain in local extension
+storage; SLINK services only authenticate the signed 5/10/15/20-item permission
+tier.
+
+Matching Torn Item Market and Bazaar rows receive a green highlight and an
+optional **SLINK Buy** button. That button fills the maximum affordable quantity
+and deliberately activates Torn's native purchase control so Torn retains its
+own confirmation step. The in-Torn panel can copy or explicitly send a compact
+deal list to Faction Chat; the extension dashboard can only copy. Deal details
+include Torn's current shop sell price when the item catalog exposes one, using
+the v2 `value.shops[]` structure with a temporary legacy-field fallback.
+
 Version 0.17.0 adds an Efficiency **Merits** tab to both the extension dashboard
 and the in-Torn SLINK panel. It combines Torn's achieved Honors and Medals with
 personal-stat counters, displays only the next unearned award in each tier
