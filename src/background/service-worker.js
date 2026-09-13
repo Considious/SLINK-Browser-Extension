@@ -2,6 +2,7 @@ importScripts(
   '../core/runtime.js',
   '../core/format.js',
   '../core/storage.js',
+  'local-vault.js',
   '../core/permissions.js',
   '../core/adhd.js',
   '../core/market.js',
@@ -132,6 +133,28 @@ async function connectionStatus() {
   const status = await SLINK.core.workerClient.probe();
   await SLINK.core.storage.set('worker.lastStatus', status);
   return status;
+}
+
+let initializing = null;
+function initialize(reason = 'service-worker') {
+  if (initializing) return initializing;
+  initializing = (async () => {
+    const recovery = await globalThis.SLINK_LOCAL_VAULT.restoreMissing();
+    await ensureDefaultState();
+    await ensureConnectionAlarm();
+    await Promise.allSettled([connectionStatus(), SLINK.services.themes.load(reason === 'install')]);
+    const mirror = await globalThis.SLINK_LOCAL_VAULT.snapshot();
+    await SLINK.core.storage.set('storage.health.v1', {
+      initializedAt:Date.now(),
+      reason,
+      version:SLINK.VERSION,
+      recovered:Number(recovery?.recovered) || 0,
+      mirrored:Number(mirror?.saved) || 0,
+      vaultAvailable:mirror?.available === true
+    });
+    return { recovery, mirror };
+  })().finally(() => { initializing = null; });
+  return initializing;
 }
 
 async function restoreTornUi() {
@@ -357,18 +380,12 @@ const routes = {
 
 chrome.runtime.onMessage.addListener(SLINK.core.messaging.createRouter(routes));
 
-chrome.runtime.onInstalled.addListener(() => {
-  void ensureDefaultState();
-  void ensureConnectionAlarm();
-  void connectionStatus();
-  void SLINK.services.themes.load(true);
+chrome.runtime.onInstalled.addListener(details => {
+  void initialize(String(details?.reason || 'install')).catch(error => console.error('[SLINK] Install initialization:', error));
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void ensureDefaultState();
-  void ensureConnectionAlarm();
-  void connectionStatus();
-  void SLINK.services.themes.load(false);
+  void initialize('startup').catch(error => console.error('[SLINK] Startup initialization:', error));
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
@@ -388,7 +405,4 @@ chrome.alarms.onAlarm.addListener(alarm => {
   }
 });
 
-void ensureDefaultState().catch(error => console.error('[SLINK] Default state:', error));
-void ensureConnectionAlarm().catch(error => console.error('[SLINK] Connection alarm:', error));
-void connectionStatus().catch(error => console.error('[SLINK] Worker connection:', error));
-void SLINK.services.themes.load(false).catch(error => console.error('[SLINK] Theme catalog:', error));
+void initialize().catch(error => console.error('[SLINK] Service worker initialization:', error));

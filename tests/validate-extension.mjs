@@ -161,6 +161,10 @@ assert(dashboardHtml.includes('id="adhd-open-new-tab"') && read('src/modules/adh
 const warModuleSource = read('src/modules/war.js');
 const warServiceSource = read('src/background/war-service.js');
 const serviceWorkerSource = read('src/background/service-worker.js');
+const localVaultSource = read('src/background/local-vault.js');
+assert(serviceWorkerSource.includes("'local-vault.js'") && serviceWorkerSource.indexOf('restoreMissing()') < serviceWorkerSource.indexOf('ensureDefaultState();'), 'Durable settings are not restored before extension defaults initialize.');
+assert(localVaultSource.includes('indexedDB.open') && localVaultSource.includes('suspiciousBulkRemoval'), 'The same-ID local recovery vault or bulk-removal guard is missing.');
+assert(!listFiles(path.join(root, 'src')).some(file => fs.readFileSync(file, 'utf8').includes('chrome.storage.local.clear(')), 'Extension code must never clear all local SLINK storage.');
 assert(warModuleSource.includes("activeTab === 'armory'") && warModuleSource.includes('pageIsFocused()'), 'The in-Torn War module is missing its focused-page Armory Recaller.');
 assert(warModuleSource.includes('.item-action [data-role="retrieve"].active') && warModuleSource.includes('.retrieve-cont .retrieve-yes'), 'The Armory Recaller does not use Torn\'s explicit retrieve and confirmation controls.');
 assert(warServiceSource.includes("'war.armory.members'") && warServiceSource.includes("'war.armory.request'"), 'The extension is missing its cached Armory status or request routes.');
