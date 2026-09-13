@@ -201,8 +201,15 @@
     return CITY_SHOP_TARGETS.map(target => found.get(target.id) || { ...target, stock:null, defaultStock:null, price:0 });
   }
 
-  function raceActive(races, profileStatus = {}) {
-    const rows = Array.isArray(races) ? races : [];
+  function rowsFrom(value, nestedKey) {
+    if (Array.isArray(value)) return value;
+    if (Array.isArray(value?.[nestedKey])) return value[nestedKey];
+    if (value && typeof value === 'object') return Object.values(value);
+    return [];
+  }
+
+  function raceActive(races, profileStatus = {}, icons = []) {
+    const rows = rowsFrom(races, 'races');
     const raceStates = rows.flatMap(race => [
       race?.status,
       race?.state,
@@ -216,11 +223,17 @@
       profileStatus?.details,
       typeof profileStatus === 'string' ? profileStatus : ''
     ];
-    return [...raceStates, ...playerStates].some(value => {
+    const iconStates = rowsFrom(icons, 'icons').flatMap(icon => [
+      icon?.title,
+      icon?.description,
+      typeof icon === 'string' ? icon : ''
+    ]);
+    return [...raceStates, ...playerStates, ...iconStates].some(value => {
       const text = String(value ?? '').trim();
-      return /^(?:open|in[_ -]?progress|waiting|scheduled|pending)$/i.test(text)
+      return /^(?:open|in[_ -]?progress|waiting|scheduled|pending|racing)$/i.test(text)
         || /\bwaiting\s+for\s+(?:a\s+)?race\b/i.test(text)
         || /\b(?:currently\s+)?in\s+(?:a\s+)?race\b/i.test(text)
+        || /\b(?:currently\s+)?racing\b/i.test(text)
         || /\brace\s+(?:in[_ -]?progress|waiting|scheduled|pending)\b/i.test(text);
     });
   }
@@ -310,8 +323,8 @@
         shareText:`City Stock | ${SLINK.core.format.escapeHtml(item.label)} | ${Number(item.stock).toLocaleString()} available at ${SLINK.core.format.escapeHtml(item.shopName || item.shop)}${Number(item.price) > 0 ? ` | $${Number(item.price).toLocaleString()} each` : ''} | ${progress.bought ?? 0}/100 city items bought | ${chatAnchor(item.href, item.shopName || item.shop)}`
       }));
     const away = ['traveling', 'abroad'].includes(String(profile?.status?.state || '').toLowerCase()) || Number(travelSeconds) > 0;
-    const activeRace = raceActive(body.races, profile.status);
-    const racewayKnown = Array.isArray(body.enlistedcars) || Array.isArray(body.races);
+    const activeRace = raceActive(body.races, profile.status, body.icons);
+    const racewayKnown = body.enlistedcars !== undefined || body.races !== undefined || body.icons !== undefined;
     const alerts = [
       { id:'drugCooldown', active:drug === 0, title:'Drug cooldown is clear', detail:'You can take a drug now.', tone:'ready', links:[['Items','https://www.torn.com/item.php'],['Faction Armory',`${ARMORY_URL}&start=0&sub=drugs`]] },
       { id:'nerveFull', active:finite(bars?.nerve?.current) !== null && finite(bars?.nerve?.maximum) !== null && Number(bars.nerve.current) >= Number(bars.nerve.maximum), title:'Nerve is full', detail:`${bars?.nerve?.current ?? '?'} / ${bars?.nerve?.maximum ?? '?'}`, tone:'urgent', links:[['Crimes','https://www.torn.com/page.php?sid=crimes']] },

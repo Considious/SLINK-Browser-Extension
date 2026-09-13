@@ -26,6 +26,7 @@ let adhdCityItemsBought = 575;
 let adhdCityShopRequests = 0;
 let adhdCityCurrentRequests = 0;
 let adhdCityBaselineRequests = 0;
+let adhdCityBaselineTimestamp = 0;
 let adhdStockCatalogRequests = 0;
 let optionsPageOpens = 0;
 let marketCatalogRequests = 0;
@@ -79,7 +80,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.5' }; },
+    getManifest() { return { version: '0.18.6' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -275,6 +276,7 @@ context = vm.createContext({
           missions:{ givers:[] },
           casino:{ tokens:0 },
           profile:{ faction_id:46978, status:{ state:'Okay' } },
+          icons:[{ id:18, title:'Racing', description:'Waiting for a race to start' }],
           races:[],
           enlistedcars:[],
           stocks:[{ id:1, shares:1_000_000, bonus:{ available:true, increment:1, progress:7, frequency:7 }, transactions:[] }, { id:25, shares:1_000_000, bonus:{ available:true, increment:0, progress:0, frequency:0 }, transactions:[] }],
@@ -315,7 +317,10 @@ context = vm.createContext({
       } else if (url.pathname === '/v2/user/personalstats') {
         if (url.searchParams.get('stat') === 'cityitemsbought') {
           const historical = url.searchParams.has('timestamp');
-          if (historical) adhdCityBaselineRequests += 1;
+          if (historical) {
+            adhdCityBaselineRequests += 1;
+            adhdCityBaselineTimestamp = Number(url.searchParams.get('timestamp'));
+          }
           else adhdCityCurrentRequests += 1;
           body = { personalstats:[{ name:'cityitemsbought', value:historical ? 500 : adhdCityItemsBought, timestamp:Number(url.searchParams.get('timestamp')) || Math.floor(Date.now() / 1000) }] };
         } else if (url.searchParams.get('cat') === 'all') {
@@ -526,6 +531,13 @@ assert(meritsPinned.ok && meritsPinned.data.pinned.length === 1, 'A Merit farm c
 assert(!JSON.stringify(meritsRefreshed.data).includes('torn-test-key'), 'Merit status leaked the local Torn API key.');
 const adhdSettingsSaved = await send('adhd.settings.save', { cityStockAlerts:{ 392:true }, soundEnabled:{ energyFull:true }, openLinksInNewTab:true });
 assert(adhdSettingsSaved.ok && adhdSettingsSaved.data.settings.openLinksInNewTab === true, 'Torn alert new-tab preference was not saved.');
+values.set('slink.adhd.runtime.v1', {
+  fetchedAt:Date.now() - 60_000,
+  nextRefreshAt:0,
+  lastError:'',
+  snapshot:{ day:Math.floor(Date.now() / 86_400_000), fetchedAt:Date.now() - 60_000, data:{}, cityItemsBought:575, cityItemsAtReset:575 },
+  lastPurchase:null
+});
 const adhdRefreshed = await send('adhd.refresh');
 assert(adhdRefreshed.ok && adhdRefreshed.data.permitted, 'ADHD API alerts did not honor the signed permission scope.');
 assert(adhdRefreshed.data.city.bought === 75 && !adhdRefreshed.data.city.complete, 'ADHD city progress did not combine all purchases into one daily total.');
@@ -535,7 +547,9 @@ assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'stockBenefits
 assert(adhdRefreshed.data.activeAlerts.find(alert => alert.id === 'stockBenefits')?.detail.includes('Torn & Shanghai Banking (TSB)'), 'Collectible stock benefit did not use its Torn catalog name.');
 assert(!adhdRefreshed.data.activeAlerts.find(alert => alert.id === 'stockBenefits')?.detail.includes('WSU') && adhdStockCatalogRequests === 1, 'Passive stock benefit was not excluded or the stock catalog was fetched repeatedly.');
 assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'playerAddiction'), 'API battle-stat addiction did not create an Efficiency alert.');
+assert(!adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'raceOrFly'), 'Waiting-for-race API icon did not suppress the race reminder.');
 assert(adhdCityCurrentRequests === 1 && adhdCityBaselineRequests === 1, 'City totals did not use the dedicated current and reset-baseline personalstats routes.');
+assert(adhdCityBaselineTimestamp === Math.floor(Date.now() / 86_400_000) * 86_400 - 1, 'City baseline was not requested from the final second before today\'s reset.');
 const firstSound = await send('adhd.sound.claim');
 const repeatedSound = await send('adhd.sound.claim');
 assert(firstSound.ok && firstSound.data.play && firstSound.data.alertIds.includes('energyFull'), 'A newly active sound-enabled alert was not claimed.');

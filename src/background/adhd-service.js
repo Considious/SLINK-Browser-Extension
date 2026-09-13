@@ -9,7 +9,8 @@
     runtime:'adhd.runtime.v1',
     soundState:'adhd.sound.state.v1'
   });
-  const USER_SELECTIONS = 'bars,cooldowns,travel,education,organizedcrime,refills,missions,casino,profile,races,enlistedcars,stocks,battlestats';
+  const CITY_BASELINE_VERSION = 2;
+  const USER_SELECTIONS = 'bars,cooldowns,travel,education,organizedcrime,refills,missions,casino,profile,icons,races,enlistedcars,stocks,battlestats';
   let refreshing = null;
 
   async function settings() {
@@ -69,7 +70,7 @@
   function cityBaselineUrl(day) {
     const url = new URL('https://api.torn.com/v2/user/personalstats');
     url.searchParams.set('stat', 'cityitemsbought');
-    url.searchParams.set('timestamp', String(Math.floor(day * ADHD.DAY_MS / 1000)));
+    url.searchParams.set('timestamp', String(Math.floor(day * ADHD.DAY_MS / 1000) - 1));
     url.searchParams.set('comment', 'SLINK Efficiency city reset baseline');
     return url.href;
   }
@@ -140,6 +141,7 @@
         ]);
         const cityItemsBought = ADHD.personalStat(cityCurrent, 'cityitemsbought');
         let cityItemsAtReset = currentRuntime.snapshot?.day === day
+          && currentRuntime.snapshot?.cityBaselineVersion === CITY_BASELINE_VERSION
           ? currentRuntime.snapshot.cityItemsAtReset
           : null;
         if (cityItemsAtReset === null || cityItemsAtReset === undefined) {
@@ -190,7 +192,7 @@
         } catch (clusterError) {
           cluster = { ...(cluster || {}), lastError:SLINK.core.format.errorMessage(clusterError), lastErrorAt:now };
         }
-        const snapshot = { day, fetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityShops, stockCatalog, cluster };
+        const snapshot = { day, fetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityBaselineVersion:CITY_BASELINE_VERSION, cityShops, stockCatalog, cluster };
         await saveRuntime({
           fetchedAt:now,
           nextRefreshAt:ADHD.nextRefreshAt(snapshot, currentSettings, now),
