@@ -2,7 +2,7 @@
 
 Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 
-[Privacy Policy](PRIVACY.md)
+[Privacy Policy](PRIVACY.md) · [Changelog](CHANGELOG.md)
 
 Version 0.18.2 top-aligns the Market Watch editor fields so the Item selector
 and its helper text no longer pull that label above the rest of the row.
