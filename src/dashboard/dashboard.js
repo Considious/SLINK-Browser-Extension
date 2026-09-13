@@ -397,6 +397,10 @@
           snooze.addEventListener('click', async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }); renderAdhd(); });
           actions.append(snooze);
         }
+        const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'small secondary'; dismiss.textContent = 'Dismiss';
+        dismiss.title = 'Hide this alert for 5 minutes';
+        dismiss.addEventListener('click', async () => { adhd = await SLINK.core.messaging.send('adhd.alert.dismiss', { id:alert.id }); renderAdhd(); });
+        actions.append(dismiss);
         card.append(copy, actions); return card;
       }));
     }

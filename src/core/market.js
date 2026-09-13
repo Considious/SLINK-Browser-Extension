@@ -187,6 +187,16 @@
     return `$${Math.max(0, Math.trunc(Number(value) || 0)).toLocaleString('en-US')}`;
   }
 
+  function listingHighlightState(input = {}) {
+    const price = finite(input.price);
+    const shopSellPrice = finite(input.shopSellPrice);
+    const available = input.available !== false;
+    const targeted = input.targeted === true;
+    const oneDollar = available && price === 1;
+    const shopProfit = available && price !== null && shopSellPrice !== null && shopSellPrice > 0 && price < shopSellPrice;
+    return { targeted, oneDollar, shopProfit, highlighted:targeted || oneDollar || shopProfit };
+  }
+
   function opportunityRows(runtime = {}, settingsInput = {}) {
     const settings = normalizeSettings(settingsInput);
     const catalog = new Map((Array.isArray(runtime?.catalog?.items) ? runtime.catalog.items : []).map(item => [Number(item.id), item]));
@@ -242,7 +252,7 @@
     ITEM_MARKET_CACHE_SAFETY_MS, ITEM_MARKET_FALLBACK_MS, POINTS_MARKET_REFRESH_MS, PRIORITIES,
     TORN_PRIORITY_LIMITS, WEAVER_FALLBACK_BACKOFF_MS, WEAVER_MIN_REQUEST_SPACING_MS, WEAVER_RATE_LIMIT,
     WEAVER_RATE_WINDOW_MS, WEAVER_REFRESH_MS, bazaarUrl, catalogItems, defaultSettings, effectivePriority,
-    itemMarketCache, itemMarketListings, itemMarketNextCheckAt, itemMarketUrl, normalizePriority, normalizeSettings,
+    itemMarketCache, itemMarketListings, itemMarketNextCheckAt, itemMarketUrl, listingHighlightState, normalizePriority, normalizeSettings,
     normalizeWatch, opportunityRows, pointsMarketListings, pointsMarketUrl, shopSellDetails, staleRetryMs, weaverListings
   }));
 })(globalThis);

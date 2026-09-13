@@ -80,7 +80,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.6' }; },
+    getManifest() { return { version: '0.18.7' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -554,6 +554,11 @@ const firstSound = await send('adhd.sound.claim');
 const repeatedSound = await send('adhd.sound.claim');
 assert(firstSound.ok && firstSound.data.play && firstSound.data.alertIds.includes('energyFull'), 'A newly active sound-enabled alert was not claimed.');
 assert(repeatedSound.ok && repeatedSound.data.play === false, 'An unchanged alert repeated its sound.');
+const dismissedAt = Date.now();
+const adhdDismissed = await send('adhd.alert.dismiss', { id:'energyFull' });
+assert(adhdDismissed.ok && !adhdDismissed.data.activeAlerts.some(alert => alert.id === 'energyFull'), 'Dismiss did not immediately hide the selected alert.');
+assert(Number(adhdDismissed.data.settings.snoozedUntil.energyFull) >= dismissedAt + 4 * 60_000
+  && Number(adhdDismissed.data.settings.snoozedUntil.energyFull) <= dismissedAt + 6 * 60_000, 'Dismiss did not apply its five-minute suppression window.');
 assert(adhdRefreshed.data.marketWatchLimit === 40, 'Highest signed ADHD market-watch tier was not exposed.');
 assert(!JSON.stringify(adhdRefreshed.data).includes('torn-test-key'), 'ADHD public status leaked the local Torn key.');
 adhdCityItemsBought = 600;

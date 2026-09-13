@@ -266,6 +266,10 @@
     return publicStatus(false);
   }
 
+  async function dismiss(input = {}) {
+    return snooze({ id:input?.id, durationMs:5 * 60_000 });
+  }
+
   async function claimSound() {
     const [currentSettings, currentRuntime, previous] = await Promise.all([
       settings(), runtime(), SLINK.core.storage.get(KEYS.soundState, { activeIds:[] })
@@ -327,6 +331,7 @@
     'adhd.settings.save':saveSettings,
     'adhd.city.acknowledge':acknowledgeCity,
     'adhd.alert.snooze':snooze,
+    'adhd.alert.dismiss':dismiss,
     'adhd.sound.claim':claimSound
   });
 
