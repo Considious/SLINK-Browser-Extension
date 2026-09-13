@@ -81,7 +81,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.2', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.3', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -233,6 +233,15 @@ assert(warCallout.includes('TCT') && warCallout.includes('Status: Hospital / Onl
 await SLINK.core.storage.set('test.value', { working: true });
 assert((await SLINK.core.storage.get('test.value')).working, 'Extension storage adapter failed.');
 assert(values.has('slink.test.value'), 'Storage key was not namespaced.');
+const localBackup = await SLINK.core.storage.exportNamespace();
+assert(localBackup.schemaVersion === 1 && localBackup.values['slink.test.value'].working, 'SLINK backup did not include namespaced local settings.');
+await SLINK.core.storage.set('test.value', { working:false });
+const restoredBackup = await SLINK.core.storage.importNamespace(localBackup);
+assert(restoredBackup.restored > 0 && (await SLINK.core.storage.get('test.value')).working, 'SLINK backup restore did not replace local settings.');
+let rejectedBackup = false;
+try { await SLINK.core.storage.importNamespace({ schemaVersion:2, values:{} }); }
+catch { rejectedBackup = true; }
+assert(rejectedBackup, 'An unsupported SLINK backup format was accepted.');
 
 SLINK.modules.register({
   id: 'test-module',

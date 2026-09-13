@@ -67,6 +67,18 @@
     document.body.append(input); input.select(); document.execCommand('copy'); input.remove();
   }
 
+  function downloadJson(filename, value) {
+    const blob = new Blob([`${JSON.stringify(value, null, 2)}\n`], { type:'application/json' });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+  }
+
   function money(value) {
     return `$${Math.max(0, Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits:0 })}`;
   }
@@ -1076,6 +1088,29 @@
     } catch (error) { byId('access-message').textContent = errorText(error); } finally { setBusy(submit, false); }
   });
   byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('access.settings.save',{enabled:false,clearTornKey:true})]); await Promise.all([SLINK.core.messaging.send('leveling.session.clear'),SLINK.core.messaging.send('war.session.clear'),SLINK.core.messaging.send('access.session.clear')]); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
+  byId('backup-local-data').addEventListener('click', async event => {
+    const button = event.currentTarget; setBusy(button, true);
+    try {
+      const backup = await SLINK.core.storage.exportNamespace();
+      const date = new Date().toISOString().slice(0, 10);
+      downloadJson(`slink-backup-${date}.json`, backup);
+      byId('access-message').textContent = `Downloaded ${Object.keys(backup.values).length} local SLINK records. Keep this file private because it contains your API keys.`;
+    } catch (error) { byId('access-message').textContent = errorText(error); }
+    finally { setBusy(button, false); }
+  });
+  byId('restore-local-data').addEventListener('click', () => byId('restore-local-file').click());
+  byId('restore-local-file').addEventListener('change', async event => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    const button = byId('restore-local-data'); setBusy(button, true);
+    try {
+      if (file.size > 12 * 1024 * 1024) throw new Error('SLINK backup files must be 12 MB or smaller.');
+      const result = await SLINK.core.storage.importNamespace(JSON.parse(await file.text()));
+      await refresh();
+      byId('access-message').textContent = `Restored ${result.restored} local SLINK records from ${file.name}.`;
+    } catch (error) { byId('access-message').textContent = errorText(error); }
+    finally { event.currentTarget.value = ''; setBusy(button, false); }
+  });
   byId('page-panel').addEventListener('change', async event => { await SLINK.core.storage.set('ui.modules.leveling.showInTorn', event.currentTarget.checked); if (event.currentTarget.checked) await SLINK.core.storage.set('ui.pagePanelHidden', false); system.levelingInTorn = event.currentTarget.checked; });
   byId('reset-position').textContent = 'Restore GUI in Torn';
   byId('war-reset-position').textContent = 'Restore GUI in Torn';

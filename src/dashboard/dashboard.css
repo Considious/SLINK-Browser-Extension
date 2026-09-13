@@ -50,3 +50,5 @@ input,select{border-color:var(--slink-border-soft);background:var(--slink-bg);co
 @media(max-width:1100px){.adhd-layout{grid-template-columns:1fr}}@media(max-width:650px){.adhd-alert-list{grid-template-columns:1fr}.adhd-notification-settings{grid-template-columns:1fr}.adhd-alert-toggles,.adhd-toggle-headings{grid-template-columns:1fr}.adhd-toggle-headings .adhd-toggle-heading:nth-child(2){display:none}.adhd-toggle-heading,.adhd-alert-toggle{grid-template-columns:minmax(0,1fr) 48px 48px}}
 @media(max-width:1100px){.market-watch-list{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.market-watch-form,.market-watch-list{grid-template-columns:1fr}.market-watch-form .form-actions{grid-column:1}.market-deal-card{align-items:stretch;flex-direction:column}.market-deal-card .button{align-self:flex-start}}
 .market-watch-form{align-items:start}
+.local-backup{margin-top:14px;padding:10px;border:1px solid var(--slink-border);border-radius:8px;background:var(--slink-card)}
+.local-backup>p{margin-top:10px}.local-backup .warning{border-left:4px solid var(--slink-warning)}

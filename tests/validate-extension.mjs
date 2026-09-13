@@ -108,6 +108,8 @@ for (const match of dashboardSource.matchAll(/byId\('([^']+)'\)/g)) {
 assert(/function setBusy\(button, busy\)\s*{\s*if \(button\)/.test(dashboardSource), 'Dashboard busy-state helper must tolerate removed or unavailable controls.');
 assert(dashboardHtml.includes('id="theme-options"'), 'Dashboard theme selector is missing.');
 assert(dashboardHtml.includes('id="player-stats-refresh"') && dashboardHtml.includes('id="ps-armory-balance"'), 'The compact player-stat panel is missing.');
+assert(dashboardHtml.includes('id="backup-local-data"') && dashboardHtml.includes('id="restore-local-file"'), 'The local cross-build backup and restore controls are missing.');
+assert(dashboardSource.includes('exportNamespace') && dashboardSource.includes('importNamespace'), 'The dashboard does not connect the local backup and restore controls.');
 assert(dashboardHtml.includes('data-dashboard-page="alerts"') && dashboardHtml.includes('id="use-adhd"') && dashboardHtml.includes('id="adhd-city-done"'), 'The separate ADHD Alerts dashboard page or its global city completion control is missing.');
 assert(dashboardHtml.includes('>Efficiency<') && dashboardHtml.includes('id="adhd-sound-choice"') && dashboardHtml.includes('id="adhd-custom-sound"'), 'Efficiency naming or notification-sound controls are missing.');
 assert(dashboardHtml.includes('data-efficiency-view="merits"') && dashboardHtml.includes('id="merits-refresh-minutes"') && dashboardHtml.includes('id="merits-pinned-list"'), 'Efficiency is missing its Merits tab, refresh control, or three-goal farm list.');
@@ -150,6 +152,7 @@ assert(uiShellSource.includes('setBubbleAlert') && uiShellSource.includes('data-
 assert(uiShellSource.includes('ui.main.activeModule'), 'The Torn shell does not remember the selected SLINK module.');
 assert(uiShellSource.includes("groups.className = 'groups'") && uiShellSource.includes('setActiveGroup'), 'The Torn shell is missing its Combat/Efficiency navigation level.');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/player-stats.js')), 'Player Stats is missing from the in-Torn Combat tools.');
+assert(read('src/modules/player-stats.js').includes('grid-template-columns:minmax(0,1fr)'), 'The in-Torn Player Stats module can still force a two-column overflow layout.');
 assert(uiShellSource.includes('async function restore()'), 'Torn UI shell does not provide an in-place recovery path.');
 assert(!uiShellSource.includes('Pop out') && !uiShellSource.includes('setPopped'), 'The broken Torn module pop-out control is still packaged.');
 assert(read('src/background/service-worker.js').includes("'ui.torn.restore'"), 'The extension cannot repush its GUI to open Torn tabs.');
