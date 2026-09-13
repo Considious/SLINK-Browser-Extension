@@ -79,7 +79,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.4' }; },
+    getManifest() { return { version: '0.18.5' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -472,6 +472,8 @@ const injection = await send(
 assert(injection.ok && injection.data.tabId === 7, 'Torn page injection was not recorded.');
 const sharedLedger = await send('tornApi.sync', { ledger:{ events:[{ at:Date.now(), id:'tornlib:test', script:'Test userscript', endpoint:'/v2/user' }] } }, { tab:{ id:7, url:'https://www.torn.com/index.php' } });
 assert(sharedLedger.ok && sharedLedger.data.usage.byScript['Test userscript'] === 1, 'TornLib usage was not merged into the extension API ledger.');
+const sharedUsage = await send('tornApi.usage');
+assert(sharedUsage.ok && sharedUsage.data.byScript['Test userscript'] === 1, 'The live shared API usage route did not return the synchronized ledger.');
 values.set('slink.ui.main.position', { left:9999, top:9999 });
 values.set('slink.ui.bubble.position', { left:9999, top:9999 });
 values.set('slink.ui.main.collapsed', true);

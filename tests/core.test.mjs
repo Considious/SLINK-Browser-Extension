@@ -81,7 +81,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.4', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.5', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -298,6 +298,12 @@ assert(
   diagnosticError.includes('Permission lookup failed.'),
   'Safe Worker diagnostic detail was hidden from the extension.'
 );
+
+const sharedAt = Date.now();
+const sharedWithoutIds = { events:[{ at:sharedAt, script:'TornLib', endpoint:'/v2/user' }] };
+const mergedWithoutIds = SLINK.core.tornApiLimiter.mergeLedgers(sharedWithoutIds, { events:[{ at:sharedAt - 1, script:'Other', endpoint:'/v2/torn' }, ...sharedWithoutIds.events] });
+const remergedWithoutIds = SLINK.core.tornApiLimiter.mergeLedgers(mergedWithoutIds, sharedWithoutIds);
+assert(mergedWithoutIds.events.length === 2 && remergedWithoutIds.events.length === 2, 'ID-less shared API events were duplicated when their array indexes changed.');
 
 const workerProbe = await SLINK.core.workerClient.probe({ deep: true });
 assert(workerProbe.connected, 'Required SLINK Worker probe did not connect.');

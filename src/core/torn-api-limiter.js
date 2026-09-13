@@ -15,22 +15,34 @@
     return `${prefix}:${global.crypto?.randomUUID?.() || `${Date.now()}:${Math.random().toString(36).slice(2)}`}`;
   }
 
-  function normalizeEvent(value, index = 0) {
+  function stableEventId(event, prefix = 'shared') {
+    const source = [event.at, event.script, event.priority, event.method, event.endpoint, event.tabId].join('|');
+    let hash = 2166136261;
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `${prefix}:${event.at}:${(hash >>> 0).toString(36)}`;
+  }
+
+  function normalizeEvent(value) {
     if (Number.isFinite(Number(value))) {
       const at = Number(value);
-      return { at, id:`legacy:${at}:${index}`, script:'SLINK Extension', priority:'normal', method:'GET', endpoint:'unknown', tabId:'' };
+      return { at, id:`legacy:${at}`, script:'SLINK Extension', priority:'normal', method:'GET', endpoint:'unknown', tabId:'' };
     }
     if (!value || typeof value !== 'object' || !Number.isFinite(Number(value.at))) return null;
     const at = Number(value.at);
-    return {
+    const normalized = {
       at,
-      id:String(value.id || `shared:${at}:${index}`).slice(0, 160),
+      id:'',
       script:String(value.script || 'External Torn script').slice(0, 80),
       priority:String(value.priority || 'normal').slice(0, 24),
       method:String(value.method || 'GET').slice(0, 12),
       endpoint:String(value.endpoint || 'unknown').slice(0, 180),
       tabId:String(value.tabId || '').slice(0, 100)
     };
+    normalized.id = String(value.id || stableEventId(normalized)).slice(0, 160);
+    return normalized;
   }
 
   function normalizeLedger(value, now = Date.now()) {

@@ -34,6 +34,15 @@
     return SLINK.core.format.errorMessage(error);
   }
 
+  function renderSharedApiUsage(usage = system?.tornApiUsage) {
+    const count = Math.max(0, Number(usage?.count) || 0);
+    const limit = Math.max(1, Number(usage?.limit) || 60);
+    for (const id of ['api-usage', 'adhd-api-usage', 'market-api-usage', 'merits-api-usage']) {
+      const element = byId(id);
+      if (element) element.textContent = `${count}/${limit}`;
+    }
+  }
+
   function hasScope(scope) {
     return SLINK.core.permissions.hasScope(system?.permissions || {}, scope);
   }
@@ -330,7 +339,7 @@
     badge.className = permitted ? 'badge ready' : 'badge error';
     byId('adhd-active-count').textContent = alerts.length;
     byId('adhd-city-count').textContent = adhd?.city?.bought ?? '—';
-    byId('adhd-api-usage').textContent = `${adhd?.tornApiUsage?.count || 0}/${adhd?.tornApiUsage?.limit || 60}`;
+    renderSharedApiUsage(system?.tornApiUsage || adhd?.tornApiUsage);
     byId('adhd-next-check').textContent = Number(adhd?.nextRefreshAt) ? new Date(adhd.nextRefreshAt).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }) : '—';
     updateAdhdClock();
     byId('adhd-error').textContent = adhd?.lastError || '';
@@ -481,7 +490,7 @@
     byId('market-watch-count').textContent = `${watches.length}/${market.marketWatchLimit || 0}`;
     byId('market-deal-count').textContent = deals.length;
     byId('market-next-check').textContent = Number(market.nextRefreshAt) ? new Date(market.nextRefreshAt).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }) : '—';
-    byId('market-api-usage').textContent = `${market.tornApiUsage?.count || 0}/${market.tornApiUsage?.limit || 60}`;
+    renderSharedApiUsage(system?.tornApiUsage || market.tornApiUsage);
     byId('market-error').textContent = market.lastError || '';
     byId('market-error').hidden = !market.lastError;
     byId('market-show-in-torn').checked = settings.showInTorn;
@@ -574,7 +583,7 @@
     byId('merits-earned').textContent = Number(merits.completedCount || 0).toLocaleString('en-US');
     byId('merits-next').textContent = Number(merits.goals?.length || 0).toLocaleString('en-US');
     byId('merits-pinned').textContent = `${merits.pinned?.length || 0}/${SLINK.core.merits.TRACK_LIMIT}`;
-    byId('merits-api-usage').textContent = `${merits.tornApiUsage?.count || 0}/${merits.tornApiUsage?.limit || 60}`;
+    renderSharedApiUsage(system?.tornApiUsage || merits.tornApiUsage);
     byId('merits-filter').value = merits.settings?.filter || 'all';
     byId('merits-refresh-minutes').value = String(merits.settings?.refreshMinutes || 15);
     byId('merits-error').textContent = merits.lastError || '';
@@ -608,7 +617,7 @@
     byId('target-count').textContent = runtime.targets?.length || 0;
     byId('assigned-count').textContent = runtime.lastCycleChecked || 0;
     byId('reported-count').textContent = runtime.lastCycleReported || 0;
-    byId('api-usage').textContent = `${leveling?.tornApiUsage?.count || 0}/${leveling?.tornApiUsage?.limit || 60}`;
+    renderSharedApiUsage(system?.tornApiUsage || leveling?.tornApiUsage);
     byId('leveling-role').textContent = runtime.contributorOnly || runtime.idle ? 'API contributor' : runtime.collector ? 'API collector' : leveling?.configured ? 'Standby device' : 'Setup required';
     byId('leveling-status').textContent = runtime.cycleStatus || 'Ready';
     const settings = leveling?.settings || {};
@@ -995,6 +1004,7 @@
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
     system = status; leveling = status.leveling; war = status.war; access = status.access; adhd = status.adhd; market = marketStatus; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus; merits = meritsStatus;
+    system.tornApiUsage = await SLINK.core.messaging.send('tornApi.usage').catch(() => status.tornApiUsage);
     dismissedRetals = await SLINK.core.storage.get('war.dismissedRetals.v1', {});
     dismissedRetals = Object.fromEntries(Object.entries(dismissedRetals || {}).filter(([, expiresAt]) => Number(expiresAt) > Math.floor(Date.now() / 1000)));
     warTargetFilters = { ...warTargetFilters, ...(await SLINK.core.storage.get('ui.war.targetFilters.v1', {})) };
@@ -1400,6 +1410,13 @@
   await claimWarLeader();
   setInterval(() => void claimWarLeader(), 5_000);
   addEventListener('visibilitychange', () => void claimWarLeader());
+  setInterval(async () => {
+    try {
+      const usage = await SLINK.core.messaging.send('tornApi.usage');
+      if (system) system.tornApiUsage = usage;
+      renderSharedApiUsage(usage);
+    } catch {}
+  }, 2_000);
   setInterval(async () => {
     if (!war?.configured) return;
     try {

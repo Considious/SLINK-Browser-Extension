@@ -52,7 +52,7 @@
     .module-head strong { flex:1; }
     .status { padding:7px 10px; border-bottom:1px solid var(--slink-border-soft); color:var(--slink-accent); }
     .status[data-tone="ready"] { color:var(--slink-ready); }
-    .status[data-tone="error"] { color:var(--slink-error); }
+    .status[data-tone="error"] { max-height:72px; overflow:auto; overscroll-behavior:contain; overflow-wrap:anywhere; white-space:normal; color:var(--slink-error); }
     .content { display:grid; gap:7px; max-height:min(420px,calc(100dvh - 210px)); overflow:auto; padding:9px 10px; }
     .row { display:grid; grid-template-columns:105px minmax(0,1fr); gap:8px; }
     .label { color:var(--slink-muted); }

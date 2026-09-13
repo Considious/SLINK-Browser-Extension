@@ -123,6 +123,7 @@ const marketServiceSource = read('src/background/market-service.js');
 const marketModuleSource = read('src/modules/market.js');
 assert(marketServiceSource.includes('/v2/market/') && marketServiceSource.includes("requestJson('weaver'") && marketServiceSource.includes('/v2/torn/items'), 'Market/Bazaar Watch is not sourced from the declared JSON APIs.');
 assert(!marketServiceSource.includes('workerClient') && !marketServiceSource.includes('D1'), 'Private Market/Bazaar Watch data must remain local instead of using a SLINK Worker or D1.');
+assert(marketServiceSource.includes('summarizeErrors') && marketServiceSource.includes('tornBlockedUntil'), 'Market Watch does not collapse repeated capacity errors or stop redundant limiter retries within one cycle.');
 assert(marketModuleSource.includes('SLINK Buy') && marketModuleSource.includes('data-slink-market-highlight'), 'Torn listing highlights or the custom buy control are missing.');
 assert(marketModuleSource.includes('Send list to Faction') && marketModuleSource.includes('focusedTornPage'), 'Torn-only Market Watch faction sharing is missing.');
 assert(!dashboardSource.includes('Send list to Faction'), 'The extension dashboard must not offer direct Market Watch Faction Chat sending.');
@@ -130,6 +131,7 @@ assert(read('src/core/market.js').includes('value?.shops') && read('src/core/mar
 assert(read('src/core/merits.js').includes('TRACK_LIMIT = 3') && read('src/background/merits-service.js').includes("'merits.pin'"), 'Merit pinning is missing or no longer limited to three active farms.');
 assert(!read('src/background/merits-service.js').includes('workerClient') && !read('src/background/merits-service.js').includes('D1'), 'Private Merit progress must remain local instead of using a SLINK Worker or D1.');
 assert(read('src/content/content-script.js').includes('considious:torn-api-ledger:v1') && read('src/content/content-script.js').includes('considious-torn-api-limiter-v1'), 'The extension is not coordinating Torn API usage with TornLib.');
+assert(read('src/content/content-script.js').includes("CustomEvent('slink:api-usage'") && read('src/background/service-worker.js').includes("'tornApi.usage'"), 'Alerts and Market Watch are missing their shared live API-usage feed.');
 assert(dashboardSource.includes('Snooze 5m') && dashboardSource.includes('Snooze 1h') && dashboardSource.includes('dataset.alertSoundId'), 'Per-alert sound controls or both snooze options are missing.');
 assert(read('src/core/adhd.js').includes('bought >= 100') && !read('src/core/adhd.js').includes('cityItemDone'), 'City-item reminders must use one shared 100-item daily cap, not per-item completion flags.');
 assert(read('src/background/adhd-service.js').includes("'adhd.city.acknowledge'") && read('src/background/adhd-service.js').includes('cityItemsAtReset'), 'The local ADHD service is missing its global city cap or reset baseline.');
@@ -147,6 +149,7 @@ assert(read('src/background/theme-service.js').includes('/api/themes'), 'Backgro
 assert(!manifest.host_permissions.some(origin => /githubusercontent|github\.com/.test(origin)), 'The extension must receive theme data through its existing Worker, not direct GitHub host access.');
 const uiShellSource = read('src/content/ui-shell.js');
 assert(uiShellSource.includes('setTheme'), 'Torn UI shell does not support live themes.');
+assert(uiShellSource.includes('.status[data-tone="error"] { max-height:72px; overflow:auto;'), 'Torn GUI errors are not constrained to a small scrollable status box.');
 assert(uiShellSource.includes('ui.main.collapsed') && uiShellSource.includes('bubble-coil'), 'Torn UI shell does not provide the persistent theme-aware collapse bubble.');
 assert(uiShellSource.includes('setBubbleAlert') && uiShellSource.includes('data-alert-kind="retal"') && uiShellSource.includes('data-alert-kind="armory"') && uiShellSource.includes('data-alert-kind="adhd"'), 'The collapse bubble is missing retal, officer armory, or ADHD alert states.');
 assert(uiShellSource.includes('ui.main.activeModule'), 'The Torn shell does not remember the selected SLINK module.');

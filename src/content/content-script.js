@@ -96,6 +96,13 @@
   // SLINK must never navigate or refresh Torn. Storage changes are applied in
   // place where that is safe; everything else waits for normal user navigation.
   chrome.storage.onChanged.addListener(changes => {
+    const apiLedgerKey = SLINK.core.storage.fullKey('core.tornApiLedger.v1');
+    if (changes[apiLedgerKey]) {
+      const ledger = changes[apiLedgerKey].newValue || {};
+      const cutoff = Date.now() - 60_000;
+      const count = Array.isArray(ledger.events) ? ledger.events.filter(event => Number(event?.at) > cutoff).length : 0;
+      global.dispatchEvent(new CustomEvent('slink:api-usage', { detail:{ count, limit:60 } }));
+    }
     const hiddenKey = SLINK.core.storage.fullKey('ui.pagePanelHidden');
     if (changes[hiddenKey]) ui.setHidden(Boolean(changes[hiddenKey].newValue));
     const collapsedKey = SLINK.core.storage.fullKey('ui.main.collapsed');

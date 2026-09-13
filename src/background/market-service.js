@@ -82,8 +82,8 @@
   function priorityFor(watch, result) { return MARKET.effectivePriority(watch, result?.market || result?.bazaar || {}); }
 
   async function pollItem(watch, previous, next, key, force) {
-    if (!watch.marketEnabled) { delete next.market; delete next.errors.market; return; }
-    if (!due(previous?.market, force)) return;
+    if (!watch.marketEnabled) { delete next.market; delete next.errors.market; return null; }
+    if (!due(previous?.market, force)) return null;
     try {
       const body = await tornJson(`https://api.torn.com/v2/market/${encodeURIComponent(watch.itemId)}/itemmarket?limit=5`, key, `/v2/market/${watch.itemId}/itemmarket`, priorityFor(watch, previous));
       const now = Date.now(); const cache = MARKET.itemMarketCache(body);
@@ -92,21 +92,25 @@
       next.market = { fetchedAt:now, listings:MARKET.itemMarketListings(body), ...cache, cacheRetryCount,
         nextCheckAt:stale ? now + MARKET.staleRetryMs({ cacheRetryCount }) : MARKET.itemMarketNextCheckAt({ fetchedAt:now, ...cache }) };
       delete next.errors.market;
+      return null;
     } catch (error) {
       next.errors.market = SLINK.core.format.errorMessage(error);
       next.market = { ...(previous?.market || {}), nextCheckAt:Date.now() + (Number(error?.retryAfterMs) || 5_000) };
+      return error?.code === 'SLINK_TORN_API_LIMIT' ? { blockedUntil:next.market.nextCheckAt } : null;
     }
   }
 
   async function pollPoints(watch, previous, next, key, force) {
-    if (!due(previous?.points, force)) return;
+    if (!due(previous?.points, force)) return null;
     try {
       const body = await tornJson('https://api.torn.com/v2/market?selections=pointsmarket&limit=100', key, '/v2/market?selections=pointsmarket', 'high');
       const now = Date.now(); next.points = { fetchedAt:now, nextCheckAt:now + MARKET.POINTS_MARKET_REFRESH_MS, listings:MARKET.pointsMarketListings(body) };
       delete next.errors.points;
+      return null;
     } catch (error) {
       next.errors.points = SLINK.core.format.errorMessage(error);
       next.points = { ...(previous?.points || {}), nextCheckAt:Date.now() + (Number(error?.retryAfterMs) || 5_000) };
+      return error?.code === 'SLINK_TORN_API_LIMIT' ? { blockedUntil:next.points.nextCheckAt } : null;
     }
   }
 
@@ -135,6 +139,29 @@
     return times.length ? Math.min(...times) : 0;
   }
 
+  function queueTornCheck(next, previous, source, blockedUntil) {
+    next.errors[source] = 'Waiting for shared Torn API capacity.';
+    next[source] = { ...(previous?.[source] || {}), nextCheckAt:blockedUntil };
+  }
+
+  function summarizeErrors(watches, results) {
+    const groups = new Map();
+    for (const watch of watches) for (const [source, message] of Object.entries(results[watch.uid]?.errors || {})) {
+      const normalizedMessage = String(message || '').trim();
+      if (!normalizedMessage) continue;
+      const capacity = /shared Torn API (?:limit|capacity)|Waiting for shared Torn API capacity/i.test(normalizedMessage);
+      const key = capacity ? 'torn-capacity' : `${source}:${normalizedMessage}`;
+      const group = groups.get(key) || { source, message:normalizedMessage, capacity, watches:[] };
+      group.watches.push(watch.label || (watch.marketType === 'points' ? 'Points Market' : `Item ${watch.itemId}`));
+      groups.set(key, group);
+    }
+    return [...groups.values()].map(group => {
+      if (group.capacity) return `${group.watches.length} Market Watch check${group.watches.length === 1 ? '' : 's'} queued for shared Torn API capacity.`;
+      const source = group.source === 'bazaar' ? 'Weaver Bazaar' : group.source === 'points' ? 'Points Market' : 'Item Market';
+      return group.watches.length > 1 ? `${source} (${group.watches.length} watches): ${group.message}` : `${group.watches[0]} ${source}: ${group.message}`;
+    }).join(' · ');
+  }
+
   async function scheduleAlarm(when = 0) { await chrome.alarms.create(ALARM, { when:Math.max(Date.now() + 1_000, Number(when) || Date.now() + 60_000) }); }
 
   async function buildStatus(currentSettings, current, access) {
@@ -158,18 +185,24 @@
         const allowed = currentSettings.watches.slice(0, access.limit); const valid = new Set(allowed.map(watch => watch.uid));
         current.results = Object.fromEntries(Object.entries(current.results).filter(([uid]) => valid.has(uid)));
         const ordered = [...allowed].sort((a, b) => MARKET.PRIORITIES[priorityFor(a, current.results[a.uid])] - MARKET.PRIORITIES[priorityFor(b, current.results[b.uid])]);
+        let tornBlockedUntil = 0;
         for (const watch of ordered) {
           if (!watch.enabled || !(watch.maxPrice > 0)) continue;
           const previous = current.results[watch.uid] || {}; const next = { ...previous, errors:{ ...(previous.errors || {}) } };
           if (watch.marketType === 'points') {
-            delete next.market; delete next.bazaar; delete next.errors.market; delete next.errors.bazaar; await pollPoints(watch, previous, next, key, force);
+            delete next.market; delete next.bazaar; delete next.errors.market; delete next.errors.bazaar;
+            if (tornBlockedUntil && due(previous?.points, force)) queueTornCheck(next, previous, 'points', tornBlockedUntil);
+            else tornBlockedUntil = (await pollPoints(watch, previous, next, key, force))?.blockedUntil || tornBlockedUntil;
           } else if (watch.itemId > 0) {
-            delete next.points; delete next.errors.points; await pollItem(watch, previous, next, key, force); await pollWeaver(watch, previous, next, current, force);
+            delete next.points; delete next.errors.points;
+            if (tornBlockedUntil && watch.marketEnabled && due(previous?.market, force)) queueTornCheck(next, previous, 'market', tornBlockedUntil);
+            else tornBlockedUntil = (await pollItem(watch, previous, next, key, force))?.blockedUntil || tornBlockedUntil;
+            await pollWeaver(watch, previous, next, current, force);
           }
           current.results[watch.uid] = next;
         }
         current.fetchedAt = Date.now();
-        current.lastError = allowed.flatMap(watch => Object.entries(current.results[watch.uid]?.errors || {}).map(([source, message]) => `${watch.label} ${source}: ${message}`)).join(' · ');
+        current.lastError = summarizeErrors(allowed, current.results);
       } catch (error) { current.lastError = SLINK.core.format.errorMessage(error); }
       await saveRuntime(current); return buildStatus(currentSettings, current, access);
     })();

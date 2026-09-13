@@ -210,12 +210,19 @@
         ui.setStatus(current.lastError || (current.permitted ? `API watches updated ${relativeTime(current.fetchedAt)}` : 'A Market Watch permission tier is required.'), current.lastError ? 'error' : current.permitted ? 'ready' : 'normal');
       }
 
+      function updateApiUsage(event) {
+        if (!current || !event?.detail) return;
+        current.tornApiUsage = event.detail;
+        const element = ui.getContentElement().querySelector('[data-slink-api-usage]');
+        if (element) element.textContent = `${event.detail.count || 0}/${event.detail.limit || 60}`;
+      }
+
       function render(status) {
         current = status;
         updateStatus();
         const deals = Array.isArray(status?.opportunities) ? status.opportunities : [];
         const root = ui.getContentElement();
-        root.innerHTML = `<div class="slink-market-summary"><div><strong>${status?.settings?.watches?.length || 0}/${status?.marketWatchLimit || 0}</strong><small>Watches</small></div><div><strong>${deals.length}</strong><small>Deals</small></div><div><strong>${status?.tornApiUsage?.count || 0}/${status?.tornApiUsage?.limit || 60}</strong><small>API / min</small></div></div>
+        root.innerHTML = `<div class="slink-market-summary"><div><strong>${status?.settings?.watches?.length || 0}/${status?.marketWatchLimit || 0}</strong><small>Watches</small></div><div><strong>${deals.length}</strong><small>Deals</small></div><div><strong data-slink-api-usage>${status?.tornApiUsage?.count || 0}/${status?.tornApiUsage?.limit || 60}</strong><small>API / min</small></div></div>
           <div class="slink-market-actions"><button type="button" data-market-copy-all ${deals.length ? '' : 'disabled'}>Copy item list</button><button type="button" data-market-send-all disabled>Send list to Faction</button></div>
           <div class="slink-market-list">${deals.length ? deals.map(row => `<article class="slink-market-deal"><strong>${escapeHtml(row.source)} · ${escapeHtml(row.itemName)}</strong><span>${escapeHtml(row.detail)}</span><div class="slink-market-actions"><a href="${escapeHtml(row.href)}" target="_self">Open &amp; highlight</a><button type="button" data-market-copy="${escapeHtml(row.id)}">Copy</button></div></article>`).join('') : '<div class="slink-market-empty">No watched listing is currently at or below its target.</div>'}</div>`;
         const copyAll = root.querySelector('[data-market-copy-all]');
@@ -252,9 +259,10 @@
       global.addEventListener('hashchange', scheduleFormat);
       global.addEventListener('popstate', scheduleFormat);
       await load(true);
+      global.addEventListener('slink:api-usage', updateApiUsage);
       timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
-      return { stop() { stopped = true; observer?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); if (formatTimer) global.clearTimeout(formatTimer); global.removeEventListener('hashchange', scheduleFormat); global.removeEventListener('popstate', scheduleFormat); document.querySelectorAll('[data-slink-market-buy]').forEach(node => node.remove()); document.querySelectorAll('[data-slink-market-highlight]').forEach(node => { node.removeAttribute('data-slink-market-highlight'); node.style.removeProperty('outline'); node.style.removeProperty('box-shadow'); }); } };
+      return { stop() { stopped = true; observer?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); if (formatTimer) global.clearTimeout(formatTimer); global.removeEventListener('slink:api-usage', updateApiUsage); global.removeEventListener('hashchange', scheduleFormat); global.removeEventListener('popstate', scheduleFormat); document.querySelectorAll('[data-slink-market-buy]').forEach(node => node.remove()); document.querySelectorAll('[data-slink-market-highlight]').forEach(node => { node.removeAttribute('data-slink-market-highlight'); node.style.removeProperty('outline'); node.style.removeProperty('box-shadow'); }); } };
     }
   });
 })(globalThis);

@@ -160,6 +160,13 @@
         ui.setStatus(current?.lastError || (current?.configured ? `API timers updated ${relativeTime(current.fetchedAt)}` : 'Enable Efficiency from the extension dashboard.'), current?.lastError ? 'error' : current?.configured ? 'ready' : 'normal');
       }
 
+      function updateApiUsage(event) {
+        if (!current || !event?.detail) return;
+        current.tornApiUsage = event.detail;
+        const element = ui.getContentElement().querySelector('[data-slink-api-usage]');
+        if (element) element.textContent = `${event.detail.count || 0}/${event.detail.limit || 60}`;
+      }
+
       function render(status) {
         current = status;
         const alerts = Array.isArray(status?.activeAlerts) ? status.activeAlerts : [];
@@ -176,6 +183,7 @@
         for (const [value, label] of cells) {
           const cell = document.createElement('div');
           const strong = document.createElement('strong'); strong.textContent = String(value);
+          if (label === 'API / min') strong.dataset.slinkApiUsage = 'true';
           const small = document.createElement('small'); small.textContent = label;
           cell.append(strong, small); summary.append(cell);
         }
@@ -279,6 +287,7 @@
         } }
       ]);
       await load(true);
+      global.addEventListener('slink:api-usage', updateApiUsage);
       timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
       return {
@@ -286,6 +295,7 @@
           stopped = true;
           if (timer) global.clearInterval(timer);
           if (clockTimer) global.clearInterval(clockTimer);
+          global.removeEventListener('slink:api-usage', updateApiUsage);
           ui.setBubbleAlert('', 0, 'adhd');
         },
         status:() => current

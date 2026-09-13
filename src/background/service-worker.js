@@ -334,6 +334,10 @@ const routes = {
     return SLINK.core.tornApiLimiter.syncShared(payload);
   },
 
+  async 'tornApi.usage'() {
+    return SLINK.core.tornApiLimiter.getUsage();
+  },
+
   async 'ui.torn.restore'() {
     return restoreTornUi();
   },
