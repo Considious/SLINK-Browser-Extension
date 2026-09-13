@@ -79,7 +79,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.1' }; },
+    getManifest() { return { version: '0.18.2' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
