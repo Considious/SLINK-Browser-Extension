@@ -80,7 +80,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.7' }; },
+    getManifest() { return { version: '0.18.8' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -513,6 +513,10 @@ assert(!JSON.stringify(accessSaved.data).includes('torn-test-key'), 'Public ADHD
 const firstMarketWatch = await send('market.watch.save', { itemId:1, maxPrice:90, priority:'normal', marketEnabled:true, bazaarEnabled:true });
 assert(firstMarketWatch.ok && firstMarketWatch.data.opportunities.length === 2, 'API-only Item Market and Weaver Bazaar results did not create watch opportunities.');
 assert(firstMarketWatch.data.opportunities.every(row => row.shareText.includes('shop sell $125')), 'Market Watch did not expose Torn shop sell pricing.');
+const dismissedMarketKey = firstMarketWatch.data.opportunities[0].dismissKey;
+const dismissedMarketDeal = await send('market.deal.dismiss', { dismissKey:dismissedMarketKey });
+assert(dismissedMarketDeal.ok && dismissedMarketDeal.data.opportunities.length === 1
+  && !dismissedMarketDeal.data.opportunities.some(row => row.dismissKey === dismissedMarketKey), 'Market Watch dismissal did not immediately suppress only the selected deal.');
 const secondMarketWatch = await send('market.watch.save', { itemId:2, maxPrice:90, priority:'normal', marketEnabled:true, bazaarEnabled:true });
 const secondUid = secondMarketWatch.data.settings.watches.find(watch => watch.itemId === 2)?.uid;
 const editedMarketWatch = await send('market.watch.save', { uid:secondUid, itemId:2, maxPrice:95, priority:'normal', marketEnabled:true, bazaarEnabled:true });
@@ -554,11 +558,6 @@ const firstSound = await send('adhd.sound.claim');
 const repeatedSound = await send('adhd.sound.claim');
 assert(firstSound.ok && firstSound.data.play && firstSound.data.alertIds.includes('energyFull'), 'A newly active sound-enabled alert was not claimed.');
 assert(repeatedSound.ok && repeatedSound.data.play === false, 'An unchanged alert repeated its sound.');
-const dismissedAt = Date.now();
-const adhdDismissed = await send('adhd.alert.dismiss', { id:'energyFull' });
-assert(adhdDismissed.ok && !adhdDismissed.data.activeAlerts.some(alert => alert.id === 'energyFull'), 'Dismiss did not immediately hide the selected alert.');
-assert(Number(adhdDismissed.data.settings.snoozedUntil.energyFull) >= dismissedAt + 4 * 60_000
-  && Number(adhdDismissed.data.settings.snoozedUntil.energyFull) <= dismissedAt + 6 * 60_000, 'Dismiss did not apply its five-minute suppression window.');
 assert(adhdRefreshed.data.marketWatchLimit === 40, 'Highest signed ADHD market-watch tier was not exposed.');
 assert(!JSON.stringify(adhdRefreshed.data).includes('torn-test-key'), 'ADHD public status leaked the local Torn key.');
 adhdCityItemsBought = 600;

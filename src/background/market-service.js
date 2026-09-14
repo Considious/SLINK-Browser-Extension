@@ -4,7 +4,7 @@
   const SLINK = global.SLINK_EXTENSION;
   const MARKET = SLINK.core.market;
   const ALARM = 'slink.market.watch';
-  const KEYS = Object.freeze({ settings:'market.settings.v1', runtime:'market.runtime.v1' });
+  const KEYS = Object.freeze({ settings:'market.settings.v1', runtime:'market.runtime.v1', dismissals:'market.dismissals.v1' });
   const CATALOG_MAX_AGE_MS = 24 * 60 * 60_000;
   let refreshing = null;
 
@@ -20,6 +20,20 @@
     };
   }
   async function saveRuntime(value) { await SLINK.core.storage.set(KEYS.runtime, value); return value; }
+
+  function dealDismissKey(deal = {}) {
+    return `${String(deal.id || '')}|${Math.max(0, Number(deal.price) || 0)}|${Math.max(0, Number(deal.quantity) || 0)}`;
+  }
+
+  async function activeDismissals(now = Date.now()) {
+    const stored = await SLINK.core.storage.get(KEYS.dismissals, {});
+    const active = Object.fromEntries(Object.entries(stored && typeof stored === 'object' ? stored : {})
+      .filter(([key, until]) => key && Number(until) > now));
+    if (Object.keys(active).length !== Object.keys(stored && typeof stored === 'object' ? stored : {}).length) {
+      await SLINK.core.storage.set(KEYS.dismissals, active);
+    }
+    return active;
+  }
 
   async function accessState({ authenticate = false } = {}) {
     const session = authenticate ? await SLINK.services.permissionAccess.ensureSession(false, '') : await SLINK.core.storage.get('access.session.v1', null);
@@ -167,9 +181,13 @@
   async function buildStatus(currentSettings, current, access) {
     const usage = await SLINK.core.tornApiLimiter.getUsage(); const allowed = currentSettings.watches.slice(0, access.limit || 0);
     const nextRefreshAt = nextAt(currentSettings, current, access.limit || 0); await scheduleAlarm(nextRefreshAt);
+    const dismissals = await activeDismissals();
+    const opportunities = MARKET.opportunityRows({ ...current, catalog:current.catalog }, { ...currentSettings, watches:allowed })
+      .map(row => ({ ...row, dismissKey:dealDismissKey(row) }))
+      .filter(row => !dismissals[row.dismissKey]);
     return { configured:Boolean((await SLINK.services.permissionAccess.settings()).enabled), permitted:access.permitted, marketWatchLimit:access.limit,
       settings:currentSettings, catalog:current.catalog, results:current.results,
-      opportunities:MARKET.opportunityRows({ ...current, catalog:current.catalog }, { ...currentSettings, watches:allowed }),
+      opportunities,
       fetchedAt:current.fetchedAt, nextRefreshAt, lastError:current.lastError, tornApiUsage:usage };
   }
 
@@ -251,11 +269,20 @@
     return publicStatus(false);
   }
 
+  async function dismissDeal(payload = {}) {
+    const key = String(payload?.dismissKey || '').trim();
+    if (!key || key.length > 240) throw new Error('Choose a current Market Watch deal to dismiss.');
+    const dismissals = await activeDismissals();
+    dismissals[key] = Date.now() + 5 * 60_000;
+    await SLINK.core.storage.set(KEYS.dismissals, dismissals);
+    return publicStatus(false);
+  }
+
   async function ensureAlarm() { if (!await chrome.alarms.get(ALARM)) await scheduleAlarm(Date.now() + 1_000); return chrome.alarms.get(ALARM); }
   const routes = Object.freeze({
     'market.status':payload => publicStatus(payload?.refreshIfDue !== false), 'market.refresh':() => refresh(true), 'market.settings.save':saveSettings,
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },
-    'market.watch.save':upsertWatch, 'market.watch.remove':removeWatch
+    'market.watch.save':upsertWatch, 'market.watch.remove':removeWatch, 'market.deal.dismiss':dismissDeal
   });
   SLINK.define('services', 'market', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, routes }));
 })(globalThis);

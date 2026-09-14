@@ -2,6 +2,14 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.8 — 2026-09-13
+
+### Fixed
+
+- Restored the ADHD Dashboard quick-buy presentation by placing **SLINK Buy** directly over Torn's native cart or Buy control instead of inserting a second button beneath it.
+- The replacement control now inherits the native button's exact position and dimensions and follows it while scrolling, resizing, or changing purchase stages, preventing overlap with adjacent Bazaar items.
+- Moved five-minute dismissal to individual Market Watch deals in both interfaces. Normal Efficiency alerts retain their existing five-minute and one-hour snooze controls without a redundant third dismissal button.
+
 ## [0.18.7](https://github.com/Considious/SLINK-Browser-Extension/commit/e6aa5263c3f7ecf8b1517c34e4db145cd96258d6) — 2026-09-13
 
 ### Added

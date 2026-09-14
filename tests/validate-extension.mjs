@@ -127,6 +127,7 @@ assert(marketServiceSource.includes('summarizeErrors') && marketServiceSource.in
 assert(marketModuleSource.includes('SLINK Buy') && marketModuleSource.includes('data-slink-market-highlight'), 'Torn listing highlights or the custom buy control are missing.');
 assert(marketModuleSource.includes('data-slink-market-shop-profit') && marketModuleSource.includes('listingHighlightState'), 'City-shop-profit highlighting is missing from Torn purchase pages.');
 assert(marketModuleSource.includes('data-market-send') && marketModuleSource.includes('Send to Faction'), 'Per-listing Faction Chat sending is missing from the Torn Market GUI.');
+assert(marketServiceSource.includes("'market.deal.dismiss'") && marketModuleSource.includes('data-market-dismiss') && dashboardSource.includes("market.deal.dismiss"), 'Five-minute Market Watch dismissal is missing from an interface.');
 assert(marketModuleSource.includes('Send list to Faction') && marketModuleSource.includes('focusedTornPage'), 'Torn-only Market Watch faction sharing is missing.');
 assert(!dashboardSource.includes('Send list to Faction'), 'The extension dashboard must not offer direct Market Watch Faction Chat sending.');
 assert(read('src/core/market.js').includes('value?.shops') && read('src/core/market.js').includes('shop sell'), 'Current Torn shop sell-price support is missing from Market Watch.');
@@ -135,7 +136,7 @@ assert(!read('src/background/merits-service.js').includes('workerClient') && !re
 assert(read('src/content/content-script.js').includes('considious:torn-api-ledger:v1') && read('src/content/content-script.js').includes('considious-torn-api-limiter-v1'), 'The extension is not coordinating Torn API usage with TornLib.');
 assert(read('src/content/content-script.js').includes("CustomEvent('slink:api-usage'") && read('src/background/service-worker.js').includes("'tornApi.usage'"), 'Alerts and Market Watch are missing their shared live API-usage feed.');
 assert(dashboardSource.includes('Snooze 5m') && dashboardSource.includes('Snooze 1h') && dashboardSource.includes('dataset.alertSoundId'), 'Per-alert sound controls or both snooze options are missing.');
-assert(dashboardSource.includes("adhd.alert.dismiss") && read('src/modules/adhd.js').includes("adhd.alert.dismiss"), 'Five-minute alert dismissal is missing from an Efficiency GUI.');
+assert(!dashboardSource.includes("adhd.alert.dismiss") && !read('src/modules/adhd.js').includes("adhd.alert.dismiss"), 'Normal Efficiency alerts include a redundant dismissal in addition to five-minute snooze.');
 assert(read('src/core/adhd.js').includes('bought >= 100') && !read('src/core/adhd.js').includes('cityItemDone'), 'City-item reminders must use one shared 100-item daily cap, not per-item completion flags.');
 assert(read('src/background/adhd-service.js').includes("'adhd.city.acknowledge'") && read('src/background/adhd-service.js').includes('cityItemsAtReset'), 'The local ADHD service is missing its global city cap or reset baseline.');
 const permissionService = read('src/background/permission-service.js');

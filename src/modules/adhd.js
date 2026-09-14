@@ -241,12 +241,6 @@
             });
             links.append(snooze);
           }
-          const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.textContent = 'Dismiss';
-          dismiss.title = 'Hide this alert for 5 minutes';
-          dismiss.addEventListener('click', async () => {
-            render(await SLINK.core.messaging.send('adhd.alert.dismiss', { id:alert.id }));
-          });
-          links.append(dismiss);
           if (alert.id === 'cityItem') {
             const done = document.createElement('button'); done.type = 'button'; done.textContent = 'Bought — hide today';
             done.addEventListener('click', async () => render(await SLINK.core.messaging.send('adhd.city.acknowledge')));

@@ -397,10 +397,6 @@
           snooze.addEventListener('click', async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }); renderAdhd(); });
           actions.append(snooze);
         }
-        const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'small secondary'; dismiss.textContent = 'Dismiss';
-        dismiss.title = 'Hide this alert for 5 minutes';
-        dismiss.addEventListener('click', async () => { adhd = await SLINK.core.messaging.send('adhd.alert.dismiss', { id:alert.id }); renderAdhd(); });
-        actions.append(dismiss);
         card.append(copy, actions); return card;
       }));
     }
@@ -522,8 +518,12 @@
       const title = document.createElement('strong'); title.textContent = `${deal.source} · ${deal.itemName}`;
       const detail = document.createElement('span'); detail.textContent = deal.detail;
       copy.append(title, detail);
+      const actions = document.createElement('div'); actions.className = 'row-actions';
       const link = document.createElement('a'); link.className = 'button small'; link.href = deal.href; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'Open & highlight';
-      card.append(copy, link); return card;
+      const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'small secondary'; dismiss.textContent = 'Dismiss 5m';
+      dismiss.title = 'Hide this exact Market Watch deal for five minutes';
+      dismiss.addEventListener('click', async () => { market = await SLINK.core.messaging.send('market.deal.dismiss', { dismissKey:deal.dismissKey }); renderMarket(); });
+      actions.append(link, dismiss); card.append(copy, actions); return card;
     }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:market.fetchedAt ? 'No watched listing is currently below its target.' : 'Refresh after adding a watch.' })]));
     updateMarketClock();
   }

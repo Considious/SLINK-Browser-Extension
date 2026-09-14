@@ -29,6 +29,9 @@
       let observer = null;
       let formatTimer = null;
       let shareArm = null;
+      let quickBuyLayer = null;
+      let quickBuyPositionFrame = null;
+      const quickBuyControls = new Map();
 
       ui.setModuleStyles(`
         .slink-market-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.slink-market-summary>div{padding:7px;border:1px solid var(--slink-border-soft);border-radius:7px;background:var(--slink-bg-control);text-align:center}.slink-market-summary strong,.slink-market-summary small{display:block}.slink-market-summary small{color:var(--slink-muted)}
@@ -206,20 +209,82 @@
         input.dispatchEvent(new Event('input', { bubbles:true })); input.dispatchEvent(new Event('change', { bubbles:true }));
       }
 
+      function ensureQuickBuyLayer() {
+        if (quickBuyLayer?.isConnected) return quickBuyLayer;
+        quickBuyLayer = document.createElement('div');
+        quickBuyLayer.dataset.slinkMarketBuyLayer = 'true';
+        quickBuyLayer.setAttribute('aria-label', 'SLINK highlighted listing buy controls');
+        quickBuyLayer.style.cssText = 'position:fixed;inset:0;z-index:2147483646;pointer-events:none';
+        document.body.appendChild(quickBuyLayer);
+        return quickBuyLayer;
+      }
+
+      function positionQuickBuy(button, native) {
+        if (!button?.isConnected || !native?.isConnected) return;
+        const rect = native.getBoundingClientRect();
+        const hidden = rect.width <= 0 || rect.height <= 0 || rect.right < 0 || rect.bottom < 0 || rect.left > innerWidth || rect.top > innerHeight;
+        button.style.display = hidden ? 'none' : 'flex';
+        if (hidden) return;
+        button.style.left = `${Math.round(rect.left * 10) / 10}px`;
+        button.style.top = `${Math.round(rect.top * 10) / 10}px`;
+        button.style.width = `${Math.round(rect.width * 10) / 10}px`;
+        button.style.height = `${Math.round(rect.height * 10) / 10}px`;
+      }
+
+      function syncQuickBuyPositions() {
+        if (quickBuyPositionFrame) return;
+        quickBuyPositionFrame = global.requestAnimationFrame(() => {
+          quickBuyPositionFrame = null;
+          quickBuyControls.forEach((spec, native) => positionQuickBuy(spec.button, native));
+        });
+      }
+
+      function removeQuickBuy(native) {
+        const spec = quickBuyControls.get(native);
+        spec?.button?.remove();
+        native?.removeAttribute?.('data-slink-market-buy-native');
+        quickBuyControls.delete(native);
+        if (!quickBuyControls.size) { quickBuyLayer?.remove(); quickBuyLayer = null; }
+      }
+
+      function clearQuickBuys() {
+        [...quickBuyControls.keys()].forEach(removeQuickBuy);
+        document.querySelectorAll('[data-slink-market-buy]').forEach(button => button.remove());
+        document.querySelectorAll('[data-slink-market-buy-native]').forEach(native => native.removeAttribute('data-slink-market-buy-native'));
+        quickBuyLayer?.remove(); quickBuyLayer = null;
+      }
+
       function installQuickBuy(node, target) {
-        if (!current?.settings?.quickBuyEnabled || node.querySelector('[data-slink-market-buy]')) return;
+        if (!current?.settings?.quickBuyEnabled) return null;
         const native = [...node.querySelectorAll('button,[role="button"]')].find(button => !button.disabled && button.getAttribute('aria-disabled') !== 'true'
+          && !button.matches('[data-slink-market-buy]')
           && (/\b(?:buy|purchase)\b/i.test(`${button.textContent || ''} ${button.getAttribute('aria-label') || ''} ${button.getAttribute('title') || ''}`)
             || button.matches('[class*="buyButton___"],[class*="controlPanelButton___"]')));
-        if (!native) return;
+        if (!native) return null;
+        const existing = quickBuyControls.get(native);
+        if (existing) {
+          existing.node = node; existing.target = target;
+          positionQuickBuy(existing.button, native);
+          return native;
+        }
         const button = document.createElement('button');
         button.type = 'button'; button.dataset.slinkMarketBuy = 'true'; button.textContent = 'SLINK Buy';
-        button.style.cssText = 'margin:3px;padding:4px 8px;border:1px solid #78ff45;border-radius:5px;background:#17340f;color:#dfffd4;font-weight:700;cursor:pointer';
+        button.setAttribute('aria-label', 'SLINK Buy maximum available quantity');
+        button.title = 'SLINK Buy maximum available quantity';
+        button.style.cssText = 'position:fixed;box-sizing:border-box;display:flex;align-items:center;justify-content:center;margin:0;padding:0 3px;border:1px solid rgba(255,255,255,.32);border-radius:4px;background:linear-gradient(#b9ff68,#68c51d);box-shadow:inset 0 1px rgba(255,255,255,.48),0 0 7px rgba(112,255,40,.55);color:#111;font:700 10px/1.1 Arial,sans-serif;text-align:center;text-transform:uppercase;overflow:hidden;cursor:pointer;pointer-events:auto';
         button.addEventListener('click', event => {
           if (!event.isTrusted || !focusedTornPage()) return;
-          event.preventDefault(); event.stopPropagation(); fillMaximum(node, target.price); native.click();
+          event.preventDefault(); event.stopImmediatePropagation();
+          const spec = quickBuyControls.get(native);
+          if (!spec || !native.isConnected || native.disabled || native.getAttribute('aria-disabled') === 'true') return;
+          fillMaximum(spec.node, spec.target.price); native.click();
+          [40, 160, 450].forEach(delay => global.setTimeout(scheduleFormat, delay));
         });
-        native.insertAdjacentElement('afterend', button);
+        native.dataset.slinkMarketBuyNative = 'true';
+        ensureQuickBuyLayer().appendChild(button);
+        quickBuyControls.set(native, { button, node, target });
+        positionQuickBuy(button, native);
+        return native;
       }
 
       function formatPurchasePage() {
@@ -234,14 +299,16 @@
           node.style.removeProperty('outline');
           node.style.removeProperty('outline-offset');
           node.style.removeProperty('box-shadow');
-          node.querySelector('[data-slink-market-buy]')?.remove();
+          quickBuyControls.forEach((spec, native) => { if (spec.node === node) removeQuickBuy(native); });
         };
         if (!page) {
           document.querySelectorAll('[data-slink-market-highlight]').forEach(cleanup);
+          clearQuickBuys();
           return;
         }
         const nodes = purchaseNodes(page);
         const matched = new Set();
+        const activeQuickBuys = new Set();
         for (const node of nodes) {
           const price = nodePrice(node);
           const itemId = nodeItemId(node) || pageItemId(page);
@@ -261,10 +328,15 @@
           node.style.setProperty('outline-offset', '2px', 'important');
           node.style.setProperty('box-shadow', `0 0 18px 5px ${glow}`, 'important');
           node.dataset.slinkMarketReason = state.targeted ? 'SLINK API-matched listing' : state.shopProfit ? `Below city shop sell price${item?.shopSellPrice ? ` ($${Number(item.shopSellPrice).toLocaleString()})` : ''}` : '$1 purchase opportunity';
-          if (current?.settings?.quickBuyEnabled && !nodeUnavailable(node)) installQuickBuy(node, { price });
-          else node.querySelector('[data-slink-market-buy]')?.remove();
+          if (current?.settings?.quickBuyEnabled && !nodeUnavailable(node)) {
+            const native = installQuickBuy(node, { price });
+            if (native) activeQuickBuys.add(native);
+          } else {
+            quickBuyControls.forEach((spec, native) => { if (spec.node === node) removeQuickBuy(native); });
+          }
         }
         document.querySelectorAll('[data-slink-market-highlight]').forEach(node => { if (!matched.has(node)) cleanup(node); });
+        quickBuyControls.forEach((_spec, native) => { if (!activeQuickBuys.has(native)) removeQuickBuy(native); });
       }
 
       function scheduleFormat() {
@@ -306,7 +378,7 @@
         const root = ui.getContentElement();
         root.innerHTML = `<div class="slink-market-summary"><div><strong>${status?.settings?.watches?.length || 0}/${status?.marketWatchLimit || 0}</strong><small>Watches</small></div><div><strong>${deals.length}</strong><small>Deals</small></div><div><strong data-slink-api-usage>${status?.tornApiUsage?.count || 0}/${status?.tornApiUsage?.limit || 60}</strong><small>API / min</small></div></div>
           <div class="slink-market-actions"><button type="button" data-market-copy-all ${deals.length ? '' : 'disabled'}>Copy item list</button><button type="button" data-market-send-all disabled>Send list to Faction</button></div>
-          <div class="slink-market-list">${deals.length ? deals.map(row => `<article class="slink-market-deal"><strong>${escapeHtml(row.source)} · ${escapeHtml(row.itemName)}</strong><span>${escapeHtml(row.detail)}</span><div class="slink-market-actions"><a href="${escapeHtml(row.href)}" target="_self">Open &amp; highlight</a><button type="button" data-market-copy="${escapeHtml(row.id)}">Copy</button><button type="button" data-market-send="${escapeHtml(row.id)}" disabled>Send to Faction</button></div></article>`).join('') : '<div class="slink-market-empty">No watched listing is currently at or below its target.</div>'}</div>`;
+          <div class="slink-market-list">${deals.length ? deals.map(row => `<article class="slink-market-deal"><strong>${escapeHtml(row.source)} · ${escapeHtml(row.itemName)}</strong><span>${escapeHtml(row.detail)}</span><div class="slink-market-actions"><a href="${escapeHtml(row.href)}" target="_self">Open &amp; highlight</a><button type="button" data-market-copy="${escapeHtml(row.id)}">Copy</button><button type="button" data-market-send="${escapeHtml(row.id)}" disabled>Send to Faction</button><button type="button" data-market-dismiss="${escapeHtml(row.id)}">Dismiss 5m</button></div></article>`).join('') : '<div class="slink-market-empty">No watched listing is currently at or below its target.</div>'}</div>`;
         const copyAll = root.querySelector('[data-market-copy-all]');
         const sendAll = root.querySelector('[data-market-send-all]');
         copyAll?.addEventListener('click', async () => {
@@ -337,6 +409,12 @@
           if (sent) shareArm = null;
           updateShareButtons(root);
         }));
+        root.querySelectorAll('[data-market-dismiss]').forEach(button => button.addEventListener('click', async () => {
+          const row = deals.find(item => item.id === button.dataset.marketDismiss);
+          if (!row) return;
+          button.disabled = true; button.textContent = 'Dismissing…';
+          render(await SLINK.core.messaging.send('market.deal.dismiss', { dismissKey:row.dismissKey }));
+        }));
         updateShareButtons(root);
         scheduleFormat();
       }
@@ -354,11 +432,13 @@
       observer.observe(document.body, { childList:true, subtree:true });
       global.addEventListener('hashchange', scheduleFormat);
       global.addEventListener('popstate', scheduleFormat);
+      global.addEventListener('resize', syncQuickBuyPositions);
+      global.addEventListener('scroll', syncQuickBuyPositions, true);
       await load(true);
       global.addEventListener('slink:api-usage', updateApiUsage);
       timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
-      return { stop() { stopped = true; observer?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); if (formatTimer) global.clearTimeout(formatTimer); global.removeEventListener('slink:api-usage', updateApiUsage); global.removeEventListener('hashchange', scheduleFormat); global.removeEventListener('popstate', scheduleFormat); document.querySelectorAll('[data-slink-market-buy]').forEach(node => node.remove()); document.querySelectorAll('[data-slink-market-highlight]').forEach(node => { node.removeAttribute('data-slink-market-highlight'); node.removeAttribute('data-slink-market-targeted'); node.removeAttribute('data-slink-market-shop-profit'); node.removeAttribute('data-slink-market-one-dollar'); node.removeAttribute('data-slink-market-reason'); node.style.removeProperty('outline'); node.style.removeProperty('outline-offset'); node.style.removeProperty('box-shadow'); }); } };
+      return { stop() { stopped = true; observer?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); if (formatTimer) global.clearTimeout(formatTimer); if (quickBuyPositionFrame) global.cancelAnimationFrame(quickBuyPositionFrame); global.removeEventListener('slink:api-usage', updateApiUsage); global.removeEventListener('hashchange', scheduleFormat); global.removeEventListener('popstate', scheduleFormat); global.removeEventListener('resize', syncQuickBuyPositions); global.removeEventListener('scroll', syncQuickBuyPositions, true); clearQuickBuys(); document.querySelectorAll('[data-slink-market-highlight]').forEach(node => { node.removeAttribute('data-slink-market-highlight'); node.removeAttribute('data-slink-market-targeted'); node.removeAttribute('data-slink-market-shop-profit'); node.removeAttribute('data-slink-market-one-dollar'); node.removeAttribute('data-slink-market-reason'); node.style.removeProperty('outline'); node.style.removeProperty('outline-offset'); node.style.removeProperty('box-shadow'); }); } };
     }
   });
 })(globalThis);
