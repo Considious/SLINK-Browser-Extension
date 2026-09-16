@@ -9,6 +9,8 @@ const workerDirectory = path.join(root, 'src', 'background');
 const values = new Map();
 const alarms = new Map();
 const claimRequestBodies = [];
+let hourlyScheduleRequests = 0;
+let hourlyScheduleAvailable = true;
 let observationRequests = 0;
 let claimScheduleBucket = 300;
 let tornStatusState = 'Okay';
@@ -80,7 +82,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.8' }; },
+    getManifest() { return { version: '0.18.9' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -109,6 +111,7 @@ context = vm.createContext({
   fetch: async (input, options = {}) => {
     const url = new URL(String(input));
     let body = { ok: true };
+    let responseStatus = 200;
     if (url.hostname === 'slinkyleveling.richard-johnson554.workers.dev') {
       if (url.pathname === '/') body = { ok: true, service: 'SLINK Leveling API', version: 'test-worker' };
       if (url.pathname === '/api/health') body = { ok: true, version: 'test-worker', database: 'connected', consent_database: 'connected', permissions_database: 'connected' };
@@ -137,6 +140,44 @@ context = vm.createContext({
         collector_expires_at: Date.now() + 300_000,
         targets: [{ id: 123, name: 'Target', level: 50, status: 'Okay', total_stats: 1000 }]
       };
+      if (url.pathname === '/api/checks/hourly-schedule') {
+        hourlyScheduleRequests++;
+        if (!hourlyScheduleAvailable) {
+          responseStatus = 503;
+          body = { ok:false, error:'The hourly R2 schedule is not configured.', code:'hourly_schedule_not_configured' };
+        } else body = {
+          ok: true,
+          coordination: 'r2_hourly_v1',
+          generation: `test-${claimScheduleBucket}`,
+          generated_at: Date.now(),
+          valid_from: Date.now() - 60_000,
+          valid_until: Date.now() + 3_600_000,
+          fallback_until: Date.now() + 7_200_000,
+          collector_assigned: true,
+          collector_key: '3853023:extension-session',
+          collector_count: 1,
+          assigned_target_count: 1,
+          count: 1,
+          next_refresh_at: Date.now() + 3_600_000,
+          checks: [{
+            id: 123,
+            name: 'Target',
+            level: 50,
+            total_stats: 1000,
+            has_status: 1,
+            previous_status: 'Okay',
+            previous_status_until: 0,
+            previous_last_checked_at: Date.now(),
+            next_check_at: 0,
+            competition_score: 0,
+            competition_tier: 'Prime',
+            recommendation_leased: 0,
+            due_at: Date.now(),
+            freshness_checkpoint_required: false,
+            check_batch_id: `extension-session:${claimScheduleBucket}`
+          }]
+        };
+      }
       if (url.pathname === '/api/checks/claim') {
         claimRequestBodies.push(JSON.parse(String(options.body || '{}')));
         body = {
@@ -402,8 +443,8 @@ context = vm.createContext({
       ];
     }
     return {
-      ok: true,
-      status: 200,
+      ok: responseStatus >= 200 && responseStatus < 300,
+      status: responseStatus,
       text: async () => typeof body === 'string' ? body : JSON.stringify(body),
       requestMethod: options.method || 'GET'
     };
@@ -586,7 +627,9 @@ const prepared = await send('leveling.cycle.prepare');
 assert(prepared.ok && prepared.data.status.runtime.targets.length === 1, 'Leveling cycle did not load recommendations.');
 assert(prepared.data.checks.length === 1, 'Leveling cycle did not preserve assigned checks.');
 assert(prepared.data.status.runtime.targets[0].fair_fight === 2, 'FFScouter result was not applied locally.');
-assert(claimRequestBodies[0]?.scheduling_mode === 'client_v1', 'Client scheduling protocol was not requested.');
+assert(prepared.data.status.runtime.scheduleMode === 'r2_hourly_v1', 'R2 hourly scheduling was not selected.');
+assert(hourlyScheduleRequests === 1, 'The hourly schedule was not loaded exactly once.');
+assert(claimRequestBodies.length === 0, 'The R2 path still contacted the legacy D1 scheduler.');
 
 const checked = await send('leveling.check', prepared.data.checks[0]);
 assert(checked.ok && checked.data.target_id === 123, 'Assigned Torn check failed.');
@@ -596,6 +639,7 @@ assert(submitted.ok && submitted.data.runtime.pendingChecks === 0, 'Local comple
 assert(observationRequests === 0, 'Stable Okay completion contacted the Worker observation route.');
 
 claimScheduleBucket = 303;
+values.delete('slink.leveling.hourlySchedule.v1');
 tornStatusState = 'Hospital';
 const changedPrepared = await send('leveling.cycle.prepare');
 assert(changedPrepared.ok && changedPrepared.data.checks.length === 1, 'Changed-status test was not scheduled.');
@@ -603,6 +647,15 @@ const changedCheck = await send('leveling.check', changedPrepared.data.checks[0]
 assert(changedCheck.ok && changedCheck.data.completed_locally !== true, 'Changed status was incorrectly completed locally.');
 const changedSubmitted = await send('leveling.observations.submit', { observations: [changedCheck.data] });
 assert(changedSubmitted.ok && observationRequests === 1, 'Changed status was not reported to the Worker.');
+
+hourlyScheduleAvailable = false;
+claimScheduleBucket = 306;
+values.delete('slink.leveling.hourlySchedule.v1');
+const fallbackPrepared = await send('leveling.cycle.prepare');
+assert(fallbackPrepared.ok && fallbackPrepared.data.checks.length === 1, 'Unavailable R2 scheduling did not preserve the legacy claim fallback.');
+assert(fallbackPrepared.data.status.runtime.scheduleMode === 'legacy_d1_fallback', 'Legacy fallback was not reported in runtime state.');
+assert(claimRequestBodies.at(-1)?.scheduling_mode === 'client_v1', 'Legacy fallback did not request the existing scheduler protocol.');
+hourlyScheduleAvailable = true;
 
 const zeroContribution = await send('leveling.settings.save', { apiContributionLimit: 0 });
 assert(zeroContribution.ok, 'Admin zero-contribution setting failed.');

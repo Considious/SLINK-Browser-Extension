@@ -18,6 +18,7 @@
   const USER_IDLE_MS = 20 * 60 * 1000;
   const DEMAND_REPORT_INTERVAL_MS = 5 * 60 * 1000;
   const NO_DEMAND_POLL_SECONDS = 20 * 60;
+  const HOURLY_SCHEDULE_RETRY_MS = 5 * 60 * 1000;
   const WORKER_BASE = SLINK.core.workerClient.BASE_URL;
 
   const KEYS = Object.freeze({
@@ -31,6 +32,7 @@
     runtime: 'leveling.runtime.v1',
     pendingChecks: 'leveling.pendingChecks.v1',
     completedCheckBatches: 'leveling.completedCheckBatches.v1',
+    hourlySchedule: 'leveling.hourlySchedule.v1',
     fairFightCache: 'leveling.fairFightCache.v1',
     battleStats: 'leveling.battleStats.v1',
     lastActivitySyncAt: 'leveling.lastActivitySyncAt.v1'
@@ -77,6 +79,9 @@
       lastCycleReported: 0,
       contributorOnly: false,
       idle: false,
+      scheduleMode: 'legacy_d1',
+      scheduleGeneration: '',
+      scheduleRefreshAt: 0,
       nextPollSeconds: DEFAULT_POLL_SECONDS
     };
   }
@@ -139,6 +144,7 @@
 
   async function clearSession() {
     await SLINK.core.storage.remove(KEYS.session);
+    await SLINK.core.storage.remove(KEYS.hourlySchedule);
     await SLINK.core.storage.remove('permissions.leveling');
     await SLINK.core.permissions.recomputeStoredSnapshot();
   }
@@ -588,6 +594,64 @@
       .map(target => ({ ...target, check_batch_id: String(claim?.batch_id || '') }));
   }
 
+  async function loadHourlySchedule(force = false) {
+    const now = Date.now();
+    const cached = await SLINK.core.storage.get(KEYS.hourlySchedule, null);
+    if (!force && cached?.schedule && Number(cached.schedule.valid_until) > now) {
+      return cached.schedule;
+    }
+    if (!force && !cached?.schedule && Number(cached?.retryAt) > now) {
+      return null;
+    }
+
+    try {
+      const schedule = await workerRequest('/api/checks/hourly-schedule');
+      const nextRefreshAt = Number(schedule?.next_refresh_at) || 0;
+      await SLINK.core.storage.set(KEYS.hourlySchedule, {
+        schedule,
+        fetchedAt: now,
+        retryAt: nextRefreshAt > now ? nextRefreshAt : now + HOURLY_SCHEDULE_RETRY_MS
+      });
+      return schedule;
+    } catch (error) {
+      if (error?.status !== 404 && error?.status !== 503) throw error;
+      await SLINK.core.storage.set(KEYS.hourlySchedule, {
+        schedule: null,
+        fetchedAt: now,
+        retryAt: now + HOURLY_SCHEDULE_RETRY_MS,
+        unavailableCode: String(error?.data?.code || error?.code || '')
+      });
+      return null;
+    }
+  }
+
+  async function buildHourlyCheckPlan(schedule, intervalCapacity, pollSeconds) {
+    if (!schedule?.collector_assigned || !Array.isArray(schedule?.checks)) return [];
+    const now = Date.now();
+    const intervalMs = clamp(pollSeconds, 60, 300) * 1000;
+    const earliestDueAt = now - intervalMs;
+    const latestDueAt = now + intervalMs;
+    const completed = await completedCheckBatches();
+
+    return schedule.checks
+      .filter(check => {
+        const dueAt = Number(check?.due_at);
+        const batchId = String(check?.check_batch_id || '').trim();
+        const targetId = Number(check?.id);
+        return (
+          Number.isFinite(dueAt) &&
+          dueAt >= earliestDueAt &&
+          dueAt <= latestDueAt &&
+          batchId &&
+          Number.isInteger(targetId) &&
+          targetId > 0 &&
+          !(completed[batchId]?.targetIds || []).map(Number).includes(targetId)
+        );
+      })
+      .sort((left, right) => Number(left.due_at) - Number(right.due_at))
+      .slice(0, Math.max(0, Number(intervalCapacity) || 0));
+  }
+
   function canCompleteOkayLocally(target, observation) {
     return (
       normalizeSchedulingStatus(`${observation?.state || ''} ${observation?.description || ''}`) === 'Okay' &&
@@ -793,17 +857,44 @@
               1,
               MAX_INTERVAL_CHECKS
             );
-          const claim = await workerRequest('/api/checks/claim', {
-            method: 'POST',
-            body: {
-              scheduling_mode: 'client_v1',
-              interval_capacity: capacity,
-              poll_seconds: currentSettings.pollSeconds
+          let scheduleMode = 'disabled';
+          let scheduleGeneration = '';
+          let scheduleRefreshAt = 0;
+          if (capacity === 0) {
+            checks = [];
+          } else {
+            const hourlySchedule = await loadHourlySchedule();
+            if (hourlySchedule) {
+              scheduleMode = 'r2_hourly_v1';
+              scheduleGeneration = String(hourlySchedule.generation || '');
+              scheduleRefreshAt = Number(hourlySchedule.next_refresh_at) || 0;
+              checks = (await mergePending(
+                await buildHourlyCheckPlan(
+                  hourlySchedule,
+                  capacity,
+                  currentSettings.pollSeconds
+                )
+              )).slice(0, capacity);
+            } else {
+              scheduleMode = 'legacy_d1_fallback';
+              const claim = await workerRequest('/api/checks/claim', {
+                method: 'POST',
+                body: {
+                  scheduling_mode: 'client_v1',
+                  interval_capacity: capacity,
+                  poll_seconds: currentSettings.pollSeconds
+                }
+              });
+              checks = (await mergePending(
+                buildClientCheckPlan(claim, capacity)
+              )).slice(0, capacity);
             }
+          }
+          await saveRuntime({
+            scheduleMode,
+            scheduleGeneration,
+            scheduleRefreshAt
           });
-          checks = capacity === 0
-            ? []
-            : (await mergePending(buildClientCheckPlan(claim, capacity))).slice(0, capacity);
         }
         await saveRuntime({
           targets,

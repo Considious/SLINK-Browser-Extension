@@ -309,7 +309,11 @@
         const observations = [];
         const failures = [];
         await Promise.all(checks.map(async (check, index) => {
-          const delay = Math.max(0, startedAt + Math.floor(index * spacing) - Date.now());
+          const dueAt = Number(check?.due_at);
+          const targetAt = Number.isFinite(dueAt)
+            ? Math.min(startedAt + horizon, Math.max(startedAt, dueAt))
+            : startedAt + Math.floor(index * spacing);
+          const delay = Math.max(0, targetAt - Date.now());
           if (delay) await new Promise(resolve => setTimeout(resolve, delay));
           if (stopped) return;
           try {

@@ -2,6 +2,20 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.9 — 2026-09-15
+
+### Changed
+
+- Leveling collectors now load one private R2-backed assignment for the full UTC hour instead of querying the D1 scheduling path every five minutes.
+- Each collector executes only its frozen share at the Worker's exact due times; collectors that appear after the hourly roster was built wait for the next generation.
+- The current five-minute D1 claim route remains as an automatic compatibility fallback while the new Worker and bucket are rolled out.
+
+### Reliability
+
+- Hourly assignments are cached locally until their advertised refresh time and are cleared whenever the signed Leveling session changes.
+- Daily freshness checks retain their required Worker submission instead of being incorrectly completed as unchanged local `Okay` results.
+- If R2 is missing or temporarily unavailable, Leveling continues with the existing scheduler and exposes the active scheduling mode in runtime diagnostics.
+
 ## 0.18.8 — 2026-09-13
 
 ### Fixed

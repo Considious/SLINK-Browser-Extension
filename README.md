@@ -247,7 +247,10 @@ extension-wide Public Only API key donations:
 - Leveling recommendations and local Fair Fight estimates
 - FFScouter refinement cached locally
 - coordinated, paced Torn status collection and durable retry state
-- deterministic client-side target ownership across active collectors
+- one cached R2 hourly assignment per active Leveling collector, executed at
+  Worker-supplied due times
+- automatic compatibility fallback to the indexed five-minute D1 scheduler
+  while the R2 Worker path is unavailable
 - local completion of unchanged `Okay` checks without a Worker or D1 request
 - activity-snapshot and attack-page observation reporting
 
