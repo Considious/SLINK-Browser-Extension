@@ -81,7 +81,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.13', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.14', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -132,6 +132,8 @@ assert(SLINK.core.market.listingHighlightState({ price:80, shopSellPrice:125 }).
 assert(!SLINK.core.market.listingHighlightState({ price:125, shopSellPrice:125 }).highlighted, 'A listing at its city shop sell price was incorrectly marked as profitable.');
 assert(SLINK.core.market.listingHighlightState({ price:500, shopSellPrice:125, targeted:true }).targeted, 'An API-targeted listing was not marked for highlighting.');
 assert(!SLINK.core.market.listingHighlightState({ price:1, shopSellPrice:125, available:false }).highlighted, 'An unavailable listing was incorrectly marked as a purchase opportunity.');
+assert(JSON.stringify(SLINK.core.war.parseMugResultText('You mugged SweetyCute and stole $150,433')) === JSON.stringify({ victimName:'SweetyCute', amount:150433 }), 'Torn attack-result mug text was not parsed.');
+assert(SLINK.core.war.parseMugResultText('You hospitalized SweetyCute') === null, 'A non-mug attack result was misclassified as a mug.');
 const marketSettings = SLINK.core.market.normalizeSettings({ watches:[{ uid:'one', itemId:1, label:'Current Shops', maxPrice:90, marketEnabled:true, bazaarEnabled:true }] });
 assert(SLINK.core.market.normalizeSettings({ lastPriority:'low' }).lastPriority === 'low', 'Last Market Watch priority was not preserved.');
 assert(SLINK.core.market.TORN_PRIORITY_LIMITS.high === 60 && SLINK.core.market.TORN_PRIORITY_LIMITS.normal === 50 && SLINK.core.market.TORN_PRIORITY_LIMITS.low === 40, 'Market priority API headroom did not match the dashboard scheduler.');

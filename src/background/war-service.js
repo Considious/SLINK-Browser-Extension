@@ -21,6 +21,7 @@
     lastFfAt: 'war.lastFairFightAt.v1',
     personalStats: 'war.personalStats.v1',
     seenPersonalAttacks: 'war.seenPersonalAttacks.v1',
+    mugReports: 'war.mugReports.v1',
     lastPanelStatsAt: 'war.lastPanelStatsAt.v1',
     outsideTargets: 'war.outsideTargets.v1',
     lastOutsideAt: 'war.lastOutsideAt.v1',
@@ -386,6 +387,22 @@
     return { warId, attacks:0, warAttacks:0, mugs:0, mugTotal:0, mugMin:0, mugMax:0 };
   }
 
+  function mugFingerprint(activeWar, victimId, victimName, amount) {
+    return `${activeWar.warId}:${Number(victimId) || String(victimName || '').trim().toLocaleLowerCase()}:${Number(amount) || 0}`;
+  }
+
+  function mugReportMatchesAttack(report, attack, activeWar, amount) {
+    if (!report || report.warId !== activeWar.warId || report.matchedAttackId || Number(report.amount) !== amount) return false;
+    const defenderId = Number(attack?.defender?.id ?? attack?.defender_id ?? 0) || 0;
+    const defenderName = String(attack?.defender?.name ?? attack?.defender_name ?? '').trim().toLocaleLowerCase();
+    const sameVictim = Number(report.victimId) > 0 && defenderId > 0
+      ? Number(report.victimId) === defenderId
+      : Boolean(defenderName && defenderName === String(report.victimName || '').trim().toLocaleLowerCase());
+    if (!sameVictim) return false;
+    const endedAt = Number(attack?.ended ?? attack?.ended_at ?? 0) * 1000;
+    return !endedAt || Math.abs(Number(report.observedAt) - endedAt) <= 10 * 60_000;
+  }
+
   function mugAmount(attack) {
     for (const value of [
       attack?.money_mugged,
@@ -401,9 +418,10 @@
     return 0;
   }
 
-  function addPersonalAttacks(storedStats, storedSeen, activeWar, session, attacks, assumeCurrentUser = false) {
+  function addPersonalAttacks(storedStats, storedSeen, activeWar, session, attacks, assumeCurrentUser = false, storedMugReports = []) {
     const stats = storedStats?.warId === activeWar.warId ? { ...emptyPersonalStats(activeWar.warId), ...storedStats } : emptyPersonalStats(activeWar.warId);
     const seen = new Set(storedSeen?.warId === activeWar.warId ? storedSeen.ids || [] : []);
+    const mugReports = (Array.isArray(storedMugReports) ? storedMugReports : []).filter(report => report?.warId === activeWar.warId).map(report => ({ ...report }));
     for (const attack of attacks) {
       const id = String(attack?.id ?? attack?.attack_id ?? '');
       const attackerId = Number(attack?.attacker?.id ?? attack?.attacker_id ?? (assumeCurrentUser ? session.userId : 0));
@@ -414,15 +432,78 @@
       if (attack?.is_ranked_war === true || defenderFaction === Number(activeWar.opponentFactionId)) stats.warAttacks += 1;
       if (String(attack?.result ?? attack?.outcome ?? '').toLowerCase() === 'mugged') {
         const amount = mugAmount(attack);
-        stats.mugs += 1;
-        stats.mugTotal += amount;
-        if (amount > 0) {
-          stats.mugMin = stats.mugMin > 0 ? Math.min(stats.mugMin, amount) : amount;
-          stats.mugMax = Math.max(stats.mugMax, amount);
+        const reported = amount > 0 ? mugReports.find(report => mugReportMatchesAttack(report, attack, activeWar, amount)) : null;
+        if (reported) {
+          reported.matchedAttackId = id;
+        } else {
+          stats.mugs += 1;
+          stats.mugTotal += amount;
+          if (amount > 0) {
+            stats.mugMin = stats.mugMin > 0 ? Math.min(stats.mugMin, amount) : amount;
+            stats.mugMax = Math.max(stats.mugMax, amount);
+            const victimId = Number(attack?.defender?.id ?? attack?.defender_id ?? 0) || 0;
+            const victimName = String(attack?.defender?.name ?? attack?.defender_name ?? '').trim().slice(0, 80);
+            const observedAt = (Number(attack?.ended ?? attack?.ended_at ?? 0) * 1000) || Date.now();
+            mugReports.push({
+              id:`api:${id}`,
+              warId:activeWar.warId,
+              victimId,
+              victimName,
+              amount,
+              observedAt,
+              fingerprint:mugFingerprint(activeWar, victimId, victimName, amount),
+              source:'torn_api',
+              matchedAttackId:id
+            });
+          }
         }
       }
     }
-    return { stats, seen:[...seen].slice(-1000) };
+    return { stats, seen:[...seen].slice(-1000), mugReports:mugReports.slice(-1000) };
+  }
+
+  async function recordMugResult(input = {}) {
+    await ensureSession(false);
+    const activeWar = await SLINK.core.storage.get(KEYS.activeWar, null);
+    if (!activeWar?.warId || phaseForStart(activeWar.startedAt) !== 'active') return publicStatus();
+    const victimName = String(input.victimName || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const victimId = WAR.positiveInteger(input.victimId);
+    const amount = Number(input.amount);
+    if (!victimName || !Number.isSafeInteger(amount) || amount <= 0) throw new Error('A valid Torn mug result is required.');
+    const observedAt = Date.now();
+    const fingerprint = mugFingerprint(activeWar, victimId, victimName, amount);
+    const storedReports = await SLINK.core.storage.get(KEYS.mugReports, []);
+    const reports = (Array.isArray(storedReports) ? storedReports : []).filter(report => report?.warId === activeWar.warId).slice(-999);
+    const duplicate = reports.some(report => report.fingerprint === fingerprint && Math.abs(Number(report.observedAt) - observedAt) <= 5 * 60_000);
+    if (duplicate) return publicStatus();
+    const storedStats = await SLINK.core.storage.get(KEYS.personalStats, emptyPersonalStats(activeWar.warId));
+    const stats = storedStats?.warId === activeWar.warId ? { ...emptyPersonalStats(activeWar.warId), ...storedStats } : emptyPersonalStats(activeWar.warId);
+    stats.mugs += 1;
+    stats.mugTotal += amount;
+    stats.mugMin = stats.mugMin > 0 ? Math.min(stats.mugMin, amount) : amount;
+    stats.mugMax = Math.max(stats.mugMax, amount);
+    reports.push({
+      id:`dom:${global.crypto?.randomUUID?.() || `${observedAt}:${victimId}:${amount}`}`,
+      warId:activeWar.warId,
+      victimId,
+      victimName,
+      amount,
+      observedAt,
+      fingerprint,
+      source:'torn_attack_result_dom',
+      matchedAttackId:''
+    });
+    await Promise.all([
+      SLINK.core.storage.set(KEYS.personalStats, stats),
+      SLINK.core.storage.set(KEYS.mugReports, reports)
+    ]);
+    const currentRuntime = await runtime();
+    await setRuntime({ panelStats:{
+      ...(currentRuntime.panelStats || {}),
+      ...stats,
+      mugAverage:stats.mugs ? Math.round(stats.mugTotal / stats.mugs) : 0
+    } });
+    return publicStatus();
   }
 
   async function collectAttacks(activeWar, currentSettings) {
@@ -437,16 +518,18 @@
       body:{ opponent_faction_id:activeWar.opponentFactionId, attacks }
     });
     const newest = attacks.reduce((maximum, attack) => Math.max(maximum, Number(attack?.ended ?? attack?.ended_at ?? 0) || 0), previous);
-    const [storedStats, storedSeen] = await Promise.all([
+    const [storedStats, storedSeen, storedMugReports] = await Promise.all([
       SLINK.core.storage.get(KEYS.personalStats, emptyPersonalStats(activeWar.warId)),
-      SLINK.core.storage.get(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:[] })
+      SLINK.core.storage.get(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:[] }),
+      SLINK.core.storage.get(KEYS.mugReports, [])
     ]);
-    const personal = addPersonalAttacks(storedStats, storedSeen, activeWar, session, attacks);
+    const personal = addPersonalAttacks(storedStats, storedSeen, activeWar, session, attacks, false, storedMugReports);
     await Promise.all([
       SLINK.core.storage.set(KEYS.lastAttackAt, Date.now()),
       SLINK.core.storage.set(KEYS.lastAttackEnded, newest),
       SLINK.core.storage.set(KEYS.personalStats, personal.stats),
-      SLINK.core.storage.set(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:personal.seen })
+      SLINK.core.storage.set(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:personal.seen }),
+      SLINK.core.storage.set(KEYS.mugReports, personal.mugReports)
     ]);
     return attacks.length;
   }
@@ -554,14 +637,16 @@
       const from = Math.max(Math.floor(Number(activeWar.startedAt) / 1000) || nowSeconds - 600, nowSeconds - 600);
       const response = await tornRequest(`/v2/user/attacks?from=${from}&to=${nowSeconds}&limit=100&sort=desc`, currentSettings.tornKey);
       const attacks = Array.isArray(response?.attacks) ? response.attacks : [];
-      const [savedStats, savedSeen] = await Promise.all([
+      const [savedStats, savedSeen, savedMugReports] = await Promise.all([
         SLINK.core.storage.get(KEYS.personalStats, emptyPersonalStats(activeWar.warId)),
-        SLINK.core.storage.get(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:[] })
+        SLINK.core.storage.get(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:[] }),
+        SLINK.core.storage.get(KEYS.mugReports, [])
       ]);
-      const personal = addPersonalAttacks(savedStats, savedSeen, activeWar, session, attacks, true);
+      const personal = addPersonalAttacks(savedStats, savedSeen, activeWar, session, attacks, true, savedMugReports);
       await Promise.all([
         SLINK.core.storage.set(KEYS.personalStats, personal.stats),
-        SLINK.core.storage.set(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:personal.seen })
+        SLINK.core.storage.set(KEYS.seenPersonalAttacks, { warId:activeWar.warId, ids:personal.seen }),
+        SLINK.core.storage.set(KEYS.mugReports, personal.mugReports)
       ]);
     } catch { /* Public Only keys cannot read personal attacks; shared War features continue. */ }
     const stored = await SLINK.core.storage.get(KEYS.personalStats, emptyPersonalStats(activeWar.warId));
@@ -1057,6 +1142,7 @@
       'war.config.save': saveSharedConfig,
       'war.claims.update': updateClaim,
       'war.chain.report': chainReport,
+      'war.mug.report': recordMugResult,
       'war.outside.refresh': discoverOutsideTargets,
       'war.armory.members': payload => armoryMembers(payload?.force === true),
       'war.armory.request': updateArmoryRequest,

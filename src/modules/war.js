@@ -144,6 +144,8 @@
       let pendingRetalSend = null;
       let pendingRetalSendTimer = null;
       let dismissedRetalMap = {};
+      const reportedMugNodes = new WeakSet();
+      const recentMugResults = new Map();
       let leader = false;
       let leaderTimer = null;
       const leaderClientId = `war:${global.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
@@ -206,6 +208,47 @@
       function clearAttackPageGate() {
         insideGateElement?.remove();
         insideGateElement = null;
+      }
+
+      function onAttackPage() {
+        const url = new URL(location.href);
+        return /\/page\.php$/i.test(url.pathname) && String(url.searchParams.get('sid') || '').toLowerCase() === 'attack';
+      }
+
+      function attackPageTargetId() {
+        if (!onAttackPage()) return 0;
+        return Number(new URL(location.href).searchParams.get('user2ID')) || 0;
+      }
+
+      async function reportMugResultNode(node) {
+        if (!node || reportedMugNodes.has(node)) return;
+        const result = WAR.parseMugResultText(node.textContent);
+        if (!result) return;
+        reportedMugNodes.add(node);
+        const victimId = attackPageTargetId();
+        const fingerprint = `${victimId || result.victimName.toLocaleLowerCase()}:${result.amount}`;
+        const now = Date.now();
+        for (const [key, seenAt] of recentMugResults) if (now - seenAt > 5 * 60_000) recentMugResults.delete(key);
+        if (recentMugResults.has(fingerprint)) return;
+        recentMugResults.set(fingerprint, now);
+        try {
+          current = await SLINK.core.messaging.send('war.mug.report', {
+            victimId,
+            victimName:result.victimName,
+            amount:result.amount
+          });
+          render();
+        } catch (error) {
+          recentMugResults.delete(fingerprint);
+          reportedMugNodes.delete(node);
+          console.debug('[SLINK] Mug result report paused:', SLINK.core.format.errorMessage(error));
+        }
+      }
+
+      function scanAttackMugResults() {
+        if (!onAttackPage()) return;
+        const nodes = new Set(document.querySelectorAll('div[class*="dialog___"] div[class*="title___"],div[class*="green___"] div[class*="title___"]'));
+        for (const node of nodes) void reportMugResultNode(node);
       }
 
       function profileAttackButton() {
@@ -1346,12 +1389,14 @@
       leaderTimer = setInterval(() => void refreshLeader(), 5_000);
       armoryObserver = new MutationObserver(records => {
         renderProfileAttackGate();
+        scanAttackMugResults();
         if (rankPanelIsVisible()) scheduleRankOrderCapture();
         if (activeArmoryTab() && records.some(record => !record.target?.closest?.('.slink-armory-request-cell,.slink-armory-request-header'))) queueArmoryEnhancement();
       });
       armoryObserver.observe(document.body, { childList:true, subtree:true });
       render();
       renderInsideGateSurfaces();
+      scanAttackMugResults();
       queueArmoryEnhancement();
       void runCycle(false);
       return { stop() {

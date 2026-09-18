@@ -86,7 +86,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.13' }; },
+    getManifest() { return { version: '0.18.14' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -737,6 +737,10 @@ const detectedWar = await send('war.active.detect', {
   startedAt:1_777_000_000
 });
 assert(detectedWar.ok && detectedWar.data.activeWar.warId === 'rw_46978_46999_1777000000', 'Active War identity was not stable.');
+const scrapedMug = await send('war.mug.report', { victimId:9001, victimName:'War Target', amount:1250000 });
+assert(scrapedMug.ok && scrapedMug.data.runtime.panelStats.mugs === 1 && scrapedMug.data.runtime.panelStats.mugTotal === 1250000, 'Scraped Torn mug result was not added to the local War report.');
+const duplicateScrapedMug = await send('war.mug.report', { victimId:9001, victimName:'War Target', amount:1250000 });
+assert(duplicateScrapedMug.data.runtime.panelStats.mugs === 1, 'The same rendered mug result was counted twice.');
 const warCycle = await send('war.cycle.prepare');
 assert(warCycle.ok && warCycle.data.runtime.snapshot.members.length === 1, 'War cycle did not load the shared target snapshot.');
 assert(warCycle.data.runtime.snapshot.retals.length === 1, 'War cycle did not load active retals.');
@@ -746,6 +750,7 @@ assert(warCycle.data.runtime.snapshot.members[0].battleStatsEstimate === 2500000
 assert(warCycle.data.runtime.logs[0].event_count === 1, 'War cycle did not load aggregate logs.');
 assert(warCycle.data.runtime.logsWarning.includes('Live targets and retals remain available'), 'Missing historical storage did not degrade to a live-data warning.');
 assert(warCycle.data.runtime.panelStats.mugTotal === 1250000 && warCycle.data.runtime.panelStats.mugAverage === 1250000, 'Mug totals were not calculated from personal attacks.');
+assert(values.get('slink.war.mugReports.v1')?.[0]?.matchedAttackId === 'my-mug-1', 'A later API attack did not reconcile with the already-counted scraped mug result.');
 assert(warStatusSubmissions === 1, 'Elected public status collector did not submit once.');
 assert(warAttackSubmissions === 1, 'Elected faction collector did not submit attacks once.');
 const configuredWar = await send('war.config.save', { mode:'termed', idleMinutes:10, insideHitCap:25 });

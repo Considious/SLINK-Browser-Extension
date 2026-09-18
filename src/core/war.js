@@ -13,6 +13,16 @@
     return Number.isInteger(number) && number > 0 ? number : 0;
   }
 
+  function parseMugResultText(value) {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    const match = text.match(/^You mugged (.+?) and stole \$([\d,]+)$/i);
+    if (!match) return null;
+    const victimName = match[1].trim();
+    const amount = Number(match[2].replaceAll(',', ''));
+    if (!victimName || !Number.isSafeInteger(amount) || amount <= 0) return null;
+    return { victimName, amount };
+  }
+
   function makeWarId(ownFactionId, opponentFactionId, startedAt) {
     const own = positiveInteger(ownFactionId);
     const opponent = positiveInteger(opponentFactionId);
@@ -136,6 +146,7 @@
     isTraveling,
     makeWarId,
     normalizeMember,
+    parseMugResultText,
     positiveInteger,
     sortMembers,
     statusSeconds,

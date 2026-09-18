@@ -2,6 +2,14 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.14 — 2026-09-18
+
+### Fixed
+
+- Mug totals now read Torn's completed green attack-result dialog on `page.php?sid=attack`, so personal mug reporting no longer requires a Full Access API key.
+- Only the victim name, victim ID from the attack URL, and stolen amount are recorded locally; no attack-page HTML is retained or sent to a Worker.
+- Repeated rendering of the same Torn result is deduplicated, and a later personal/faction API attack is reconciled without counting the mug twice.
+
 ## 0.18.13 — 2026-09-18
 
 ### Added
