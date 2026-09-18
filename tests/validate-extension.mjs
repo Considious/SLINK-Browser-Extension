@@ -195,6 +195,8 @@ assert(warServiceSource.includes("'war.mug.report': recordMugResult") && warServ
 assert(warModuleSource.includes('.item-action [data-role="retrieve"].active') && warModuleSource.includes('.retrieve-cont .retrieve-yes'), 'The Armory Recaller does not use Torn\'s explicit retrieve and confirmation controls.');
 assert(warServiceSource.includes("'war.armory.members'") && warServiceSource.includes("'war.armory.request'"), 'The extension is missing its cached Armory status or request routes.');
 assert(warModuleSource.includes("button.textContent = 'Request Item'") && warModuleSource.includes('/^(revitalize|warlord)$/i') && warModuleSource.includes('slink-armory-request-cell'), 'Warlord and Revitalize item requests are not inserted into a separate Torn armory column.');
+assert(warModuleSource.includes('grid-template-columns:62px minmax(170px,1fr) 145px 70px 120px 112px 126px') && !warModuleSource.includes('flex-wrap:wrap !important; min-width:780px'), 'Armory rows do not use a uniform fixed-column layout.');
+assert(warModuleSource.includes("actionSlot.className = 'slink-armory-request-action'") && warModuleSource.includes('else row.append(cell)'), 'Every Armory row does not reserve the same SLINK status and request cell.');
 assert(warModuleSource.includes('NO INSIDE HITS DURING MAJOR BONUS WINDOWS') && warModuleSource.includes('INSIDE_WINDOWS'), 'The Termed-war major-window inside gate is missing.');
 assert(warModuleSource.includes('profile-button-attack') && warModuleSource.includes('renderProfileAttackGate'), 'The inside gate does not cover Torn profile attack buttons.');
 assert(warModuleSource.includes('data-war-retal-dismiss') && warModuleSource.includes('retalDismissKey'), 'Per-player retaliation dismissal is missing.');

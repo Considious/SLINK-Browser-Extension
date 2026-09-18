@@ -2,6 +2,14 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.16 — 2026-09-18
+
+### Fixed
+
+- Armory item rows and their header now use the same fixed seven-column grid, preventing borrowed and available items from wrapping into different layouts.
+- Every item row reserves an identical SLINK status/request cell; non-requestable items keep an empty action slot instead of shifting neighboring columns.
+- Status, last activity, and the request button have dedicated fixed-height lines, keeping rows uniform while preserving horizontal scrolling on narrower screens.
+
 ## 0.18.15 — 2026-09-18
 
 ### Fixed
