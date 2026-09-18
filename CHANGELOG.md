@@ -2,6 +2,13 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.15 — 2026-09-18
+
+### Fixed
+
+- Market Watch permission tiers can now be refreshed explicitly from both the dedicated dashboard and the in-Torn Market interface.
+- A newly assigned or upgraded tier replaces the cached signed permission session immediately; `.10`, `.15`, and higher tiers no longer appear to require a separate `.5` grant.
+
 ## 0.18.14 — 2026-09-18
 
 ### Fixed

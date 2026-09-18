@@ -1272,6 +1272,12 @@
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
     finally { setBusy(button, false); }
   });
+  byId('market-permissions-refresh').addEventListener('click', async event => {
+    const button = event.currentTarget; setBusy(button, true); byId('market-error').hidden = true;
+    try { market = await SLINK.core.messaging.send('market.permissions.refresh'); renderMarket(); }
+    catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
+    finally { setBusy(button, false); }
+  });
   byId('market-load-items').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-message').textContent = 'Loading Torn’s item catalog…';
     try { market = await SLINK.core.messaging.send('market.catalog', { force:true }); byId('market-message').textContent = `${market.catalog?.items?.length || 0} API items loaded.`; renderMarket(); }

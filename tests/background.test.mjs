@@ -35,6 +35,7 @@ let marketCatalogRequests = 0;
 let itemMarketRequests = 0;
 let weaverMarketRequests = 0;
 let pointsMarketRequests = 0;
+let permissionAuthScopes = ['admin.*','slink.adhd.alerts','slink.adhd.marketwatch.40'];
 const adminPermissionRequests = [];
 const adminGrantState = new Map([
   ['slink.level', { status:'active', expiresAt:Date.now() + 86_400_000 }]
@@ -86,7 +87,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.14' }; },
+    getManifest() { return { version: '0.18.15' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -232,7 +233,7 @@ context = vm.createContext({
         disclosure_version:'2026-08-23', disclosure_sha256:'summary-hash', summary:'Encrypted offline donation test.'
       };
       if (url.pathname === '/api/permissions/terms') body = { ok:true, terms:{ version:'2026-08-24', sha256:'72a933d69ec99cabeb92b426208e9d0c47e90acaf960818e0b4da38f3f2f5b0a', url:'https://example.test/terms', summary:'Permission disclosure.' } };
-      if (url.pathname === '/api/permissions/auth') body = { ok:true, session_token:'signed-access-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:['admin.*','slink.adhd.alerts','slink.adhd.marketwatch.40'] };
+      if (url.pathname === '/api/permissions/auth') body = { ok:true, session_token:'signed-access-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:permissionAuthScopes };
       if (url.pathname === '/api/admin/scopes') body = { ok:true, scopes:[{ scope:'slink.level', category:'Products', title:'SLINK Leveling' }, { scope:'slink.war', category:'Products', title:'SLINK War' }, { scope:'slink.war.officer', category:'War permissions', title:'SLINK War Officer' }, { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow' }] };
       if (/^\/api\/admin\/users\/\d+\/permissions$/.test(url.pathname)) {
         if (options.method === 'POST') {
@@ -574,6 +575,11 @@ const accessSaved = await send('access.settings.save', {
 });
 assert(accessSaved.ok && accessSaved.data.session.authenticated, 'ADHD permission-only session did not authenticate.');
 assert(!JSON.stringify(accessSaved.data).includes('torn-test-key'), 'Public ADHD access state leaked the shared local Torn API key.');
+permissionAuthScopes = ['slink.adhd.alerts','slink.adhd.marketwatch.10'];
+const refreshedMarketPermissions = await send('market.permissions.refresh');
+assert(refreshedMarketPermissions.ok && refreshedMarketPermissions.data.marketWatchLimit === 10, 'Market Watch did not refresh an upgraded signed tier on demand.');
+permissionAuthScopes = ['admin.*','slink.adhd.alerts','slink.adhd.marketwatch.40'];
+assert((await send('market.permissions.refresh')).data.marketWatchLimit === 40, 'Market Watch permission refresh did not replace the cached tier.');
 const firstMarketWatch = await send('market.watch.save', { itemId:1, maxPrice:90, priority:'normal', marketEnabled:true, bazaarEnabled:true });
 assert(firstMarketWatch.ok && firstMarketWatch.data.opportunities.length === 2, 'API-only Item Market and Weaver Bazaar results did not create watch opportunities.');
 assert(firstMarketWatch.data.opportunities.every(row => row.shareText.includes('shop sell $125')), 'Market Watch did not expose Torn shop sell pricing.');

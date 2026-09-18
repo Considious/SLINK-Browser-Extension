@@ -128,6 +128,7 @@ assert(marketModuleSource.includes('SLINK Buy') && marketModuleSource.includes('
 assert(marketModuleSource.includes('data-slink-market-shop-profit') && marketModuleSource.includes('listingHighlightState'), 'City-shop-profit highlighting is missing from Torn purchase pages.');
 assert(marketModuleSource.includes('data-market-send') && marketModuleSource.includes('Send to Faction'), 'Per-listing Faction Chat sending is missing from the Torn Market GUI.');
 assert(marketServiceSource.includes("'market.deal.dismiss'") && marketModuleSource.includes('data-market-dismiss') && dashboardSource.includes("market.deal.dismiss"), 'Five-minute Market Watch dismissal is missing from an interface.');
+assert(marketServiceSource.includes("'market.permissions.refresh'") && marketModuleSource.includes('Refresh permissions') && dashboardHtml.includes('market-permissions-refresh'), 'Market Watch is missing its explicit signed-permission refresh control.');
 assert(marketModuleSource.includes('Send list to Faction') && marketModuleSource.includes('focusedTornPage'), 'Torn-only Market Watch faction sharing is missing.');
 assert(!dashboardSource.includes('Send list to Faction'), 'The extension dashboard must not offer direct Market Watch Faction Chat sending.');
 assert(read('src/core/market.js').includes('value?.shops') && read('src/core/market.js').includes('shop sell'), 'Current Torn shop sell-price support is missing from Market Watch.');

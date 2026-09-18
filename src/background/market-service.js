@@ -35,8 +35,8 @@
     return active;
   }
 
-  async function accessState({ authenticate = false } = {}) {
-    const session = authenticate ? await SLINK.services.permissionAccess.ensureSession(false, '') : await SLINK.core.storage.get('access.session.v1', null);
+  async function accessState({ authenticate = false, force = false } = {}) {
+    const session = authenticate ? await SLINK.services.permissionAccess.ensureSession(force, '') : await SLINK.core.storage.get('access.session.v1', null);
     const active = session?.token && Number(session?.expiresAt) > Date.now();
     const permissions = active ? session : await SLINK.core.storage.get('permissions.snapshot', {});
     const limit = SLINK.core.adhd.marketWatchLimit(permissions || {});
@@ -278,9 +278,15 @@
     return publicStatus(false);
   }
 
+  async function refreshPermissions() {
+    await accessState({ authenticate:true, force:true });
+    return publicStatus(false);
+  }
+
   async function ensureAlarm() { if (!await chrome.alarms.get(ALARM)) await scheduleAlarm(Date.now() + 1_000); return chrome.alarms.get(ALARM); }
   const routes = Object.freeze({
     'market.status':payload => publicStatus(payload?.refreshIfDue !== false), 'market.refresh':() => refresh(true), 'market.settings.save':saveSettings,
+    'market.permissions.refresh':refreshPermissions,
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },
     'market.watch.save':upsertWatch, 'market.watch.remove':removeWatch, 'market.deal.dismiss':dismissDeal
   });
