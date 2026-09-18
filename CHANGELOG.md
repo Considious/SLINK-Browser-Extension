@@ -2,6 +2,14 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.11 — 2026-09-18
+
+### Added
+
+- Added a local weekly Google Play Points prize reminder to the dashboard and in-Torn Efficiency interface.
+- The shared Google Play Points link works from desktop and can hand off to the Play Store on supported Android devices.
+- Marking the prize claimed hides the reminder for exactly seven days without making any Torn or SLINK API request.
+
 ## 0.18.10 — 2026-09-17
 
 ### Fixed

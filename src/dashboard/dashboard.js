@@ -397,6 +397,14 @@
           snooze.addEventListener('click', async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }); renderAdhd(); });
           actions.append(snooze);
         }
+        if (alert.id === 'googlePlayPoints') {
+          const claimed = document.createElement('button'); claimed.type = 'button'; claimed.className = 'small secondary'; claimed.textContent = 'Claimed — remind in 7 days';
+          claimed.addEventListener('click', async () => {
+            adhd = await SLINK.core.messaging.send('adhd.google-play-points.acknowledge');
+            renderAdhd();
+          });
+          actions.append(claimed);
+        }
         card.append(copy, actions); return card;
       }));
     }

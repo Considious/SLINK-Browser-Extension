@@ -139,6 +139,7 @@ assert(dashboardSource.includes('Snooze 5m') && dashboardSource.includes('Snooze
 assert(!dashboardSource.includes("adhd.alert.dismiss") && !read('src/modules/adhd.js').includes("adhd.alert.dismiss"), 'Normal Efficiency alerts include a redundant dismissal in addition to five-minute snooze.');
 assert(read('src/core/adhd.js').includes('bought >= 100') && !read('src/core/adhd.js').includes('cityItemDone'), 'City-item reminders must use one shared 100-item daily cap, not per-item completion flags.');
 assert(read('src/background/adhd-service.js').includes("'adhd.city.acknowledge'") && read('src/background/adhd-service.js').includes('cityItemsAtReset'), 'The local ADHD service is missing its global city cap or reset baseline.');
+assert(read('src/core/adhd.js').includes('https://play.google.com/store/points') && read('src/core/adhd.js').includes("id:'googlePlayPoints'") && read('src/background/adhd-service.js').includes("'adhd.google-play-points.acknowledge'"), 'The seven-day Google Play Points reminder or claim action is missing.');
 const permissionService = read('src/background/permission-service.js');
 assert(permissionService.includes('/api/permissions/auth'), 'ADHD access is not backed by the existing signed permissions service.');
 assert(permissionService.includes("requestJson('contributionWorker'"), 'Generic permissions are not routed through the Contribution Worker.');

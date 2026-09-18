@@ -5,10 +5,12 @@
   if (!SLINK) throw new Error('SLINK runtime must load before ADHD helpers.');
 
   const DAY_MS = 24 * 60 * 60 * 1000;
+  const WEEK_MS = 7 * DAY_MS;
   const ALERT_SCOPE = 'slink.adhd.alerts';
   const MARKET_SCOPE_PREFIX = 'slink.adhd.marketwatch.';
   const MARKET_TIERS = Object.freeze([5, 10, 15, 20, 25, 30, 35, 40]);
   const ARMORY_URL = 'https://www.torn.com/factions.php?step=your#/tab=armoury';
+  const GOOGLE_PLAY_POINTS_URL = 'https://play.google.com/store/points';
   const CITY_SHOP_TARGETS = Object.freeze([
     Object.freeze({ id:392, label:'Pepper Spray', shop:"Big Al's Gun Shop", href:'https://www.torn.com/bigalgunshop.php' }),
     Object.freeze({ id:731, label:'Empty Blood Bags', shop:'Pharmacy', href:'https://www.torn.com/shops.php?step=pharmacy' }),
@@ -34,6 +36,7 @@
     Object.freeze({ id:'education', label:'Start an education' }),
     Object.freeze({ id:'casinoTokens', label:'Spend casino tokens' }),
     Object.freeze({ id:'stockBenefits', label:'Stock benefits ready' }),
+    Object.freeze({ id:'googlePlayPoints', label:'Google Play Points weekly prize' }),
     Object.freeze({ id:'clusterRing', label:'Cluster Ring window' })
   ]);
   const ALL_ALERT_IDS = Object.freeze([
@@ -75,7 +78,8 @@
       openLinksInNewTab:false,
       cityStockAlerts:Object.fromEntries(CITY_SHOP_TARGETS.map(target => [target.id, false])),
       snoozedUntil:{},
-      cityDoneDay:null
+      cityDoneDay:null,
+      googlePlayPointsClaimedAt:0
     };
   }
 
@@ -95,7 +99,8 @@
       openLinksInNewTab:input?.openLinksInNewTab === true,
       cityStockAlerts:{ ...defaults.cityStockAlerts, ...(input?.cityStockAlerts && typeof input.cityStockAlerts === 'object' ? input.cityStockAlerts : {}) },
       snoozedUntil:{ ...(input?.snoozedUntil && typeof input.snoozedUntil === 'object' ? input.snoozedUntil : {}) },
-      cityDoneDay:Number.isInteger(Number(input?.cityDoneDay)) ? Number(input.cityDoneDay) : null
+      cityDoneDay:Number.isInteger(Number(input?.cityDoneDay)) ? Number(input.cityDoneDay) : null,
+      googlePlayPointsClaimedAt:Math.max(0, Number(input?.googlePlayPointsClaimedAt) || 0)
     };
   }
 
@@ -341,6 +346,7 @@
       { id:'energyRefill', active:refillUsed(refills, 'energy') === false, title:'Energy refill is unused', detail:'Your daily point refill is still available.', tone:'daily', links:[['Points','https://www.torn.com/points.php'],['Faction Armory',ARMORY_URL]] },
       { id:'nerveRefill', active:refillUsed(refills, 'nerve') === false, title:'Nerve refill is unused', detail:'Your daily point refill is still available.', tone:'daily', links:[['Points','https://www.torn.com/points.php'],['Faction Armory',ARMORY_URL]] },
       { id:'stockBenefits', active:readyStocks.length > 0, title:readyStocks.length === 1 ? 'A stock benefit is ready' : `${readyStocks.length} stock benefits are ready`, detail:readyStocks.map(stock => stock.name ? `${stock.name}${stock.acronym ? ` (${stock.acronym})` : ''}` : stock.acronym || `Stock ${stock.id}`).join(', '), tone:'ready', links:[['Stock market','https://www.torn.com/page.php?sid=stocks']] },
+      { id:'googlePlayPoints', active:Number(settings.googlePlayPointsClaimedAt || 0) + WEEK_MS <= now, title:'Claim your weekly Google Play Points prize', detail:'Open Google Play Points, claim the weekly prize, then mark it claimed here. This reminder returns seven days after confirmation.', tone:'daily', links:[['Open Google Play Points',GOOGLE_PLAY_POINTS_URL]] },
       { id:'playerAddiction', active:playerAddiction !== null && playerAddiction >= settings.playerAddictionThreshold, title:'Player addiction needs attention', detail:`${playerAddiction ?? 0}% battle-stat penalty — alert threshold ${settings.playerAddictionThreshold}%`, tone:'urgent', links:[['Travel','https://www.torn.com/travelagency.php']] },
       { id:'clusterRing', active:clusterRingReady(snapshot.cluster), title:'Cluster Ring security window is open', detail:'Torn reports the Jewelry Store cameras and guard are disabled. Shoplifting skill 100 and 0% Jewelry Store notoriety are still required.', tone:'urgent', links:[['Shoplift','https://www.torn.com/page.php?sid=crimes#/shoplifting']] },
       ...cityStockAlerts
@@ -355,6 +361,8 @@
     const body = snapshot.data || {};
     const fetchedAt = Number(snapshot.fetchedAt) || now;
     const candidates = [now + 2 * 60 * 60 * 1000, nextUtcDay(now) + 15_000];
+    if ((settings.enabled.googlePlayPoints !== false || settings.soundEnabled.googlePlayPoints === true)
+      && Number(settings.googlePlayPointsClaimedAt) > 0) candidates.push(Number(settings.googlePlayPointsClaimedAt) + WEEK_MS + 1_000);
     const progress = cityProgress(snapshot, settings, now);
     if (!progress.complete) candidates.push(now + 5 * 60_000);
     if ((settings.enabled.clusterRing !== false || settings.soundEnabled.clusterRing === true)
@@ -414,6 +422,7 @@
     ALERT_SCOPE,
     CITY_SHOP_TARGETS,
     DAY_MS,
+    GOOGLE_PLAY_POINTS_URL,
     MARKET_SCOPE_PREFIX,
     MARKET_TIERS,
     buildAlerts,
@@ -432,6 +441,7 @@
     raceActive,
     refillUsed,
     stockBenefitsReady,
-    utcDay
+    utcDay,
+    WEEK_MS
   }));
 })(globalThis);

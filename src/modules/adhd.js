@@ -246,6 +246,11 @@
             done.addEventListener('click', async () => render(await SLINK.core.messaging.send('adhd.city.acknowledge')));
             links.append(done);
           }
+          if (alert.id === 'googlePlayPoints') {
+            const done = document.createElement('button'); done.type = 'button'; done.textContent = 'Claimed — remind in 7 days';
+            done.addEventListener('click', async () => render(await SLINK.core.messaging.send('adhd.google-play-points.acknowledge')));
+            links.append(done);
+          }
           card.append(title, detail, links); list.append(card);
         }
         root.append(list);

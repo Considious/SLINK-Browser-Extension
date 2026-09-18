@@ -82,7 +82,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.10' }; },
+    getManifest() { return { version: '0.18.11' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -593,6 +593,10 @@ assert(adhdRefreshed.data.activeAlerts.find(alert => alert.id === 'stockBenefits
 assert(!adhdRefreshed.data.activeAlerts.find(alert => alert.id === 'stockBenefits')?.detail.includes('WSU') && adhdStockCatalogRequests === 1, 'Passive stock benefit was not excluded or the stock catalog was fetched repeatedly.');
 assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'playerAddiction'), 'API battle-stat addiction did not create an Efficiency alert.');
 assert(!adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'raceOrFly'), 'Waiting-for-race API icon did not suppress the race reminder.');
+assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'googlePlayPoints'), 'The first-run weekly Google Play Points reminder was not active.');
+const weeklyPrizeClaimed = await send('adhd.google-play-points.acknowledge');
+assert(weeklyPrizeClaimed.ok && !weeklyPrizeClaimed.data.activeAlerts.some(alert => alert.id === 'googlePlayPoints'), 'Claiming the weekly Google Play Points prize did not hide its reminder.');
+assert(Number(values.get('slink.adhd.settings.v1')?.googlePlayPointsClaimedAt) > Date.now() - 5_000, 'The weekly Google Play Points claim was not persisted locally.');
 assert(adhdCityCurrentRequests === 1 && adhdCityBaselineRequests === 1, 'City totals did not use the dedicated current and reset-baseline personalstats routes.');
 assert(adhdCityBaselineTimestamp === Math.floor(Date.now() / 86_400_000) * 86_400 - 1, 'City baseline was not requested from the final second before today\'s reset.');
 const firstSound = await send('adhd.sound.claim');

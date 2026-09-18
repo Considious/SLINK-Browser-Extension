@@ -256,6 +256,15 @@
     return publicStatus(false);
   }
 
+  async function acknowledgeGooglePlayPoints() {
+    const next = await settings();
+    next.googlePlayPointsClaimedAt = Date.now();
+    await SLINK.core.storage.set(KEYS.settings, next);
+    const currentRuntime = await runtime();
+    if (currentRuntime.snapshot) await saveRuntime({ nextRefreshAt:ADHD.nextRefreshAt(currentRuntime.snapshot, next) });
+    return publicStatus(false);
+  }
+
   async function snooze(input = {}) {
     const id = String(input.id || '').trim();
     if (!ADHD.ALERT_DEFINITIONS.some(definition => definition.id === id) && !/^cityStock:\d+$/.test(id)) throw new Error('Unknown Efficiency alert.');
@@ -326,6 +335,7 @@
     'adhd.refresh':() => refresh(true),
     'adhd.settings.save':saveSettings,
     'adhd.city.acknowledge':acknowledgeCity,
+    'adhd.google-play-points.acknowledge':acknowledgeGooglePlayPoints,
     'adhd.alert.snooze':snooze,
     'adhd.sound.claim':claimSound
   });
