@@ -2,6 +2,15 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.10 — 2026-09-17
+
+### Fixed
+
+- Restored the Armory Recaller whitelist behavior from the proven standalone v1.2.6 script: Torn-displayed rank hierarchy, name/rank/ID search, 12-hour roster caching, and bulk select or clear of every shown member.
+- Added reusable GUI interaction-state preservation so API refreshes retain open sections, typed searches, focus, cursor position, and scroll position instead of collapsing controls under the user.
+- Reduced the Armory tab to Armory controls only; War totals, mug reporting, item-request cards, and retaliation cards remain on their relevant War views.
+- Suppressed retaliation cards and alerts for members of the current opponent while Termed-war mode is active.
+
 ## 0.18.9 — 2026-09-15
 
 ### Changed

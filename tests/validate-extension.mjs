@@ -152,6 +152,9 @@ assert(read('src/background/adhd-service.js').includes('/v2/torn/stocks') && rea
 assert(read('src/background/theme-service.js').includes('/api/themes'), 'Background theme catalog route is missing.');
 assert(!manifest.host_permissions.some(origin => /githubusercontent|github\.com/.test(origin)), 'The extension must receive theme data through its existing Worker, not direct GitHub host access.');
 const uiShellSource = read('src/content/ui-shell.js');
+const uiStateSource = read('src/core/ui-state.js');
+assert(manifest.content_scripts.some(entry => entry.js?.includes('src/core/ui-state.js')), 'Reusable GUI interaction-state preservation is not loaded in Torn.');
+assert(uiStateSource.includes('selectionStart') && uiStateSource.includes("querySelectorAll('details')") && uiStateSource.includes('data-slink-preserve-scroll'), 'GUI state preservation is missing focus/cursor, open-section, or scroll restoration.');
 assert(uiShellSource.includes('setTheme'), 'Torn UI shell does not support live themes.');
 assert(uiShellSource.includes('.status[data-tone="error"] { max-height:72px; overflow:auto;'), 'Torn GUI errors are not constrained to a small scrollable status box.');
 assert(uiShellSource.includes('ui.main.collapsed') && uiShellSource.includes('bubble-coil'), 'Torn UI shell does not provide the persistent theme-aware collapse bubble.');
@@ -173,6 +176,10 @@ assert(serviceWorkerSource.includes("'local-vault.js'") && serviceWorkerSource.i
 assert(localVaultSource.includes('indexedDB.open') && localVaultSource.includes('suspiciousBulkRemoval'), 'The same-ID local recovery vault or bulk-removal guard is missing.');
 assert(!listFiles(path.join(root, 'src')).some(file => fs.readFileSync(file, 'utf8').includes('chrome.storage.local.clear(')), 'Extension code must never clear all local SLINK storage.');
 assert(warModuleSource.includes("activeTab === 'armory'") && warModuleSource.includes('pageIsFocused()'), 'The in-Torn War module is missing its focused-page Armory Recaller.');
+assert(warModuleSource.includes('Search name, rank, or ID') && warModuleSource.includes('Select shown') && warModuleSource.includes('Clear shown'), 'The Armory whitelist is missing standalone-compatible search or bulk rank selection.');
+assert(warModuleSource.includes('captureDisplayedRankOrder') && warModuleSource.includes("war.armory.rankOrder.v1") && warModuleSource.includes('12 * 60 * 60_000'), 'The Armory whitelist is missing Torn rank ordering or its 12-hour roster cache.');
+assert(warModuleSource.includes("const content = activeTab === 'armory'") && warModuleSource.includes("? `${tabBar}<div>${body}</div>`"), 'The Armory tab still includes unrelated War summary and alert content.');
+assert(warModuleSource.includes('belongsToTermedOpponent') && warModuleSource.includes('for (const retal of visibleRetals())'), 'Termed-war opponent retals are not consistently filtered from the GUI and alerts.');
 assert(warModuleSource.includes('.item-action [data-role="retrieve"].active') && warModuleSource.includes('.retrieve-cont .retrieve-yes'), 'The Armory Recaller does not use Torn\'s explicit retrieve and confirmation controls.');
 assert(warServiceSource.includes("'war.armory.members'") && warServiceSource.includes("'war.armory.request'"), 'The extension is missing its cached Armory status or request routes.');
 assert(warModuleSource.includes("button.textContent = 'Request Item'") && warModuleSource.includes('/^(revitalize|warlord)$/i') && warModuleSource.includes('slink-armory-request-cell'), 'Warlord and Revitalize item requests are not inserted into a separate Torn armory column.');

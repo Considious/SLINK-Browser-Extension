@@ -49,6 +49,10 @@
     .slink-war-armory-controls,.slink-war-armory-actions { display:flex; flex-wrap:wrap; align-items:end; gap:6px; }
     .slink-war-armory-controls label { display:grid; flex:1 1 170px; gap:3px; color:var(--slink-muted); }
     .slink-war-armory-controls select,.slink-war-armory-search { min-width:0; padding:6px; border:1px solid var(--slink-border-soft); border-radius:5px; background:var(--slink-bg-control); color:var(--slink-text); }
+    .slink-war-armory-manager { padding:7px; border:1px solid var(--slink-border-soft); border-radius:6px; }
+    .slink-war-armory-manager summary { cursor:pointer; font-weight:700; }
+    .slink-war-armory-manager-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; margin:6px 0; }
+    .slink-war-armory-manager-actions button { min-height:28px; padding:4px 3px; }
     .slink-war-armory-members { display:grid; gap:3px; max-height:220px; overflow:auto; padding:4px; border:1px solid var(--slink-border-soft); border-radius:6px; }
     .slink-war-armory-member { display:grid; grid-template-columns:auto 1fr; align-items:center; gap:7px; padding:5px; background:var(--slink-bg-raised); }
     .slink-war-armory-member small { display:block; color:var(--slink-muted); }
@@ -123,6 +127,10 @@
       let armoryWhitelist = new Set();
       let armoryMembers = [];
       let armoryMembersSavedAt = 0;
+      let armoryRankOrder = [];
+      let armorySearch = '';
+      let armoryWhitelistOpen = false;
+      let armoryRankCaptureTimers = [];
       let armoryStatus = 'Ready. Retrieval only runs after you press Retrieve Next.';
       let armoryState = 'normal';
       let armoryBusy = false;
@@ -283,9 +291,12 @@
 
       function visibleRetals() {
         const now = Math.floor(Date.now() / 1000);
+        const termedOpponent = current?.sharedConfig?.mode === 'termed' ? Number(current?.activeWar?.opponentFactionId) || 0 : 0;
+        const termedMembers = termedOpponent ? opponentMemberIds() : new Set();
         return (current?.runtime?.snapshot?.retals || []).filter(retal => {
           const expiresAt = Number(retal.expiresAt) || now + 300;
-          return expiresAt > now && !dismissedRetalMap[retalDismissKey(retal)] && !dismissedRetalMap[String(retal.attackId)];
+          const belongsToTermedOpponent = termedOpponent > 0 && (Number(retal.attackerFactionId) === termedOpponent || termedMembers.has(Number(retal.attackerId)));
+          return expiresAt > now && !belongsToTermedOpponent && !dismissedRetalMap[retalDismissKey(retal)] && !dismissedRetalMap[String(retal.attackId)];
         });
       }
 
@@ -355,18 +366,81 @@
         if (fullUi) render();
       }
 
+      function normalizeArmoryRank(value) {
+        return String(value ?? '').replace(/\s+/g, ' ').trim();
+      }
+
+      function sortArmoryMembers(members) {
+        const rankIndex = new Map(armoryRankOrder.map((rank, index) => [normalizeArmoryRank(rank).toLowerCase(), index]));
+        return [...members].sort((left, right) => {
+          const leftRank = normalizeArmoryRank(left.rank) || 'Member';
+          const rightRank = normalizeArmoryRank(right.rank) || 'Member';
+          const leftIndex = rankIndex.get(leftRank.toLowerCase());
+          const rightIndex = rankIndex.get(rightRank.toLowerCase());
+          const leftCaptured = Number.isInteger(leftIndex);
+          const rightCaptured = Number.isInteger(rightIndex);
+          if (leftCaptured && rightCaptured && leftIndex !== rightIndex) return leftIndex - rightIndex;
+          if (leftCaptured !== rightCaptured) return leftCaptured ? -1 : 1;
+          return leftRank.localeCompare(rightRank, undefined, { sensitivity:'base', numeric:true })
+            || String(left.name).localeCompare(String(right.name), undefined, { sensitivity:'base', numeric:true });
+        });
+      }
+
+      function rankPanelIsVisible() {
+        const panel = document.querySelector('#faction-rank');
+        if (!panel) return false;
+        const style = getComputedStyle(panel);
+        return panel.getAttribute('aria-hidden') !== 'true' && style.display !== 'none' && panel.getClientRects().length > 0;
+      }
+
+      async function captureDisplayedRankOrder() {
+        if (!pageIsFocused() || !rankPanelIsVisible() || !armoryMembers.length) return false;
+        const knownRanks = new Map();
+        for (const member of armoryMembers) {
+          const rank = normalizeArmoryRank(member.rank);
+          if (rank) knownRanks.set(rank.toLowerCase(), rank);
+        }
+        if (knownRanks.size < 2) return false;
+        const found = []; const seen = new Set();
+        const walker = document.createTreeWalker(document.querySelector('#faction-rank'), NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+          const canonical = knownRanks.get(normalizeArmoryRank(node.nodeValue).toLowerCase());
+          if (!canonical || seen.has(canonical.toLowerCase())) continue;
+          seen.add(canonical.toLowerCase()); found.push(canonical);
+        }
+        if (found.length < 2 || JSON.stringify(found) === JSON.stringify(armoryRankOrder)) return found.length >= 2;
+        armoryRankOrder = found;
+        armoryMembers = sortArmoryMembers(armoryMembers);
+        await Promise.all([
+          SLINK.core.storage.set('war.armory.rankOrder.v1', armoryRankOrder),
+          SLINK.core.storage.set('war.armory.memberCache.v1', { savedAt:armoryMembersSavedAt, members:armoryMembers, rankOrderCapturedAt:Date.now(), source:'v2 members + displayed Rank tab order' })
+        ]);
+        armorySetStatus(`Captured displayed hierarchy for ${found.length} ranks.`, 'success');
+        return true;
+      }
+
+      function scheduleRankOrderCapture() {
+        for (const timerId of armoryRankCaptureTimers) clearTimeout(timerId);
+        armoryRankCaptureTimers = [200, 600, 1200, 2400, 4000].map(delay => setTimeout(() => void captureDisplayedRankOrder(), delay));
+      }
+
+      function handleRankTabClick(event) {
+        if (event.target?.closest?.('[data-case="rank"],a[href*="#faction-rank"],[aria-controls="faction-rank"]')) scheduleRankOrderCapture();
+      }
+
       async function ensureArmoryMembers(force = false) {
         const cached = await SLINK.core.storage.get('war.armory.memberCache.v1', null);
-        if (!force && cached?.savedAt && Date.now() - Number(cached.savedAt) < 60_000 && Array.isArray(cached.members) && cached.members.length) {
-          armoryMembers = cached.members;
+        if (!force && cached?.savedAt && Date.now() - Number(cached.savedAt) < 12 * 60 * 60_000 && Array.isArray(cached.members) && cached.members.length) {
+          armoryMembers = sortArmoryMembers(cached.members);
           armoryMembersSavedAt = Number(cached.savedAt) || 0;
           return true;
         }
         if (!pageIsFocused()) { armorySetStatus('Focus this Torn tab before loading faction members.', 'error'); return false; }
         const result = await SLINK.core.messaging.send('war.armory.members', { force });
-        armoryMembers = (result?.members || []).sort((a, b) => String(a.rank).localeCompare(String(b.rank)) || String(a.name).localeCompare(String(b.name)));
+        armoryMembers = sortArmoryMembers(result?.members || []);
         armoryMembersSavedAt = Number(result?.fetchedAt) || Date.now();
-        await SLINK.core.storage.set('war.armory.memberCache.v1', { savedAt:armoryMembersSavedAt, members:armoryMembers });
+        await SLINK.core.storage.set('war.armory.memberCache.v1', { savedAt:armoryMembersSavedAt, members:armoryMembers, source:armoryRankOrder.length ? 'v2 members + displayed Rank tab order' : 'v2 members + alphabetical ranks' });
         return armoryMembers.length > 0;
       }
 
@@ -436,9 +510,9 @@
         if (!list) return;
         ensureArmoryHeader(tab, list);
         try {
-          if (!armoryMembers.length || Date.now() - armoryMembersSavedAt >= 60_000 || !armoryMembers.some(member => member.statusState || member.lastActionRelative)) {
-            await ensureArmoryMembers(!armoryMembers.some(member => member.statusState || member.lastActionRelative));
-          }
+          if (!armoryMembers.length) await ensureArmoryMembers(false);
+          const statusRefreshDue = Date.now() - armoryMembersSavedAt >= 60_000 || !armoryMembers.some(member => member.statusState || member.lastActionRelative);
+          if (statusRefreshDue) await ensureArmoryMembers(true);
         } catch (error) {
           localError = `Armory status unavailable: ${SLINK.core.format.errorMessage(error)}`;
           if (fullUi) render();
@@ -549,15 +623,53 @@
       function armoryHtml() {
         if (!current?.session?.officer) return '<div class="slink-war-error">slink.war.officer permission is required.</div>';
         const onArmory = Boolean(activeArmoryTab());
-        const members = armoryMembers.map(member => `<label class="slink-war-armory-member"><input type="checkbox" data-armory-member="${member.id}" ${armoryWhitelist.has(member.id) ? 'checked' : ''}><span><strong>${escape(member.name)}</strong><small>${escape(member.rank)} · level ${Number(member.level) || '?'} · ID ${member.id}</small></span></label>`).join('');
+        const members = armoryMemberRowsHtml();
         return `<div class="slink-war-armory">
-          <div class="slink-war-note">The Recaller only scans while this Torn tab is focused and retrieves exactly one item per click. It never runs automatically.</div>
           ${onArmory ? '' : '<a class="slink-war-note" href="https://www.torn.com/factions.php?step=your#/tab=armoury">Open Faction Armoury, then choose Weapons or Armor</a>'}
           <div class="slink-war-armory-controls"><label>Recall mode<select id="slink-armory-mode"><option value="ranked-all" ${armoryMode === 'ranked-all' ? 'selected' : ''}>All ranked items</option><option value="ranked-no-prof" ${armoryMode === 'ranked-no-prof' ? 'selected' : ''}>Ranked except Proficience</option><option value="proficience-15-plus" ${armoryMode === 'proficience-15-plus' ? 'selected' : ''}>Proficience from level 15+</option></select></label></div>
-          <div class="slink-war-armory-actions"><button id="slink-armory-retrieve" type="button" ${onArmory && !armoryBusy ? '' : 'disabled'}>${armoryBusy ? 'Working…' : 'Retrieve Next'}</button><button id="slink-armory-next" type="button" ${onArmory ? '' : 'disabled'}>Next Page</button><button id="slink-armory-members" type="button">Load faction whitelist</button></div>
+          <div class="slink-war-armory-actions"><button id="slink-armory-retrieve" type="button" ${onArmory && !armoryBusy ? '' : 'disabled'}>${armoryBusy ? 'Working…' : 'Retrieve Next'}</button><button id="slink-armory-next" type="button" ${onArmory ? '' : 'disabled'}>Next Page</button></div>
           <div class="slink-war-armory-status" data-state="${armoryState}">${escape(armoryStatus)}</div>
-          ${armoryMembers.length ? `<details><summary>Never retrieve from (${armoryWhitelist.size})</summary><input id="slink-armory-search" class="slink-war-armory-search" type="search" placeholder="Search members"><div class="slink-war-armory-members">${members}</div></details>` : ''}
+          <details class="slink-war-armory-manager" data-slink-ui-key="war-armory-whitelist" ${armoryWhitelistOpen ? 'open' : ''}>
+            <summary>Never retrieve from (<span id="slink-armory-whitelist-count">${armoryWhitelist.size}</span>)</summary>
+            <input id="slink-armory-search" data-slink-preserve data-slink-ui-key="war-armory-search" class="slink-war-armory-search" type="search" value="${escape(armorySearch)}" placeholder="Search name, rank, or ID">
+            <div class="slink-war-armory-manager-actions"><button id="slink-armory-members" type="button">Refresh if due</button><button id="slink-armory-select-shown" type="button">Select shown</button><button id="slink-armory-clear-shown" type="button">Clear shown</button></div>
+            <div id="slink-armory-member-list" data-slink-preserve-scroll data-slink-ui-key="war-armory-member-list" class="slink-war-armory-members">${members || '<div class="slink-war-note">Load the faction roster to manage the whitelist.</div>'}</div>
+          </details>
         </div>`;
+      }
+
+      function filteredArmoryMembers() {
+        const needle = armorySearch.trim().toLowerCase();
+        return sortArmoryMembers(armoryMembers).filter(member => !needle || `${member.name} ${member.rank} ${member.id}`.toLowerCase().includes(needle));
+      }
+
+      function armoryMemberRowsHtml() {
+        return filteredArmoryMembers().map(member => `<label class="slink-war-armory-member" data-armory-search="${escape(`${member.name} ${member.rank} ${member.id}`.toLowerCase())}"><input type="checkbox" data-armory-member="${member.id}" ${armoryWhitelist.has(String(member.id)) ? 'checked' : ''}><span><strong>${escape(member.name)}</strong><small>${escape(member.rank)} · level ${Number(member.level) || '?'} · ID ${member.id}</small></span></label>`).join('');
+      }
+
+      function bindArmoryMemberCheckboxes(root) {
+        for (const input of root.querySelectorAll('[data-armory-member]')) input.addEventListener('change', async () => {
+          if (input.checked) armoryWhitelist.add(input.dataset.armoryMember); else armoryWhitelist.delete(input.dataset.armoryMember);
+          root.querySelector('#slink-armory-whitelist-count').textContent = String(armoryWhitelist.size);
+          await SLINK.core.storage.set('war.armory.whitelist.v1', [...armoryWhitelist]);
+        });
+      }
+
+      function renderArmoryMemberList(root) {
+        const list = root.querySelector('#slink-armory-member-list');
+        if (!list) return;
+        const scrollTop = list.scrollTop;
+        list.innerHTML = armoryMemberRowsHtml() || '<div class="slink-war-note">No faction members match that search.</div>';
+        list.scrollTop = scrollTop;
+        bindArmoryMemberCheckboxes(root);
+      }
+
+      async function setShownArmoryMembers(checked) {
+        for (const member of filteredArmoryMembers()) {
+          if (checked) armoryWhitelist.add(String(member.id)); else armoryWhitelist.delete(String(member.id));
+        }
+        await SLINK.core.storage.set('war.armory.whitelist.v1', [...armoryWhitelist]);
+        render();
       }
 
       function assignmentControls() {
@@ -891,6 +1003,8 @@
 
       function render() {
         if (!fullUi) return;
+        const root = context.ui.getContentElement();
+        const preservedUi = SLINK.core.uiState?.capture(root);
         const snapshot = current?.runtime?.snapshot || {};
         const stats = current?.runtime?.panelStats || {};
         const canViewLogs = current?.session?.canViewLogs === true;
@@ -911,8 +1025,13 @@
           ? `${Number(stats.mugs)} mugs • ${money(stats.mugTotal)} total • ${money(stats.mugMin)} min • ${money(stats.mugAverage)} avg • ${money(stats.mugMax)} max`
           : 'Mug totals appear after a mug.';
         const retals = visibleRetals();
-        context.ui.setContentHtml(`<div class="slink-war-subtabs">${tabs.map(tab => `<button class="slink-war-subtab" data-war-tab="${tab}" aria-selected="${activeTab === tab}">${tab[0].toUpperCase()}${tab.slice(1)}</button>`).join('')}</div><div class="slink-war-summary"><div class="slink-war-stat"><b>${Number(stats.attacks) || 0}</b><span>Attacks</span></div><div class="slink-war-stat"><b>${Number(stats.warAttacks) || 0}${insideCap ? `/${insideCap}` : ''}</b><span>War / cap</span></div><div class="slink-war-stat"><b>${Number(stats.mugs) || 0}</b><span>Mugs</span></div><div class="slink-war-stat"><b>${chain}</b><span>Chain</span></div></div><div class="slink-war-note slink-war-report"><span>${mugSummary}</span><button id="slink-war-copy-report" type="button">Copy report</button></div>${itemRequestCards()}${retals.length ? `<div class="slink-war-note"><strong>Active retals</strong>${retalCards()}</div>` : ''}${localError ? `<div class="slink-war-error">${escape(localError)}</div>` : ''}<div>${body}</div>`);
+        const tabBar = `<div class="slink-war-subtabs">${tabs.map(tab => `<button class="slink-war-subtab" data-war-tab="${tab}" aria-selected="${activeTab === tab}">${tab[0].toUpperCase()}${tab.slice(1)}</button>`).join('')}</div>`;
+        const content = activeTab === 'armory'
+          ? `${tabBar}<div>${body}</div>`
+          : `${tabBar}<div class="slink-war-summary"><div class="slink-war-stat"><b>${Number(stats.attacks) || 0}</b><span>Attacks</span></div><div class="slink-war-stat"><b>${Number(stats.warAttacks) || 0}${insideCap ? `/${insideCap}` : ''}</b><span>War / cap</span></div><div class="slink-war-stat"><b>${Number(stats.mugs) || 0}</b><span>Mugs</span></div><div class="slink-war-stat"><b>${chain}</b><span>Chain</span></div></div><div class="slink-war-note slink-war-report"><span>${mugSummary}</span><button id="slink-war-copy-report" type="button">Copy report</button></div>${itemRequestCards()}${retals.length ? `<div class="slink-war-note"><strong>Active retals</strong>${retalCards()}</div>` : ''}${localError ? `<div class="slink-war-error">${escape(localError)}</div>` : ''}<div>${body}</div>`;
+        context.ui.setContentHtml(content);
         bindEvents();
+        SLINK.core.uiState?.restore(context.ui.getContentElement(), preservedUi);
       }
 
       function bindEvents() {
@@ -931,17 +1050,17 @@
         root.querySelector('#slink-armory-next')?.addEventListener('click', nextArmoryPage);
         root.querySelector('#slink-armory-members')?.addEventListener('click', async event => {
           event.currentTarget.disabled = true;
-          try { if (await ensureArmoryMembers()) armorySetStatus(`Loaded ${armoryMembers.length} faction members.`, 'success'); }
+          try { if (await ensureArmoryMembers(false)) armorySetStatus(`Loaded ${armoryMembers.length} faction members.`, 'success'); }
           catch (error) { armorySetStatus(SLINK.core.format.errorMessage(error), 'error'); }
         });
-        for (const input of root.querySelectorAll('[data-armory-member]')) input.addEventListener('change', async () => {
-          if (input.checked) armoryWhitelist.add(input.dataset.armoryMember); else armoryWhitelist.delete(input.dataset.armoryMember);
-          await SLINK.core.storage.set('war.armory.whitelist.v1', [...armoryWhitelist]);
-        });
+        bindArmoryMemberCheckboxes(root);
+        root.querySelector('.slink-war-armory-manager')?.addEventListener('toggle', event => { armoryWhitelistOpen = event.currentTarget.open; });
         root.querySelector('#slink-armory-search')?.addEventListener('input', event => {
-          const needle = event.currentTarget.value.trim().toLowerCase();
-          for (const row of root.querySelectorAll('.slink-war-armory-member')) row.hidden = !row.textContent.toLowerCase().includes(needle);
+          armorySearch = event.currentTarget.value;
+          renderArmoryMemberList(root);
         });
+        root.querySelector('#slink-armory-select-shown')?.addEventListener('click', () => void setShownArmoryMembers(true));
+        root.querySelector('#slink-armory-clear-shown')?.addEventListener('click', () => void setShownArmoryMembers(false));
         root.querySelector('#slink-war-copy-report')?.addEventListener('click', async event => {
           const button = event.currentTarget;
           button.disabled = true;
@@ -1099,7 +1218,7 @@
         if (context.presentation !== 'headless') return;
         dismissedRetalMap = await dismissedRetals();
         const currentIds = new Set();
-        for (const retal of current?.runtime?.snapshot?.retals || []) {
+        for (const retal of visibleRetals()) {
           const id = String(retal.attackId);
           currentIds.add(id);
           if (dismissedRetalMap[retalDismissKey(retal)] || dismissedRetalMap[id] || shownAlerts.has(id)) continue;
@@ -1200,9 +1319,10 @@
       if (!['targets', 'outside', 'claims', 'armory', 'logs', 'settings'].includes(activeTab)) activeTab = 'targets';
       armoryMode = await SLINK.core.storage.get('war.armory.mode.v1', 'ranked-all');
       armoryWhitelist = new Set((await SLINK.core.storage.get('war.armory.whitelist.v1', [])).map(String));
+      armoryRankOrder = (await SLINK.core.storage.get('war.armory.rankOrder.v1', [])).map(normalizeArmoryRank).filter(Boolean);
       const armoryCache = await SLINK.core.storage.get('war.armory.memberCache.v1', null);
       if (Array.isArray(armoryCache?.members)) {
-        armoryMembers = armoryCache.members;
+        armoryMembers = sortArmoryMembers(armoryCache.members);
         armoryMembersSavedAt = Number(armoryCache.savedAt) || 0;
       }
       const storedInsideUnlock = await SLINK.core.storage.get('war.insideUnlock.v1', null);
@@ -1216,12 +1336,14 @@
       }
       document.addEventListener('pointerdown', unlockAudio, { passive:true });
       document.addEventListener('click', handleProfileAttack, true);
+      document.addEventListener('click', handleRankTabClick, true);
       document.addEventListener('visibilitychange', refreshLeader);
       if (fullUi && !current.configured) activeTab = 'settings';
       await refreshLeader();
       leaderTimer = setInterval(() => void refreshLeader(), 5_000);
       armoryObserver = new MutationObserver(records => {
         renderProfileAttackGate();
+        if (rankPanelIsVisible()) scheduleRankOrderCapture();
         if (activeArmoryTab() && records.some(record => !record.target?.closest?.('.slink-armory-request-cell,.slink-armory-request-header'))) queueArmoryEnhancement();
       });
       armoryObserver.observe(document.body, { childList:true, subtree:true });
@@ -1233,6 +1355,8 @@
         stopped = true;
         clearTimeout(timer);
         clearTimeout(armoryDecorateTimer);
+        for (const timerId of armoryRankCaptureTimers) clearTimeout(timerId);
+        armoryRankCaptureTimers = [];
         clearInterval(leaderTimer);
         if (pendingRetalSendTimer) clearTimeout(pendingRetalSendTimer);
         pendingRetalSendTimer = null;
@@ -1247,6 +1371,7 @@
         setPageAlert(false);
         document.removeEventListener('pointerdown', unlockAudio);
         document.removeEventListener('click', handleProfileAttack, true);
+        document.removeEventListener('click', handleRankTabClick, true);
         document.removeEventListener('visibilitychange', refreshLeader);
         void SLINK.core.messaging.send('war.leader.release', { clientId:leaderClientId }).catch(() => {});
         for (const id of shownAlerts) context.ui.dismissAlert(`war-retal-${id}`);
