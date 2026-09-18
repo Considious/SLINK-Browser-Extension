@@ -943,21 +943,28 @@
       heading.textContent = category;
       section.append(heading);
       for (const scope of entries) {
-        const label = document.createElement('label');
-        label.className = 'scope-row';
-        label.innerHTML = '<input type="checkbox"><span><strong></strong><small></small></span><span class="muted"></span>';
-        const input = label.querySelector('input');
+        const row = document.createElement('div');
+        row.className = 'scope-row';
+        row.innerHTML = '<input type="checkbox" title="Select to add or extend"><span><strong></strong><small></small></span><span class="muted"></span><span class="scope-actions"></span>';
+        const input = row.querySelector('input');
         input.dataset.scope = scope.scope;
-        input.checked = scope.active;
-        input.disabled = Boolean(scope.inherited_active && !scope.direct_active);
-        label.querySelector('strong').textContent = `${scope.title} (${scope.scope})`;
-        label.querySelector('small').textContent = scope.description;
-        label.lastElementChild.textContent = scope.inherited_active
-          ? `Inherited from faction ${scope.inherited_from_faction}`
-          : scope.active
-          ? (scope.expires_at ? `Direct grant expires ${new Date(scope.expires_at).toLocaleString()}` : 'Direct grant; no expiration')
-          : scope.status.replace('_', ' ');
-        section.append(label);
+        input.checked = false;
+        input.disabled = Boolean(scope.direct_active && !scope.expires_at);
+        row.querySelector('strong').textContent = `${scope.title} (${scope.scope})`;
+        row.querySelector('small').textContent = scope.description;
+        const states = [];
+        if (scope.direct_active) states.push(scope.expires_at ? `Direct until ${new Date(scope.expires_at).toLocaleString()}` : 'Direct permanent');
+        else if (scope.status && scope.status !== 'not_granted') states.push(`Direct ${String(scope.status).replace('_', ' ')}`);
+        if (scope.inherited_active) states.push(`Inherited from faction ${scope.inherited_from_faction}`);
+        if (!states.length) states.push('Not granted');
+        row.children[2].textContent = states.join(' · ');
+        if (scope.direct_active) {
+          const revoke = document.createElement('button');
+          revoke.type = 'button'; revoke.className = 'small danger'; revoke.textContent = 'Revoke';
+          revoke.dataset.revokeScope = scope.scope;
+          row.querySelector('.scope-actions').append(revoke);
+        }
+        section.append(row);
       }
       return section;
     }));
@@ -1402,7 +1409,9 @@
   byId('donation-revoke').addEventListener('click', async () => { if (!confirm('Revoke this saved donation and erase its encrypted key material?')) return; try { contribution=await SLINK.core.messaging.send('contribution.revoke'); byId('donation-message').textContent='Donation revoked and encrypted key material erased.'; renderContribution(); } catch(error) { byId('donation-message').textContent=errorText(error); } });
   byId('run-diagnostic').addEventListener('click', async event => { const button=event.currentTarget; setBusy(button,true); try { byId('diagnostic').textContent=formatDiagnostic(await SLINK.core.messaging.send('diagnostics.run')); } catch(error){ byId('diagnostic').textContent=errorText(error); } finally{ setBusy(button,false); } });
   byId('admin-lookup-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-lookup'); setBusy(button,true); byId('admin-message').textContent=''; try { adminUser=await SLINK.core.messaging.send('access.admin.permissions.get',{userId:byId('admin-user-id').value}); renderAdminScopes(adminUser.scopes); byId('admin-permissions-form').hidden=false; const identity=adminUser.faction_id ? ` Current faction: ${adminUser.faction_id}. Faction access is marked as inherited and does not create a personal grant row.` : ' No current faction entitlement was found; only direct grants are shown.'; byId('admin-message').textContent=`Loaded effective access for Torn ID ${adminUser.user_id}.${identity}${adminUser.identity_warning ? ` ${adminUser.identity_warning}` : ''}`; } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
-  byId('admin-permissions-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-save'); setBusy(button,true); try { const scopes=[...byId('admin-scope-list').querySelectorAll('input[data-scope]:checked:not(:disabled)')].map(input=>input.dataset.scope); adminUser=await SLINK.core.messaging.send('access.admin.permissions.save',{userId:adminUser.user_id,scopes,hours:byId('admin-hours').value,note:byId('admin-note').value}); byId('admin-message').textContent=`Permissions saved for Torn ID ${adminUser.user_id}. They take effect on the user's next authentication.`; byId('admin-lookup-form').requestSubmit(); } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
+  byId('admin-permanent').addEventListener('change', event => { byId('admin-hours').disabled=event.currentTarget.checked; byId('admin-hours').required=!event.currentTarget.checked; });
+  byId('admin-permissions-form').addEventListener('submit', async event => { event.preventDefault(); const button=byId('admin-save'); setBusy(button,true); try { const scopes=[...byId('admin-scope-list').querySelectorAll('input[data-scope]:checked:not(:disabled)')].map(input=>input.dataset.scope); if(!scopes.length) throw new Error('Check at least one permission to add or extend.'); adminUser=await SLINK.core.messaging.send('access.admin.permissions.grant',{userId:adminUser.user_id,factionId:adminUser.faction_id,scopes,hours:byId('admin-hours').value,permanent:byId('admin-permanent').checked,note:byId('admin-note').value}); renderAdminScopes(adminUser.scopes); byId('admin-message').textContent=`Added ${scopes.length} permission${scopes.length===1?'':'s'} for Torn ID ${adminUser.user_id}. Unselected permissions were unchanged.`; } catch(error){ byId('admin-message').textContent=errorText(error); } finally{ setBusy(button,false); } });
+  byId('admin-scope-list').addEventListener('click', async event => { const button=event.target.closest('[data-revoke-scope]'); if(!button||!adminUser)return; const scope=adminUser.scopes.find(entry=>entry.scope===button.dataset.revokeScope); if(!scope)return; const inherited=scope.inherited_active?' The inherited faction grant will remain active.':''; if(!confirm(`Revoke only the direct ${scope.title} (${scope.scope}) grant for Torn ID ${adminUser.user_id}?${inherited}`))return; setBusy(button,true); try { adminUser=await SLINK.core.messaging.send('access.admin.permissions.revoke',{userId:adminUser.user_id,factionId:adminUser.faction_id,scopes:[scope.scope],note:byId('admin-note').value}); renderAdminScopes(adminUser.scopes); byId('admin-message').textContent=`Revoked the direct ${scope.title} permission. Every other permission was unchanged.${inherited}`; } catch(error){ byId('admin-message').textContent=errorText(error); if(button.isConnected)setBusy(button,false); } });
 
   try {
     await refresh();

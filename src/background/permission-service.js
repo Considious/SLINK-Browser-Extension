@@ -186,6 +186,26 @@
     return { ...result, identity_warning:identityWarning };
   }
 
+  async function mutateAdminPermissions(payload = {}, operation = 'grant') {
+    const session = await ensureSession(false, 'admin.*');
+    if (!SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('admin.* permission is required.');
+    const userId = Number(payload?.userId);
+    if (!Number.isInteger(userId) || userId <= 0) throw new Error('Enter a valid Torn user ID.');
+    const factionId = Number(payload?.factionId);
+    const query = Number.isInteger(factionId) && factionId > 0 ? `?faction_id=${factionId}` : '';
+    return permissionRequest(`/api/admin/users/${userId}/permissions${query}`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body:{
+        operation,
+        scopes:Array.isArray(payload?.scopes) ? payload.scopes : [],
+        hours:payload?.hours,
+        permanent:payload?.permanent === true,
+        note:payload?.note
+      }
+    });
+  }
+
   async function status() {
     const [currentSettings, terms, accepted, session, permissions] = await Promise.all([
       settings(),
@@ -213,17 +233,9 @@
       return permissionRequest('/api/admin/scopes');
     },
     'access.admin.permissions.get':adminPermissionsGet,
-    'access.admin.permissions.save':async payload => {
-      const session = await ensureSession(false, 'admin.*');
-      if (!SLINK.core.permissions.hasScope(session, 'admin.*')) throw new Error('admin.* permission is required.');
-      const userId = Number(payload?.userId);
-      if (!Number.isInteger(userId) || userId <= 0) throw new Error('Enter a valid Torn user ID.');
-      return permissionRequest(`/api/admin/users/${userId}/permissions`, {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body:{ scopes:Array.isArray(payload?.scopes) ? payload.scopes : [], hours:payload?.hours, note:payload?.note }
-      });
-    }
+    'access.admin.permissions.grant':payload => mutateAdminPermissions(payload, 'grant'),
+    'access.admin.permissions.revoke':payload => mutateAdminPermissions(payload, 'revoke'),
+    'access.admin.permissions.save':payload => mutateAdminPermissions(payload, 'grant')
   });
 
   SLINK.define('services', 'permissionAccess', Object.freeze({ clearSession, ensureSession, routes, settings, status }));

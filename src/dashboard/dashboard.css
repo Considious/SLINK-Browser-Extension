@@ -52,3 +52,7 @@ input,select{border-color:var(--slink-border-soft);background:var(--slink-bg);co
 .market-watch-form{align-items:start}
 .local-backup{margin-top:14px;padding:10px;border:1px solid var(--slink-border);border-radius:8px;background:var(--slink-card)}
 .local-backup>p{margin-top:10px}.local-backup .warning{border-left:4px solid var(--slink-warning)}
+.scope-row{grid-template-columns:auto minmax(220px,1fr) minmax(180px,auto) auto}
+.scope-actions{display:flex;justify-content:flex-end}
+.scope-actions:empty{display:none}
+@media(max-width:760px){.scope-row{grid-template-columns:auto minmax(0,1fr)}.scope-row>.muted,.scope-actions{grid-column:2}}

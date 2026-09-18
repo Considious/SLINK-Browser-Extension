@@ -2,6 +2,15 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.12 — 2026-09-18
+
+### Fixed
+
+- Permission assignment is now additive: adding checked permissions never revokes or changes any unselected permission.
+- Existing longer-lived and permanent direct grants are never shortened when more access is added.
+- Added permanent direct grants with no expiration date.
+- Added a confirmed Revoke button to each active direct permission, so revocation is explicit and limited to that one permission.
+
 ## 0.18.11 — 2026-09-18
 
 ### Added

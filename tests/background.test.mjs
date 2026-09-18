@@ -35,6 +35,10 @@ let marketCatalogRequests = 0;
 let itemMarketRequests = 0;
 let weaverMarketRequests = 0;
 let pointsMarketRequests = 0;
+const adminPermissionRequests = [];
+const adminGrantState = new Map([
+  ['slink.level', { status:'active', expiresAt:Date.now() + 86_400_000 }]
+]);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -82,7 +86,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.11' }; },
+    getManifest() { return { version: '0.18.12' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -231,12 +235,31 @@ context = vm.createContext({
       if (url.pathname === '/api/permissions/auth') body = { ok:true, session_token:'signed-access-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:['admin.*','slink.adhd.alerts','slink.adhd.marketwatch.40'] };
       if (url.pathname === '/api/admin/scopes') body = { ok:true, scopes:[{ scope:'slink.level', category:'Products', title:'SLINK Leveling' }, { scope:'slink.war', category:'Products', title:'SLINK War' }, { scope:'slink.war.officer', category:'War permissions', title:'SLINK War Officer' }, { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow' }] };
       if (/^\/api\/admin\/users\/\d+\/permissions$/.test(url.pathname)) {
-        const selected = options.method === 'POST' ? new Set(JSON.parse(options.body || '{}').scopes || []) : new Set(['slink.level']);
-        body = { ok:true, user_id:Number(url.pathname.split('/')[4]), faction_id:46978, scopes:[
-          { scope:'slink.level', category:'Products', title:'SLINK Leveling', description:'Leveling access', active:selected.has('slink.level'), status:selected.has('slink.level') ? 'active' : 'not_granted', expires_at:selected.has('slink.level') ? Date.now() + 86_400_000 : null },
-          { scope:'slink.war', category:'Products', title:'SLINK War', description:'War access', active:selected.has('slink.war'), status:selected.has('slink.war') ? 'active' : 'not_granted', expires_at:selected.has('slink.war') ? Date.now() + 86_400_000 : null },
-          { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow', description:'Purple and green theme', active:selected.has('slink.theme.underglow'), status:selected.has('slink.theme.underglow') ? 'active' : 'not_granted', expires_at:selected.has('slink.theme.underglow') ? Date.now() + 86_400_000 : null }
-        ] };
+        if (options.method === 'POST') {
+          const request = JSON.parse(options.body || '{}');
+          adminPermissionRequests.push(request);
+          for (const scope of request.scopes || []) {
+            if (request.operation === 'revoke') {
+              const previous = adminGrantState.get(scope);
+              adminGrantState.set(scope, { status:'revoked', expiresAt:previous?.expiresAt ?? null });
+            } else {
+              adminGrantState.set(scope, {
+                status:'active',
+                expiresAt:request.permanent ? null : Date.now() + Number(request.hours || 24) * 3_600_000
+              });
+            }
+          }
+        }
+        const catalog = [
+          { scope:'slink.level', category:'Products', title:'SLINK Leveling', description:'Leveling access' },
+          { scope:'slink.war', category:'Products', title:'SLINK War', description:'War access' },
+          { scope:'slink.theme.underglow', category:'Themes', title:'Slinky Underglow', description:'Purple and green theme' }
+        ];
+        body = { ok:true, user_id:Number(url.pathname.split('/')[4]), faction_id:46978, scopes:catalog.map(entry => {
+          const grant = adminGrantState.get(entry.scope);
+          const directActive = grant?.status === 'active';
+          return { ...entry, active:directActive, direct_active:directActive, inherited_active:false, status:grant?.status || 'not_granted', expires_at:grant?.expiresAt ?? null };
+        }) };
       }
       if (url.pathname === '/api/donations' && options.method === 'POST') {
         contributionActive = true;
@@ -738,9 +761,17 @@ assert(values.get('slink.permissions.snapshot')?.scopes.includes('slink.level'),
 assert(values.get('slink.permissions.snapshot')?.scopes.includes('slink.war'), 'Combined permissions omitted the War scope.');
 const adminPermissions = await send('access.admin.permissions.get', { userId:1234567 });
 assert(adminPermissions.ok && adminPermissions.data.user_id === 1234567, 'Admin permission lookup failed.');
-const updatedPermissions = await send('access.admin.permissions.save', { userId:1234567, scopes:['slink.level','slink.war','slink.theme.underglow'], hours:24, note:'Test grant' });
-assert(updatedPermissions.ok && updatedPermissions.data.scopes.find(scope => scope.scope === 'slink.war').active, 'Admin permission update failed.');
-assert(updatedPermissions.data.scopes.find(scope => scope.scope === 'slink.theme.underglow').active, 'Theme permission update failed.');
+const originalLevelExpiry = adminPermissions.data.scopes.find(scope => scope.scope === 'slink.level').expires_at;
+const addedWar = await send('access.admin.permissions.grant', { userId:1234567, scopes:['slink.war'], hours:24, note:'Test additive grant' });
+assert(addedWar.ok && addedWar.data.scopes.find(scope => scope.scope === 'slink.war').active, 'Additive permission grant failed.');
+assert(addedWar.data.scopes.find(scope => scope.scope === 'slink.level').expires_at === originalLevelExpiry, 'Adding a permission changed an unselected grant.');
+const permanentTheme = await send('access.admin.permissions.grant', { userId:1234567, scopes:['slink.theme.underglow'], permanent:true, note:'Permanent theme purchase' });
+assert(permanentTheme.data.scopes.find(scope => scope.scope === 'slink.theme.underglow').active && permanentTheme.data.scopes.find(scope => scope.scope === 'slink.theme.underglow').expires_at === null, 'Permanent permission grant failed.');
+assert(permanentTheme.data.scopes.find(scope => scope.scope === 'slink.level').active && permanentTheme.data.scopes.find(scope => scope.scope === 'slink.war').active, 'Permanent grant revoked an unselected permission.');
+const revokedWar = await send('access.admin.permissions.revoke', { userId:1234567, scopes:['slink.war'], note:'Specific revoke' });
+assert(!revokedWar.data.scopes.find(scope => scope.scope === 'slink.war').active, 'Specific permission revoke failed.');
+assert(revokedWar.data.scopes.find(scope => scope.scope === 'slink.level').active && revokedWar.data.scopes.find(scope => scope.scope === 'slink.theme.underglow').active, 'Specific revoke changed another permission.');
+assert(adminPermissionRequests.map(request => request.operation).join(',') === 'grant,grant,revoke', 'Admin permission routes sent the wrong operations.');
 
 const leader = await send('leveling.leader.claim', {}, { id: 'test', tab: { id: 7 } });
 assert(leader.ok && leader.data.leader, 'Torn tab did not acquire the local Leveling leader lease.');
