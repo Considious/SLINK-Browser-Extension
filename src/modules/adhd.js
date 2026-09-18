@@ -170,6 +170,7 @@
       function render(status) {
         current = status;
         const alerts = Array.isArray(status?.activeAlerts) ? status.activeAlerts : [];
+        ui.setAlertCount('adhd', alerts.length, { group:'efficiency', label:'active Efficiency reminders' });
         updateStatus();
         const root = ui.getContentElement();
         root.replaceChildren();
@@ -302,6 +303,7 @@
           if (clockTimer) global.clearInterval(clockTimer);
           global.removeEventListener('slink:api-usage', updateApiUsage);
           ui.setBubbleAlert('', 0, 'adhd');
+          ui.setAlertCount('adhd', 0);
         },
         status:() => current
       };

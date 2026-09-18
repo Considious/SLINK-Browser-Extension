@@ -61,6 +61,46 @@
     element.textContent = '';
   }
 
+  function activeRetals() {
+    const now = Math.floor(Date.now() / 1000);
+    const termedOpponent = war?.sharedConfig?.mode === 'termed' ? Number(war?.activeWar?.opponentFactionId) || 0 : 0;
+    const termedMembers = termedOpponent ? new Set([...(war?.runtime?.snapshot?.opponentMemberIds || []), ...(war?.runtime?.snapshot?.members || []).map(member => member.id)].map(Number).filter(Boolean)) : new Set();
+    return (war?.runtime?.snapshot?.retals || []).filter(retal => {
+      const key = `user:${Number(retal.attackerId) || String(retal.attackId || '')}`;
+      const belongsToTermedOpponent = termedOpponent > 0 && (Number(retal.attackerFactionId) === termedOpponent || termedMembers.has(Number(retal.attackerId)));
+      return Number(retal.expiresAt) > now && !belongsToTermedOpponent && !dismissedRetals[key] && !dismissedRetals[String(retal.attackId)];
+    });
+  }
+
+  function activeArmoryRequests() {
+    return war?.session?.officer === true ? (war?.runtime?.snapshot?.itemRequests || []) : [];
+  }
+
+  function setNavigationAlertCount(name, count, description) {
+    const badge = document.querySelector(`[data-alert-count="${name}"]`);
+    if (!badge) return;
+    const normalized = Math.max(0, Math.trunc(Number(count) || 0));
+    badge.hidden = normalized === 0;
+    badge.textContent = normalized > 99 ? '99+' : String(normalized || '');
+    const button = badge.closest('button');
+    const label = button?.querySelector('span:first-child')?.textContent || name;
+    if (button) {
+      button.title = normalized ? `${normalized} ${description}` : '';
+      button.setAttribute('aria-label', normalized ? `${label}: ${normalized} ${description}` : label);
+    }
+  }
+
+  function updateNavigationAlertCounts() {
+    const efficiencyAlerts = Array.isArray(adhd?.activeAlerts) ? adhd.activeAlerts.length : 0;
+    const marketDeals = Array.isArray(market?.opportunities) ? market.opportunities.length : 0;
+    const retals = activeRetals().length;
+    const armoryRequests = activeArmoryRequests().length;
+    setNavigationAlertCount('alerts', efficiencyAlerts, 'active reminders');
+    setNavigationAlertCount('market', marketDeals, 'active Market Watch deals');
+    setNavigationAlertCount('efficiency', efficiencyAlerts + marketDeals, 'active Efficiency alerts');
+    setNavigationAlertCount('combat', retals + armoryRequests, 'active War alerts');
+  }
+
   function pill(text, className = '') {
     const span = document.createElement('span');
     span.className = `pill ${className}`.trim();
@@ -334,6 +374,7 @@
     const permitted = adhd?.permitted === true;
     const configured = adhd?.configured === true;
     const alerts = Array.isArray(adhd?.activeAlerts) ? adhd.activeAlerts : [];
+    updateNavigationAlertCounts();
     const badge = byId('adhd-permission-state');
     badge.textContent = permitted ? 'Efficiency access active' : `Requires ${adhd?.requiredScope || SLINK.core.adhd.ALERT_SCOPE}`;
     badge.className = permitted ? 'badge ready' : 'badge error';
@@ -492,6 +533,7 @@
     const settings = SLINK.core.market.normalizeSettings(market.settings || {});
     const watches = settings.watches || [];
     const deals = Array.isArray(market.opportunities) ? market.opportunities : [];
+    updateNavigationAlertCounts();
     const catalog = Array.isArray(market.catalog?.items) ? market.catalog.items : [];
     byId('adhd-market-tier').textContent = market.marketWatchLimit ? `${market.marketWatchLimit} watch slots unlocked` : 'No watch tier';
     byId('adhd-market-tier').className = market.permitted ? 'badge ready' : 'badge error';
@@ -646,10 +688,8 @@
   function renderRetals() {
     const root = byId('war-retals');
     const now = Math.floor(Date.now() / 1000);
-    const retals = (war?.runtime?.snapshot?.retals || []).filter(retal => {
-      const key = `user:${Number(retal.attackerId) || String(retal.attackId || '')}`;
-      return Number(retal.expiresAt) > now && !dismissedRetals[key] && !dismissedRetals[String(retal.attackId)];
-    });
+    const retals = activeRetals();
+    updateNavigationAlertCounts();
     byId('retal-summary').textContent = retals.length ? `${retals.length} active retaliation opportunit${retals.length === 1 ? 'y' : 'ies'}` : 'No active retaliation opportunities';
     if (!retals.length) {
       const empty = document.createElement('p');
@@ -799,7 +839,7 @@
       ? `Mugs ${money(stats.mugTotal)} total • ${money(stats.mugMin)} min • ${money(stats.mugAverage)} avg • ${money(stats.mugMax)} max`
       : 'Mug totals appear after a mug.';
     const now = Math.floor(Date.now() / 1000);
-    byId('war-retal-count').textContent = (snapshot.retals || []).filter(retal => Number(retal.expiresAt) > now && !dismissedRetals[`user:${Number(retal.attackerId) || String(retal.attackId || '')}`] && !dismissedRetals[String(retal.attackId)]).length;
+    byId('war-retal-count').textContent = activeRetals().length;
     const chain = stats.chain;
     byId('war-chain').textContent = chain?.current ? `${chain.current}${chain.target ? `/${chain.target}` : ''}${chain.secondsLeft ? ` • ${SLINK.core.format.formatHumanDuration(chain.secondsLeft)}` : ''}` : 'No active chain';
     const turtle = stats.turtle;

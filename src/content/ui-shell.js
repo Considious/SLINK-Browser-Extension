@@ -48,6 +48,9 @@
     .group-tab[aria-selected="true"] { border-color:var(--slink-accent-alt); background:var(--slink-selected-bg); color:var(--slink-text); box-shadow:0 0 10px var(--slink-glow-right); }
     .tab { flex:1 0 auto; min-height:27px; padding:3px 7px; color:var(--slink-muted); }
     .tab[aria-selected="true"] { border-color:var(--slink-border); background:var(--slink-accent); color:var(--slink-text); }
+    .group-tab,.tab { display:flex; align-items:center; justify-content:center; gap:5px; }
+    .nav-alert-count { display:inline-grid; place-items:center; min-width:18px; height:18px; padding:0 4px; border:2px solid #050505; border-radius:999px; background:#d71920; color:#fff; box-shadow:0 0 0 1px rgba(255,255,255,.32); font:bold 10px/14px Arial,sans-serif; }
+    .nav-alert-count[hidden] { display:none; }
     .module-head { display:flex; align-items:center; gap:7px; padding:6px 9px 0; }
     .module-head strong { flex:1; }
     .status { padding:7px 10px; border-bottom:1px solid var(--slink-border-soft); color:var(--slink-accent); }
@@ -114,12 +117,51 @@
     const views = new Map();
     const groupButtons = new Map();
     const alerts = new Map();
+    const navigationAlerts = new Map();
     let hidden = false;
     let collapsed = false;
     let activeId = '';
     let activeGroup = '';
     let preferredActiveId = '';
     const bubbleAlertSources = new Map();
+
+    function displayAlertCount(count) {
+      return Number(count) > 99 ? '99+' : String(Math.max(1, Number(count) || 1));
+    }
+
+    function updateNavigationAlerts() {
+      for (const [moduleId, view] of views) {
+        const alert = navigationAlerts.get(moduleId);
+        const count = Math.max(0, Number(alert?.count) || 0);
+        view.alertBadge.hidden = count === 0;
+        view.alertBadge.textContent = count ? displayAlertCount(count) : '';
+        const description = count ? `${count} ${alert.label || 'active alerts'}` : '';
+        view.tab.title = description;
+        view.tab.setAttribute('aria-label', description ? `${view.title}: ${description}` : view.title);
+      }
+      for (const [groupId, button] of groupButtons) {
+        const count = [...navigationAlerts.values()].filter(alert => alert.group === groupId).reduce((total, alert) => total + Math.max(0, Number(alert.count) || 0), 0);
+        const badge = button.querySelector('.nav-alert-count');
+        badge.hidden = count === 0;
+        badge.textContent = count ? displayAlertCount(count) : '';
+        const label = button.dataset.label || groupId;
+        button.title = count ? `${count} active alert${count === 1 ? '' : 's'} in ${label}` : '';
+        button.setAttribute('aria-label', count ? `${label}: ${count} active alert${count === 1 ? '' : 's'}` : label);
+      }
+    }
+
+    function setAlertCount(source, count = 0, details = {}) {
+      const sourceId = String(source || '').trim();
+      if (!sourceId) return;
+      const normalized = Math.max(0, Math.trunc(Number(count) || 0));
+      if (normalized) navigationAlerts.set(sourceId, {
+        count:normalized,
+        group:String(details.group || views.get(sourceId)?.group || ''),
+        label:String(details.label || 'active alerts')
+      });
+      else navigationAlerts.delete(sourceId);
+      updateNavigationAlerts();
+    }
 
     function setBubbleAlert(kind = '', count = 0, source = 'default') {
       const sourceId = String(source || 'default');
@@ -322,20 +364,27 @@
       element.innerHTML = `<div class="module-head"><strong></strong></div><div class="status" role="status"></div><div class="content"></div><div class="actions"></div>`;
       element.querySelector('strong').textContent = module.title;
       const tab = document.createElement('button');
-      tab.className = 'tab'; tab.type = 'button'; tab.textContent = module.shortTitle || module.title; tab.setAttribute('role', 'tab');
+      tab.className = 'tab'; tab.type = 'button'; tab.setAttribute('role', 'tab');
+      const tabLabel = document.createElement('span'); tabLabel.textContent = module.shortTitle || module.title;
+      const tabAlertBadge = document.createElement('span'); tabAlertBadge.className = 'nav-alert-count'; tabAlertBadge.hidden = true; tabAlertBadge.setAttribute('aria-hidden', 'true');
+      tab.append(tabLabel, tabAlertBadge);
       tabs.append(tab); main.element.append(element);
       const group = String(module.group || 'other');
       if (!groupButtons.has(group)) {
         const groupButton = document.createElement('button');
         groupButton.className = 'group-tab';
         groupButton.type = 'button';
-        groupButton.textContent = String(module.groupTitle || group);
+        const groupLabel = String(module.groupTitle || group);
+        groupButton.dataset.label = groupLabel;
+        const label = document.createElement('span'); label.textContent = groupLabel;
+        const alertBadge = document.createElement('span'); alertBadge.className = 'nav-alert-count'; alertBadge.hidden = true; alertBadge.setAttribute('aria-hidden', 'true');
+        groupButton.append(label, alertBadge);
         groupButton.setAttribute('role', 'tab');
         groupButton.addEventListener('click', () => setActiveGroup(group, true));
         groupButtons.set(group, groupButton);
         groups.append(groupButton);
       }
-      const view = { id:module.id, title:module.title, group, element, tab };
+      const view = { id:module.id, title:module.title, group, element, tab, alertBadge:tabAlertBadge };
       views.set(module.id, view);
       tab.addEventListener('click', () => setActive(module.id, true));
       const moduleStyle = document.createElement('style'); shadow.append(moduleStyle);
@@ -370,12 +419,14 @@
         showAlert,
         dismissAlert,
         setBubbleAlert,
+        setAlertCount,
         remove() {
-          view.tab.remove(); element.remove(); moduleStyle.remove(); views.delete(module.id);
+          view.tab.remove(); element.remove(); moduleStyle.remove(); views.delete(module.id); navigationAlerts.delete(module.id);
           if (![...views.values()].some(candidate => candidate.group === view.group)) {
             groupButtons.get(view.group)?.remove();
             groupButtons.delete(view.group);
           }
+          updateNavigationAlerts();
           refreshShell();
         },
         ui: null
@@ -384,6 +435,7 @@
       view.api = Object.freeze(api);
       if (!activeId) activeId = module.id;
       if (preferredActiveId === module.id) activeId = module.id;
+      updateNavigationAlerts();
       refreshShell();
       return view.api;
     }
@@ -415,6 +467,7 @@
       dismissAlert,
       showAlert,
       setBubbleAlert,
+      setAlertCount,
       setTheme,
       setCollapsed,
       setHidden(value) { hidden = Boolean(value); refreshShell(); },

@@ -5,6 +5,7 @@
   const WAR = SLINK.core.war;
   const MODULE_STYLES = `
     .slink-war-subtabs { display:grid; grid-template-columns:repeat(auto-fit,minmax(58px,1fr)); gap:4px; }
+    .slink-war-subtab { display:flex; align-items:center; justify-content:center; gap:5px; }
     .slink-war-subtab[aria-selected="true"] { border-color:var(--slink-border); background:var(--slink-accent); }
     .slink-war-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; }
     .slink-war-stat { padding:6px; border-radius:6px; background:var(--slink-bg-raised); text-align:center; }
@@ -1025,7 +1026,8 @@
           ? `${Number(stats.mugs)} mugs • ${money(stats.mugTotal)} total • ${money(stats.mugMin)} min • ${money(stats.mugAverage)} avg • ${money(stats.mugMax)} max`
           : 'Mug totals appear after a mug.';
         const retals = visibleRetals();
-        const tabBar = `<div class="slink-war-subtabs">${tabs.map(tab => `<button class="slink-war-subtab" data-war-tab="${tab}" aria-selected="${activeTab === tab}">${tab[0].toUpperCase()}${tab.slice(1)}</button>`).join('')}</div>`;
+        const armoryRequestCount = officer ? (snapshot.itemRequests || []).length : 0;
+        const tabBar = `<div class="slink-war-subtabs">${tabs.map(tab => `<button class="slink-war-subtab" data-war-tab="${tab}" aria-selected="${activeTab === tab}"><span>${tab[0].toUpperCase()}${tab.slice(1)}</span>${tab === 'armory' && armoryRequestCount ? `<span class="nav-alert-count" aria-label="${armoryRequestCount} active Armory requests">${armoryRequestCount > 99 ? '99+' : armoryRequestCount}</span>` : ''}</button>`).join('')}</div>`;
         const content = activeTab === 'armory'
           ? `${tabBar}<div>${body}</div>`
           : `${tabBar}<div class="slink-war-summary"><div class="slink-war-stat"><b>${Number(stats.attacks) || 0}</b><span>Attacks</span></div><div class="slink-war-stat"><b>${Number(stats.warAttacks) || 0}${insideCap ? `/${insideCap}` : ''}</b><span>War / cap</span></div><div class="slink-war-stat"><b>${Number(stats.mugs) || 0}</b><span>Mugs</span></div><div class="slink-war-stat"><b>${chain}</b><span>Chain</span></div></div><div class="slink-war-note slink-war-report"><span>${mugSummary}</span><button id="slink-war-copy-report" type="button">Copy report</button></div>${itemRequestCards()}${retals.length ? `<div class="slink-war-note"><strong>Active retals</strong>${retalCards()}</div>` : ''}${localError ? `<div class="slink-war-error">${escape(localError)}</div>` : ''}<div>${body}</div>`;
@@ -1210,6 +1212,7 @@
         if (active && signature !== lastAlertSignature && settings.alertSound) playAlertTone();
         lastAlertSignature = active ? signature : '';
         if (fullUi) context.ui.getContentElement()?.closest('.window')?.classList.toggle('slink-war-alerting', active && settings.alertPanelFlash);
+        context.ui.setAlertCount('war', retals.length + itemRequests.length, { group:'combat', label:'active War alerts' });
         context.ui.setBubbleAlert(retals.length ? 'retal' : itemRequests.length ? 'armory' : '', retals.length || itemRequests.length, 'war');
         setPageAlert(active);
       }
@@ -1368,6 +1371,7 @@
         pageStyleElement?.remove();
         pageStyleElement = null;
         context.ui.setBubbleAlert('', 0, 'war');
+        context.ui.setAlertCount('war', 0);
         setPageAlert(false);
         document.removeEventListener('pointerdown', unlockAudio);
         document.removeEventListener('click', handleProfileAttack, true);

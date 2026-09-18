@@ -2,6 +2,15 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.13 — 2026-09-18
+
+### Added
+
+- Added theme-independent red notification badges with white numbers and black outlines to the in-Torn module and section tabs.
+- Efficiency now rolls up normal reminder and Market Watch deal counts, while each Alerts and Market tab keeps its own count.
+- Combat and War now show the combined active retaliation and officer Armory-request count, while the in-Torn Armory subtab shows its own request count.
+- Added the same Combat, Efficiency, Alerts, and Market count badges to the dedicated extension dashboard.
+
 ## 0.18.12 — 2026-09-18
 
 ### Fixed
