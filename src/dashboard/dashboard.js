@@ -469,6 +469,7 @@
     byId('market-watch-item-meta').textContent = 'The Torn item list loads automatically.';
     byId('market-item-suggestions').hidden = true;
     byId('market-watch-priority').value = SLINK.core.market.normalizePriority(market?.settings?.lastPriority);
+    byId('market-watch-enabled').checked = true;
     byId('market-watch-market').checked = true;
     byId('market-watch-bazaar').checked = true;
     syncMarketWatchType();
@@ -539,7 +540,8 @@
     const catalog = Array.isArray(market.catalog?.items) ? market.catalog.items : [];
     byId('adhd-market-tier').textContent = market.marketWatchLimit ? `${market.marketWatchLimit} watch slots unlocked` : 'No watch tier';
     byId('adhd-market-tier').className = market.permitted ? 'badge ready' : 'badge error';
-    byId('market-watch-count').textContent = `${watches.length}/${market.marketWatchLimit || 0}`;
+    const activeCount = Number(market.activeWatchCount ?? SLINK.core.market.activeSlotCount(settings)) || 0;
+    byId('market-watch-count').textContent = `${activeCount}/${market.marketWatchLimit || 0}`;
     byId('market-deal-count').textContent = deals.length;
     byId('market-next-check').textContent = Number(market.nextRefreshAt) ? new Date(market.nextRefreshAt).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }) : '—';
     renderSharedApiUsage(system?.tornApiUsage || market.tornApiUsage);
@@ -555,10 +557,10 @@
     byId('market-weaver-pricelist-status').textContent = priceList.lastError
       ? `Weaver sync issue: ${priceList.lastError}`
       : priceList.fetchedAt
-        ? `${Number(priceList.itemCount || 0).toLocaleString()} active prices synced ${relativeTime(priceList.fetchedAt)}.`
+        ? `${Number(priceList.itemCount || 0).toLocaleString()} prices imported · ${settings.weaverActiveItemIds.length} selected · synced ${relativeTime(priceList.fetchedAt)}.`
         : settings.weaverPricelistEnabled ? 'Weaver price list will sync on refresh.' : 'Weaver price list is off.';
     if (!byId('market-watch-uid').value) byId('market-watch-priority').value = settings.lastPriority;
-    byId('market-watch-save').disabled = !market.permitted || watches.length >= Number(market.marketWatchLimit || 0) && !byId('market-watch-uid').value;
+    byId('market-watch-save').disabled = !market.permitted || watches.length >= SLINK.core.market.SAVED_WATCH_LIMIT && !byId('market-watch-uid').value;
     const watchList = byId('market-watch-list');
     watchList.replaceChildren(...(watches.length ? watches.map(watch => {
       const item = catalog.find(row => Number(row.id) === Number(watch.itemId));
@@ -566,13 +568,30 @@
       const copy = document.createElement('div');
       const title = document.createElement('strong'); title.textContent = watch.marketType === 'points' ? 'Points Market' : `${watch.label || item?.name || `Item ${watch.itemId}`} [${watch.itemId}]`;
       const sources = watch.marketType === 'points' ? 'Points Market · every 30s' : `${watch.marketEnabled ? 'Item Market' : ''}${watch.marketEnabled && watch.bazaarEnabled ? ' + ' : ''}${watch.bazaarEnabled ? 'Weaver Bazaar' : ''}`;
-      const detail = document.createElement('span'); detail.textContent = `Target $${Number(watch.maxPrice).toLocaleString()} · ${watch.priority} · ${sources}${Number(item?.shopSellPrice) > 0 ? ` · shop sell $${Number(item.shopSellPrice).toLocaleString()}${item.shopSellName ? ` at ${item.shopSellName}` : ''}` : ''}`;
+      const detail = document.createElement('span'); detail.textContent = `${watch.enabled ? 'Active slot' : 'Saved inactive'} · Target $${Number(watch.maxPrice).toLocaleString()} · ${watch.priority} · ${sources}${Number(item?.shopSellPrice) > 0 ? ` · shop sell $${Number(item.shopSellPrice).toLocaleString()}${item.shopSellName ? ` at ${item.shopSellName}` : ''}` : ''}`;
       copy.append(title, detail);
       const actions = document.createElement('div'); actions.className = 'row-actions';
+      const enabled = document.createElement('label'); enabled.className = 'toggle';
+      const enabledInput = document.createElement('input'); enabledInput.type = 'checkbox'; enabledInput.checked = watch.enabled; enabledInput.dataset.marketWatchEnabled = watch.uid;
+      enabled.append(enabledInput, document.createTextNode('Active'));
       const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'small secondary'; edit.dataset.marketEdit = watch.uid; edit.textContent = 'Edit';
       const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'small danger'; remove.dataset.marketRemove = watch.uid; remove.textContent = 'Remove';
-      actions.append(edit, remove); row.append(copy, actions); return row;
+      actions.append(enabled, edit, remove); row.append(copy, actions); return row;
     }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:market.permitted ? 'No watches yet.' : 'No Market Watch tier is active.' })]));
+    const importedItems = Array.isArray(priceList.items) ? priceList.items : [];
+    const selectedWeaverIds = new Set(settings.weaverActiveItemIds);
+    const activeManualIds = new Set(watches.filter(watch => watch.enabled && watch.marketType === 'item').map(watch => Number(watch.itemId)));
+    const weaverList = byId('market-weaver-item-list');
+    weaverList.replaceChildren(...(importedItems.length ? importedItems.map(price => {
+      const row = document.createElement('label'); row.className = 'market-weaver-item';
+      const input = document.createElement('input'); input.type = 'checkbox'; input.dataset.marketWeaverItem = String(price.itemId); input.checked = selectedWeaverIds.has(Number(price.itemId)); input.disabled = !market.permitted;
+      const copy = document.createElement('span');
+      const title = document.createElement('strong'); title.textContent = `${price.name || `Item ${price.itemId}`} [${price.itemId}]`;
+      const detail = document.createElement('small');
+      detail.textContent = `$${Number(price.buyPrice || 0).toLocaleString()}${Number(price.bulkBuyPrice) > 0 ? ` · bulk $${Number(price.bulkBuyPrice).toLocaleString()} at ${Number(price.bulkThreshold || 0).toLocaleString()}+` : ''}${activeManualIds.has(Number(price.itemId)) ? ' · shares its SLINK item slot' : ''}`;
+      copy.append(title, detail); row.append(input, copy); return row;
+    }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:priceList.fetchedAt ? 'No active Weaver prices were returned.' : 'Sync your Weaver price list to choose monitored items.' })]));
+    byId('market-weaver-clear-active').disabled = !settings.weaverActiveItemIds.length;
     const dealList = byId('market-deal-list');
     dealList.replaceChildren(...(deals.length ? deals.map(deal => {
       const card = document.createElement('article'); card.className = 'market-deal-card';
@@ -1381,7 +1400,7 @@
         priority:byId('market-watch-priority').value,
         marketEnabled:marketType === 'points' || byId('market-watch-market').checked,
         bazaarEnabled:marketType === 'item' && byId('market-watch-bazaar').checked,
-        enabled:true
+        enabled:byId('market-watch-enabled').checked
       });
       const savedName = marketType === 'points' ? 'Points Market' : item.name;
       resetMarketWatchForm(); byId('market-message').textContent = `${savedName} watch saved.`; renderMarket();
@@ -1412,7 +1431,7 @@
     const remove = event.target.closest('[data-market-remove]');
     if (edit) {
       const watch = market?.settings?.watches?.find(row => row.uid === edit.dataset.marketEdit); if (!watch) return;
-      byId('market-watch-uid').value = watch.uid; byId('market-watch-type').value = watch.marketType || 'item'; byId('market-watch-price').value = watch.maxPrice; byId('market-watch-priority').value = watch.priority; byId('market-watch-market').checked = watch.marketEnabled; byId('market-watch-bazaar').checked = watch.bazaarEnabled; byId('market-watch-save').disabled = false;
+      byId('market-watch-uid').value = watch.uid; byId('market-watch-type').value = watch.marketType || 'item'; byId('market-watch-price').value = watch.maxPrice; byId('market-watch-priority').value = watch.priority; byId('market-watch-enabled').checked = watch.enabled; byId('market-watch-market').checked = watch.marketEnabled; byId('market-watch-bazaar').checked = watch.bazaarEnabled; byId('market-watch-save').disabled = false;
       if (watch.marketType !== 'points') selectMarketItem(marketCatalog().find(item => Number(item.id) === Number(watch.itemId)) || { id:watch.itemId, name:watch.label });
       syncMarketWatchType(); byId('market-watch-price').focus();
     }
@@ -1422,6 +1441,32 @@
       try { market = await SLINK.core.messaging.send('market.watch.remove', { uid:watch.uid }); byId('market-message').textContent = `${watch.label} removed.`; renderMarket(); }
       catch (error) { byId('market-message').textContent = errorText(error); setBusy(remove, false); }
     }
+  });
+  byId('market-watch-list').addEventListener('change', async event => {
+    const input = event.target.closest('[data-market-watch-enabled]'); if (!input) return;
+    const watch = market?.settings?.watches?.find(row => row.uid === input.dataset.marketWatchEnabled); if (!watch) return;
+    input.disabled = true; byId('market-message').textContent = '';
+    try {
+      market = await SLINK.core.messaging.send('market.watch.save', { ...watch, enabled:input.checked });
+      byId('market-message').textContent = `${watch.label} is now ${input.checked ? 'active' : 'saved but inactive'}.`;
+      renderMarket();
+    } catch (error) { byId('market-message').textContent = errorText(error); renderMarket(); }
+  });
+  byId('market-weaver-item-list').addEventListener('change', async event => {
+    const input = event.target.closest('[data-market-weaver-item]'); if (!input) return;
+    const itemIds = [...byId('market-weaver-item-list').querySelectorAll('[data-market-weaver-item]:checked')].map(node => Number(node.dataset.marketWeaverItem));
+    input.disabled = true; byId('market-message').textContent = '';
+    try {
+      market = await SLINK.core.messaging.send('market.weaver.selection.save', { itemIds });
+      byId('market-message').textContent = `Saved ${market.settings?.weaverActiveItemIds?.length || 0} selected Weaver price${market.settings?.weaverActiveItemIds?.length === 1 ? '' : 's'}.`;
+      renderMarket();
+    } catch (error) { byId('market-message').textContent = errorText(error); renderMarket(); }
+  });
+  byId('market-weaver-clear-active').addEventListener('click', async event => {
+    const button = event.currentTarget; setBusy(button, true); byId('market-message').textContent = '';
+    try { market = await SLINK.core.messaging.send('market.weaver.selection.save', { itemIds:[] }); byId('market-message').textContent = 'All Weaver prices are saved but inactive.'; renderMarket(); }
+    catch (error) { byId('market-message').textContent = errorText(error); }
+    finally { setBusy(button, false); }
   });
   byId('merits-refresh').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('merits-error').hidden = true;

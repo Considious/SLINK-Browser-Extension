@@ -615,7 +615,9 @@ assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverSummaryR
 const enabledWeaverPricelist = await send('market.settings.save', { weaverPricelistEnabled:true, listedItemsEnabled:false, weaverSourceOrder:'pricelist-first' });
 assert(enabledWeaverPricelist.ok, 'Weaver price-list settings could not be enabled.');
 const syncedWeaverPricelist = await send('market.weaver.pricelist.sync');
-assert(syncedWeaverPricelist.ok && syncedWeaverPricelist.data.weaverPricelist.itemCount === 1 && syncedWeaverPricelist.data.opportunities.some(row => row.source === 'Weaver Pricelist'), 'Weaver price-list sync did not create locally screened Bazaar opportunities.');
+assert(syncedWeaverPricelist.ok && syncedWeaverPricelist.data.weaverPricelist.itemCount === 1 && !syncedWeaverPricelist.data.opportunities.some(row => row.source === 'Weaver Pricelist'), 'An imported Weaver price consumed a free monitoring slot before being selected.');
+const selectedWeaverPricelist = await send('market.weaver.selection.save', { itemIds:[2] });
+assert(selectedWeaverPricelist.ok && selectedWeaverPricelist.data.activeWatchCount === 1 && selectedWeaverPricelist.data.opportunities.some(row => row.source === 'Weaver Pricelist'), 'A selected Weaver price did not consume one active slot and create a locally screened opportunity.');
 assert(weaverPricelistRequests === 1 && weaverSummaryRequests >= 1 && weaverDetailRequests < weaverMarketRequests, 'Weaver did not use one summary screen before item-detail requests.');
 await send('market.settings.save', { listedItemsEnabled:true });
 const pointsMarketWatch = await send('market.watch.save', { marketType:'points', maxPrice:45_000, priority:'low' });

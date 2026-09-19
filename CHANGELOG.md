@@ -2,6 +2,19 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.22 — 2026-09-19
+
+### Changed
+
+- Market Watch permissions now govern one shared pool of actively searched item slots instead of limiting how many watches may be saved.
+- SLINK watches can remain saved but inactive and can be swapped into the active pool without deletion or re-entry.
+- Weaver price-list entries are imported as inactive choices and receive individual activation checkboxes; imported prices no longer provide unmetered searches.
+- Selecting the same item through both a SLINK watch and the Weaver price list consumes one shared slot while retaining both configured sources and thresholds.
+
+### Added
+
+- The dedicated dashboard now displays active-slot usage, saved-watch state, imported Weaver prices, per-entry activation controls, and a clear-selection action.
+
 ## 0.18.21 — 2026-09-19
 
 ### Fixed

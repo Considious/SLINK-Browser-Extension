@@ -17,6 +17,7 @@
   const WEAVER_MIN_REQUEST_SPACING_MS = Math.ceil(WEAVER_RATE_WINDOW_MS / WEAVER_RATE_LIMIT);
   const WEAVER_FALLBACK_BACKOFF_MS = 15 * 60_000;
   const WEAVER_PRICELIST_REFRESH_MS = 3 * 60_000;
+  const SAVED_WATCH_LIMIT = 250;
 
   function finite(value) {
     if (value === null || value === undefined || value === '') return null;
@@ -31,7 +32,7 @@
   function defaultSettings() {
     return {
       enabled:true, showInTorn:true, quickBuyEnabled:true, soundEnabled:true, lastPriority:'normal',
-      listedItemsEnabled:true, weaverPricelistEnabled:false, weaverSourceOrder:'listed-first', watches:[]
+      listedItemsEnabled:true, weaverPricelistEnabled:false, weaverSourceOrder:'listed-first', weaverActiveItemIds:[], watches:[]
     };
   }
 
@@ -64,9 +65,24 @@
       listedItemsEnabled:input?.listedItemsEnabled !== false,
       weaverPricelistEnabled:input?.weaverPricelistEnabled === true,
       weaverSourceOrder:input?.weaverSourceOrder === 'pricelist-first' ? 'pricelist-first' : 'listed-first',
+      weaverActiveItemIds:[...new Set((Array.isArray(input?.weaverActiveItemIds) ? input.weaverActiveItemIds : [])
+        .map(value => Math.trunc(Number(value) || 0)).filter(value => value > 0))],
       watches:(Array.isArray(input?.watches) ? input.watches : []).map(normalizeWatch)
     };
   }
+
+  function activeSlotKeys(settingsInput = {}) {
+    const settings = normalizeSettings(settingsInput);
+    const keys = new Set();
+    if (settings.listedItemsEnabled) for (const watch of settings.watches) {
+      if (!watch.enabled) continue;
+      keys.add(watch.marketType === 'points' ? 'points' : `item:${watch.itemId}`);
+    }
+    if (settings.weaverPricelistEnabled) for (const itemId of settings.weaverActiveItemIds) keys.add(`item:${itemId}`);
+    return [...keys];
+  }
+
+  function activeSlotCount(settingsInput = {}) { return activeSlotKeys(settingsInput).length; }
 
   function shopSellDetails(item = {}) {
     const shops = Array.isArray(item?.value?.shops) ? item.value.shops : [];
@@ -280,7 +296,8 @@
       }
       return rows;
     });
-    if (settings.weaverPricelistEnabled) for (const priceItem of weaverPricelistItems(runtime?.weaverPricelist?.items || [])) {
+    const activeWeaverIds = new Set(settings.weaverActiveItemIds);
+    if (settings.weaverPricelistEnabled) for (const priceItem of weaverPricelistItems(runtime?.weaverPricelist?.items || []).filter(item => activeWeaverIds.has(item.itemId))) {
       const result = runtime?.pricelistResults?.[priceItem.itemId] || {};
       const item = catalog.get(priceItem.itemId) || {};
       const name = priceItem.name || item.name || `Item ${priceItem.itemId}`;
@@ -311,9 +328,9 @@
   }
 
   SLINK.define('core', 'market', Object.freeze({
-    ITEM_MARKET_CACHE_SAFETY_MS, ITEM_MARKET_FALLBACK_MS, POINTS_MARKET_REFRESH_MS, PRIORITIES,
+    ITEM_MARKET_CACHE_SAFETY_MS, ITEM_MARKET_FALLBACK_MS, POINTS_MARKET_REFRESH_MS, PRIORITIES, SAVED_WATCH_LIMIT,
     TORN_PRIORITY_LIMITS, WEAVER_FALLBACK_BACKOFF_MS, WEAVER_MIN_REQUEST_SPACING_MS, WEAVER_RATE_LIMIT,
-    WEAVER_PRICELIST_REFRESH_MS, WEAVER_RATE_WINDOW_MS, WEAVER_REFRESH_MS, bazaarUrl, catalogItems, defaultSettings, effectivePriority,
+    WEAVER_PRICELIST_REFRESH_MS, WEAVER_RATE_WINDOW_MS, WEAVER_REFRESH_MS, activeSlotCount, activeSlotKeys, bazaarUrl, catalogItems, defaultSettings, effectivePriority,
     itemMarketCache, itemMarketListings, itemMarketNextCheckAt, itemMarketUrl, listingHighlightState, normalizePriority, normalizeSettings,
     normalizeWatch, opportunityRows, pointsMarketListings, pointsMarketUrl, shopSellDetails, staleRetryMs, weaverListings,
     weaverMarketplaceItems, weaverPricelistItems, weaverPricelistTarget

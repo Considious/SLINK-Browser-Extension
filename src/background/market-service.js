@@ -46,6 +46,12 @@
     return { limit, permitted:limit > 0, userId:Number(permissions?.userId || session?.userId) || null };
   }
 
+  function assertActiveSlotLimit(settingsValue, access) {
+    const count = MARKET.activeSlotCount(settingsValue);
+    if (count > Number(access.limit || 0)) throw new Error(`Your permission allows ${access.limit || 0} active Market Watch item${Number(access.limit) === 1 ? '' : 's'}. Disable another saved or Weaver watch first.`);
+    return count;
+  }
+
   async function tornKey() {
     const [access, leveling, war] = await Promise.all([
       SLINK.services.permissionAccess.settings(), SLINK.core.storage.get('leveling.settings.v1', {}), SLINK.core.storage.get('war.settings.v1', {})
@@ -147,6 +153,15 @@
     return current.weaverPricelist;
   }
 
+  async function pruneWeaverSelection(settingsValue, current) {
+    const available = new Set(MARKET.weaverPricelistItems(current.weaverPricelist?.items || []).map(item => item.itemId));
+    const selected = settingsValue.weaverActiveItemIds.filter(itemId => available.has(itemId));
+    if (selected.length === settingsValue.weaverActiveItemIds.length) return settingsValue;
+    const next = MARKET.normalizeSettings({ ...settingsValue, weaverActiveItemIds:selected });
+    await SLINK.core.storage.set(KEYS.settings, next);
+    return next;
+  }
+
   async function ensureWeaverSummary(current, force = false, maxAgeMs = MARKET.WEAVER_REFRESH_MS.normal) {
     if (!force && current.weaverSummary?.items?.length && Date.now() - Number(current.weaverSummary.fetchedAt) < maxAgeMs) return current.weaverSummary;
     const body = await weaverJson('https://weav3r.dev/api/marketplace', current); const now = Date.now();
@@ -167,7 +182,8 @@
     if (currentSettings.listedItemsEnabled) for (const watch of allowed) if (watch.enabled && watch.marketType === 'item' && watch.bazaarEnabled) {
       add(watch.itemId, watch.maxPrice, watch, priorityFor(watch, current.results[watch.uid]), current.results[watch.uid]);
     }
-    if (currentSettings.weaverPricelistEnabled) for (const item of MARKET.weaverPricelistItems(current.weaverPricelist?.items || [])) {
+    const activePricelistIds = new Set(currentSettings.weaverActiveItemIds);
+    if (currentSettings.weaverPricelistEnabled) for (const item of MARKET.weaverPricelistItems(current.weaverPricelist?.items || []).filter(row => activePricelistIds.has(row.itemId))) {
       add(item.itemId, Math.max(item.buyPrice, item.bulkBuyPrice || 0), 'pricelist', 'normal', current.pricelistResults[item.itemId]);
     }
     const first = currentSettings.weaverSourceOrder === 'pricelist-first' ? 'pricelist' : 'manual';
@@ -214,8 +230,8 @@
     }
   }
 
-  function nextAt(currentSettings, current, limit) {
-    const times = (currentSettings.listedItemsEnabled ? currentSettings.watches.slice(0, limit) : []).filter(watch => watch.enabled).flatMap(watch => {
+  function nextAt(currentSettings, current, _limit) {
+    const times = (currentSettings.listedItemsEnabled ? currentSettings.watches : []).filter(watch => watch.enabled).flatMap(watch => {
       const result = current.results[watch.uid] || {};
       return watch.marketType === 'points'
         ? [Number(result.points?.nextCheckAt) || Date.now()]
@@ -223,7 +239,8 @@
     });
     if (currentSettings.weaverPricelistEnabled) {
       times.push(Number(current.weaverPricelist?.nextCheckAt) || Date.now());
-      for (const item of MARKET.weaverPricelistItems(current.weaverPricelist?.items || [])) times.push(Number(current.pricelistResults?.[item.itemId]?.bazaar?.nextCheckAt) || Date.now());
+      const activeIds = new Set(currentSettings.weaverActiveItemIds);
+      for (const item of MARKET.weaverPricelistItems(current.weaverPricelist?.items || []).filter(row => activeIds.has(row.itemId))) times.push(Number(current.pricelistResults?.[item.itemId]?.bazaar?.nextCheckAt) || Date.now());
     }
     return times.length ? Math.min(...times) : 0;
   }
@@ -254,7 +271,7 @@
   async function scheduleAlarm(when = 0) { await chrome.alarms.create(ALARM, { when:Math.max(Date.now() + 1_000, Number(when) || Date.now() + 60_000) }); }
 
   async function buildStatus(currentSettings, current, access) {
-    const usage = await SLINK.core.tornApiLimiter.getUsage(); const allowed = currentSettings.watches.slice(0, access.limit || 0);
+    const usage = await SLINK.core.tornApiLimiter.getUsage(); const allowed = currentSettings.watches.filter(watch => watch.enabled);
     const nextRefreshAt = nextAt(currentSettings, current, access.limit || 0); await scheduleAlarm(nextRefreshAt);
     const dismissals = await activeDismissals();
     const opportunities = MARKET.opportunityRows({ ...current, catalog:current.catalog }, { ...currentSettings, watches:allowed })
@@ -262,7 +279,8 @@
       .filter(row => !dismissals[row.dismissKey]);
     return { configured:Boolean((await SLINK.services.permissionAccess.settings()).enabled), permitted:access.permitted, marketWatchLimit:access.limit,
       settings:currentSettings, catalog:current.catalog, results:current.results,
-      weaverPricelist:{ userId:current.weaverPricelist?.userId || null, fetchedAt:Number(current.weaverPricelist?.fetchedAt) || 0, itemCount:MARKET.weaverPricelistItems(current.weaverPricelist?.items || []).length, lastError:String(current.weaverPricelist?.lastError || '') },
+      activeWatchCount:MARKET.activeSlotCount(currentSettings), savedWatchCount:currentSettings.watches.length,
+      weaverPricelist:{ userId:current.weaverPricelist?.userId || null, fetchedAt:Number(current.weaverPricelist?.fetchedAt) || 0, itemCount:MARKET.weaverPricelistItems(current.weaverPricelist?.items || []).length, items:MARKET.weaverPricelistItems(current.weaverPricelist?.items || []), lastError:String(current.weaverPricelist?.lastError || '') },
       opportunities,
       fetchedAt:current.fetchedAt, nextRefreshAt, lastError:current.lastError, tornApiUsage:usage };
   }
@@ -270,16 +288,19 @@
   async function refresh(force = false) {
     if (refreshing) return refreshing;
     refreshing = (async () => {
-      const currentSettings = await settings(); const access = await accessState({ authenticate:true }); const current = await runtime();
+      let currentSettings = await settings(); const access = await accessState({ authenticate:true }); const current = await runtime();
       if (!access.permitted) throw new Error('Your account does not have a SLINK Market Watch tier.');
       if (!currentSettings.enabled) return buildStatus(currentSettings, current, access);
       const key = await tornKey();
       try {
         if (currentSettings.watches.some(watch => watch.marketType === 'item') || currentSettings.weaverPricelistEnabled) current.catalog = await ensureCatalog({ key, current });
-        const allowed = currentSettings.watches.slice(0, access.limit); const valid = new Set(allowed.map(watch => watch.uid));
+        assertActiveSlotLimit(currentSettings, access);
+        const allowed = currentSettings.watches.filter(watch => watch.enabled); const valid = new Set(allowed.map(watch => watch.uid));
         current.results = Object.fromEntries(Object.entries(current.results).filter(([uid]) => valid.has(uid)));
-        if (currentSettings.weaverPricelistEnabled) await syncWeaverPricelist(current, access, force);
+        if (currentSettings.weaverPricelistEnabled) { await syncWeaverPricelist(current, access, force); currentSettings = await pruneWeaverSelection(currentSettings, current); }
         else current.pricelistResults = {};
+        const activePricelistIds = new Set(currentSettings.weaverActiveItemIds.map(String));
+        current.pricelistResults = Object.fromEntries(Object.entries(current.pricelistResults).filter(([itemId]) => activePricelistIds.has(String(itemId))));
         const ordered = [...(currentSettings.listedItemsEnabled ? allowed : [])].sort((a, b) => MARKET.PRIORITIES[priorityFor(a, current.results[a.uid])] - MARKET.PRIORITIES[priorityFor(b, current.results[b.uid])]);
         let tornBlockedUntil = 0;
         for (const watch of ordered) {
@@ -319,6 +340,8 @@
 
   async function saveSettings(input = {}) {
     const previous = await settings(); const next = MARKET.normalizeSettings({ ...previous, ...input, watches:previous.watches });
+    const access = await accessState({ authenticate:MARKET.activeSlotCount(next) > 0 });
+    assertActiveSlotLimit(next, access);
     await SLINK.core.storage.set(KEYS.settings, next); return publicStatus(false);
   }
 
@@ -335,9 +358,13 @@
     const duplicate = previous.watches.findIndex(row => row.marketType === watch.marketType && (watch.marketType === 'points' || row.itemId === watch.itemId) && row.uid !== watch.uid);
     if (duplicate >= 0) throw new Error(`${watch.label} is already watched.`);
     if (index >= 0) previous.watches[index] = watch;
-    else { if (previous.watches.length >= access.limit) throw new Error(`Your permission allows ${access.limit} Market Watch items.`); previous.watches.push(watch); }
+    else {
+      if (previous.watches.length >= MARKET.SAVED_WATCH_LIMIT) throw new Error(`Market Watch keeps up to ${MARKET.SAVED_WATCH_LIMIT} saved entries in this browser.`);
+      previous.watches.push(watch);
+    }
     previous.lastPriority = watch.priority;
-    await SLINK.core.storage.set(KEYS.settings, MARKET.normalizeSettings(previous));
+    const normalized = MARKET.normalizeSettings(previous); assertActiveSlotLimit(normalized, access);
+    await SLINK.core.storage.set(KEYS.settings, normalized);
     const current = await runtime(); delete current.results[watch.uid]; await saveRuntime(current); return refresh(false);
   }
 
@@ -366,7 +393,7 @@
       settings(), runtime(), accessState(), SLINK.core.storage.get(KEYS.soundState, { activeKeys:[], pendingKeys:[] }),
       SLINK.core.storage.get('adhd.settings.v1', {})
     ]);
-    const allowed = currentSettings.watches.slice(0, access.limit || 0);
+    const allowed = currentSettings.watches.filter(watch => watch.enabled);
     const dismissals = await activeDismissals();
     const opportunities = MARKET.opportunityRows({ ...current, catalog:current.catalog }, { ...currentSettings, watches:allowed })
       .map(row => ({ ...row, dismissKey:dealDismissKey(row) }))
@@ -399,11 +426,26 @@
   }
 
   async function syncPricelist() {
-    const currentSettings = await settings(); const access = await accessState({ authenticate:true, force:true }); const current = await runtime();
+    let currentSettings = await settings(); const access = await accessState({ authenticate:true, force:true }); const current = await runtime();
     if (!access.permitted) throw new Error('A signed SLINK Market Watch permission is required.');
-    const synced = await syncWeaverPricelist(current, access, true); await saveRuntime(current);
+    const synced = await syncWeaverPricelist(current, access, true); currentSettings = await pruneWeaverSelection(currentSettings, current); await saveRuntime(current);
     if (synced.lastError) throw new Error(synced.lastError);
     return currentSettings.weaverPricelistEnabled ? refresh(false) : buildStatus(currentSettings, current, access);
+  }
+
+  async function saveWeaverSelection(input = {}) {
+    const access = await accessState({ authenticate:true });
+    if (!access.permitted) throw new Error('A signed SLINK Market Watch permission is required.');
+    const current = await runtime(); const available = new Set(MARKET.weaverPricelistItems(current.weaverPricelist?.items || []).map(item => item.itemId));
+    const selected = [...new Set((Array.isArray(input?.itemIds) ? input.itemIds : []).map(value => Math.trunc(Number(value) || 0)).filter(value => available.has(value)))];
+    const previous = await settings();
+    const candidate = MARKET.normalizeSettings({ ...previous, weaverActiveItemIds:selected });
+    assertActiveSlotLimit({ ...candidate, weaverPricelistEnabled:true }, access);
+    await SLINK.core.storage.set(KEYS.settings, candidate);
+    const activeIds = new Set(selected.map(String));
+    current.pricelistResults = Object.fromEntries(Object.entries(current.pricelistResults).filter(([itemId]) => activeIds.has(String(itemId))));
+    await saveRuntime(current);
+    return candidate.weaverPricelistEnabled ? refresh(false) : buildStatus(candidate, current, access);
   }
 
   async function ensureAlarm() { if (!await chrome.alarms.get(ALARM)) await scheduleAlarm(Date.now() + 1_000); return chrome.alarms.get(ALARM); }
@@ -411,6 +453,7 @@
     'market.status':payload => publicStatus(payload?.refreshIfDue !== false), 'market.refresh':() => refresh(true), 'market.settings.save':saveSettings,
     'market.permissions.refresh':refreshPermissions,
     'market.weaver.pricelist.sync':syncPricelist,
+    'market.weaver.selection.save':saveWeaverSelection,
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },
     'market.watch.save':upsertWatch, 'market.watch.remove':removeWatch, 'market.deal.dismiss':dismissDeal,
     'market.sound.claim':claimSound, 'market.sound.ack':acknowledgeSound
