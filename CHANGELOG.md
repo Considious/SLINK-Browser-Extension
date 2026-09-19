@@ -2,6 +2,14 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.20 — 2026-09-19
+
+### Fixed
+
+- The weekly Google Play Points reminder no longer sends every device to the non-claimable Play website.
+- Android now receives a direct Play Store app intent, Windows receives the correct Google Play Games claim path, and iOS clearly explains that claiming requires Android or Windows.
+- Every platform retains a link to Google's current official claiming instructions.
+
 ## 0.18.19 — 2026-09-19
 
 ### Fixed

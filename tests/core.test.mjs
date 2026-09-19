@@ -81,7 +81,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.19', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.20', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -189,7 +189,12 @@ const adhdSettings = SLINK.core.adhd.defaultSettings();
 assert(adhdSettings.openLinksInNewTab === false, 'Torn alert links must default to the current tab.');
 assert(SLINK.core.adhd.normalizeSettings({ openLinksInNewTab:true }).openLinksInNewTab === true, 'New-tab preference was not normalized.');
 const weeklyReminderNow = Date.now();
-assert(SLINK.core.adhd.buildAlerts({ fetchedAt:weeklyReminderNow, data:{} }, adhdSettings, weeklyReminderNow).find(alert => alert.id === 'googlePlayPoints')?.links?.[0]?.[1] === 'https://play.google.com/store/points', 'The initial Google Play Points reminder or shared desktop/mobile link is missing.');
+const androidWeeklyPrize = SLINK.core.adhd.buildAlerts({ fetchedAt:weeklyReminderNow, data:{} }, adhdSettings, weeklyReminderNow, { userAgent:'Mozilla/5.0 (Linux; Android 15)' }).find(alert => alert.id === 'googlePlayPoints');
+assert(androidWeeklyPrize?.links?.[0]?.[1].startsWith('intent://play.google.com/store/points') && androidWeeklyPrize.links[0][1].includes('package=com.android.vending'), 'Android Google Play Points does not target the Play Store app.');
+const windowsWeeklyPrize = SLINK.core.adhd.buildAlerts({ fetchedAt:weeklyReminderNow, data:{} }, adhdSettings, weeklyReminderNow, { userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }).find(alert => alert.id === 'googlePlayPoints');
+assert(windowsWeeklyPrize?.detail.includes('Google Play Games') && windowsWeeklyPrize?.links?.[0]?.[1] === SLINK.core.adhd.GOOGLE_PLAY_POINTS_HELP_URL, 'Windows Google Play Points instructions are missing.');
+const iosWeeklyPrize = SLINK.core.adhd.buildAlerts({ fetchedAt:weeklyReminderNow, data:{} }, adhdSettings, weeklyReminderNow, { userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' }).find(alert => alert.id === 'googlePlayPoints');
+assert(iosWeeklyPrize?.detail.includes('does not support claiming'), 'iOS Google Play Points limitation is not explained.');
 const claimedWeeklyPrize = SLINK.core.adhd.normalizeSettings({ googlePlayPointsClaimedAt:weeklyReminderNow });
 assert(!SLINK.core.adhd.buildAlerts({ fetchedAt:weeklyReminderNow, data:{} }, claimedWeeklyPrize, weeklyReminderNow + SLINK.core.adhd.WEEK_MS - 1).some(alert => alert.id === 'googlePlayPoints'), 'The Google Play Points reminder returned before seven full days.');
 assert(SLINK.core.adhd.buildAlerts({ fetchedAt:weeklyReminderNow, data:{} }, claimedWeeklyPrize, weeklyReminderNow + SLINK.core.adhd.WEEK_MS).some(alert => alert.id === 'googlePlayPoints'), 'The Google Play Points reminder did not reset after seven days.');

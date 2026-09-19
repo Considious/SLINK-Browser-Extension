@@ -10,7 +10,8 @@
   const MARKET_SCOPE_PREFIX = 'slink.adhd.marketwatch.';
   const MARKET_TIERS = Object.freeze([5, 10, 15, 20, 25, 30, 35, 40]);
   const ARMORY_URL = 'https://www.torn.com/factions.php?step=your#/tab=armoury';
-  const GOOGLE_PLAY_POINTS_URL = 'https://play.google.com/store/points';
+  const GOOGLE_PLAY_POINTS_HELP_URL = 'https://support.google.com/googleplay/answer/9077192';
+  const GOOGLE_PLAY_POINTS_ANDROID_INTENT = `intent://play.google.com/store/points#Intent;scheme=https;package=com.android.vending;S.browser_fallback_url=${encodeURIComponent(GOOGLE_PLAY_POINTS_HELP_URL)};end`;
   const CITY_SHOP_TARGETS = Object.freeze([
     Object.freeze({ id:392, label:'Pepper Spray', shop:"Big Al's Gun Shop", href:'https://www.torn.com/bigalgunshop.php' }),
     Object.freeze({ id:731, label:'Empty Blood Bags', shop:'Pharmacy', href:'https://www.torn.com/shops.php?step=pharmacy' }),
@@ -294,6 +295,27 @@
     return camera?.disabled === true && guard?.disabled === true;
   }
 
+  function googlePlayPointsAccess(options = {}) {
+    const userAgent = String(options.userAgent || global.navigator?.userAgent || '');
+    const maxTouchPoints = Number(options.maxTouchPoints ?? global.navigator?.maxTouchPoints) || 0;
+    if (/android/i.test(userAgent)) return {
+      detail:'Open the Play Store app, then use Profile → Play Points → Perks. If the app opens its home page, follow that same path.',
+      links:[['Open Play Store app',GOOGLE_PLAY_POINTS_ANDROID_INTENT],['Official instructions',GOOGLE_PLAY_POINTS_HELP_URL]]
+    };
+    if (/windows/i.test(userAgent)) return {
+      detail:'Open Google Play Games on your PC, then choose Play Points → Perks → Claim. Google does not provide a reliable web link into that screen.',
+      links:[['Official PC instructions',GOOGLE_PLAY_POINTS_HELP_URL]]
+    };
+    if (/iphone|ipad|ipod/i.test(userAgent) || (/macintosh/i.test(userAgent) && maxTouchPoints > 1)) return {
+      detail:'Google does not support claiming the weekly prize on iPhone or iPad. Use the Play Store app on Android or Google Play Games on Windows.',
+      links:[['Official claiming instructions',GOOGLE_PLAY_POINTS_HELP_URL]]
+    };
+    return {
+      detail:'Claim in the Play Store app on Android or Google Play Games on Windows, then mark it claimed here.',
+      links:[['Official claiming instructions',GOOGLE_PLAY_POINTS_HELP_URL]]
+    };
+  }
+
   function buildAlerts(snapshot = {}, settingsInput = {}, now = Date.now(), options = {}) {
     const settings = normalizeSettings(settingsInput);
     const body = snapshot.data || {};
@@ -308,6 +330,7 @@
     const refills = body.refills || {};
     const casino = body.casino || {};
     const readyStocks = stockBenefitsReady(body.stocks, snapshot.stockCatalog);
+    const playPoints = googlePlayPointsAccess(options);
     const playerAddiction = addictionPercentFromBattleStats(body);
     const travelSeconds = Number(travel?.arrival_at) * 1000 > now
       ? Math.ceil((Number(travel.arrival_at) * 1000 - now) / 1000)
@@ -346,7 +369,7 @@
       { id:'energyRefill', active:refillUsed(refills, 'energy') === false, title:'Energy refill is unused', detail:'Your daily point refill is still available.', tone:'daily', links:[['Points','https://www.torn.com/points.php'],['Faction Armory',ARMORY_URL]] },
       { id:'nerveRefill', active:refillUsed(refills, 'nerve') === false, title:'Nerve refill is unused', detail:'Your daily point refill is still available.', tone:'daily', links:[['Points','https://www.torn.com/points.php'],['Faction Armory',ARMORY_URL]] },
       { id:'stockBenefits', active:readyStocks.length > 0, title:readyStocks.length === 1 ? 'A stock benefit is ready' : `${readyStocks.length} stock benefits are ready`, detail:readyStocks.map(stock => stock.name ? `${stock.name}${stock.acronym ? ` (${stock.acronym})` : ''}` : stock.acronym || `Stock ${stock.id}`).join(', '), tone:'ready', links:[['Stock market','https://www.torn.com/page.php?sid=stocks']] },
-      { id:'googlePlayPoints', active:Number(settings.googlePlayPointsClaimedAt || 0) + WEEK_MS <= now, title:'Claim your weekly Google Play Points prize', detail:'Open Google Play Points, claim the weekly prize, then mark it claimed here. This reminder returns seven days after confirmation.', tone:'daily', links:[['Open Google Play Points',GOOGLE_PLAY_POINTS_URL]] },
+      { id:'googlePlayPoints', active:Number(settings.googlePlayPointsClaimedAt || 0) + WEEK_MS <= now, title:'Claim your weekly Google Play Points prize', detail:`${playPoints.detail} This reminder returns seven days after confirmation.`, tone:'daily', links:playPoints.links },
       { id:'playerAddiction', active:playerAddiction !== null && playerAddiction >= settings.playerAddictionThreshold, title:'Player addiction needs attention', detail:`${playerAddiction ?? 0}% battle-stat penalty — alert threshold ${settings.playerAddictionThreshold}%`, tone:'urgent', links:[['Travel','https://www.torn.com/travelagency.php']] },
       { id:'clusterRing', active:clusterRingReady(snapshot.cluster), title:'Cluster Ring security window is open', detail:'Torn reports the Jewelry Store cameras and guard are disabled. Shoplifting skill 100 and 0% Jewelry Store notoriety are still required.', tone:'urgent', links:[['Shoplift','https://www.torn.com/page.php?sid=crimes#/shoplifting']] },
       ...cityStockAlerts
@@ -422,7 +445,8 @@
     ALERT_SCOPE,
     CITY_SHOP_TARGETS,
     DAY_MS,
-    GOOGLE_PLAY_POINTS_URL,
+    GOOGLE_PLAY_POINTS_ANDROID_INTENT,
+    GOOGLE_PLAY_POINTS_HELP_URL,
     MARKET_SCOPE_PREFIX,
     MARKET_TIERS,
     buildAlerts,
