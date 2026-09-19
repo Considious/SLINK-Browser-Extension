@@ -22,6 +22,8 @@
   let dismissedRetals = {};
   let pendingCustomSoundDataUrl = null;
   let soundClaiming = false;
+  let pendingAdhdSoundClaim = null;
+  let pendingMarketSoundClaim = null;
   let warTargetFilters = { minFF:1, maxFF:3, status:'all', sort:'availability' };
   const warLeaderClientId = `war-dashboard:${globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
   const INSIDE_WINDOWS = Object.freeze([[0, 100], [200, 250], [450, 500], [950, 1000], [2350, 2500], [4850, 5000], [9900, 10000]]);
@@ -545,6 +547,7 @@
     byId('market-error').hidden = !market.lastError;
     byId('market-show-in-torn').checked = settings.showInTorn;
     byId('market-quick-buy').checked = settings.quickBuyEnabled;
+    byId('market-alert-sound').checked = settings.soundEnabled;
     byId('market-listed-items').checked = settings.listedItemsEnabled;
     byId('market-weaver-pricelist').checked = settings.weaverPricelistEnabled;
     byId('market-weaver-source-order').value = settings.weaverSourceOrder;
@@ -585,6 +588,7 @@
       actions.append(link, dismiss); card.append(copy, actions); return card;
     }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:market.fetchedAt ? 'No watched listing is currently below its target.' : 'Refresh after adding a watch.' })]));
     updateMarketClock();
+    void claimMarketSound();
   }
 
   function meritProgressElement(progress) {
@@ -670,9 +674,42 @@
     soundClaiming = true;
     try {
       const claim = await SLINK.core.messaging.send('adhd.sound.claim');
-      if (claim?.play) await SLINK.core.adhd.playNotificationSound(claim);
+      if (claim?.play) pendingAdhdSoundClaim = claim;
+      if (pendingAdhdSoundClaim) {
+        await SLINK.core.adhd.playNotificationSound(pendingAdhdSoundClaim);
+        await SLINK.core.messaging.send('adhd.sound.ack', { alertIds:pendingAdhdSoundClaim.alertIds || [] });
+        pendingAdhdSoundClaim = null;
+      }
     } catch {}
     finally { soundClaiming = false; }
+  }
+
+  async function claimMarketSound() {
+    try {
+      const claim = await SLINK.core.messaging.send('market.sound.claim');
+      if (claim?.play) pendingMarketSoundClaim = claim;
+      if (pendingMarketSoundClaim) {
+        await SLINK.core.adhd.playNotificationSound(pendingMarketSoundClaim);
+        await SLINK.core.messaging.send('market.sound.ack', { dealKeys:pendingMarketSoundClaim.dealKeys || [] });
+        pendingMarketSoundClaim = null;
+      }
+    } catch {}
+  }
+
+  function unlockAndRetrySounds(event) {
+    if (!event.isTrusted) return;
+    void SLINK.core.adhd.unlockNotificationSound().then(async () => {
+      if (pendingAdhdSoundClaim) {
+        await SLINK.core.adhd.playNotificationSound(pendingAdhdSoundClaim);
+        await SLINK.core.messaging.send('adhd.sound.ack', { alertIds:pendingAdhdSoundClaim.alertIds || [] });
+        pendingAdhdSoundClaim = null;
+      }
+      if (pendingMarketSoundClaim) {
+        await SLINK.core.adhd.playNotificationSound(pendingMarketSoundClaim);
+        await SLINK.core.messaging.send('market.sound.ack', { dealKeys:pendingMarketSoundClaim.dealKeys || [] });
+        pendingMarketSoundClaim = null;
+      }
+    }).catch(() => {});
   }
 
   function renderLeveling() {
@@ -1358,6 +1395,7 @@
       market = await SLINK.core.messaging.send('market.settings.save', {
         showInTorn:byId('market-show-in-torn').checked,
         quickBuyEnabled:byId('market-quick-buy').checked,
+        soundEnabled:byId('market-alert-sound').checked,
         listedItemsEnabled:byId('market-listed-items').checked,
         weaverPricelistEnabled:byId('market-weaver-pricelist').checked,
         weaverSourceOrder:byId('market-weaver-source-order').value
@@ -1532,6 +1570,8 @@
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
   }, 30_000);
   setInterval(() => { updateAdhdClock(); updateMarketClock(); updateMeritsClock(); }, 1_000);
+  document.addEventListener('pointerdown', unlockAndRetrySounds, true);
+  document.addEventListener('keydown', unlockAndRetrySounds, true);
   addEventListener('pagehide', () => { void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {}); }, { once:true });
 })();
 

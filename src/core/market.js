@@ -30,7 +30,7 @@
 
   function defaultSettings() {
     return {
-      enabled:true, showInTorn:true, quickBuyEnabled:true, lastPriority:'normal',
+      enabled:true, showInTorn:true, quickBuyEnabled:true, soundEnabled:true, lastPriority:'normal',
       listedItemsEnabled:true, weaverPricelistEnabled:false, weaverSourceOrder:'listed-first', watches:[]
     };
   }
@@ -59,6 +59,7 @@
       enabled:input?.enabled !== false,
       showInTorn:input?.showInTorn !== false,
       quickBuyEnabled:input?.quickBuyEnabled !== false,
+      soundEnabled:input?.soundEnabled !== false,
       lastPriority:normalizePriority(input?.lastPriority),
       listedItemsEnabled:input?.listedItemsEnabled !== false,
       weaverPricelistEnabled:input?.weaverPricelistEnabled === true,

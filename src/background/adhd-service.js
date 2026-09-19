@@ -277,22 +277,35 @@
 
   async function claimSound() {
     const [currentSettings, currentRuntime, previous] = await Promise.all([
-      settings(), runtime(), SLINK.core.storage.get(KEYS.soundState, { activeIds:[] })
+      settings(), runtime(), SLINK.core.storage.get(KEYS.soundState, { activeIds:[], pendingIds:[] })
     ]);
     const candidates = currentRuntime.snapshot
       ? ADHD.buildAlerts(currentRuntime.snapshot, currentSettings, Date.now(), { includeHidden:true })
         .filter(alert => currentSettings.soundEnabled[alert.id] === true)
       : [];
     const activeIds = candidates.map(alert => alert.id).sort();
-    const oldIds = new Set(Array.isArray(previous?.activeIds) ? previous.activeIds : []);
-    const newAlerts = candidates.filter(alert => !oldIds.has(alert.id));
-    await SLINK.core.storage.set(KEYS.soundState, { activeIds, updatedAt:Date.now() });
+    const activeSet = new Set((Array.isArray(previous?.activeIds) ? previous.activeIds : []).filter(id => activeIds.includes(id)));
+    const pendingSet = new Set((Array.isArray(previous?.pendingIds) ? previous.pendingIds : []).filter(id => activeIds.includes(id)));
+    candidates.forEach(alert => { if (!activeSet.has(alert.id)) pendingSet.add(alert.id); });
+    const pendingIds = [...pendingSet].sort();
+    const now = Date.now();
+    const play = pendingIds.length > 0 && now - Number(previous?.claimedAt || 0) >= 5_000;
+    await SLINK.core.storage.set(KEYS.soundState, { activeIds:[...activeSet].sort(), pendingIds, claimedAt:play ? now : Number(previous?.claimedAt) || 0, updatedAt:now });
     return {
-      play:newAlerts.length > 0,
-      alertIds:newAlerts.map(alert => alert.id),
+      play,
+      alertIds:pendingIds,
       soundChoice:currentSettings.soundChoice,
       customSoundDataUrl:currentSettings.soundChoice === 'custom' ? currentSettings.customSoundDataUrl : ''
     };
+  }
+
+  async function acknowledgeSound(input = {}) {
+    const acknowledged = new Set(Array.isArray(input?.alertIds) ? input.alertIds.map(String) : []);
+    const previous = await SLINK.core.storage.get(KEYS.soundState, { activeIds:[], pendingIds:[] });
+    const activeIds = [...new Set([...(Array.isArray(previous?.activeIds) ? previous.activeIds : []), ...acknowledged])].sort();
+    const pendingIds = (Array.isArray(previous?.pendingIds) ? previous.pendingIds : []).filter(id => !acknowledged.has(id));
+    await SLINK.core.storage.set(KEYS.soundState, { activeIds, pendingIds, claimedAt:pendingIds.length ? Number(previous?.claimedAt) || 0 : 0, updatedAt:Date.now() });
+    return { ok:true };
   }
 
   async function publicStatus(refreshIfDue = true) {
@@ -337,7 +350,8 @@
     'adhd.city.acknowledge':acknowledgeCity,
     'adhd.google-play-points.acknowledge':acknowledgeGooglePlayPoints,
     'adhd.alert.snooze':snooze,
-    'adhd.sound.claim':claimSound
+    'adhd.sound.claim':claimSound,
+    'adhd.sound.ack':acknowledgeSound
   });
 
   SLINK.define('services', 'adhd', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, routes }));

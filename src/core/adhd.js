@@ -405,6 +405,27 @@
     return Math.max(now + 60_000, Math.min(...candidates.filter(Number.isFinite)));
   }
 
+  let notificationAudioContext = null;
+
+  async function notificationContext() {
+    const AudioContextClass = global.AudioContext || global.webkitAudioContext;
+    if (!AudioContextClass) throw new Error('Audio playback is unavailable in this browser context.');
+    if (!notificationAudioContext || notificationAudioContext.state === 'closed') notificationAudioContext = new AudioContextClass();
+    if (notificationAudioContext.state !== 'running') await notificationAudioContext.resume();
+    if (notificationAudioContext.state !== 'running') throw new Error('Alert sound is waiting for a click in Torn before Chrome will allow playback.');
+    return notificationAudioContext;
+  }
+
+  async function unlockNotificationSound() {
+    const context = await notificationContext();
+    const gain = context.createGain();
+    gain.gain.value = 0.0001;
+    const oscillator = context.createOscillator();
+    oscillator.connect(gain); gain.connect(context.destination);
+    oscillator.start(); oscillator.stop(context.currentTime + 0.01);
+    return true;
+  }
+
   async function playNotificationSound(input = {}) {
     const choice = String(input.soundChoice || 'chime');
     const custom = String(input.customSoundDataUrl || '');
@@ -415,9 +436,7 @@
       await audio.play();
       return;
     }
-    const AudioContextClass = global.AudioContext || global.webkitAudioContext;
-    if (!AudioContextClass) throw new Error('Audio playback is unavailable in this browser context.');
-    const context = new AudioContextClass();
+    const context = await notificationContext();
     const patterns = {
       chime:[[0, 660, 0.13], [0.12, 880, 0.2]],
       bell:[[0, 880, 0.12], [0.17, 660, 0.15], [0.34, 880, 0.2]],
@@ -436,7 +455,6 @@
       oscillator.connect(gain); gain.connect(context.destination);
       oscillator.start(start + offset); oscillator.stop(start + offset + duration + 0.02);
     }
-    global.setTimeout(() => { void context.close(); }, 1_500);
   }
 
   SLINK.define('core', 'adhd', Object.freeze({
@@ -454,14 +472,15 @@
     clusterRingAchieved,
     clusterRingReady,
     cityShopTargetStock,
+    normalizeSettings,
     cityProgress,
     defaultSettings,
     marketWatchLimit,
     nextRefreshAt,
     nextUtcDay,
-    normalizeSettings,
     personalStat,
     playNotificationSound,
+    unlockNotificationSound,
     raceActive,
     refillUsed,
     stockBenefitsReady,

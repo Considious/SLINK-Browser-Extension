@@ -26,6 +26,7 @@
       let clockTimer = null;
       let current = null;
       let chatShareArm = null;
+      let pendingSoundClaim = null;
 
       ui.setModuleStyles(`
         .slink-adhd-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
@@ -36,10 +37,33 @@
         .slink-adhd-alert strong,.slink-adhd-alert span{display:block}.slink-adhd-alert span{margin-top:2px;color:var(--slink-muted)}
         .slink-adhd-links{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.slink-adhd-links a,.slink-adhd-links button{display:inline-flex;align-items:center;justify-content:center;min-height:28px;padding:4px 8px;border:1px solid var(--slink-border);border-radius:6px;background:var(--slink-bg);color:var(--slink-text);box-shadow:inset 0 0 0 1px rgba(255,255,255,.035);font:inherit;text-decoration:none;cursor:pointer}.slink-adhd-links a:hover,.slink-adhd-links button:hover{border-color:var(--slink-accent-alt);background:var(--slink-selected-bg);filter:brightness(1.12)}.slink-adhd-links button:disabled{cursor:not-allowed;opacity:.48;filter:none}
         .slink-adhd-empty{padding:16px;border-radius:7px;background:var(--slink-bg-control);color:var(--slink-muted);text-align:center}
+        .slink-sound-toggle{display:flex;align-items:center;gap:6px;margin:7px 0;color:var(--slink-text);font-size:12px}.slink-sound-toggle input{margin:0}
       `);
 
       function focusedTornPage() {
         return document.visibilityState === 'visible' && document.hasFocus();
+      }
+
+      async function playPendingSound() {
+        if (!pendingSoundClaim) return false;
+        const claim = pendingSoundClaim;
+        await SLINK.core.adhd.playNotificationSound(claim);
+        await SLINK.core.messaging.send('adhd.sound.ack', { alertIds:claim.alertIds || [] });
+        if (pendingSoundClaim === claim) pendingSoundClaim = null;
+        return true;
+      }
+
+      async function claimAlertSound() {
+        try {
+          const claim = await SLINK.core.messaging.send('adhd.sound.claim');
+          if (claim?.play) pendingSoundClaim = claim;
+          await playPendingSound();
+        } catch {}
+      }
+
+      function unlockAndRetrySound(event) {
+        if (!event.isTrusted) return;
+        void SLINK.core.adhd.unlockNotificationSound().then(playPendingSound).catch(() => {});
       }
 
       async function copyAlertText(value) {
@@ -189,6 +213,18 @@
           cell.append(strong, small); summary.append(cell);
         }
         root.append(summary);
+        const soundToggle = document.createElement('label'); soundToggle.className = 'slink-sound-toggle';
+        const soundInput = document.createElement('input'); soundInput.type = 'checkbox';
+        const normalizedSettings = SLINK.core.adhd.normalizeSettings(status?.settings || {});
+        soundInput.checked = Object.values(normalizedSettings.soundEnabled).some(Boolean);
+        soundInput.addEventListener('change', async () => {
+          soundInput.disabled = true;
+          try {
+            const soundEnabled = Object.fromEntries(Object.keys(normalizedSettings.soundEnabled).map(id => [id, soundInput.checked]));
+            render(await SLINK.core.messaging.send('adhd.settings.save', { soundEnabled }));
+          } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); soundInput.disabled = false; }
+        });
+        soundToggle.append(soundInput, document.createTextNode('Play alert sounds')); root.append(soundToggle);
         const list = document.createElement('div');
         list.className = 'slink-adhd-list';
         if (!alerts.length) {
@@ -262,10 +298,7 @@
       async function load(refreshIfDue = true) {
         try {
           render(await SLINK.core.messaging.send('adhd.status', { refreshIfDue }));
-          try {
-            const claim = await SLINK.core.messaging.send('adhd.sound.claim');
-            if (claim?.play) await SLINK.core.adhd.playNotificationSound(claim);
-          } catch {}
+          await claimAlertSound();
         }
         catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
       }
@@ -275,10 +308,7 @@
           event.currentTarget.disabled = true;
           try {
             render(await SLINK.core.messaging.send('adhd.refresh'));
-            try {
-              const claim = await SLINK.core.messaging.send('adhd.sound.claim');
-              if (claim?.play) await SLINK.core.adhd.playNotificationSound(claim);
-            } catch {}
+            await claimAlertSound();
           }
           catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
           finally { event.currentTarget.disabled = false; }
@@ -293,6 +323,8 @@
         } }
       ]);
       await load(false);
+      document.addEventListener('pointerdown', unlockAndRetrySound, true);
+      document.addEventListener('keydown', unlockAndRetrySound, true);
       global.addEventListener('slink:api-usage', updateApiUsage);
       timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
@@ -302,6 +334,8 @@
           if (timer) global.clearInterval(timer);
           if (clockTimer) global.clearInterval(clockTimer);
           global.removeEventListener('slink:api-usage', updateApiUsage);
+          document.removeEventListener('pointerdown', unlockAndRetrySound, true);
+          document.removeEventListener('keydown', unlockAndRetrySound, true);
           ui.setBubbleAlert('', 0, 'adhd');
           ui.setAlertCount('adhd', 0);
         },

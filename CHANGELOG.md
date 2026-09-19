@@ -2,6 +2,18 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.21 — 2026-09-19
+
+### Fixed
+
+- Market and Bazaar highlighting now uses the proven ADHD Dashboard listing detection, including Bazaar grid cards and Item Market seller rows whose native Buy button stays disabled until quantity is entered.
+- SLINK Buy now remains anchored over the original purchase control through open, maximum-quantity, and confirmation stages instead of moving between Torn buttons or disappearing mid-purchase.
+- Regular Efficiency and Market Watch sounds now survive Chrome autoplay blocking and remain pending until Torn receives a user interaction and playback succeeds.
+
+### Added
+
+- Torn-side Efficiency Alerts and Market Watch now include visible sound toggles; Market Watch also has a matching persistent toggle in the dedicated dashboard.
+
 ## 0.18.20 — 2026-09-19
 
 ### Fixed

@@ -4,7 +4,7 @@
   const SLINK = global.SLINK_EXTENSION;
   const MARKET = SLINK.core.market;
   const ALARM = 'slink.market.watch';
-  const KEYS = Object.freeze({ settings:'market.settings.v1', runtime:'market.runtime.v1', dismissals:'market.dismissals.v1' });
+  const KEYS = Object.freeze({ settings:'market.settings.v1', runtime:'market.runtime.v1', dismissals:'market.dismissals.v1', soundState:'market.sound.state.v1' });
   const CATALOG_MAX_AGE_MS = 24 * 60 * 60_000;
   let refreshing = null;
 
@@ -361,6 +361,43 @@
     return publicStatus(false);
   }
 
+  async function claimSound() {
+    const [currentSettings, current, access, previous, adhdSettings] = await Promise.all([
+      settings(), runtime(), accessState(), SLINK.core.storage.get(KEYS.soundState, { activeKeys:[], pendingKeys:[] }),
+      SLINK.core.storage.get('adhd.settings.v1', {})
+    ]);
+    const allowed = currentSettings.watches.slice(0, access.limit || 0);
+    const dismissals = await activeDismissals();
+    const opportunities = MARKET.opportunityRows({ ...current, catalog:current.catalog }, { ...currentSettings, watches:allowed })
+      .map(row => ({ ...row, dismissKey:dealDismissKey(row) }))
+      .filter(row => !dismissals[row.dismissKey]);
+    const activeKeys = opportunities.map(row => row.dismissKey).sort();
+    const activeSet = new Set((Array.isArray(previous?.activeKeys) ? previous.activeKeys : []).filter(key => activeKeys.includes(key)));
+    const pendingSet = new Set((Array.isArray(previous?.pendingKeys) ? previous.pendingKeys : []).filter(key => activeKeys.includes(key)));
+    activeKeys.forEach(key => { if (!activeSet.has(key)) pendingSet.add(key); });
+    const pendingKeys = [...pendingSet].sort();
+    const now = Date.now();
+    const play = currentSettings.soundEnabled && pendingKeys.length > 0 && now - Number(previous?.claimedAt || 0) >= 5_000;
+    if (!currentSettings.soundEnabled) { activeKeys.forEach(key => activeSet.add(key)); pendingSet.clear(); }
+    await SLINK.core.storage.set(KEYS.soundState, { activeKeys:[...activeSet].sort(), pendingKeys:[...pendingSet].sort(), claimedAt:play ? now : Number(previous?.claimedAt) || 0, updatedAt:now });
+    const normalizedAdhd = SLINK.core.adhd.normalizeSettings(adhdSettings);
+    return {
+      play,
+      dealKeys:pendingKeys,
+      soundChoice:normalizedAdhd.soundChoice,
+      customSoundDataUrl:normalizedAdhd.soundChoice === 'custom' ? normalizedAdhd.customSoundDataUrl : ''
+    };
+  }
+
+  async function acknowledgeSound(input = {}) {
+    const acknowledged = new Set(Array.isArray(input?.dealKeys) ? input.dealKeys.map(String) : []);
+    const previous = await SLINK.core.storage.get(KEYS.soundState, { activeKeys:[], pendingKeys:[] });
+    const activeKeys = [...new Set([...(Array.isArray(previous?.activeKeys) ? previous.activeKeys : []), ...acknowledged])].sort();
+    const pendingKeys = (Array.isArray(previous?.pendingKeys) ? previous.pendingKeys : []).filter(key => !acknowledged.has(key));
+    await SLINK.core.storage.set(KEYS.soundState, { activeKeys, pendingKeys, claimedAt:pendingKeys.length ? Number(previous?.claimedAt) || 0 : 0, updatedAt:Date.now() });
+    return { ok:true };
+  }
+
   async function syncPricelist() {
     const currentSettings = await settings(); const access = await accessState({ authenticate:true, force:true }); const current = await runtime();
     if (!access.permitted) throw new Error('A signed SLINK Market Watch permission is required.');
@@ -375,7 +412,8 @@
     'market.permissions.refresh':refreshPermissions,
     'market.weaver.pricelist.sync':syncPricelist,
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },
-    'market.watch.save':upsertWatch, 'market.watch.remove':removeWatch, 'market.deal.dismiss':dismissDeal
+    'market.watch.save':upsertWatch, 'market.watch.remove':removeWatch, 'market.deal.dismiss':dismissDeal,
+    'market.sound.claim':claimSound, 'market.sound.ack':acknowledgeSound
   });
   SLINK.define('services', 'market', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, routes }));
 })(globalThis);

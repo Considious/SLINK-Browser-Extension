@@ -598,6 +598,10 @@ assert((await send('market.permissions.refresh')).data.marketWatchLimit === 40, 
 const firstMarketWatch = await send('market.watch.save', { itemId:1, maxPrice:90, priority:'normal', marketEnabled:true, bazaarEnabled:true });
 assert(firstMarketWatch.ok && firstMarketWatch.data.opportunities.length === 2, 'API-only Item Market and Weaver Bazaar results did not create watch opportunities.');
 assert(firstMarketWatch.data.opportunities.every(row => row.shareText.includes('shop sell $125')), 'Market Watch did not expose Torn shop sell pricing.');
+const firstMarketSound = await send('market.sound.claim');
+await send('market.sound.ack', { dealKeys:firstMarketSound.data.dealKeys });
+const repeatedMarketSound = await send('market.sound.claim');
+assert(firstMarketSound.ok && firstMarketSound.data.play && !repeatedMarketSound.data.play, 'A new Market Watch deal did not create exactly one sound claim.');
 const dismissedMarketKey = firstMarketWatch.data.opportunities[0].dismissKey;
 const dismissedMarketDeal = await send('market.deal.dismiss', { dismissKey:dismissedMarketKey });
 assert(dismissedMarketDeal.ok && dismissedMarketDeal.data.opportunities.length === 1
@@ -650,6 +654,7 @@ assert(Number(values.get('slink.adhd.settings.v1')?.googlePlayPointsClaimedAt) >
 assert(adhdCityCurrentRequests === 1 && adhdCityBaselineRequests === 1, 'City totals did not use the dedicated current and reset-baseline personalstats routes.');
 assert(adhdCityBaselineTimestamp === Math.floor(Date.now() / 86_400_000) * 86_400 - 1, 'City baseline was not requested from the final second before today\'s reset.');
 const firstSound = await send('adhd.sound.claim');
+await send('adhd.sound.ack', { alertIds:firstSound.data.alertIds });
 const repeatedSound = await send('adhd.sound.claim');
 assert(firstSound.ok && firstSound.data.play && firstSound.data.alertIds.includes('energyFull'), 'A newly active sound-enabled alert was not claimed.');
 assert(repeatedSound.ok && repeatedSound.data.play === false, 'An unchanged alert repeated its sound.');
