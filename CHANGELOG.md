@@ -2,6 +2,13 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.19 — 2026-09-19
+
+### Fixed
+
+- Combat once again shows only Leveling, War, and Stats, while Efficiency shows only Alerts, Market, and Merits.
+- Explicit hidden-state styling prevents the module button layout from overriding section visibility when all tabs are created during fast startup.
+
 ## 0.18.18 — 2026-09-19
 
 ### Fixed

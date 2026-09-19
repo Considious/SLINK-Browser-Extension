@@ -9,7 +9,7 @@
     :host { all: initial; ${SLINK.core.themes.cssVariables('slink-dark')} }
     * { box-sizing:border-box; }
     .window { position:fixed; z-index:999999; width:min(350px,calc(100vw - 16px)); overflow:hidden; border:1px solid var(--slink-border); border-radius:10px; background:var(--slink-bg); color:var(--slink-text); box-shadow:0 10px 28px var(--slink-shadow); font:12px/1.4 Arial,sans-serif; }
-    .window[hidden], .module-view[hidden] { display:none; }
+    .window[hidden], .module-view[hidden], .groups[hidden], .tabs[hidden], .tab[hidden] { display:none !important; }
     .bubble { position:fixed; right:12px; top:88px; z-index:999999; display:grid; place-items:center; width:50px; height:50px; padding:0; border:1px solid var(--slink-border); border-radius:50%; background:var(--slink-panel-bg); color:var(--slink-text); box-shadow:-3px 0 14px var(--slink-glow-left),3px 0 14px var(--slink-glow-right),0 8px 22px var(--slink-shadow); cursor:grab; touch-action:none; user-select:none; }
     .bubble[hidden] { display:none; }
     .bubble[data-dragging="true"] { cursor:grabbing; }

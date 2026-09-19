@@ -176,6 +176,7 @@ assert(dashboardSource.includes('efficiencyAlerts + marketDeals') && dashboardSo
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/player-stats.js')), 'Player Stats is missing from the in-Torn Combat tools.');
 assert(read('src/modules/player-stats.js').includes('grid-template-columns:minmax(0,1fr)'), 'The in-Torn Player Stats module can still force a two-column overflow layout.');
 assert(uiShellSource.includes('async function restore()'), 'Torn UI shell does not provide an in-place recovery path.');
+assert(uiShellSource.includes('.tab[hidden] { display:none !important; }'), 'Inactive Combat or Efficiency module tabs can override their hidden state.');
 assert(!uiShellSource.includes('Pop out') && !uiShellSource.includes('setPopped'), 'The broken Torn module pop-out control is still packaged.');
 assert(read('src/background/service-worker.js').includes("'ui.torn.restore'"), 'The extension cannot repush its GUI to open Torn tabs.');
 assert(read('src/background/service-worker.js').includes("'ui.dashboard.open'") && read('src/modules/adhd.js').includes("SLINK.core.messaging.send('ui.dashboard.open'"), 'The Torn Efficiency settings button is not routed through the background worker.');
