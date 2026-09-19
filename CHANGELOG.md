@@ -2,6 +2,18 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.17 — 2026-09-19
+
+### Added
+
+- Market Watch can now use manually listed SLINK watches, the signed-in player's public Weaver price list, or both, with a configurable source-check order and manual price-list sync.
+- Weaver price-list bulk thresholds are honored per seller quantity, while disabled prices and Weaver set pseudo-items are excluded.
+
+### Improved
+
+- Weaver Bazaar monitoring now downloads one all-item marketplace summary, compares it locally with every active SLINK and Weaver target, and requests seller details only for items whose lowest price can qualify.
+- Both target sources share each qualifying detail request, avoiding duplicate API calls when the same item appears in both lists.
+
 ## 0.18.16 — 2026-09-18
 
 ### Fixed

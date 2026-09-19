@@ -16,6 +16,7 @@
   const WEAVER_RATE_WINDOW_MS = 60_000;
   const WEAVER_MIN_REQUEST_SPACING_MS = Math.ceil(WEAVER_RATE_WINDOW_MS / WEAVER_RATE_LIMIT);
   const WEAVER_FALLBACK_BACKOFF_MS = 15 * 60_000;
+  const WEAVER_PRICELIST_REFRESH_MS = 3 * 60_000;
 
   function finite(value) {
     if (value === null || value === undefined || value === '') return null;
@@ -28,7 +29,10 @@
   }
 
   function defaultSettings() {
-    return { enabled:true, showInTorn:true, quickBuyEnabled:true, lastPriority:'normal', watches:[] };
+    return {
+      enabled:true, showInTorn:true, quickBuyEnabled:true, lastPriority:'normal',
+      listedItemsEnabled:true, weaverPricelistEnabled:false, weaverSourceOrder:'listed-first', watches:[]
+    };
   }
 
   function normalizeWatch(input = {}, index = 0) {
@@ -56,6 +60,9 @@
       showInTorn:input?.showInTorn !== false,
       quickBuyEnabled:input?.quickBuyEnabled !== false,
       lastPriority:normalizePriority(input?.lastPriority),
+      listedItemsEnabled:input?.listedItemsEnabled !== false,
+      weaverPricelistEnabled:input?.weaverPricelistEnabled === true,
+      weaverSourceOrder:input?.weaverSourceOrder === 'pricelist-first' ? 'pricelist-first' : 'listed-first',
       watches:(Array.isArray(input?.watches) ? input.watches : []).map(normalizeWatch)
     };
   }
@@ -162,6 +169,32 @@
     }).filter(Boolean).sort((left, right) => left.price - right.price);
   }
 
+  function weaverMarketplaceItems(body = {}) {
+    const rows = Array.isArray(body?.items) ? body.items : Array.isArray(body?.data?.items) ? body.data.items : [];
+    return rows.map(row => ({
+      itemId:Math.max(0, Math.trunc(Number(row?.item_id ?? row?.itemId ?? row?.id) || 0)),
+      name:String(row?.item_name ?? row?.itemName ?? row?.name ?? '').trim(),
+      lowestPrice:Math.max(0, Math.trunc(Number(row?.lowest_price ?? row?.lowestPrice) || 0)),
+      totalBazaars:Math.max(0, Math.trunc(Number(row?.total_bazaars ?? row?.totalBazaars) || 0))
+    })).filter(row => row.itemId > 0 && row.lowestPrice > 0);
+  }
+
+  function weaverPricelistItems(body = {}) {
+    const rows = Array.isArray(body) ? body : Array.isArray(body?.items) ? body.items : Array.isArray(body?.data) ? body.data : [];
+    return rows.map(row => ({
+      itemId:Math.trunc(Number(row?.itemId ?? row?.item_id ?? row?.id) || 0),
+      name:String(row?.name ?? row?.itemName ?? row?.item_name ?? '').trim(),
+      buyPrice:Math.max(0, Math.trunc(Number(row?.buyPrice ?? row?.buy_price) || 0)),
+      bulkThreshold:Math.max(0, Math.trunc(Number(row?.bulkThreshold ?? row?.bulk_threshold) || 0)),
+      bulkBuyPrice:Math.max(0, Math.trunc(Number(row?.bulkBuyPrice ?? row?.bulk_buy_price) || 0))
+    })).filter(row => row.itemId > 0 && row.buyPrice > 0);
+  }
+
+  function weaverPricelistTarget(item = {}, quantity = 0) {
+    const bulk = Number(item.bulkThreshold) > 0 && Number(quantity) >= Number(item.bulkThreshold) && Number(item.bulkBuyPrice) > 0;
+    return Math.max(0, Math.trunc(Number(bulk ? item.bulkBuyPrice : item.buyPrice) || 0));
+  }
+
   function itemMarketUrl(itemId, price = 0) {
     const target = Math.max(0, Math.trunc(Number(itemId) || 0));
     const threshold = Math.max(0, Math.trunc(Number(price) || 0));
@@ -200,7 +233,7 @@
   function opportunityRows(runtime = {}, settingsInput = {}) {
     const settings = normalizeSettings(settingsInput);
     const catalog = new Map((Array.isArray(runtime?.catalog?.items) ? runtime.catalog.items : []).map(item => [Number(item.id), item]));
-    return settings.watches.flatMap(watch => {
+    const rows = (settings.listedItemsEnabled ? settings.watches : []).flatMap(watch => {
       if (!watch.enabled || !(watch.maxPrice > 0)) return [];
       const result = runtime?.results?.[watch.uid] || {};
       if (watch.marketType === 'points') {
@@ -245,14 +278,43 @@
         });
       }
       return rows;
-    }).sort((left, right) => left.price - right.price);
+    });
+    if (settings.weaverPricelistEnabled) for (const priceItem of weaverPricelistItems(runtime?.weaverPricelist?.items || [])) {
+      const result = runtime?.pricelistResults?.[priceItem.itemId] || {};
+      const item = catalog.get(priceItem.itemId) || {};
+      const name = priceItem.name || item.name || `Item ${priceItem.itemId}`;
+      const sellText = Number(item.shopSellPrice) > 0 ? `${formatMoney(item.shopSellPrice)}${item.shopSellName ? ` at ${item.shopSellName}` : ''}` : '';
+      const bestBySeller = new Map();
+      for (const listing of Array.isArray(result?.bazaar?.listings) ? result.bazaar.listings : []) {
+        const previous = bestBySeller.get(listing.sellerId);
+        if (!previous || listing.price < previous.price) bestBySeller.set(listing.sellerId, listing);
+      }
+      for (const listing of [...bestBySeller.values()].slice(0, 5)) {
+        const maxPrice = weaverPricelistTarget(priceItem, listing.quantity);
+        if (!(maxPrice > 0) || listing.price > maxPrice) continue;
+        rows.push({
+          id:`bazaar:weaver-pricelist:${priceItem.itemId}:${listing.sellerId}`, watchUid:'', source:'Weaver Pricelist', itemId:priceItem.itemId, itemName:name,
+          sellerId:listing.sellerId, sellerName:listing.sellerName, price:listing.price, quantity:listing.quantity,
+          maxPrice, shopSellPrice:Number(item.shopSellPrice) || 0, shopSellName:item.shopSellName || '', href:listing.href,
+          detail:`${formatMoney(listing.price)}${listing.quantity > 0 ? ` × ${listing.quantity.toLocaleString('en-US')}` : ''} from ${listing.sellerName} · Weaver target ${formatMoney(maxPrice)}${sellText ? ` · shop sells ${sellText}` : ''}`,
+          shareText:`Weaver Pricelist | ${name} | ${formatMoney(listing.price)}${listing.quantity > 0 ? ` x ${listing.quantity.toLocaleString('en-US')}` : ''} | ${listing.sellerName} | target ${formatMoney(maxPrice)}${sellText ? ` | shop sell ${sellText}` : ''} | <a href="${listing.href}">Open Bazaar</a>`
+        });
+      }
+    }
+    const unique = new Map();
+    for (const row of rows) {
+      const key = `${row.source === 'Bazaar' || row.source === 'Weaver Pricelist' ? 'bazaar' : row.source}:${row.itemId}:${row.sellerId || 0}:${row.price}`;
+      if (!unique.has(key)) unique.set(key, row);
+    }
+    return [...unique.values()].sort((left, right) => left.price - right.price);
   }
 
   SLINK.define('core', 'market', Object.freeze({
     ITEM_MARKET_CACHE_SAFETY_MS, ITEM_MARKET_FALLBACK_MS, POINTS_MARKET_REFRESH_MS, PRIORITIES,
     TORN_PRIORITY_LIMITS, WEAVER_FALLBACK_BACKOFF_MS, WEAVER_MIN_REQUEST_SPACING_MS, WEAVER_RATE_LIMIT,
-    WEAVER_RATE_WINDOW_MS, WEAVER_REFRESH_MS, bazaarUrl, catalogItems, defaultSettings, effectivePriority,
+    WEAVER_PRICELIST_REFRESH_MS, WEAVER_RATE_WINDOW_MS, WEAVER_REFRESH_MS, bazaarUrl, catalogItems, defaultSettings, effectivePriority,
     itemMarketCache, itemMarketListings, itemMarketNextCheckAt, itemMarketUrl, listingHighlightState, normalizePriority, normalizeSettings,
-    normalizeWatch, opportunityRows, pointsMarketListings, pointsMarketUrl, shopSellDetails, staleRetryMs, weaverListings
+    normalizeWatch, opportunityRows, pointsMarketListings, pointsMarketUrl, shopSellDetails, staleRetryMs, weaverListings,
+    weaverMarketplaceItems, weaverPricelistItems, weaverPricelistTarget
   }));
 })(globalThis);

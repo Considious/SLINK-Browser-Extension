@@ -545,6 +545,15 @@
     byId('market-error').hidden = !market.lastError;
     byId('market-show-in-torn').checked = settings.showInTorn;
     byId('market-quick-buy').checked = settings.quickBuyEnabled;
+    byId('market-listed-items').checked = settings.listedItemsEnabled;
+    byId('market-weaver-pricelist').checked = settings.weaverPricelistEnabled;
+    byId('market-weaver-source-order').value = settings.weaverSourceOrder;
+    const priceList = market.weaverPricelist || {};
+    byId('market-weaver-pricelist-status').textContent = priceList.lastError
+      ? `Weaver sync issue: ${priceList.lastError}`
+      : priceList.fetchedAt
+        ? `${Number(priceList.itemCount || 0).toLocaleString()} active prices synced ${relativeTime(priceList.fetchedAt)}.`
+        : settings.weaverPricelistEnabled ? 'Weaver price list will sync on refresh.' : 'Weaver price list is off.';
     if (!byId('market-watch-uid').value) byId('market-watch-priority').value = settings.lastPriority;
     byId('market-watch-save').disabled = !market.permitted || watches.length >= Number(market.marketWatchLimit || 0) && !byId('market-watch-uid').value;
     const watchList = byId('market-watch-list');
@@ -1278,6 +1287,12 @@
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
     finally { setBusy(button, false); }
   });
+  byId('market-weaver-pricelist-sync').addEventListener('click', async event => {
+    const button = event.currentTarget; setBusy(button, true); byId('market-message').textContent = 'Syncing your Weaver price list…';
+    try { market = await SLINK.core.messaging.send('market.weaver.pricelist.sync'); byId('market-message').textContent = 'Weaver price list synced.'; renderMarket(); }
+    catch (error) { byId('market-message').textContent = errorText(error); }
+    finally { setBusy(button, false); }
+  });
   byId('market-load-items').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-message').textContent = 'Loading Torn’s item catalog…';
     try { market = await SLINK.core.messaging.send('market.catalog', { force:true }); byId('market-message').textContent = `${market.catalog?.items?.length || 0} API items loaded.`; renderMarket(); }
@@ -1340,10 +1355,17 @@
   byId('market-settings-save').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true);
     try {
-      market = await SLINK.core.messaging.send('market.settings.save', { showInTorn:byId('market-show-in-torn').checked, quickBuyEnabled:byId('market-quick-buy').checked });
+      market = await SLINK.core.messaging.send('market.settings.save', {
+        showInTorn:byId('market-show-in-torn').checked,
+        quickBuyEnabled:byId('market-quick-buy').checked,
+        listedItemsEnabled:byId('market-listed-items').checked,
+        weaverPricelistEnabled:byId('market-weaver-pricelist').checked,
+        weaverSourceOrder:byId('market-weaver-source-order').value
+      });
       await SLINK.core.storage.set('ui.modules.market.showInTorn', byId('market-show-in-torn').checked);
       if (byId('market-show-in-torn').checked) await SLINK.core.storage.set('ui.pagePanelHidden', false);
-      byId('market-message').textContent = 'Market display settings saved locally.'; renderMarket();
+      byId('market-message').textContent = 'Market settings saved locally. Refreshing sources…';
+      market = await SLINK.core.messaging.send('market.refresh'); renderMarket();
     } catch (error) { byId('market-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
   });

@@ -14,6 +14,9 @@
     return {
       catalog:stored?.catalog && typeof stored.catalog === 'object' ? stored.catalog : { fetchedAt:0, items:[] },
       results:stored?.results && typeof stored.results === 'object' ? stored.results : {},
+      pricelistResults:stored?.pricelistResults && typeof stored.pricelistResults === 'object' ? stored.pricelistResults : {},
+      weaverSummary:stored?.weaverSummary && typeof stored.weaverSummary === 'object' ? stored.weaverSummary : { fetchedAt:0, items:[] },
+      weaverPricelist:stored?.weaverPricelist && typeof stored.weaverPricelist === 'object' ? stored.weaverPricelist : { userId:null, fetchedAt:0, nextCheckAt:0, items:[], lastError:'' },
       weaver:stored?.weaver && typeof stored.weaver === 'object' ? stored.weaver : { events:[], cooldownUntil:0 },
       fetchedAt:Number(stored?.fetchedAt) || 0,
       lastError:String(stored?.lastError || '')
@@ -40,7 +43,7 @@
     const active = session?.token && Number(session?.expiresAt) > Date.now();
     const permissions = active ? session : await SLINK.core.storage.get('permissions.snapshot', {});
     const limit = SLINK.core.adhd.marketWatchLimit(permissions || {});
-    return { limit, permitted:limit > 0 };
+    return { limit, permitted:limit > 0, userId:Number(permissions?.userId || session?.userId) || null };
   }
 
   async function tornKey() {
@@ -66,12 +69,14 @@
   }
 
   async function weaverJson(url, current) {
-    const now = Date.now();
+    let now = Date.now();
     current.weaver = pruneWeaver(current.weaver, now);
     const spacingAt = Number(current.weaver.events.at(-1) || 0) + MARKET.WEAVER_MIN_REQUEST_SPACING_MS;
     const windowAt = Number(current.weaver.events[0] || 0) + MARKET.WEAVER_RATE_WINDOW_MS;
     const retryAt = Math.max(current.weaver.cooldownUntil, spacingAt, current.weaver.events.length >= MARKET.WEAVER_RATE_LIMIT ? windowAt : 0);
-    if (retryAt > now) {
+    if (retryAt > now && retryAt - now <= MARKET.WEAVER_MIN_REQUEST_SPACING_MS + 100) {
+      await new Promise(resolve => setTimeout(resolve, retryAt - now)); now = Date.now(); current.weaver = pruneWeaver(current.weaver, now);
+    } else if (retryAt > now) {
       const error = new Error('Weaver request budget is reserved for a later watch.'); error.code = 'SLINK_WEAVER_RATE_LIMIT'; error.retryAfterMs = retryAt - now; throw error;
     }
     current.weaver.events.push(now);
@@ -128,28 +133,98 @@
     }
   }
 
-  async function pollWeaver(watch, previous, next, current, force) {
-    if (!watch.bazaarEnabled) { delete next.bazaar; delete next.errors.bazaar; return; }
-    const priority = priorityFor(watch, previous);
-    if (!force && (Number(previous?.bazaar?.nextCheckAt) || Number(previous?.bazaar?.fetchedAt || 0) + MARKET.WEAVER_REFRESH_MS[priority]) > Date.now()) return;
-    const url = `https://weav3r.dev/api/marketplace/${encodeURIComponent(watch.itemId)}?maxPrice=${encodeURIComponent(watch.maxPrice)}&limit=5`;
+  async function syncWeaverPricelist(current, access, force = false) {
+    const previous = current.weaverPricelist || {};
+    if (!force && Number(previous.nextCheckAt) > Date.now() && Number(previous.userId) === Number(access.userId)) return previous;
+    if (!(Number(access.userId) > 0)) throw new Error('Refresh SLINK permissions so Weaver can identify your Torn account.');
+    const url = `https://weav3r.dev/api/pricelist/${encodeURIComponent(access.userId)}`;
     try {
       const body = await weaverJson(url, current); const now = Date.now();
-      next.bazaar = { fetchedAt:now, nextCheckAt:now + MARKET.WEAVER_REFRESH_MS[priority], sourceUrl:url, listings:MARKET.weaverListings(body, watch.itemId) };
-      delete next.errors.bazaar;
+      current.weaverPricelist = { userId:access.userId, fetchedAt:now, nextCheckAt:now + MARKET.WEAVER_PRICELIST_REFRESH_MS, items:MARKET.weaverPricelistItems(body), lastError:'' };
     } catch (error) {
-      next.errors.bazaar = SLINK.core.format.errorMessage(error);
-      next.bazaar = { ...(previous?.bazaar || {}), nextCheckAt:Date.now() + (Number(error?.retryAfterMs) || 5_000) };
+      current.weaverPricelist = { ...previous, userId:access.userId, nextCheckAt:Date.now() + (Number(error?.retryAfterMs) || 15_000), lastError:SLINK.core.format.errorMessage(error) };
+    }
+    return current.weaverPricelist;
+  }
+
+  async function ensureWeaverSummary(current, force = false, maxAgeMs = MARKET.WEAVER_REFRESH_MS.normal) {
+    if (!force && current.weaverSummary?.items?.length && Date.now() - Number(current.weaverSummary.fetchedAt) < maxAgeMs) return current.weaverSummary;
+    const body = await weaverJson('https://weav3r.dev/api/marketplace', current); const now = Date.now();
+    current.weaverSummary = { fetchedAt:now, items:MARKET.weaverMarketplaceItems(body) };
+    return current.weaverSummary;
+  }
+
+  function weaverTargets(currentSettings, allowed, current, force) {
+    const targets = new Map();
+    const add = (itemId, threshold, source, priority, destination) => {
+      if (!(itemId > 0) || !(threshold > 0) || !due(destination?.bazaar, force)) return;
+      const previous = targets.get(itemId) || { itemId, threshold:0, priority, manual:[], pricelist:false };
+      previous.threshold = Math.max(previous.threshold, threshold);
+      if (MARKET.PRIORITIES[priority] < MARKET.PRIORITIES[previous.priority]) previous.priority = priority;
+      if (source === 'pricelist') previous.pricelist = true; else previous.manual.push(source);
+      targets.set(itemId, previous);
+    };
+    if (currentSettings.listedItemsEnabled) for (const watch of allowed) if (watch.enabled && watch.marketType === 'item' && watch.bazaarEnabled) {
+      add(watch.itemId, watch.maxPrice, watch, priorityFor(watch, current.results[watch.uid]), current.results[watch.uid]);
+    }
+    if (currentSettings.weaverPricelistEnabled) for (const item of MARKET.weaverPricelistItems(current.weaverPricelist?.items || [])) {
+      add(item.itemId, Math.max(item.buyPrice, item.bulkBuyPrice || 0), 'pricelist', 'normal', current.pricelistResults[item.itemId]);
+    }
+    const first = currentSettings.weaverSourceOrder === 'pricelist-first' ? 'pricelist' : 'manual';
+    return [...targets.values()].sort((a, b) => {
+      const aRank = first === 'pricelist' ? (a.pricelist ? 0 : 1) : (a.manual.length ? 0 : 1);
+      const bRank = first === 'pricelist' ? (b.pricelist ? 0 : 1) : (b.manual.length ? 0 : 1);
+      return aRank - bRank || MARKET.PRIORITIES[a.priority] - MARKET.PRIORITIES[b.priority] || a.itemId - b.itemId;
+    });
+  }
+
+  function storeWeaverResult(target, allowed, current, payload) {
+    for (const watch of target.manual) {
+      const result = current.results[watch.uid] || { errors:{} }; result.errors ||= {};
+      result.bazaar = payload; delete result.errors.bazaar; current.results[watch.uid] = result;
+    }
+    if (target.pricelist) current.pricelistResults[target.itemId] = { bazaar:payload, errors:{} };
+  }
+
+  async function pollWeaverTargets(currentSettings, allowed, current, force) {
+    const targets = weaverTargets(currentSettings, allowed, current, force); if (!targets.length) return;
+    const maxAge = Math.min(...targets.map(target => MARKET.WEAVER_REFRESH_MS[target.priority]));
+    let summary;
+    try { summary = await ensureWeaverSummary(current, force, maxAge); }
+    catch (error) {
+      const retryAt = Date.now() + (Number(error?.retryAfterMs) || 5_000);
+      for (const target of targets) storeWeaverResult(target, allowed, current, { nextCheckAt:retryAt, listings:[] });
+      throw error;
+    }
+    const lowest = new Map(summary.items.map(item => [item.itemId, item.lowestPrice]));
+    for (const target of targets) {
+      const now = Date.now(); const nextCheckAt = now + MARKET.WEAVER_REFRESH_MS[target.priority];
+      if (!(Number(lowest.get(target.itemId)) > 0) || Number(lowest.get(target.itemId)) > target.threshold) {
+        storeWeaverResult(target, allowed, current, { fetchedAt:now, nextCheckAt, screenedAt:summary.fetchedAt, listings:[] }); continue;
+      }
+      const url = `https://weav3r.dev/api/marketplace/${encodeURIComponent(target.itemId)}?maxPrice=${encodeURIComponent(target.threshold)}&limit=5`;
+      try {
+        const body = await weaverJson(url, current);
+        storeWeaverResult(target, allowed, current, { fetchedAt:Date.now(), nextCheckAt, screenedAt:summary.fetchedAt, sourceUrl:url, listings:MARKET.weaverListings(body, target.itemId) });
+      } catch (error) {
+        const retry = Date.now() + (Number(error?.retryAfterMs) || 5_000);
+        storeWeaverResult(target, allowed, current, { nextCheckAt:retry, listings:[] });
+        if (error?.code === 'SLINK_WEAVER_RATE_LIMIT') break;
+      }
     }
   }
 
   function nextAt(currentSettings, current, limit) {
-    const times = currentSettings.watches.slice(0, limit).filter(watch => watch.enabled).flatMap(watch => {
+    const times = (currentSettings.listedItemsEnabled ? currentSettings.watches.slice(0, limit) : []).filter(watch => watch.enabled).flatMap(watch => {
       const result = current.results[watch.uid] || {};
       return watch.marketType === 'points'
         ? [Number(result.points?.nextCheckAt) || Date.now()]
         : [watch.marketEnabled ? Number(result.market?.nextCheckAt) || Date.now() : 0, watch.bazaarEnabled ? Number(result.bazaar?.nextCheckAt) || Date.now() : 0].filter(Boolean);
     });
+    if (currentSettings.weaverPricelistEnabled) {
+      times.push(Number(current.weaverPricelist?.nextCheckAt) || Date.now());
+      for (const item of MARKET.weaverPricelistItems(current.weaverPricelist?.items || [])) times.push(Number(current.pricelistResults?.[item.itemId]?.bazaar?.nextCheckAt) || Date.now());
+    }
     return times.length ? Math.min(...times) : 0;
   }
 
@@ -187,6 +262,7 @@
       .filter(row => !dismissals[row.dismissKey]);
     return { configured:Boolean((await SLINK.services.permissionAccess.settings()).enabled), permitted:access.permitted, marketWatchLimit:access.limit,
       settings:currentSettings, catalog:current.catalog, results:current.results,
+      weaverPricelist:{ userId:current.weaverPricelist?.userId || null, fetchedAt:Number(current.weaverPricelist?.fetchedAt) || 0, itemCount:MARKET.weaverPricelistItems(current.weaverPricelist?.items || []).length, lastError:String(current.weaverPricelist?.lastError || '') },
       opportunities,
       fetchedAt:current.fetchedAt, nextRefreshAt, lastError:current.lastError, tornApiUsage:usage };
   }
@@ -199,10 +275,12 @@
       if (!currentSettings.enabled) return buildStatus(currentSettings, current, access);
       const key = await tornKey();
       try {
-        if (currentSettings.watches.some(watch => watch.marketType === 'item')) current.catalog = await ensureCatalog({ key, current });
+        if (currentSettings.watches.some(watch => watch.marketType === 'item') || currentSettings.weaverPricelistEnabled) current.catalog = await ensureCatalog({ key, current });
         const allowed = currentSettings.watches.slice(0, access.limit); const valid = new Set(allowed.map(watch => watch.uid));
         current.results = Object.fromEntries(Object.entries(current.results).filter(([uid]) => valid.has(uid)));
-        const ordered = [...allowed].sort((a, b) => MARKET.PRIORITIES[priorityFor(a, current.results[a.uid])] - MARKET.PRIORITIES[priorityFor(b, current.results[b.uid])]);
+        if (currentSettings.weaverPricelistEnabled) await syncWeaverPricelist(current, access, force);
+        else current.pricelistResults = {};
+        const ordered = [...(currentSettings.listedItemsEnabled ? allowed : [])].sort((a, b) => MARKET.PRIORITIES[priorityFor(a, current.results[a.uid])] - MARKET.PRIORITIES[priorityFor(b, current.results[b.uid])]);
         let tornBlockedUntil = 0;
         for (const watch of ordered) {
           if (!watch.enabled || !(watch.maxPrice > 0)) continue;
@@ -215,10 +293,10 @@
             delete next.points; delete next.errors.points;
             if (tornBlockedUntil && watch.marketEnabled && due(previous?.market, force)) queueTornCheck(next, previous, 'market', tornBlockedUntil);
             else tornBlockedUntil = (await pollItem(watch, previous, next, key, force))?.blockedUntil || tornBlockedUntil;
-            await pollWeaver(watch, previous, next, current, force);
           }
           current.results[watch.uid] = next;
         }
+        await pollWeaverTargets(currentSettings, allowed, current, force);
         current.fetchedAt = Date.now();
         current.lastError = summarizeErrors(allowed, current.results);
       } catch (error) { current.lastError = SLINK.core.format.errorMessage(error); }
@@ -283,10 +361,19 @@
     return publicStatus(false);
   }
 
+  async function syncPricelist() {
+    const currentSettings = await settings(); const access = await accessState({ authenticate:true, force:true }); const current = await runtime();
+    if (!access.permitted) throw new Error('A signed SLINK Market Watch permission is required.');
+    const synced = await syncWeaverPricelist(current, access, true); await saveRuntime(current);
+    if (synced.lastError) throw new Error(synced.lastError);
+    return currentSettings.weaverPricelistEnabled ? refresh(false) : buildStatus(currentSettings, current, access);
+  }
+
   async function ensureAlarm() { if (!await chrome.alarms.get(ALARM)) await scheduleAlarm(Date.now() + 1_000); return chrome.alarms.get(ALARM); }
   const routes = Object.freeze({
     'market.status':payload => publicStatus(payload?.refreshIfDue !== false), 'market.refresh':() => refresh(true), 'market.settings.save':saveSettings,
     'market.permissions.refresh':refreshPermissions,
+    'market.weaver.pricelist.sync':syncPricelist,
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },
     'market.watch.save':upsertWatch, 'market.watch.remove':removeWatch, 'market.deal.dismiss':dismissDeal
   });

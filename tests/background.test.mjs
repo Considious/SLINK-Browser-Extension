@@ -34,6 +34,9 @@ let optionsPageOpens = 0;
 let marketCatalogRequests = 0;
 let itemMarketRequests = 0;
 let weaverMarketRequests = 0;
+let weaverSummaryRequests = 0;
+let weaverDetailRequests = 0;
+let weaverPricelistRequests = 0;
 let pointsMarketRequests = 0;
 let permissionAuthScopes = ['admin.*','slink.adhd.alerts','slink.adhd.marketwatch.40'];
 const adminPermissionRequests = [];
@@ -87,7 +90,7 @@ const chrome = {
     }
   },
   runtime: {
-    getManifest() { return { version: '0.18.16' }; },
+    getManifest() { return { version: '0.18.17' }; },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -459,7 +462,19 @@ context = vm.createContext({
       };
     } else if (url.hostname === 'weav3r.dev') {
       weaverMarketRequests += 1;
-      body = { listings:[{ sellerId:44, sellerName:'Bazaar Seller', price:85, quantity:2, updatedAt:Date.now() }] };
+      if (/^\/api\/pricelist\//.test(url.pathname)) {
+        weaverPricelistRequests += 1;
+        body = [{ itemId:2, name:'Legacy Shop', buyPrice:90, bulkThreshold:3, bulkBuyPrice:95 }];
+      } else if (url.pathname === '/api/marketplace') {
+        weaverSummaryRequests += 1;
+        body = { items:[
+          { item_id:1, item_name:'Current Shops', lowest_price:85, total_bazaars:2 },
+          { item_id:2, item_name:'Legacy Shop', lowest_price:85, total_bazaars:2 }
+        ] };
+      } else {
+        weaverDetailRequests += 1;
+        body = { listings:[{ sellerId:44, sellerName:'Bazaar Seller', price:85, quantity:3, updatedAt:Date.now() }] };
+      }
     } else if (url.hostname === 'ffscouter.com') {
       body = [
         { player_id:123, fair_fight:2, bs_estimate:1000, source:'FFScouter' },
@@ -592,7 +607,13 @@ const secondUid = secondMarketWatch.data.settings.watches.find(watch => watch.it
 const editedMarketWatch = await send('market.watch.save', { uid:secondUid, itemId:2, maxPrice:95, priority:'normal', marketEnabled:true, bazaarEnabled:true });
 assert(editedMarketWatch.ok && editedMarketWatch.data.marketWatchLimit === 40, 'Signed Market Watch tier was not enforced or exposed.');
 assert(editedMarketWatch.data.settings.lastPriority === 'normal', 'Saved Market Watch priority was not remembered for the next watch.');
-assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverMarketRequests >= 1 && weaverMarketRequests <= 3, 'Editing one watch force-refreshed unrelated watches, bypassed the local catalog cache, or ignored Weaver spacing.');
+assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverSummaryRequests === 1 && weaverDetailRequests === 3, 'Editing one watch force-refreshed unrelated watches, bypassed the local catalog cache, or skipped Weaver summary screening.');
+const enabledWeaverPricelist = await send('market.settings.save', { weaverPricelistEnabled:true, listedItemsEnabled:false, weaverSourceOrder:'pricelist-first' });
+assert(enabledWeaverPricelist.ok, 'Weaver price-list settings could not be enabled.');
+const syncedWeaverPricelist = await send('market.weaver.pricelist.sync');
+assert(syncedWeaverPricelist.ok && syncedWeaverPricelist.data.weaverPricelist.itemCount === 1 && syncedWeaverPricelist.data.opportunities.some(row => row.source === 'Weaver Pricelist'), 'Weaver price-list sync did not create locally screened Bazaar opportunities.');
+assert(weaverPricelistRequests === 1 && weaverSummaryRequests >= 1 && weaverDetailRequests < weaverMarketRequests, 'Weaver did not use one summary screen before item-detail requests.');
+await send('market.settings.save', { listedItemsEnabled:true });
 const pointsMarketWatch = await send('market.watch.save', { marketType:'points', maxPrice:45_000, priority:'low' });
 assert(pointsMarketWatch.ok && pointsMarketRequests === 1 && pointsMarketWatch.data.opportunities.some(row => row.source === 'Points Market'), 'Points Market did not use its combined API watch.');
 assert(pointsMarketWatch.data.settings.lastPriority === 'low', 'The most recently selected priority did not carry forward.');

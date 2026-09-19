@@ -81,7 +81,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.16', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.17', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -136,12 +136,19 @@ assert(JSON.stringify(SLINK.core.war.parseMugResultText('You mugged SweetyCute a
 assert(SLINK.core.war.parseMugResultText('You hospitalized SweetyCute') === null, 'A non-mug attack result was misclassified as a mug.');
 const marketSettings = SLINK.core.market.normalizeSettings({ watches:[{ uid:'one', itemId:1, label:'Current Shops', maxPrice:90, marketEnabled:true, bazaarEnabled:true }] });
 assert(SLINK.core.market.normalizeSettings({ lastPriority:'low' }).lastPriority === 'low', 'Last Market Watch priority was not preserved.');
+assert(SLINK.core.market.normalizeSettings({ weaverPricelistEnabled:true, weaverSourceOrder:'pricelist-first' }).weaverSourceOrder === 'pricelist-first', 'Weaver source priority was not preserved.');
+const weaverSummary = SLINK.core.market.weaverMarketplaceItems({ items:[{ item_id:1, item_name:'Current Shops', lowest_price:85, total_bazaars:3 }, { item_id:2, lowest_price:0 }] });
+assert(weaverSummary.length === 1 && weaverSummary[0].lowestPrice === 85, 'Weaver marketplace summary did not normalize into local screening rows.');
+const weaverPrices = SLINK.core.market.weaverPricelistItems([{ itemId:1, name:'Current Shops', buyPrice:90, bulkThreshold:5, bulkBuyPrice:95 }, { itemId:-1, buyPrice:100 }, { itemId:2, buyPrice:0 }]);
+assert(weaverPrices.length === 1 && SLINK.core.market.weaverPricelistTarget(weaverPrices[0], 4) === 90 && SLINK.core.market.weaverPricelistTarget(weaverPrices[0], 5) === 95, 'Weaver price-list or bulk threshold normalization failed.');
 assert(SLINK.core.market.TORN_PRIORITY_LIMITS.high === 60 && SLINK.core.market.TORN_PRIORITY_LIMITS.normal === 50 && SLINK.core.market.TORN_PRIORITY_LIMITS.low === 40, 'Market priority API headroom did not match the dashboard scheduler.');
 const cacheNext = SLINK.core.market.itemMarketNextCheckAt({ fetchedAt:1_000_000, cacheTimestamp:1_000, cacheDelayMs:30_000 });
 assert(cacheNext === 1_031_000, 'Item Market scheduling did not use cache timestamp + delay + one second.');
 const marketDeals = SLINK.core.market.opportunityRows({ catalog:{ items:marketCatalog }, results:{ one:{ market:{ listings:[{ price:80, quantity:3 }] }, bazaar:{ listings:[{ sellerId:44, sellerName:'Seller', price:85, quantity:2, href:'https://www.torn.com/bazaar.php?userId=44&itemId=1&price=85&slinkHighlight=1#/' }] } } } }, marketSettings);
 assert(marketDeals.length === 2 && marketDeals.every(row => row.shareText.includes('shop sell $125')), 'Market/Bazaar deal copy omitted the Torn shop sell price.');
 assert(marketDeals.find(row => row.source === 'Item Market')?.href.includes('page.php?sid=ItemMarket'), 'Item Market deal uses an obsolete Torn route.');
+const pricelistDeals = SLINK.core.market.opportunityRows({ catalog:{ items:marketCatalog }, weaverPricelist:{ items:weaverPrices }, pricelistResults:{ 1:{ bazaar:{ listings:[{ sellerId:45, sellerName:'Bulk Seller', price:94, quantity:5, href:'https://www.torn.com/bazaar.php?userId=45' }] } } } }, { listedItemsEnabled:false, weaverPricelistEnabled:true });
+assert(pricelistDeals.length === 1 && pricelistDeals[0].source === 'Weaver Pricelist' && pricelistDeals[0].maxPrice === 95, 'Weaver price-list results did not become quantity-aware Market Watch deals.');
 const pointsSettings = SLINK.core.market.normalizeSettings({ watches:[{ uid:'points', marketType:'points', maxPrice:45_000 }] });
 const pointsDeals = SLINK.core.market.opportunityRows({ results:{ points:{ points:{ listings:[{ price:44_000, quantity:1_000 }] } } } }, pointsSettings);
 assert(pointsDeals.length === 1 && pointsDeals[0].href === 'https://www.torn.com/pmarket.php', 'Points Market watch did not create the correct API-backed deal.');

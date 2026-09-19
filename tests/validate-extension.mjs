@@ -116,12 +116,14 @@ assert(dashboardHtml.includes('data-efficiency-view="merits"') && dashboardHtml.
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/merits.js')), 'Merits is missing from the in-Torn Efficiency tools.');
 assert(dashboardHtml.includes('data-efficiency-view="market"') && dashboardHtml.includes('id="market-watch-form"') && dashboardHtml.includes('id="market-quick-buy"'), 'Efficiency is missing its Market Watch tab, editor, or quick-buy control.');
 assert(dashboardHtml.includes('id="market-watch-type"') && dashboardHtml.includes('>Points Market<') && dashboardHtml.includes('id="market-watch-item-id"') && dashboardHtml.includes('id="market-item-suggestions"'), 'Market Watch is missing Points Market or its ID-backed searchable item selector.');
+assert(dashboardHtml.includes('id="market-weaver-pricelist"') && dashboardHtml.includes('id="market-weaver-source-order"') && dashboardHtml.includes('market-weaver-pricelist-sync'), 'Market Watch is missing Weaver price-list source controls or manual sync.');
 assert(dashboardSource.includes('settings.lastPriority') && dashboardSource.includes('selectMarketItem'), 'Market Watch does not preserve the selected priority or bind catalog choices to Torn IDs.');
 assert(read('src/dashboard/dashboard.css').includes('.market-watch-list{display:grid;grid-template-columns:repeat(3'), 'Market watches are not presented in a three-column desktop grid.');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/core/market.js') && entry.js?.includes('src/modules/market.js')), 'Market Watch is missing from the in-Torn Efficiency tools.');
 const marketServiceSource = read('src/background/market-service.js');
 const marketModuleSource = read('src/modules/market.js');
 assert(marketServiceSource.includes('/v2/market/') && marketServiceSource.includes("requestJson('weaver'") && marketServiceSource.includes('/v2/torn/items'), 'Market/Bazaar Watch is not sourced from the declared JSON APIs.');
+assert(marketServiceSource.includes("weaverJson('https://weav3r.dev/api/marketplace'") && marketServiceSource.includes('/api/pricelist/') && marketServiceSource.includes('pollWeaverTargets'), 'Weaver watches do not use summary-first screening for the SLINK and Weaver price lists.');
 assert(!marketServiceSource.includes('workerClient') && !marketServiceSource.includes('D1'), 'Private Market/Bazaar Watch data must remain local instead of using a SLINK Worker or D1.');
 assert(marketServiceSource.includes('summarizeErrors') && marketServiceSource.includes('tornBlockedUntil'), 'Market Watch does not collapse repeated capacity errors or stop redundant limiter retries within one cycle.');
 assert(marketModuleSource.includes('SLINK Buy') && marketModuleSource.includes('data-slink-market-highlight'), 'Torn listing highlights or the custom buy control are missing.');
