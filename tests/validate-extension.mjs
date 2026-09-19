@@ -209,6 +209,11 @@ assert(dashboardHtml.includes('id="claim-target-id"') && dashboardHtml.includes(
 assert(warModuleSource.includes('slink-war-claim-target-id') && warModuleSource.includes('slink-war-claim-submit'), 'The in-Torn War panel is missing explicit Torn-ID med-out claiming.');
 assert(!dashboardSource.includes('claim-war-target') && !warModuleSource.includes('data-war-claim='), 'Legacy per-target med-out buttons remain in the War target cards.');
 assert(read('src/core/messaging.js').includes('suspendStaleContext') && read('src/core/messaging.js').includes('staleContextPromise'), 'Obsolete extension pages do not become quietly inactive after an update.');
+const moduleLoaderSource = read('src/core/modules.js');
+assert(moduleLoaderSource.includes('const planned = []') && moduleLoaderSource.includes('Promise.all(planned.map'), 'Torn modules are still started serially before later tabs exist.');
+for (const modulePath of ['src/modules/adhd.js','src/modules/market.js','src/modules/merits.js','src/modules/player-stats.js']) {
+  assert(read(modulePath).includes('await load(false);'), `${modulePath} still forces due API work during Torn page navigation.`);
+}
 assert(!listFiles(path.join(root, 'src')).some(file => /\.(?:js|mjs|html)$/i.test(file) && /(?:loader2?\.php|\/loader)/i.test(fs.readFileSync(file, 'utf8'))), 'An obsolete Torn loader URL remains in the extension.');
 assert(warServiceSource.includes("'war.leader.claim'") && warServiceSource.includes('LOCAL_LEADER_LEASE_MS'), 'War collection does not use one extension-wide polling owner.');
 assert(serviceWorkerSource.includes('chrome.alarms.clear(WAR_CYCLE_ALARM)') && !serviceWorkerSource.includes('SLINK.services.war.prepareCycle()'), 'The legacy background War poller is still active.');

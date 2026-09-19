@@ -292,7 +292,7 @@
           finally { event.currentTarget.disabled = false; }
         } }
       ]);
-      await load(true);
+      await load(false);
       global.addEventListener('slink:api-usage', updateApiUsage);
       timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);

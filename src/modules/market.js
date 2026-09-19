@@ -436,7 +436,7 @@
       global.addEventListener('popstate', scheduleFormat);
       global.addEventListener('resize', syncQuickBuyPositions);
       global.addEventListener('scroll', syncQuickBuyPositions, true);
-      await load(true);
+      await load(false);
       global.addEventListener('slink:api-usage', updateApiUsage);
       timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);

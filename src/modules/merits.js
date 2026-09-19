@@ -99,7 +99,7 @@
         catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
         finally { event.currentTarget.disabled = false; }
       } }]);
-      await load(true);
+      await load(false);
       apiTimer = global.setInterval(() => { if (!stopped) void load(true); }, 60_000);
       clockTimer = global.setInterval(() => { if (!stopped) setStatus(); }, 1_000);
       return { stop() { stopped = true; if (apiTimer) global.clearInterval(apiTimer); if (clockTimer) global.clearInterval(clockTimer); } };

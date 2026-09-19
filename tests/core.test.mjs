@@ -81,7 +81,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.17', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.18', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -287,6 +287,39 @@ const started = await SLINK.modules.startAll({
   permissions: { scopes: ['test.read'] }
 });
 assert(started.started.includes('test-module'), 'Permitted module did not start.');
+await SLINK.modules.stopAll();
+
+let releaseSlowModule;
+const slowModuleGate = new Promise(resolve => { releaseSlowModule = resolve; });
+let fastModuleStarted = false;
+const createdModuleViews = [];
+SLINK.modules.register({
+  id:'slow-module',
+  matches:url => url.hostname === 'www.torn.com',
+  async start() { await slowModuleGate; return { started:true }; }
+});
+SLINK.modules.register({
+  id:'fast-module',
+  matches:url => url.hostname === 'www.torn.com',
+  async start() { fastModuleStarted = true; return { started:true }; }
+});
+const concurrentStart = SLINK.modules.startAll({
+  url:new URL('https://www.torn.com/index.php'),
+  permissions:{ scopes:['test.read'] },
+  modulePresentation:async () => 'full',
+  ui:{
+    async createModuleView(module) {
+      createdModuleViews.push(module.id);
+      return { setStatus() {}, remove() {} };
+    }
+  }
+});
+await new Promise(resolve => setTimeout(resolve, 0));
+assert(createdModuleViews.includes('slow-module') && createdModuleViews.includes('fast-module'), 'A slow module blocked creation of later Torn tabs.');
+assert(fastModuleStarted, 'A slow module blocked independent startup of later Torn modules.');
+releaseSlowModule();
+const concurrentResult = await concurrentStart;
+assert(concurrentResult.started.includes('slow-module') && concurrentResult.started.includes('fast-module'), 'Concurrent Torn module startup did not finish cleanly.');
 await SLINK.modules.stopAll();
 
 assert(

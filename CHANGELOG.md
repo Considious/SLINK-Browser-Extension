@@ -2,6 +2,14 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.18 — 2026-09-19
+
+### Fixed
+
+- Torn-side module tabs are now created before any module begins loading, so a slow War or Alerts refresh can no longer make later Efficiency tabs appear missing or leave the interface stuck on Combat.
+- Modules start independently and report their own loading failures without preventing the remaining tabs from loading.
+- Alerts, Market Watch, Merits, and Player Stats render their saved background state first when a Torn page opens instead of treating every page change as a request to repeat due API work.
+
 ## 0.18.17 — 2026-09-19
 
 ### Added

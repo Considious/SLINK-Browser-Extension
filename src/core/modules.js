@@ -38,6 +38,8 @@
     const started = [];
     const denied = [];
     const skipped = [];
+    const failed = [];
+    const planned = [];
 
     for (const module of registry.values()) {
       if (running.has(module.id)) {
@@ -65,15 +67,36 @@
         continue;
       }
 
-      const moduleUi = presentation === 'full' && context.ui?.createModuleView
-        ? await context.ui.createModuleView(module)
-        : context.ui;
-      const instance = await module.start({ ...context, module, ui: moduleUi, presentation });
-      running.set(module.id, { module, instance, moduleUi });
-      started.push(module.id);
+      try {
+        const moduleUi = presentation === 'full' && context.ui?.createModuleView
+          ? await context.ui.createModuleView(module)
+          : context.ui;
+        if (presentation === 'full') moduleUi?.setStatus?.('Loading saved state…');
+        planned.push({ module, presentation, moduleUi });
+      } catch (error) {
+        failed.push({ id:module.id, error:SLINK.core.format.errorMessage(error) });
+      }
     }
 
-    return { started, denied, skipped };
+    // Create every permitted tab before starting any module. Module starts can
+    // perform network or storage work, so running them one-by-one made later
+    // tabs appear missing (and left the shell looking stuck on an earlier tab).
+    await Promise.all(planned.map(async ({ module, presentation, moduleUi }) => {
+      try {
+        const instance = await module.start({ ...context, module, ui:moduleUi, presentation });
+        running.set(module.id, { module, instance, moduleUi });
+        started.push(module.id);
+      } catch (error) {
+        const message = SLINK.core.format.errorMessage(error);
+        moduleUi?.setStatus?.(message, 'error');
+        // Retain the failed view so stopAll can remove it during an in-page
+        // module restart instead of leaving a duplicate tab behind.
+        running.set(module.id, { module, instance:null, moduleUi, startFailed:true });
+        failed.push({ id:module.id, error:message });
+      }
+    }));
+
+    return { started, denied, skipped, failed };
   }
 
   async function stopAll() {
