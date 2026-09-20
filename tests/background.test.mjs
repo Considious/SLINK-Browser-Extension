@@ -31,6 +31,9 @@ let adhdCityBaselineRequests = 0;
 let adhdCityBaselineTimestamp = 0;
 let adhdStockCatalogRequests = 0;
 let optionsPageOpens = 0;
+let offscreenDocumentOpen = false;
+let offscreenDocumentsCreated = 0;
+let offscreenSoundsPlayed = 0;
 let marketCatalogRequests = 0;
 let itemMarketRequests = 0;
 let weaverMarketRequests = 0;
@@ -90,8 +93,23 @@ const chrome = {
       ].includes(origin));
     }
   },
+  offscreen: {
+    async createDocument(details) {
+      assert(details?.reasons?.includes('AUDIO_PLAYBACK'), 'Offscreen audio document used the wrong Chrome reason.');
+      offscreenDocumentOpen = true;
+      offscreenDocumentsCreated += 1;
+    }
+  },
   runtime: {
-    getManifest() { return { version: '0.18.17' }; },
+    id:'test-extension-id',
+    getManifest() { return { version: '0.18.25' }; },
+    getURL(pathname) { return `chrome-extension://test-extension-id/${String(pathname).replace(/^\//, '')}`; },
+    async getContexts() { return offscreenDocumentOpen ? [{ contextType:'OFFSCREEN_DOCUMENT' }] : []; },
+    async sendMessage(message) {
+      if (message?.target !== 'slink-offscreen-audio' || message?.type !== 'play') throw new Error('Unexpected direct runtime message.');
+      offscreenSoundsPlayed += 1;
+      return { ok:true };
+    },
     async openOptionsPage() { optionsPageOpens += 1; },
     onInstalled,
     onMessage,
@@ -671,11 +689,12 @@ assert(weeklyPrizeClaimed.ok && !weeklyPrizeClaimed.data.activeAlerts.some(alert
 assert(Number(values.get('slink.adhd.settings.v1')?.googlePlayPointsClaimedAt) > Date.now() - 5_000, 'The weekly Google Play Points claim was not persisted locally.');
 assert(adhdCityCurrentRequests === 1 && adhdCityBaselineRequests === 1, 'City totals did not use the dedicated current and reset-baseline personalstats routes.');
 assert(adhdCityBaselineTimestamp === Math.floor(Date.now() / 86_400_000) * 86_400 - 1, 'City baseline was not requested from the final second before today\'s reset.');
-const firstSound = await send('adhd.sound.claim');
-await send('adhd.sound.ack', { alertIds:firstSound.data.alertIds });
+const flushedSound = await send('audio.flush');
 const repeatedSound = await send('adhd.sound.claim');
-assert(firstSound.ok && firstSound.data.play && firstSound.data.alertIds.includes('energyFull'), 'A newly active sound-enabled alert was not claimed.');
+assert(flushedSound.ok && flushedSound.data.played >= 1 && offscreenDocumentsCreated === 1 && offscreenSoundsPlayed >= 1, 'A newly active sound-enabled alert was not played by the background offscreen document.');
 assert(repeatedSound.ok && repeatedSound.data.play === false, 'An unchanged alert repeated its sound.');
+const directBackgroundSound = await send('audio.play', { soundChoice:'urgent' });
+assert(directBackgroundSound.ok && directBackgroundSound.data.played && offscreenDocumentsCreated === 1, 'War audio did not reuse the background offscreen document.');
 assert(adhdRefreshed.data.marketWatchLimit === 40, 'Highest signed ADHD market-watch tier was not exposed.');
 assert(!JSON.stringify(adhdRefreshed.data).includes('torn-test-key'), 'ADHD public status leaked the local Torn key.');
 adhdCityItemsBought = 600;

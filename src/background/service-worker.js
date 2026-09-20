@@ -21,7 +21,8 @@ importScripts(
   'player-stats-service.js',
   'leveling-service.js',
   'war-service.js',
-  'contribution-service.js'
+  'contribution-service.js',
+  'audio-service.js'
 );
 
 const SLINK = globalThis.SLINK_EXTENSION;
@@ -380,7 +381,8 @@ const routes = {
   ...SLINK.services.merits.routes,
   ...SLINK.services.themes.routes,
   ...SLINK.services.playerStats.routes,
-  ...SLINK.services.contributionRoutes
+  ...SLINK.services.contributionRoutes,
+  ...SLINK.services.audio.routes
 };
 
 chrome.runtime.onMessage.addListener(SLINK.core.messaging.createRouter(routes));
@@ -396,11 +398,15 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
   if (alarm.name === SLINK.services.adhd.ALARM) {
-    void SLINK.services.adhd.publicStatus(true).catch(error => console.error('[SLINK] Efficiency alerts:', error));
+    void SLINK.services.adhd.publicStatus(true)
+      .then(() => SLINK.services.audio.flush())
+      .catch(error => console.error('[SLINK] Efficiency alerts:', error));
     void SLINK.services.merits.publicStatus(true).catch(error => console.error('[SLINK] Merits:', error));
   }
   if (alarm.name === SLINK.services.market.ALARM) {
-    void SLINK.services.market.publicStatus(true).catch(error => console.error('[SLINK] Market Watch:', error));
+    void SLINK.services.market.publicStatus(true)
+      .then(() => SLINK.services.audio.flush())
+      .catch(error => console.error('[SLINK] Market Watch:', error));
   }
   if (alarm.name === SLINK.services.market.DOLLAR_ALARM) {
     void SLINK.services.market.dollarStatus(true).catch(error => console.error('[SLINK] $1 Bazaars:', error));

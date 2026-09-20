@@ -123,7 +123,6 @@
       let localError = '';
       let targetSort = 'availability';
       let targetFilters = { minFF:1, maxFF:3, status:'all' };
-      let audioContext = null;
       let alertOverlay = null;
       let lastAlertSignature = '';
       let armoryMode = 'ranked-all';
@@ -1212,26 +1211,8 @@
         return Object.fromEntries(Object.entries(values || {}).filter(([, expiresAt]) => Number(expiresAt) > now));
       }
 
-      function unlockAudio() {
-        if (!current?.settings?.alertSound) return;
-        try {
-          const AudioContextClass = global.AudioContext || global.webkitAudioContext;
-          if (!AudioContextClass) return;
-          if (!audioContext) audioContext = new AudioContextClass();
-          if (audioContext.state === 'suspended') void audioContext.resume();
-        } catch {}
-      }
-
       function playAlertTone() {
-        unlockAudio();
-        if (!audioContext || audioContext.state !== 'running') return;
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        oscillator.frequency.value = 620;
-        gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.18, audioContext.currentTime + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.45);
-        oscillator.connect(gain); gain.connect(audioContext.destination); oscillator.start(); oscillator.stop(audioContext.currentTime + 0.48);
+        void SLINK.core.messaging.send('audio.play', { soundChoice:'urgent' }).catch(() => {});
       }
 
       function setPageAlert(active) {
@@ -1385,7 +1366,6 @@
         activeTab = 'armory';
         await SLINK.core.storage.remove('ui.war.requestedTab');
       }
-      document.addEventListener('pointerdown', unlockAudio, { passive:true });
       document.addEventListener('click', handleProfileAttack, true);
       document.addEventListener('click', handleRankTabClick, true);
       document.addEventListener('visibilitychange', refreshLeader);
@@ -1423,7 +1403,6 @@
         context.ui.setBubbleAlert('', 0, 'war');
         context.ui.setAlertCount('war', 0);
         setPageAlert(false);
-        document.removeEventListener('pointerdown', unlockAudio);
         document.removeEventListener('click', handleProfileAttack, true);
         document.removeEventListener('click', handleRankTabClick, true);
         document.removeEventListener('visibilitychange', refreshLeader);

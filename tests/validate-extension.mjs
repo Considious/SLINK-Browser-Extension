@@ -33,6 +33,7 @@ assert(manifest.version === packageJson.version, 'Manifest and package versions 
 assert(!JSON.stringify(manifest).includes('<all_urls>'), 'The extension must not request <all_urls>.');
 assert(manifest.permissions.includes('storage'), 'Storage permission is required.');
 assert(manifest.permissions.includes('alarms'), 'Alarms permission is required.');
+assert(manifest.permissions.includes('offscreen'), 'Background alert audio requires Chrome offscreen-document access.');
 assert(
   manifest.host_permissions.length === 7 &&
   manifest.host_permissions.includes('https://www.torn.com/*') &&
@@ -52,6 +53,8 @@ assert(
 assertFile(manifest.background.service_worker);
 assertFile(manifest.action.default_popup);
 assertFile(manifest.options_ui.page);
+assertFile('src/offscreen/audio.html');
+assertFile('src/offscreen/audio.js');
 for (const entry of manifest.content_scripts) {
   for (const script of entry.js || []) assertFile(script);
   for (const stylesheet of entry.css || []) assertFile(stylesheet);
@@ -112,6 +115,7 @@ assert(dashboardHtml.includes('id="backup-local-data"') && dashboardHtml.include
 assert(dashboardSource.includes('exportNamespace') && dashboardSource.includes('importNamespace'), 'The dashboard does not connect the local backup and restore controls.');
 assert(dashboardHtml.includes('data-dashboard-page="alerts"') && dashboardHtml.includes('id="use-adhd"') && dashboardHtml.includes('id="adhd-city-done"'), 'The separate ADHD Alerts dashboard page or its global city completion control is missing.');
 assert(dashboardHtml.includes('>Efficiency<') && dashboardHtml.includes('id="adhd-sound-choice"') && dashboardHtml.includes('id="adhd-custom-sound"'), 'Efficiency naming or notification-sound controls are missing.');
+assert(dashboardSource.includes("messaging.send('audio.play', { soundChoice:byId('adhd-sound-choice').value"), 'The alert-sound preview does not test the real background audio path.');
 assert(dashboardHtml.includes('data-efficiency-view="merits"') && dashboardHtml.includes('id="merits-refresh-minutes"') && dashboardHtml.includes('id="merits-pinned-list"'), 'Efficiency is missing its Merits tab, refresh control, or three-goal farm list.');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/merits.js')), 'Merits is missing from the in-Torn Efficiency tools.');
 assert(dashboardHtml.includes('data-efficiency-view="dollar"') && dashboardHtml.includes('id="dollar-bazaars-refresh"') && dashboardHtml.includes('id="dollar-bazaars-list"'), 'Efficiency is missing its $1 Bazaars tab, manual refresh, or results list.');
@@ -125,6 +129,8 @@ assert(read('src/dashboard/dashboard.css').includes('.market-watch-list{display:
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/core/market.js') && entry.js?.includes('src/modules/market.js')), 'Market Watch is missing from the in-Torn Efficiency tools.');
 const marketServiceSource = read('src/background/market-service.js');
 const marketModuleSource = read('src/modules/market.js');
+const audioServiceSource = read('src/background/audio-service.js');
+const offscreenAudioSource = read('src/offscreen/audio.js');
 assert(marketServiceSource.includes('/v2/market/') && marketServiceSource.includes("requestJson('weaver'") && marketServiceSource.includes('/v2/torn/items'), 'Market/Bazaar Watch is not sourced from the declared JSON APIs.');
 assert(marketServiceSource.includes("weaverJson('https://weav3r.dev/api/marketplace'") && marketServiceSource.includes('/api/pricelist/') && marketServiceSource.includes('pollWeaverTargets'), 'Weaver watches do not use summary-first screening for the SLINK and Weaver price lists.');
 assert(marketServiceSource.includes("weaverJson('https://weav3r.dev/api/dollar-bazaars/items?page=1&limit=100'") && marketServiceSource.includes("'market.dollar.refresh'") && marketServiceSource.includes('periodInMinutes:60'), '$1 Bazaars does not use the Weaver JSON API, hourly cache, and manual refresh route.');
@@ -138,10 +144,11 @@ assert(marketModuleSource.includes("nodeUnavailable(node, kind = '')") && market
 assert(marketModuleSource.includes('data-slink-market-shop-profit') && marketModuleSource.includes('listingHighlightState'), 'City-shop-profit highlighting is missing from Torn purchase pages.');
 assert(marketModuleSource.includes('data-market-send') && marketModuleSource.includes('Send to Faction'), 'Per-listing Faction Chat sending is missing from the Torn Market GUI.');
 assert(marketServiceSource.includes("'market.deal.dismiss'") && marketModuleSource.includes('data-market-dismiss') && dashboardSource.includes("market.deal.dismiss"), 'Five-minute Market Watch dismissal is missing from an interface.');
-assert(marketServiceSource.includes("'market.sound.claim'") && marketModuleSource.includes('pendingSoundClaim') && dashboardHtml.includes('market-alert-sound'), 'Market Watch sound claiming, retry, or its user toggle is missing.');
+assert(marketServiceSource.includes("'market.sound.claim'") && marketModuleSource.includes("messaging.send('audio.flush')") && dashboardHtml.includes('market-alert-sound'), 'Market Watch background sound delivery or its user toggle is missing.');
 assert(marketServiceSource.includes("'market.weaver.selection.save'") && marketServiceSource.includes('assertActiveSlotLimit') && !marketServiceSource.includes('watches.slice(0, access.limit'), 'The shared active-slot limit is not enforced across saved SLINK and selected Weaver watches.');
 assert(read('src/core/market.js').includes('activeSlotKeys') && read('src/core/market.js').includes('weaverActiveItemIds'), 'Market Watch does not deduplicate active SLINK and Weaver item slots.');
-assert(read('src/core/adhd.js').includes('unlockNotificationSound') && read('src/modules/adhd.js').includes('pendingSoundClaim'), 'Torn alert audio is still consumed while Chrome audio playback is suspended.');
+assert(audioServiceSource.includes("reasons:['AUDIO_PLAYBACK']") && audioServiceSource.includes('chrome.runtime.getContexts') && audioServiceSource.includes("'adhd.sound.ack'") && audioServiceSource.includes("'market.sound.ack'") && offscreenAudioSource.includes('playNotificationSound'), 'Alert audio is not delivered and acknowledged through Chrome’s background offscreen-audio document.');
+assert(read('src/background/service-worker.js').includes(".then(() => SLINK.services.audio.flush())") && read('src/modules/adhd.js').includes("messaging.send('audio.flush')"), 'Background alarms or Torn Efficiency alerts are not connected to focus-independent sound delivery.');
 assert(marketServiceSource.includes("'market.permissions.refresh'") && marketModuleSource.includes('Refresh permissions') && dashboardHtml.includes('market-permissions-refresh'), 'Market Watch is missing its explicit signed-permission refresh control.');
 assert(marketModuleSource.includes('Send list to Faction') && marketModuleSource.includes('focusedTornPage'), 'Torn-only Market Watch faction sharing is missing.');
 assert(!dashboardSource.includes('Send list to Faction'), 'The extension dashboard must not offer direct Market Watch Faction Chat sending.');

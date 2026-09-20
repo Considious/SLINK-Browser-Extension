@@ -26,7 +26,6 @@
       let clockTimer = null;
       let current = null;
       let chatShareArm = null;
-      let pendingSoundClaim = null;
 
       ui.setModuleStyles(`
         .slink-adhd-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
@@ -44,26 +43,8 @@
         return document.visibilityState === 'visible' && document.hasFocus();
       }
 
-      async function playPendingSound() {
-        if (!pendingSoundClaim) return false;
-        const claim = pendingSoundClaim;
-        await SLINK.core.adhd.playNotificationSound(claim);
-        await SLINK.core.messaging.send('adhd.sound.ack', { alertIds:claim.alertIds || [] });
-        if (pendingSoundClaim === claim) pendingSoundClaim = null;
-        return true;
-      }
-
       async function claimAlertSound() {
-        try {
-          const claim = await SLINK.core.messaging.send('adhd.sound.claim');
-          if (claim?.play) pendingSoundClaim = claim;
-          await playPendingSound();
-        } catch {}
-      }
-
-      function unlockAndRetrySound(event) {
-        if (!event.isTrusted) return;
-        void SLINK.core.adhd.unlockNotificationSound().then(playPendingSound).catch(() => {});
+        try { await SLINK.core.messaging.send('audio.flush'); } catch {}
       }
 
       async function copyAlertText(value) {
@@ -323,8 +304,6 @@
         } }
       ]);
       await load(false);
-      document.addEventListener('pointerdown', unlockAndRetrySound, true);
-      document.addEventListener('keydown', unlockAndRetrySound, true);
       global.addEventListener('slink:api-usage', updateApiUsage);
       timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
@@ -334,8 +313,6 @@
           if (timer) global.clearInterval(timer);
           if (clockTimer) global.clearInterval(clockTimer);
           global.removeEventListener('slink:api-usage', updateApiUsage);
-          document.removeEventListener('pointerdown', unlockAndRetrySound, true);
-          document.removeEventListener('keydown', unlockAndRetrySound, true);
           ui.setBubbleAlert('', 0, 'adhd');
           ui.setAlertCount('adhd', 0);
         },

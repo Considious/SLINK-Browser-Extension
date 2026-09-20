@@ -2,6 +2,14 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.25 — 2026-09-20
+
+### Fixed
+
+- Efficiency, Market Watch, and War alert sounds now play through a Chrome extension offscreen-audio document instead of depending on a focused Torn or extension-dashboard page.
+- Background Efficiency and Market Watch alarms now deliver enabled sounds even when Torn is in another tab, Chrome is showing another page, or the extension dashboard is unfocused.
+- Focus and visibility checks remain in place for Torn DOM actions such as quick buying, Armory retrieval, and Faction Chat; they no longer gate audio delivery.
+
 ## 0.18.24 — 2026-09-20
 
 ### Fixed

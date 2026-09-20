@@ -35,7 +35,6 @@
       let pendingBazaarPurchase = null;
       let quickPurchaseSyncTimer = null;
       let quickPurchaseListingIdCounter = 0;
-      let pendingSoundClaim = null;
       const quickBuyControls = new Map();
       const quickPurchaseControlSpecs = new WeakMap();
       const quickPurchaseListingIds = new WeakMap();
@@ -125,26 +124,8 @@
         send.click(); return true;
       }
 
-      async function playPendingSound() {
-        if (!pendingSoundClaim) return false;
-        const claim = pendingSoundClaim;
-        await SLINK.core.adhd.playNotificationSound(claim);
-        await SLINK.core.messaging.send('market.sound.ack', { dealKeys:claim.dealKeys || [] });
-        if (pendingSoundClaim === claim) pendingSoundClaim = null;
-        return true;
-      }
-
       async function claimMarketSound() {
-        try {
-          const claim = await SLINK.core.messaging.send('market.sound.claim');
-          if (claim?.play) pendingSoundClaim = claim;
-          await playPendingSound();
-        } catch {}
-      }
-
-      function unlockAndRetrySound(event) {
-        if (!event.isTrusted) return;
-        void SLINK.core.adhd.unlockNotificationSound().then(playPendingSound).catch(() => {});
+        try { await SLINK.core.messaging.send('audio.flush'); } catch {}
       }
 
       function purchasePage() {
@@ -678,13 +659,11 @@
       global.addEventListener('scroll', syncQuickBuyPositions, true);
       document.addEventListener('click', handleQuickBuy, true);
       document.addEventListener('click', handleNativeBazaarBuy, true);
-      document.addEventListener('pointerdown', unlockAndRetrySound, true);
-      document.addEventListener('keydown', unlockAndRetrySound, true);
       await load(false);
       global.addEventListener('slink:api-usage', updateApiUsage);
       timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
-      return { stop() { stopped = true; observer?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); if (formatTimer) global.clearTimeout(formatTimer); if (quickPurchaseSyncTimer) global.clearTimeout(quickPurchaseSyncTimer); if (quickBuyPositionFrame) global.cancelAnimationFrame(quickBuyPositionFrame); global.removeEventListener('slink:api-usage', updateApiUsage); global.removeEventListener('hashchange', scheduleFormat); global.removeEventListener('popstate', scheduleFormat); global.removeEventListener('resize', syncQuickBuyPositions); global.removeEventListener('scroll', syncQuickBuyPositions, true); document.removeEventListener('click', handleQuickBuy, true); document.removeEventListener('click', handleNativeBazaarBuy, true); document.removeEventListener('pointerdown', unlockAndRetrySound, true); document.removeEventListener('keydown', unlockAndRetrySound, true); ui.setAlertCount('market', 0); clearQuickBuys(); quickPurchaseFlow = null; document.querySelectorAll('[data-slink-market-highlight]').forEach(node => { node.removeAttribute('data-slink-market-highlight'); node.removeAttribute('data-slink-market-kind'); node.removeAttribute('data-slink-market-targeted'); node.removeAttribute('data-slink-market-shop-profit'); node.removeAttribute('data-slink-market-one-dollar'); node.removeAttribute('data-slink-market-reason'); node.removeAttribute('data-slink-market-max-applied'); node.style.removeProperty('outline'); node.style.removeProperty('outline-offset'); node.style.removeProperty('box-shadow'); }); } };
+      return { stop() { stopped = true; observer?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); if (formatTimer) global.clearTimeout(formatTimer); if (quickPurchaseSyncTimer) global.clearTimeout(quickPurchaseSyncTimer); if (quickBuyPositionFrame) global.cancelAnimationFrame(quickBuyPositionFrame); global.removeEventListener('slink:api-usage', updateApiUsage); global.removeEventListener('hashchange', scheduleFormat); global.removeEventListener('popstate', scheduleFormat); global.removeEventListener('resize', syncQuickBuyPositions); global.removeEventListener('scroll', syncQuickBuyPositions, true); document.removeEventListener('click', handleQuickBuy, true); document.removeEventListener('click', handleNativeBazaarBuy, true); ui.setAlertCount('market', 0); clearQuickBuys(); quickPurchaseFlow = null; document.querySelectorAll('[data-slink-market-highlight]').forEach(node => { node.removeAttribute('data-slink-market-highlight'); node.removeAttribute('data-slink-market-kind'); node.removeAttribute('data-slink-market-targeted'); node.removeAttribute('data-slink-market-shop-profit'); node.removeAttribute('data-slink-market-one-dollar'); node.removeAttribute('data-slink-market-reason'); node.removeAttribute('data-slink-market-max-applied'); node.style.removeProperty('outline'); node.style.removeProperty('outline-offset'); node.style.removeProperty('box-shadow'); }); } };
     }
   });
 })(globalThis);

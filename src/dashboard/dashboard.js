@@ -23,8 +23,6 @@
   let dismissedRetals = {};
   let pendingCustomSoundDataUrl = null;
   let soundClaiming = false;
-  let pendingAdhdSoundClaim = null;
-  let pendingMarketSoundClaim = null;
   let warTargetFilters = { minFF:1, maxFF:3, status:'all', sort:'availability' };
   const warLeaderClientId = `war-dashboard:${globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
   const INSIDE_WINDOWS = Object.freeze([[0, 100], [200, 250], [450, 500], [950, 1000], [2350, 2500], [4850, 5000], [9900, 10000]]);
@@ -728,44 +726,12 @@
   async function claimAdhdSound() {
     if (soundClaiming) return;
     soundClaiming = true;
-    try {
-      const claim = await SLINK.core.messaging.send('adhd.sound.claim');
-      if (claim?.play) pendingAdhdSoundClaim = claim;
-      if (pendingAdhdSoundClaim) {
-        await SLINK.core.adhd.playNotificationSound(pendingAdhdSoundClaim);
-        await SLINK.core.messaging.send('adhd.sound.ack', { alertIds:pendingAdhdSoundClaim.alertIds || [] });
-        pendingAdhdSoundClaim = null;
-      }
-    } catch {}
+    try { await SLINK.core.messaging.send('audio.flush'); } catch {}
     finally { soundClaiming = false; }
   }
 
   async function claimMarketSound() {
-    try {
-      const claim = await SLINK.core.messaging.send('market.sound.claim');
-      if (claim?.play) pendingMarketSoundClaim = claim;
-      if (pendingMarketSoundClaim) {
-        await SLINK.core.adhd.playNotificationSound(pendingMarketSoundClaim);
-        await SLINK.core.messaging.send('market.sound.ack', { dealKeys:pendingMarketSoundClaim.dealKeys || [] });
-        pendingMarketSoundClaim = null;
-      }
-    } catch {}
-  }
-
-  function unlockAndRetrySounds(event) {
-    if (!event.isTrusted) return;
-    void SLINK.core.adhd.unlockNotificationSound().then(async () => {
-      if (pendingAdhdSoundClaim) {
-        await SLINK.core.adhd.playNotificationSound(pendingAdhdSoundClaim);
-        await SLINK.core.messaging.send('adhd.sound.ack', { alertIds:pendingAdhdSoundClaim.alertIds || [] });
-        pendingAdhdSoundClaim = null;
-      }
-      if (pendingMarketSoundClaim) {
-        await SLINK.core.adhd.playNotificationSound(pendingMarketSoundClaim);
-        await SLINK.core.messaging.send('market.sound.ack', { dealKeys:pendingMarketSoundClaim.dealKeys || [] });
-        pendingMarketSoundClaim = null;
-      }
-    }).catch(() => {});
+    await claimAdhdSound();
   }
 
   function renderLeveling() {
@@ -1588,7 +1554,7 @@
   });
   byId('adhd-preview-sound').addEventListener('click', async () => {
     const customSoundDataUrl = pendingCustomSoundDataUrl === null ? adhd?.settings?.customSoundDataUrl || '' : pendingCustomSoundDataUrl;
-    try { await SLINK.core.adhd.playNotificationSound({ soundChoice:byId('adhd-sound-choice').value, customSoundDataUrl }); }
+    try { await SLINK.core.messaging.send('audio.play', { soundChoice:byId('adhd-sound-choice').value, customSoundDataUrl }); }
     catch (error) { byId('adhd-settings-message').textContent = errorText(error); }
   });
   byId('adhd-city-done').addEventListener('click', async event => {
@@ -1663,8 +1629,6 @@
     catch (error) { byId('dollar-bazaars-error').textContent = errorText(error); byId('dollar-bazaars-error').hidden = false; }
   }, 60_000);
   setInterval(() => { updateAdhdClock(); updateMarketClock(); updateMeritsClock(); updateDollarBazaarClock(); }, 1_000);
-  document.addEventListener('pointerdown', unlockAndRetrySounds, true);
-  document.addEventListener('keydown', unlockAndRetrySounds, true);
   addEventListener('pagehide', () => { void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {}); }, { once:true });
 })();
 
