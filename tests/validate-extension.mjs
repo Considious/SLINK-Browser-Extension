@@ -114,6 +114,8 @@ assert(dashboardHtml.includes('data-dashboard-page="alerts"') && dashboardHtml.i
 assert(dashboardHtml.includes('>Efficiency<') && dashboardHtml.includes('id="adhd-sound-choice"') && dashboardHtml.includes('id="adhd-custom-sound"'), 'Efficiency naming or notification-sound controls are missing.');
 assert(dashboardHtml.includes('data-efficiency-view="merits"') && dashboardHtml.includes('id="merits-refresh-minutes"') && dashboardHtml.includes('id="merits-pinned-list"'), 'Efficiency is missing its Merits tab, refresh control, or three-goal farm list.');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/merits.js')), 'Merits is missing from the in-Torn Efficiency tools.');
+assert(dashboardHtml.includes('data-efficiency-view="dollar"') && dashboardHtml.includes('id="dollar-bazaars-refresh"') && dashboardHtml.includes('id="dollar-bazaars-list"'), 'Efficiency is missing its $1 Bazaars tab, manual refresh, or results list.');
+assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/dollar-bazaars.js')), '$1 Bazaars is missing from the in-Torn Efficiency tools.');
 assert(dashboardHtml.includes('data-efficiency-view="market"') && dashboardHtml.includes('id="market-watch-form"') && dashboardHtml.includes('id="market-quick-buy"'), 'Efficiency is missing its Market Watch tab, editor, or quick-buy control.');
 assert(dashboardHtml.includes('id="market-watch-type"') && dashboardHtml.includes('>Points Market<') && dashboardHtml.includes('id="market-watch-item-id"') && dashboardHtml.includes('id="market-item-suggestions"'), 'Market Watch is missing Points Market or its ID-backed searchable item selector.');
 assert(dashboardHtml.includes('id="market-weaver-pricelist"') && dashboardHtml.includes('id="market-weaver-source-order"') && dashboardHtml.includes('market-weaver-pricelist-sync'), 'Market Watch is missing Weaver price-list source controls or manual sync.');
@@ -125,6 +127,8 @@ const marketServiceSource = read('src/background/market-service.js');
 const marketModuleSource = read('src/modules/market.js');
 assert(marketServiceSource.includes('/v2/market/') && marketServiceSource.includes("requestJson('weaver'") && marketServiceSource.includes('/v2/torn/items'), 'Market/Bazaar Watch is not sourced from the declared JSON APIs.');
 assert(marketServiceSource.includes("weaverJson('https://weav3r.dev/api/marketplace'") && marketServiceSource.includes('/api/pricelist/') && marketServiceSource.includes('pollWeaverTargets'), 'Weaver watches do not use summary-first screening for the SLINK and Weaver price lists.');
+assert(marketServiceSource.includes("weaverJson('https://weav3r.dev/api/dollar-bazaars/items?page=1&limit=100'") && marketServiceSource.includes("'market.dollar.refresh'") && marketServiceSource.includes('periodInMinutes:60'), '$1 Bazaars does not use the Weaver JSON API, hourly cache, and manual refresh route.');
+assert(!read('src/modules/dollar-bazaars.js').includes('fetch(') && !read('src/modules/dollar-bazaars.js').includes('querySelectorAll'), '$1 Bazaars must use the background API route instead of scraping a web page.');
 assert(!marketServiceSource.includes('workerClient') && !marketServiceSource.includes('D1'), 'Private Market/Bazaar Watch data must remain local instead of using a SLINK Worker or D1.');
 assert(marketServiceSource.includes('summarizeErrors') && marketServiceSource.includes('tornBlockedUntil'), 'Market Watch does not collapse repeated capacity errors or stop redundant limiter retries within one cycle.');
 assert(marketModuleSource.includes('SLINK Buy') && marketModuleSource.includes('data-slink-market-highlight'), 'Torn listing highlights or the custom buy control are missing.');
@@ -220,7 +224,7 @@ assert(!dashboardSource.includes('claim-war-target') && !warModuleSource.include
 assert(read('src/core/messaging.js').includes('suspendStaleContext') && read('src/core/messaging.js').includes('staleContextPromise'), 'Obsolete extension pages do not become quietly inactive after an update.');
 const moduleLoaderSource = read('src/core/modules.js');
 assert(moduleLoaderSource.includes('const planned = []') && moduleLoaderSource.includes('Promise.all(planned.map'), 'Torn modules are still started serially before later tabs exist.');
-for (const modulePath of ['src/modules/adhd.js','src/modules/market.js','src/modules/merits.js','src/modules/player-stats.js']) {
+for (const modulePath of ['src/modules/adhd.js','src/modules/market.js','src/modules/merits.js','src/modules/dollar-bazaars.js','src/modules/player-stats.js']) {
   assert(read(modulePath).includes('await load(false);'), `${modulePath} still forces due API work during Torn page navigation.`);
 }
 assert(!listFiles(path.join(root, 'src')).some(file => /\.(?:js|mjs|html)$/i.test(file) && /(?:loader2?\.php|\/loader)/i.test(fs.readFileSync(file, 'utf8'))), 'An obsolete Torn loader URL remains in the extension.');

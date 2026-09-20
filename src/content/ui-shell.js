@@ -43,7 +43,7 @@
     .icon-button { width:30px; padding:0; }
     .groups,.tabs { display:grid; gap:4px; overflow:auto; padding:6px 7px; border-bottom:1px solid var(--slink-border-soft); }
     .groups { grid-template-columns:repeat(2,minmax(0,1fr)); padding-bottom:4px; background:var(--slink-bg-raised); }
-    .tabs { grid-template-columns:repeat(3,minmax(0,1fr)); padding-top:4px; }
+    .tabs { grid-template-columns:repeat(auto-fit,minmax(70px,1fr)); padding-top:4px; }
     .group-tab { min-height:29px; padding:3px 7px; color:var(--slink-muted); font-weight:700; }
     .group-tab[aria-selected="true"] { border-color:var(--slink-accent-alt); background:var(--slink-selected-bg); color:var(--slink-text); box-shadow:0 0 10px var(--slink-glow-right); }
     .tab { flex:1 0 auto; min-height:27px; padding:3px 7px; color:var(--slink-muted); }

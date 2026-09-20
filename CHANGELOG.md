@@ -2,6 +2,18 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.23 — 2026-09-20
+
+### Added
+
+- Added a fourth **$1 Bazaars** Efficiency tab to both the dedicated extension dashboard and the in-Torn interface.
+- The tab uses Weaver's public Dollar Bazaars JSON API, ranks the top 100 listings by total market value, and links directly to each seller's Torn bazaar.
+- Results refresh automatically once per hour, can be refreshed manually, and retain the last successful response when Weaver is temporarily unavailable or rate-limited.
+
+### Privacy and API use
+
+- Dollar Bazaar discovery makes one shared API request per refresh and does not scrape Weaver or Torn pages.
+
 ## 0.18.22 — 2026-09-19
 
 ### Changed

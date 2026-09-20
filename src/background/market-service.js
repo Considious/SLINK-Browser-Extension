@@ -4,9 +4,12 @@
   const SLINK = global.SLINK_EXTENSION;
   const MARKET = SLINK.core.market;
   const ALARM = 'slink.market.watch';
-  const KEYS = Object.freeze({ settings:'market.settings.v1', runtime:'market.runtime.v1', dismissals:'market.dismissals.v1', soundState:'market.sound.state.v1' });
+  const DOLLAR_ALARM = 'slink.market.dollar-bazaars';
+  const DOLLAR_REFRESH_MS = 60 * 60_000;
+  const KEYS = Object.freeze({ settings:'market.settings.v1', runtime:'market.runtime.v1', dollarBazaars:'market.dollar-bazaars.v1', dismissals:'market.dismissals.v1', soundState:'market.sound.state.v1' });
   const CATALOG_MAX_AGE_MS = 24 * 60 * 60_000;
   let refreshing = null;
+  let dollarRefreshing = null;
 
   async function settings() { return MARKET.normalizeSettings(await SLINK.core.storage.get(KEYS.settings, {})); }
   async function runtime() {
@@ -448,15 +451,65 @@
     return candidate.weaverPricelistEnabled ? refresh(false) : buildStatus(candidate, current, access);
   }
 
+  async function dollarRecord() {
+    const stored = await SLINK.core.storage.get(KEYS.dollarBazaars, {});
+    return stored && typeof stored === 'object' ? stored : {};
+  }
+
+  function buildDollarStatus(stored = {}) {
+    const items = MARKET.weaverDollarBazaarItems({ items:Array.isArray(stored.items) ? stored.items : [] });
+    return {
+      items,
+      itemCount:items.length,
+      fetchedAt:Number(stored.fetchedAt) || 0,
+      nextRefreshAt:Number(stored.nextRefreshAt) || 0,
+      lastError:String(stored.lastError || ''),
+      sourceUrl:'https://weav3r.dev/dollar-bazaars'
+    };
+  }
+
+  async function refreshDollarBazaars(force = false) {
+    if (dollarRefreshing) return dollarRefreshing;
+    dollarRefreshing = (async () => {
+      const previous = await dollarRecord();
+      if (!force && Number(previous.nextRefreshAt) > Date.now()) return buildDollarStatus(previous);
+      let next;
+      try {
+        const current = await runtime();
+        const body = await weaverJson('https://weav3r.dev/api/dollar-bazaars/items?page=1&limit=100', current);
+        const now = Date.now();
+        next = { fetchedAt:now, nextRefreshAt:now + DOLLAR_REFRESH_MS, items:MARKET.weaverDollarBazaarItems(body), lastError:'' };
+      } catch (error) {
+        next = { ...previous, nextRefreshAt:Date.now() + DOLLAR_REFRESH_MS, lastError:SLINK.core.format.errorMessage(error) };
+      }
+      await SLINK.core.storage.set(KEYS.dollarBazaars, next);
+      return buildDollarStatus(next);
+    })();
+    try { return await dollarRefreshing; } finally { dollarRefreshing = null; }
+  }
+
+  async function dollarStatus(refreshIfDue = true) {
+    const current = await dollarRecord();
+    if (refreshIfDue && Number(current.nextRefreshAt || 0) <= Date.now()) return refreshDollarBazaars(false);
+    return buildDollarStatus(current);
+  }
+
+  async function ensureDollarAlarm() {
+    if (!await chrome.alarms.get(DOLLAR_ALARM)) await chrome.alarms.create(DOLLAR_ALARM, { delayInMinutes:1, periodInMinutes:60 });
+    return chrome.alarms.get(DOLLAR_ALARM);
+  }
+
   async function ensureAlarm() { if (!await chrome.alarms.get(ALARM)) await scheduleAlarm(Date.now() + 1_000); return chrome.alarms.get(ALARM); }
   const routes = Object.freeze({
     'market.status':payload => publicStatus(payload?.refreshIfDue !== false), 'market.refresh':() => refresh(true), 'market.settings.save':saveSettings,
     'market.permissions.refresh':refreshPermissions,
     'market.weaver.pricelist.sync':syncPricelist,
     'market.weaver.selection.save':saveWeaverSelection,
+    'market.dollar.status':payload => dollarStatus(payload?.refreshIfDue !== false),
+    'market.dollar.refresh':() => refreshDollarBazaars(true),
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },
     'market.watch.save':upsertWatch, 'market.watch.remove':removeWatch, 'market.deal.dismiss':dismissDeal,
     'market.sound.claim':claimSound, 'market.sound.ack':acknowledgeSound
   });
-  SLINK.define('services', 'market', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, routes }));
+  SLINK.define('services', 'market', Object.freeze({ ALARM, DOLLAR_ALARM, dollarStatus, ensureAlarm, ensureDollarAlarm, publicStatus, refresh, routes }));
 })(globalThis);

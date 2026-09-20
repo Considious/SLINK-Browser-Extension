@@ -81,7 +81,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.22', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.23', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -250,6 +250,12 @@ const soundOnly = SLINK.core.adhd.normalizeSettings({ enabled:{ drugCooldown:fal
 assert(!SLINK.core.adhd.buildAlerts(efficiencySnapshot, soundOnly).some(alert => alert.id === 'drugCooldown'), 'A hidden alert remained visible.');
 assert(SLINK.core.adhd.buildAlerts(efficiencySnapshot, soundOnly, Date.now(), { includeHidden:true }).some(alert => alert.id === 'drugCooldown'), 'A sound-only alert was unavailable to the sound notifier.');
 assert(SLINK.core.market.defaultSettings().soundEnabled === true && SLINK.core.market.normalizeSettings({ soundEnabled:false }).soundEnabled === false, 'Market Watch sound does not have a durable user-toggle default.');
+const dollarBazaars = SLINK.core.market.weaverDollarBazaarItems({ items:[
+  { itemId:1, itemName:'Cheap Stack', itemType:'Other', playerId:11, sellerName:'Seller A', quantity:2, marketPrice:100, totalValue:200, lastUpdated:'2026-09-20T00:00:00Z' },
+  { itemId:2, itemName:'Best Stack', itemType:'Drug', playerId:22, sellerName:'Seller B', quantity:3, marketPrice:500, totalValue:1500, lastUpdated:'2026-09-20T00:00:00Z' }
+] });
+assert(dollarBazaars.length === 2 && dollarBazaars[0].itemId === 2, 'Weaver $1 Bazaar items were not normalized and ranked by total market value.');
+assert(dollarBazaars[0].href.includes('bazaar.php') && dollarBazaars[0].href.includes('userId=22') && dollarBazaars[0].href.includes('price=1'), 'Weaver $1 Bazaar result did not create a direct highlighted Torn bazaar URL.');
 assert(SLINK.core.war.makeWarId(46978, 46999, 1_777_000_000) === 'rw_46978_46999_1777000000', 'Second-based War identity was changed.');
 assert(SLINK.core.war.makeWarId(46978, 46999, 1_777_000_000_000) === 'rw_46978_46999_1777000000', 'Millisecond-based War identity was not normalized.');
 assert(SLINK.core.war.sortMembers([

@@ -36,6 +36,7 @@ let itemMarketRequests = 0;
 let weaverMarketRequests = 0;
 let weaverSummaryRequests = 0;
 let weaverDetailRequests = 0;
+let weaverDollarRequests = 0;
 let weaverPricelistRequests = 0;
 let pointsMarketRequests = 0;
 let permissionAuthScopes = ['admin.*','slink.adhd.alerts','slink.adhd.marketwatch.40'];
@@ -462,7 +463,13 @@ context = vm.createContext({
       };
     } else if (url.hostname === 'weav3r.dev') {
       weaverMarketRequests += 1;
-      if (/^\/api\/pricelist\//.test(url.pathname)) {
+      if (url.pathname === '/api/dollar-bazaars/items') {
+        weaverDollarRequests += 1;
+        body = { items:[
+          { itemId:1, itemName:'Lower Value', itemType:'Other', playerId:44, sellerName:'Bazaar Seller', quantity:2, marketPrice:100, totalValue:200, lastUpdated:new Date().toISOString() },
+          { itemId:2, itemName:'Higher Value', itemType:'Drug', playerId:55, sellerName:'Dollar Seller', quantity:4, marketPrice:500, totalValue:2000, lastUpdated:new Date().toISOString() }
+        ] };
+      } else if (/^\/api\/pricelist\//.test(url.pathname)) {
         weaverPricelistRequests += 1;
         body = [{ itemId:2, name:'Legacy Shop', buyPrice:90, bulkThreshold:3, bulkBuyPrice:95 }];
       } else if (url.pathname === '/api/marketplace') {
@@ -515,6 +522,7 @@ assert(alarms.has('slink.worker.connection'), 'Worker connection alarm was not c
 assert(alarms.has('slink.playerStats.daily'), 'Daily local player-stat alarm was not created.');
 assert(alarms.has('slink.adhd.alerts'), 'ADHD scheduler alarm was not created.');
 assert(alarms.has('slink.market.watch'), 'Market Watch scheduler alarm was not created.');
+assert(alarms.has('slink.market.dollar-bazaars'), '$1 Bazaar hourly scheduler alarm was not created.');
 assert(values.get('slink.worker.lastStatus')?.connected === true, 'Automatic Worker connection was not persisted.');
 assert(values.get('slink.themes.catalog.v1')?.catalog?.revision === 'test.remote.1', 'Remote theme catalog was not cached locally.');
 
@@ -539,6 +547,14 @@ assert(status.data.capabilities.contributionWorker.granted === true, 'Required c
 assert(status.data.capabilities.warWorker.granted === true, 'Required War capability was not granted.');
 assert(status.data.worker.connected === true, 'System status did not report a real Worker connection.');
 assert(status.data.leveling.terms.accepted === false, 'Fresh Leveling terms should require acceptance.');
+
+const firstDollarStatus = await send('market.dollar.status', { refreshIfDue:true });
+assert(firstDollarStatus.ok && firstDollarStatus.data.items.length === 2 && firstDollarStatus.data.items[0].itemName === 'Higher Value', '$1 Bazaar API results were not returned in descending total-value order.');
+assert(weaverDollarRequests === 1, '$1 Bazaar status did not make exactly one Weaver API request.');
+const cachedDollarStatus = await send('market.dollar.status', { refreshIfDue:true });
+assert(cachedDollarStatus.ok && weaverDollarRequests === 1, '$1 Bazaar hourly cache made a redundant Weaver API request.');
+const refreshedDollarStatus = await send('market.dollar.refresh');
+assert(refreshedDollarStatus.ok && weaverDollarRequests === 2, '$1 Bazaar manual refresh did not force exactly one Weaver API request.');
 
 const donated = await send('contribution.donate', { apiKey:'public-only-test-key', acceptTerms:true });
 assert(donated.ok && donated.data.donation.active, 'Public Only donation route failed.');

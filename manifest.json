@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.18.22",
+  "version": "0.18.23",
   "description": "Shared Live Intelligence NetworK with Combat and Efficiency reminder tools for Torn.",
   "permissions": [
     "alarms",
@@ -53,6 +53,7 @@
         "src/modules/adhd.js",
         "src/modules/market.js",
         "src/modules/merits.js",
+        "src/modules/dollar-bazaars.js",
         "src/modules/contribution.js",
         "src/content/content-script.js"
       ]

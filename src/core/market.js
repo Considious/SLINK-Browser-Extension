@@ -212,6 +212,31 @@
     return Math.max(0, Math.trunc(Number(bulk ? item.bulkBuyPrice : item.buyPrice) || 0));
   }
 
+  function weaverDollarBazaarItems(body = {}) {
+    const rows = Array.isArray(body?.items) ? body.items : Array.isArray(body?.data?.items) ? body.data.items : [];
+    return rows.map(row => {
+      const itemId = Math.max(0, Math.trunc(Number(row?.itemId ?? row?.item_id) || 0));
+      const sellerId = Math.max(0, Math.trunc(Number(row?.playerId ?? row?.player_id ?? row?.sellerId ?? row?.seller_id) || 0));
+      const marketPrice = Math.max(0, Math.trunc(Number(row?.marketPrice ?? row?.market_price) || 0));
+      const quantity = Math.max(0, Math.trunc(Number(row?.quantity ?? row?.amount) || 0));
+      const updatedAt = externalTimestampMs(row?.lastUpdated ?? row?.last_updated ?? row?.updatedAt ?? row?.updated_at);
+      return {
+        itemId,
+        itemName:String(row?.itemName ?? row?.item_name ?? row?.name ?? `Item ${itemId}`).trim().slice(0, 160),
+        itemType:String(row?.itemType ?? row?.item_type ?? row?.type ?? '').trim().slice(0, 80),
+        sellerId,
+        sellerName:String(row?.sellerName ?? row?.seller_name ?? row?.playerName ?? row?.player_name ?? `Player ${sellerId}`).trim().slice(0, 160),
+        quantity,
+        marketPrice,
+        totalValue:Math.max(0, Math.trunc(Number(row?.totalValue ?? row?.total_value) || marketPrice * quantity)),
+        updatedAt,
+        href:bazaarUrl(sellerId, itemId, 1, updatedAt)
+      };
+    }).filter(row => row.itemId > 0 && row.sellerId > 0 && row.marketPrice > 0 && row.quantity > 0)
+      .sort((left, right) => right.totalValue - left.totalValue || right.marketPrice - left.marketPrice || left.itemName.localeCompare(right.itemName))
+      .slice(0, 100);
+  }
+
   function itemMarketUrl(itemId, price = 0) {
     const target = Math.max(0, Math.trunc(Number(itemId) || 0));
     const threshold = Math.max(0, Math.trunc(Number(price) || 0));
@@ -333,6 +358,6 @@
     WEAVER_PRICELIST_REFRESH_MS, WEAVER_RATE_WINDOW_MS, WEAVER_REFRESH_MS, activeSlotCount, activeSlotKeys, bazaarUrl, catalogItems, defaultSettings, effectivePriority,
     itemMarketCache, itemMarketListings, itemMarketNextCheckAt, itemMarketUrl, listingHighlightState, normalizePriority, normalizeSettings,
     normalizeWatch, opportunityRows, pointsMarketListings, pointsMarketUrl, shopSellDetails, staleRetryMs, weaverListings,
-    weaverMarketplaceItems, weaverPricelistItems, weaverPricelistTarget
+    weaverDollarBazaarItems, weaverMarketplaceItems, weaverPricelistItems, weaverPricelistTarget
   }));
 })(globalThis);

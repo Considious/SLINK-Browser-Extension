@@ -126,6 +126,7 @@ async function ensureConnectionAlarm() {
   await chrome.alarms.clear(WAR_CYCLE_ALARM);
   await SLINK.services.adhd.ensureAlarm();
   await SLINK.services.market.ensureAlarm();
+  await SLINK.services.market.ensureDollarAlarm();
   await SLINK.services.playerStats.ensureAlarm();
 }
 
@@ -348,7 +349,7 @@ const routes = {
       : 'workspace';
     await SLINK.core.storage.set('ui.dashboard.activePage', page);
     if (page === 'alerts') {
-      const efficiencyView = ['alerts', 'market', 'merits'].includes(String(payload.efficiencyView))
+      const efficiencyView = ['alerts', 'market', 'merits', 'dollar'].includes(String(payload.efficiencyView))
         ? String(payload.efficiencyView)
         : 'alerts';
       await SLINK.core.storage.set('ui.efficiency.activeView', efficiencyView);
@@ -400,6 +401,9 @@ chrome.alarms.onAlarm.addListener(alarm => {
   }
   if (alarm.name === SLINK.services.market.ALARM) {
     void SLINK.services.market.publicStatus(true).catch(error => console.error('[SLINK] Market Watch:', error));
+  }
+  if (alarm.name === SLINK.services.market.DOLLAR_ALARM) {
+    void SLINK.services.market.dollarStatus(true).catch(error => console.error('[SLINK] $1 Bazaars:', error));
   }
   if (alarm.name === SLINK.services.playerStats.ALARM) {
     void SLINK.services.playerStats.status().then(status => {
