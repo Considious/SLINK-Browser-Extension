@@ -5,6 +5,8 @@
   if (!SLINK) throw new Error('SLINK runtime must load before the UI shell.');
 
   const HOST_ID = 'slink-extension-panel';
+  const ACTIVE_MODULE_STORAGE_KEY = 'ui.main.activeModule';
+  const ACTIVE_MODULES_BY_GROUP_STORAGE_KEY = 'ui.main.activeModulesByGroup';
   const STYLES = `
     :host { all: initial; ${SLINK.core.themes.cssVariables('slink-dark')} }
     * { box-sizing:border-box; }
@@ -123,6 +125,8 @@
     let activeId = '';
     let activeGroup = '';
     let preferredActiveId = '';
+    const preferredActiveIdsByGroup = new Map();
+    let navigationSelectionChanged = false;
     const bubbleAlertSources = new Map();
 
     function displayAlertCount(count) {
@@ -235,8 +239,13 @@
       activeId = id;
       activeGroup = views.get(id).group;
       if (persist) {
+        navigationSelectionChanged = true;
         preferredActiveId = id;
-        void SLINK.core.storage.set('ui.main.activeModule', id);
+        preferredActiveIdsByGroup.set(activeGroup, id);
+        void Promise.all([
+          SLINK.core.storage.set(ACTIVE_MODULE_STORAGE_KEY, id),
+          SLINK.core.storage.set(ACTIVE_MODULES_BY_GROUP_STORAGE_KEY, Object.fromEntries(preferredActiveIdsByGroup))
+        ]);
       }
       for (const [moduleId, view] of views) {
         view.element.hidden = moduleId !== id;
@@ -249,7 +258,8 @@
     function setActiveGroup(groupId, persist = true) {
       const matches = [...views.values()].filter(view => view.group === groupId);
       if (!matches.length) return;
-      const preferred = matches.find(view => view.id === preferredActiveId);
+      const groupPreference = preferredActiveIdsByGroup.get(groupId);
+      const preferred = matches.find(view => view.id === groupPreference) || matches.find(view => view.id === preferredActiveId);
       setActive((preferred || matches[0]).id, persist);
     }
 
@@ -434,7 +444,9 @@
       api.ui = api;
       view.api = Object.freeze(api);
       if (!activeId) activeId = module.id;
-      if (preferredActiveId === module.id) activeId = module.id;
+      if (!preferredActiveIdsByGroup.has(group) && preferredActiveId === module.id) preferredActiveIdsByGroup.set(group, module.id);
+      const groupPreference = preferredActiveIdsByGroup.get(group);
+      if (groupPreference === module.id || (!groupPreference && preferredActiveId === module.id)) activeId = module.id;
       updateNavigationAlerts();
       refreshShell();
       return view.api;
@@ -442,9 +454,20 @@
 
     const bubbleMover = makeBubbleMovable();
     main.element.querySelector('.hide').addEventListener('click', () => void setCollapsed(true));
-    void SLINK.core.storage.get('ui.main.activeModule', '').then(value => {
-      preferredActiveId = String(value || '');
-      if (views.has(preferredActiveId)) setActive(preferredActiveId, false);
+    void Promise.all([
+      SLINK.core.storage.get(ACTIVE_MODULE_STORAGE_KEY, ''),
+      SLINK.core.storage.get(ACTIVE_MODULES_BY_GROUP_STORAGE_KEY, {})
+    ]).then(([legacyActiveId, storedByGroup]) => {
+      if (!preferredActiveId) preferredActiveId = String(legacyActiveId || '');
+      if (storedByGroup && typeof storedByGroup === 'object' && !Array.isArray(storedByGroup)) {
+        for (const [groupId, moduleId] of Object.entries(storedByGroup)) {
+          if (!preferredActiveIdsByGroup.has(groupId) && typeof moduleId === 'string' && moduleId) preferredActiveIdsByGroup.set(groupId, moduleId);
+        }
+      }
+      if (navigationSelectionChanged) return;
+      const preferredForCurrentGroup = preferredActiveIdsByGroup.get(activeGroup);
+      const selection = views.has(preferredActiveId) ? preferredActiveId : views.has(preferredForCurrentGroup) ? preferredForCurrentGroup : '';
+      if (selection) setActive(selection, false);
     });
     void SLINK.core.storage.get('ui.main.collapsed', false).then(value => setCollapsed(Boolean(value), false));
     async function restore() {

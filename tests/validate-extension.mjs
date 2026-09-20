@@ -178,7 +178,7 @@ assert(uiShellSource.includes('setTheme'), 'Torn UI shell does not support live 
 assert(uiShellSource.includes('.status[data-tone="error"] { max-height:72px; overflow:auto;'), 'Torn GUI errors are not constrained to a small scrollable status box.');
 assert(uiShellSource.includes('ui.main.collapsed') && uiShellSource.includes('bubble-coil'), 'Torn UI shell does not provide the persistent theme-aware collapse bubble.');
 assert(uiShellSource.includes('setBubbleAlert') && uiShellSource.includes('data-alert-kind="retal"') && uiShellSource.includes('data-alert-kind="armory"') && uiShellSource.includes('data-alert-kind="adhd"'), 'The collapse bubble is missing retal, officer armory, or ADHD alert states.');
-assert(uiShellSource.includes('ui.main.activeModule'), 'The Torn shell does not remember the selected SLINK module.');
+assert(uiShellSource.includes('ui.main.activeModule') && uiShellSource.includes('ui.main.activeModulesByGroup') && uiShellSource.includes('preferredActiveIdsByGroup.get(groupId)'), 'The Torn shell does not remember the selected module independently for Combat and Efficiency.');
 assert(uiShellSource.includes("groups.className = 'groups'") && uiShellSource.includes('setActiveGroup'), 'The Torn shell is missing its Combat/Efficiency navigation level.');
 assert(uiShellSource.includes('navigationAlerts') && uiShellSource.includes('setAlertCount') && uiShellSource.includes("alert.group === groupId"), 'The Torn shell is missing module alert badges or parent-group count rollups.');
 assert(uiShellSource.includes('background:#d71920') && uiShellSource.includes('border:2px solid #050505') && uiShellSource.includes('color:#fff'), 'Torn navigation alert badges are not theme-independent red, white, and black.');

@@ -2,6 +2,13 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.24 — 2026-09-20
+
+### Fixed
+
+- The in-Torn interface now remembers the last selected tab independently for Combat and Efficiency. For example, moving from **Combat → War** to **Efficiency → Market** and back returns to War instead of resetting Combat to Leveling.
+- The most recently open section and its selected tab remain restored after Torn page changes and reloads. Existing saved module selection is retained as a backward-compatible fallback.
+
 ## 0.18.23 — 2026-09-20
 
 ### Added
