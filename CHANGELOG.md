@@ -2,6 +2,16 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.26 — 2026-09-25
+
+- Added a compact Armory TCT (UTC) date/time converter with your device's local time and a copyable relative Discord timestamp. Conversion follows the device timezone, including daylight saving, and needs no API calls.
+
+- Fixed Retrieve Next staying disabled until the next ten-second War refresh. The button now updates immediately when retrieval finishes, fails, or finds no eligible items.
+- Adapted retrieval and pagination from Considious Armory Recaller 1.2.6 while retaining SLINK's interface and shared API access. Includes whitelist skip counts, strict level-15 filtering, and Torn's exact hash-route pagination fallback. Each click retrieves at most one item, with only 50 ms confirmation checks and no added cooldown.
+
+- Added a separate, persistent 24-hour countdown to Efficiency in the dashboard and Torn panel, with start, restart, and cancel/dismiss controls. Its completion reminder uses the existing visibility and sound settings.
+- Added Stack mode to pause both full-energy and energy-refill reminders, including their sounds. A fresh API reading below 150 energy automatically ends Stack mode and evaluates both reminders normally. Stacked or missing energy readings keep it enabled; checks continue at most five minutes apart using the existing API refresh.
+
 ## 0.18.25 — 2026-09-20
 
 ### Fixed

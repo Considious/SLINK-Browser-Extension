@@ -102,7 +102,7 @@ const chrome = {
   },
   runtime: {
     id:'test-extension-id',
-    getManifest() { return { version: '0.18.25' }; },
+    getManifest() { return { version: '0.18.26' }; },
     getURL(pathname) { return `chrome-extension://test-extension-id/${String(pathname).replace(/^\//, '')}`; },
     async getContexts() { return offscreenDocumentOpen ? [{ contextType:'OFFSCREEN_DOCUMENT' }] : []; },
     async sendMessage(message) {
@@ -863,5 +863,34 @@ onAlarm.fire({ name: 'slink.worker.connection' });
 await new Promise(resolve => setTimeout(resolve, 0));
 assert(values.get('slink.worker.lastStatus')?.connected === true, 'Alarm connection status was not persisted.');
 
-console.log('Background startup, required capabilities, Leveling and War auth/collection, routes, alarms, and diagnostics passed.');
+const stackEnabled = await send('adhd.reminder.control', { action:'stack-on' });
+assert(stackEnabled.ok && stackEnabled.data.settings.stackModeSince > 0, 'Stack mode was not persisted.');
+assert(!stackEnabled.data.activeAlerts.some(a => ['energyFull', 'energyRefill'].includes(a.id)), 'Stack mode did not mute energy reminders.');
+const cachedStack = await send('adhd.status', { refreshIfDue:false });
+assert(cachedStack.data.settings.stackModeSince > 0, 'A cached low-energy reading disabled Stack mode.');
+assert(cachedStack.data.nextRefreshAt <= Date.now() + 5 * 60_000, 'Stack mode must keep checking energy at least every five minutes.');
+// The API fixture returns 100 energy; a NEW reading should end Stack mode.
+await new Promise(resolve => setTimeout(resolve, 2));
+const spentStack = await send('adhd.refresh');
+assert(spentStack.ok && spentStack.data.settings.stackModeSince === 0, 'Fresh energy below 150 did not end Stack mode.');
+assert(spentStack.data.activeAlerts.some(a => a.id === 'energyRefill'), 'Unused refill did not resume after spending energy.');
+const timerStartedAt = Date.now();
+const startedTimer = await send('adhd.reminder.control', { action:'timer-start' });
+assert(startedTimer.ok && startedTimer.data.settings.timer24EndsAt >= timerStartedAt + 86_400_000, 'Timer must start 24 hours from the click.');
+assert(!startedTimer.data.activeAlerts.some(a => a.id === 'timer24'), 'Timer fired before its deadline.');
+const timerSettings = values.get('slink.adhd.settings.v1');
+timerSettings.timer24EndsAt = Date.now() - 1;
+timerSettings.soundEnabled.timer24 = true;
+values.set('slink.adhd.settings.v1', timerSettings);
+const expiredTimer = await send('adhd.status', { refreshIfDue:false });
+assert(expiredTimer.data.activeAlerts.some(a => a.id === 'timer24'), 'Expired timer must fire without another API refresh.');
+const timerSound = await send('adhd.sound.claim');
+assert(timerSound.data.alertIds.includes('timer24'), 'Timer did not enter the sound queue.');
+await send('adhd.sound.ack', { alertIds:['timer24'] });
+await send('adhd.reminder.control', { action:'timer-start' });
+assert(!values.get('slink.adhd.sound.state.v1').activeIds.includes('timer24'), 'Restart did not rearm timer sound.');
+const cancelledTimer = await send('adhd.reminder.control', { action:'timer-cancel' });
+assert(cancelledTimer.data.settings.timer24EndsAt === 0, 'Timer cancel was not persisted.');
+assert(!cancelledTimer.data.activeAlerts.some(a => a.id === 'timer24'), 'Dismissed timer remains active.');
+console.log('Background startup, capabilities, services, Stack mode and 24-hour timer checks passed.');
 

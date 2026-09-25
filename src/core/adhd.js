@@ -21,6 +21,7 @@
     Object.freeze({ id:956, label:'Blank DVDs', shop:'Cyber Force', href:'https://www.torn.com/shops.php?step=cyberforce' })
   ]);
   const ALERT_DEFINITIONS = Object.freeze([
+    Object.freeze({ id:'timer24', label:'24-hour timer' }),
     Object.freeze({ id:'energyRefill', label:'Energy refill' }),
     Object.freeze({ id:'nerveRefill', label:'Nerve refill' }),
     Object.freeze({ id:'energyFull', label:'Energy full' }),
@@ -69,6 +70,8 @@
   function defaultSettings() {
     return {
       medicalThresholdHours:3,
+      stackModeSince:0,
+      timer24EndsAt:0,
       boosterThresholdHours:3,
       landingLeadMinutes:5,
       playerAddictionThreshold:4,
@@ -89,6 +92,8 @@
     return {
       ...defaults,
       ...(input && typeof input === 'object' ? input : {}),
+      stackModeSince:Math.max(0, finite(input?.stackModeSince) || 0),
+      timer24EndsAt:Math.max(0, finite(input?.timer24EndsAt) || 0),
       medicalThresholdHours:Math.min(24, Math.max(1, Number(input?.medicalThresholdHours) || defaults.medicalThresholdHours)),
       boosterThresholdHours:Math.min(72, Math.max(0, Number(input?.boosterThresholdHours) || defaults.boosterThresholdHours)),
       landingLeadMinutes:Math.min(60, Math.max(1, Number(input?.landingLeadMinutes) || defaults.landingLeadMinutes)),
@@ -354,6 +359,7 @@
     const activeRace = raceActive(body.races, profile.status, body.icons);
     const racewayKnown = body.enlistedcars !== undefined || body.races !== undefined || body.icons !== undefined;
     const alerts = [
+      { id:'timer24', active:settings.timer24EndsAt > 0 && settings.timer24EndsAt <= now, title:'24-hour timer finished', detail:'Your countdown has finished. Dismiss it or start another timer.', tone:'urgent', links:[] },
       { id:'drugCooldown', active:drug === 0, title:'Drug cooldown is clear', detail:'You can take a drug now.', tone:'ready', links:[['Items','https://www.torn.com/item.php'],['Faction Armory',`${ARMORY_URL}&start=0&sub=drugs`]] },
       { id:'nerveFull', active:finite(bars?.nerve?.current) !== null && finite(bars?.nerve?.maximum) !== null && Number(bars.nerve.current) >= Number(bars.nerve.maximum), title:'Nerve is full', detail:`${bars?.nerve?.current ?? '?'} / ${bars?.nerve?.maximum ?? '?'}`, tone:'urgent', links:[['Crimes','https://www.torn.com/page.php?sid=crimes']] },
       { id:'energyFull', active:finite(bars?.energy?.current) !== null && finite(bars?.energy?.maximum) !== null && Number(bars.energy.current) >= Number(bars.energy.maximum), title:'Energy is full', detail:`${bars?.energy?.current ?? '?'} / ${bars?.energy?.maximum ?? '?'}`, tone:'urgent', links:[['Gym','https://www.torn.com/gym.php']] },
@@ -375,6 +381,7 @@
       ...cityStockAlerts
     ];
     return alerts.filter(alert => alert.active
+      && !(settings.stackModeSince > 0 && ['energyFull', 'energyRefill'].includes(alert.id))
       && (options.includeHidden === true || settings.enabled[alert.id] !== false)
       && Number(settings.snoozedUntil[alert.id] || 0) <= now);
   }
@@ -384,6 +391,7 @@
     const body = snapshot.data || {};
     const fetchedAt = Number(snapshot.fetchedAt) || now;
     const candidates = [now + 2 * 60 * 60 * 1000, nextUtcDay(now) + 15_000];
+    if (settings.stackModeSince > 0) candidates.push(now + 5 * 60_000);
     if ((settings.enabled.googlePlayPoints !== false || settings.soundEnabled.googlePlayPoints === true)
       && Number(settings.googlePlayPointsClaimedAt) > 0) candidates.push(Number(settings.googlePlayPointsClaimedAt) + WEEK_MS + 1_000);
     const progress = cityProgress(snapshot, settings, now);
@@ -403,6 +411,41 @@
     const arrival = finite(body?.travel?.arrival_at);
     if (arrival && arrival * 1000 > now) candidates.push(Math.max(now + 60_000, arrival * 1000 - settings.landingLeadMinutes * 60_000));
     return Math.max(now + 60_000, Math.min(...candidates.filter(Number.isFinite)));
+  }
+
+  function updateReminderClock(root, settings) {
+    const clock = root.querySelector('[data-reminder-countdown]');
+    if (!clock) return;
+    const remaining = Math.max(0, Math.ceil((Number(settings?.timer24EndsAt) - Date.now()) / 1000));
+    clock.textContent = !settings?.timer24EndsAt ? '24-hour timer: not started'
+      : remaining ? `24-hour timer: ${SLINK.core.format.formatHumanDuration(remaining)} remaining` : '24-hour timer finished';
+  }
+
+  function reminderControls(settings, onAction, onError) {
+    const root = document.createElement('div');
+    root.className = 'slink-adhd-links adhd-alert-actions';
+    root.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0';
+    const clock = document.createElement('span'); clock.dataset.reminderCountdown = 'true';
+    const stack = document.createElement('span');
+    stack.textContent = settings.stackModeSince > 0 ? 'Stack mode on — energy reminders paused until below 150E' : 'Stack mode off';
+    root.append(clock, stack);
+    const controls = [
+      [settings.timer24EndsAt ? 'Restart 24h timer' : 'Start 24h timer', 'timer-start'],
+      ...(settings.timer24EndsAt ? [['Cancel / dismiss timer', 'timer-cancel']] : []),
+      [settings.stackModeSince > 0 ? 'Turn Stack mode off' : 'Enable Stack mode', settings.stackModeSince > 0 ? 'stack-off' : 'stack-on']
+    ];
+    for (const [label, action] of controls) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'small secondary'; button.textContent = label;
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try { await onAction(action); }
+        catch (error) { onError(error); }
+        finally { button.disabled = false; }
+      });
+      root.append(button);
+    }
+    updateReminderClock(root, settings);
+    return root;
   }
 
   let notificationAudioContext = null;
@@ -483,6 +526,8 @@
     unlockNotificationSound,
     raceActive,
     refillUsed,
+    reminderControls,
+    updateReminderClock,
     stockBenefitsReady,
     utcDay,
     WEEK_MS

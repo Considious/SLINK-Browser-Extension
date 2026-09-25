@@ -419,6 +419,10 @@
       row.append(label, visible, sound); return row;
     }));
     const list = byId('adhd-alert-list');
+    const reminderControls = SLINK.core.adhd.reminderControls(settings,
+      async action => { adhd = await SLINK.core.messaging.send('adhd.reminder.control', { action }); renderAdhd(); },
+      error => { byId('adhd-settings-message').textContent = errorText(error); });
+    byId('adhd-reminder-controls').replaceChildren(reminderControls);
     if (!alerts.length) {
       const empty = document.createElement('div'); empty.className = 'adhd-empty';
       empty.textContent = adhd?.fetchedAt ? 'You’re caught up. No active API reminders.' : 'No timer snapshot has been collected yet.';
@@ -455,6 +459,7 @@
 
   function updateAdhdClock() {
     if (!adhd) return;
+    SLINK.core.adhd.updateReminderClock(document, adhd.settings);
     byId('adhd-status').textContent = !adhd.configured
       ? 'Enable Efficiency in API & feature access to begin.'
       : adhd.fetchedAt ? `Private timers last updated ${relativeTime(adhd.fetchedAt)}. Stats refresh only when the next timer is due.` : 'Ready for the first API refresh.';

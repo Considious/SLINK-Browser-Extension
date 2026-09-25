@@ -162,6 +162,7 @@
 
       function updateStatus() {
         if (!current) return;
+        SLINK.core.adhd.updateReminderClock(ui.getContentElement(), current.settings);
         ui.setStatus(current?.lastError || (current?.configured ? `API timers updated ${relativeTime(current.fetchedAt)}` : 'Enable Efficiency from the extension dashboard.'), current?.lastError ? 'error' : current?.configured ? 'ready' : 'normal');
       }
 
@@ -194,6 +195,9 @@
           cell.append(strong, small); summary.append(cell);
         }
         root.append(summary);
+        root.append(SLINK.core.adhd.reminderControls(status.settings || {},
+          async action => render(await SLINK.core.messaging.send('adhd.reminder.control', { action })),
+          error => ui.setStatus(SLINK.core.format.errorMessage(error), 'error')));
         const soundToggle = document.createElement('label'); soundToggle.className = 'slink-sound-toggle';
         const soundInput = document.createElement('input'); soundInput.type = 'checkbox';
         const normalizedSettings = SLINK.core.adhd.normalizeSettings(status?.settings || {});

@@ -136,6 +136,7 @@
       let armoryStatus = 'Ready. Retrieval only runs after you press Retrieve Next.';
       let armoryState = 'normal';
       let armoryBusy = false;
+      let armoryTimestampValue = new Date().toISOString().slice(0, 16);
       let armoryObserver = null;
       let armoryDecorateTimer = null;
       let pageStyleElement = null;
@@ -401,8 +402,9 @@
         if (armoryMode === 'proficience-15-plus') {
           if (kind !== 'weapons' || !proficience) return null;
           const member = armoryMembers.find(item => item.id === borrower.id);
-          if (!member || Number(member.level) < 15) return null;
+          if (!member || !Number.isFinite(Number(member.level)) || Number(member.level) < 15) return null;
         }
+        if (!['ranked-all', 'ranked-no-prof', 'proficience-15-plus'].includes(armoryMode)) return null;
         return borrower;
       }
 
@@ -619,53 +621,98 @@
         }
       }
 
+      // Retrieval and pagination adapted from Considious Armory Recaller 1.2.6.
+      async function retrieveOneArmoryItem(row, borrower) {
+          const open = row.querySelector('.item-action [data-role="retrieve"].active');
+          if (!open) throw new Error('Retrieve control was not found.');
+          armorySetStatus(`Retrieving ${(row.querySelector('.name')?.textContent.trim() || 'item')} from ${borrower.name}…`);
+          open.click();
+          for (let attempt = 0; attempt < 20; attempt += 1) {
+              await new Promise(resolve => setTimeout(resolve, 50));
+              if (!pageIsFocused()) throw new Error('The Torn page lost focus before confirmation. Nothing else was clicked.');
+              const confirm = row.querySelector('.retrieve-cont .retrieve-yes');
+              if (confirm && confirm.getClientRects().length > 0) {
+                  confirm.click();
+                  return;
+              }
+          }
+          throw new Error('Torn did not display the retrieval confirmation.');
+      }
+
+      function findNextArmoryPageControl(tab) {
+          const roots = [tab, document.querySelector('#faction-armoury'), document].filter(Boolean);
+          const selectors = [
+              '.gallery-wrapper.pagination a[href] > i.pagination-right',
+              '.pagination a[href] > i.pagination-right',
+              '.pagination a.next:not(.disabled)',
+              '.pagination .next:not(.disabled) a',
+              'a[aria-label="Next"]',
+              'a[title="Next"]',
+              '[data-page="next"]',
+          ];
+
+          for (const root of roots) {
+              for (const selector of selectors) {
+                  const found = root.querySelector(selector);
+                  if (!found) continue;
+                  const control = found.matches('a, button') ? found : found.closest('a, button');
+                  if (!control || control.disabled || control.classList.contains('disable') || control.classList.contains('disabled')) continue;
+                  return control;
+              }
+          }
+
+          return [...(tab?.querySelectorAll('a, button') || [])].find((el) => {
+              const values = [el.textContent, el.getAttribute('aria-label'), el.getAttribute('title')].map((v) => (v || '').trim().toLowerCase());
+              return values.includes('next') && !el.disabled && !el.classList.contains('disabled') && !el.classList.contains('disable');
+          }) || null;
+      }
+
       async function retrieveArmoryItem() {
         if (armoryBusy) return;
         armoryBusy = true;
         try {
+          if (fullUi) render();
           if (!pageIsFocused()) throw new Error('Focus this Torn tab before retrieving an item.');
           const tab = activeArmoryTab();
           const kind = armoryTabKind(tab);
           if (!tab || !kind) throw new Error('Open the Weapons or Armor tab in Faction Armoury first.');
           if (armoryMode === 'proficience-15-plus' && !await ensureArmoryMembers()) return;
           if (!pageIsFocused()) throw new Error('The Torn tab lost focus. Nothing was retrieved.');
+          let skippedWhitelist = 0;
           for (const row of tab.querySelectorAll('ul.item-list > li')) {
+            if (armoryWhitelist.has(armoryBorrower(row)?.id)) skippedWhitelist++;
             const borrower = armoryEligibility(row, kind);
             if (!borrower) continue;
             const item = row.querySelector('.name')?.textContent.trim() || 'item';
-            const open = row.querySelector('.item-action [data-role="retrieve"].active');
-            open.click();
-            for (let attempt = 0; attempt < 20; attempt += 1) {
-              await new Promise(resolve => setTimeout(resolve, 50));
-              if (!pageIsFocused()) throw new Error('The Torn tab lost focus before confirmation. Nothing else was clicked.');
-              const confirm = row.querySelector('.retrieve-cont .retrieve-yes');
-              if (confirm && confirm.getClientRects().length) {
-                confirm.click();
-                armorySetStatus(`Retrieved one ${item} from ${borrower.name}.`, 'success');
-                return;
-              }
-            }
-            throw new Error('Torn did not display the retrieval confirmation.');
+            await retrieveOneArmoryItem(row, borrower);
+            armorySetStatus(`Retrieved one ${item} from ${borrower.name}.`, 'success');
+            return;
           }
-          armorySetStatus('No eligible ranked items remain on this page.', 'success');
+          armorySetStatus(skippedWhitelist ? `No eligible items. Skipped ${skippedWhitelist} whitelisted loan${skippedWhitelist === 1 ? '' : 's'}.` : 'No eligible items remain on this page.', 'success');
         } catch (error) { armorySetStatus(SLINK.core.format.errorMessage(error), 'error'); }
-        finally { armoryBusy = false; }
+        finally {
+          armoryBusy = false;
+          // Restore the button now, rather than waiting for the next War cycle.
+          if (fullUi) render();
+        }
       }
 
       function nextArmoryPage() {
-        if (!pageIsFocused()) return armorySetStatus('Focus this Torn tab before changing pages.', 'error');
-        const tab = activeArmoryTab();
-        if (!tab) return armorySetStatus('Open the Weapons or Armor tab in Faction Armoury first.', 'error');
-        const selectors = ['.gallery-wrapper.pagination a[href] > i.pagination-right','.pagination a[href] > i.pagination-right','.pagination a.next:not(.disabled)','.pagination .next:not(.disabled) a','a[aria-label="Next"]','a[title="Next"]','[data-page="next"]'];
-        let next = null;
-        for (const selector of selectors) {
-          const found = tab.querySelector(selector) || document.querySelector(`#faction-armoury ${selector}`);
-          const control = found?.matches('a,button') ? found : found?.closest('a,button');
-          if (control && !control.classList.contains('disabled') && !control.classList.contains('disable')) { next = control; break; }
-        }
-        if (!next) return armorySetStatus('No enabled Next Page control was found.', 'success');
-        next.click();
-        armorySetStatus('Moved to the next armory page.', 'success');
+          if (!pageIsFocused()) return armorySetStatus('Page is not focused. Page was not changed.', 'error');
+          const tab = activeArmoryTab();
+          if (!tab) return armorySetStatus('Open the Weapons or Armor armory tab.', 'error');
+          const next = findNextArmoryPageControl(tab);
+          if (!next) return armorySetStatus('No enabled Next Page control was found.', 'done');
+
+          const href = next.getAttribute('href');
+          next.click();
+
+          // Torn's armory pagination is hash-routed. Fall back to assigning the
+          // exact href when another script prevents the synthetic click.
+          if (href?.startsWith('#') && location.hash !== href) {
+              location.hash = href.slice(1);
+          }
+          armorySetStatus('Moved to the next page.');
       }
 
       function armoryHtml() {
@@ -677,6 +724,7 @@
           <div class="slink-war-armory-controls"><label>Recall mode<select id="slink-armory-mode"><option value="ranked-all" ${armoryMode === 'ranked-all' ? 'selected' : ''}>All ranked items</option><option value="ranked-no-prof" ${armoryMode === 'ranked-no-prof' ? 'selected' : ''}>Ranked except Proficience</option><option value="proficience-15-plus" ${armoryMode === 'proficience-15-plus' ? 'selected' : ''}>Proficience from level 15+</option></select></label></div>
           <div class="slink-war-armory-actions"><button id="slink-armory-retrieve" type="button" ${onArmory && !armoryBusy ? '' : 'disabled'}>${armoryBusy ? 'Working…' : 'Retrieve Next'}</button><button id="slink-armory-next" type="button" ${onArmory ? '' : 'disabled'}>Next Page</button></div>
           <div class="slink-war-armory-status" data-state="${armoryState}">${escape(armoryStatus)}</div>
+          ${WAR.armoryTimestampHtml(armoryTimestampValue)}
           <details class="slink-war-armory-manager" data-slink-ui-key="war-armory-whitelist" ${armoryWhitelistOpen ? 'open' : ''}>
             <summary>Never retrieve from (<span id="slink-armory-whitelist-count">${armoryWhitelist.size}</span>)</summary>
             <input id="slink-armory-search" data-slink-preserve data-slink-ui-key="war-armory-search" class="slink-war-armory-search" type="search" value="${escape(armorySearch)}" placeholder="Search name, rank, or ID">
@@ -1097,6 +1145,17 @@
         });
         root.querySelector('#slink-armory-retrieve')?.addEventListener('click', () => void retrieveArmoryItem());
         root.querySelector('#slink-armory-next')?.addEventListener('click', nextArmoryPage);
+        root.querySelector('[data-armory-time]')?.addEventListener('input', event => {
+          armoryTimestampValue = event.currentTarget.value;
+          WAR.updateArmoryTimestamp(root, armoryTimestampValue);
+        });
+        root.querySelector('[data-armory-copy]')?.addEventListener('click', async () => {
+          const result = WAR.discordTimestamp(armoryTimestampValue);
+          if (!result) return;
+          const message = root.querySelector('[data-armory-time-message]');
+          try { await navigator.clipboard.writeText(result.code); message.textContent = 'Copied — paste into Discord.'; }
+          catch { root.querySelector('[data-armory-code]')?.select(); message.textContent = 'Select and copy the timestamp above.'; }
+        });
         root.querySelector('#slink-armory-members')?.addEventListener('click', async event => {
           event.currentTarget.disabled = true;
           try { if (await ensureArmoryMembers(false)) armorySetStatus(`Loaded ${armoryMembers.length} faction members.`, 'success'); }

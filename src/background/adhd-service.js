@@ -193,9 +193,18 @@
           cluster = { ...(cluster || {}), lastError:SLINK.core.format.errorMessage(clusterError), lastErrorAt:now };
         }
         const snapshot = { day, fetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityBaselineVersion:CITY_BASELINE_VERSION, cityShops, stockCatalog, cluster };
+        // Only a new measured energy reading may end Stack mode; never infer a drop.
+        const latestSettings = await settings();
+        const energy = data?.bars?.energy?.current;
+        if (latestSettings.stackModeSince > 0 && now > latestSettings.stackModeSince
+          && energy !== null && energy !== undefined && energy !== ''
+          && Number.isFinite(Number(energy)) && Number(energy) >= 0 && Number(energy) < 150) {
+          latestSettings.stackModeSince = 0;
+          await SLINK.core.storage.set(KEYS.settings, latestSettings);
+        }
         await saveRuntime({
           fetchedAt:now,
-          nextRefreshAt:ADHD.nextRefreshAt(snapshot, currentSettings, now),
+          nextRefreshAt:ADHD.nextRefreshAt(snapshot, latestSettings, now),
           lastError:'',
           snapshot,
           lastPurchase
@@ -256,6 +265,29 @@
     return publicStatus(false);
   }
 
+  async function reminderControl(input = {}) {
+    const next = await settings();
+    let resetIds;
+    if (input.action === 'stack-on' || input.action === 'stack-off') {
+      next.stackModeSince = input.action === 'stack-on' ? Date.now() : 0;
+      resetIds = ['energyFull', 'energyRefill'];
+    } else if (input.action === 'timer-start' || input.action === 'timer-cancel') {
+      next.timer24EndsAt = input.action === 'timer-start' ? Date.now() + ADHD.DAY_MS : 0;
+      resetIds = ['timer24'];
+    } else throw new Error('Unknown reminder action.');
+    for (const id of resetIds) delete next.snoozedUntil[id];
+    await SLINK.core.storage.set(KEYS.settings, next);
+    const sound = await SLINK.core.storage.get(KEYS.soundState, {});
+    await SLINK.core.storage.set(KEYS.soundState, {
+      ...sound,
+      activeIds:(sound.activeIds || []).filter(id => !resetIds.includes(id)),
+      pendingIds:(sound.pendingIds || []).filter(id => !resetIds.includes(id))
+    });
+    const current = await runtime();
+    if (current.snapshot) await saveRuntime({ nextRefreshAt:ADHD.nextRefreshAt(current.snapshot, next) });
+    return publicStatus(false);
+  }
+
   async function acknowledgeGooglePlayPoints() {
     const next = await settings();
     next.googlePlayPointsClaimedAt = Date.now();
@@ -279,10 +311,8 @@
     const [currentSettings, currentRuntime, previous] = await Promise.all([
       settings(), runtime(), SLINK.core.storage.get(KEYS.soundState, { activeIds:[], pendingIds:[] })
     ]);
-    const candidates = currentRuntime.snapshot
-      ? ADHD.buildAlerts(currentRuntime.snapshot, currentSettings, Date.now(), { includeHidden:true })
-        .filter(alert => currentSettings.soundEnabled[alert.id] === true)
-      : [];
+    const candidates = ADHD.buildAlerts(currentRuntime.snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
+      .filter(alert => (currentRuntime.snapshot || alert.id === 'timer24') && currentSettings.soundEnabled[alert.id] === true);
     const activeIds = candidates.map(alert => alert.id).sort();
     const activeSet = new Set((Array.isArray(previous?.activeIds) ? previous.activeIds : []).filter(id => activeIds.includes(id)));
     const pendingSet = new Set((Array.isArray(previous?.pendingIds) ? previous.pendingIds : []).filter(id => activeIds.includes(id)));
@@ -327,7 +357,7 @@
       permitted,
       requiredScope:ADHD.ALERT_SCOPE,
       settings:currentSettings,
-      activeAlerts:snapshot ? ADHD.buildAlerts(snapshot, currentSettings) : [],
+      activeAlerts:ADHD.buildAlerts(snapshot || {}, currentSettings).filter(alert => snapshot || alert.id === 'timer24'),
       city:snapshot ? ADHD.cityProgress(snapshot, currentSettings) : { bought:null, remaining:null, complete:false, manuallyDone:false },
       lastPurchase:currentRuntime.lastPurchase,
       fetchedAt:Number(currentRuntime.fetchedAt) || 0,
@@ -350,6 +380,7 @@
     'adhd.city.acknowledge':acknowledgeCity,
     'adhd.google-play-points.acknowledge':acknowledgeGooglePlayPoints,
     'adhd.alert.snooze':snooze,
+    'adhd.reminder.control':reminderControl,
     'adhd.sound.claim':claimSound,
     'adhd.sound.ack':acknowledgeSound
   });

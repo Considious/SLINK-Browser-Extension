@@ -137,7 +137,40 @@
     return [...byKey.values()].sort((a, b) => Number(b.last_seen_at) - Number(a.last_seen_at));
   }
 
+  function discordTimestamp(value) {
+    // TCT is UTC. Never parse the datetime-local input as the device's local time.
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(String(value))) return null;
+    const date = new Date(`${value}:00Z`);
+    if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 16) !== value) return null;
+    return {
+      code:`<t:${Math.floor(date.getTime() / 1000)}:R>`,
+      local:date.toLocaleString(undefined, { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short' })
+    };
+  }
+
+  function armoryTimestampHtml(value) {
+    const result = discordTimestamp(value);
+    const escape = SLINK.core.format.escapeHtml;
+    return `<div data-armory-timestamp style="display:grid;gap:5px;margin:10px 0;min-width:0">
+      <label>TCT date &amp; time (UTC) <input type="datetime-local" data-armory-time value="${escape(value)}" style="max-width:100%;box-sizing:border-box"></label>
+      <small data-armory-local>${escape(result ? `Your time: ${result.local}` : 'Enter a valid TCT date and time.')}</small>
+      <div style="display:flex;flex-wrap:wrap;gap:5px"><input type="text" data-armory-code aria-label="Relative Discord timestamp" readonly value="${escape(result?.code || '')}" style="min-width:0;flex:1"><button type="button" data-armory-copy ${result ? '' : 'disabled'}>Copy relative timestamp</button></div>
+      <small data-armory-time-message role="status">Discord shows “in X hours” or “X hours ago”.</small>
+    </div>`;
+  }
+
+  function updateArmoryTimestamp(root, value) {
+    const result = discordTimestamp(value);
+    root.querySelector('[data-armory-local]').textContent = result ? `Your time: ${result.local}` : 'Enter a valid TCT date and time.';
+    root.querySelector('[data-armory-code]').value = result?.code || '';
+    root.querySelector('[data-armory-copy]').disabled = !result;
+    root.querySelector('[data-armory-time-message]').textContent = 'Discord shows “in X hours” or “X hours ago”.';
+  }
+
   SLINK.define('core', 'war', Object.freeze({
+    discordTimestamp,
+    armoryTimestampHtml,
+    updateArmoryTimestamp,
     TERMS_SHA256,
     TERMS_VERSION,
     WORKER_BASE,

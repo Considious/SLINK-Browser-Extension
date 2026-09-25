@@ -81,7 +81,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.25', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.26', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
@@ -410,5 +410,15 @@ const staleResult = await Promise.race([
 ]);
 assert(staleResult === 'suspended', 'An obsolete extension page rejected instead of becoming quietly inactive.');
 
-console.log('Core storage, required hosts, scopes, modules, HTTP guard, limiter, and messaging checks passed.');
+const reminderNow = Date.now();
+for (const energy of [150, 151, 1000, null, undefined]) {
+  const snapshot = { data:{ bars:{ energy:{ current:energy, maximum:150 } }, refills:{ energy:{ available:true } }, cooldowns:{ drug:0 } } };
+  const alerts = SLINK.core.adhd.buildAlerts(snapshot, { stackModeSince:reminderNow, timer24EndsAt:reminderNow - 1 }, reminderNow, { includeHidden:true });
+  assert(!alerts.some(a => ['energyFull', 'energyRefill'].includes(a.id)), 'Stacking must suppress energy alerts and sound candidates, including unknown readings.');
+  assert(alerts.some(a => a.id === 'timer24') && alerts.some(a => a.id === 'drugCooldown'), 'Stack mode suppressed an unrelated reminder.');
+}
+const normalSnapshot = { data:{ bars:{ energy:{ current:150, maximum:150 } }, refills:{ energy:{ available:true } } } };
+assert(SLINK.core.adhd.buildAlerts(normalSnapshot, {}).some(a => a.id === 'energyFull'), 'Normal max-energy reminder did not resume.');
+assert(!SLINK.core.adhd.buildAlerts(normalSnapshot, { timer24EndsAt:reminderNow + 1 }, reminderNow).some(a => a.id === 'timer24'), 'Countdown completed early.');
+console.log('Core storage, hosts, scopes, modules, HTTP, limiter, messaging and reminder checks passed.');
 
