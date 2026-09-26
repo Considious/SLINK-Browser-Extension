@@ -2,6 +2,14 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.29 — 2026-09-26
+
+### Fixed
+
+- Faction Chat sharing now selects Torn's exact paper-plane send control instead of clicking the first button near the composer, which could repeatedly scroll chat history without sending.
+- All alert types retain the single shared sender, with a one-send lock and confirmation that Torn cleared the composer before reporting success.
+- Fixed Market Watch referencing the removed `sent` variable after adopting the shared sender.
+
 ## 0.18.26 — 2026-09-26
 
 ### Added

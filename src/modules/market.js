@@ -549,7 +549,7 @@
           if (!shareArm || shareArm.id !== 'all' || shareArm.expiresAt <= Date.now()) { updateShareButtons(root); return; }
           sendAll.disabled = true; sendAll.textContent = 'Sending…';
           const result = await SLINK.core.factionChat.send(shareArm.text); sendAll.textContent = result.label;
-          if (sent) shareArm = null;
+          if (result.ok) shareArm = null;
           updateShareButtons(root);
         });
         root.querySelectorAll('[data-market-copy]').forEach(button => button.addEventListener('click', async () => {
@@ -565,7 +565,7 @@
           button.disabled = true; button.textContent = 'Sending…';
           const result = await SLINK.core.factionChat.send(shareArm.text);
           button.textContent = result.label;
-          if (sent) shareArm = null;
+          if (result.ok) shareArm = null;
           updateShareButtons(root);
         }));
         root.querySelectorAll('[data-market-dismiss]').forEach(button => button.addEventListener('click', async () => {
