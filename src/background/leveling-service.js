@@ -15,7 +15,7 @@
   const DAILY_FRESHNESS_BUCKETS = 3;
   const FF_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
   const BATTLE_STATS_CACHE_MS = 24 * 60 * 60 * 1000;
-  const USER_IDLE_MS = 20 * 60 * 1000;
+  const USER_IDLE_MS = 5 * 60 * 1000;
   const DEMAND_REPORT_INTERVAL_MS = 5 * 60 * 1000;
   const NO_DEMAND_POLL_SECONDS = 20 * 60;
   const HOURLY_SCHEDULE_RETRY_MS = 5 * 60 * 1000;
@@ -815,9 +815,21 @@
       await saveRuntime({ polling: true, lastError: '', cycleStatus: 'Connecting to the SLINK Network...' });
       try {
         const lastInteractionAt = Number(await SLINK.core.storage.get(KEYS.lastInteractionAt, 0)) || 0;
-        const contributorMode = currentSettings.contributorOnly || Date.now() - lastInteractionAt >= USER_IDLE_MS;
-        if (contributorMode) {
+        if (currentSettings.contributorOnly) {
           return await prepareContributorCycle(currentSettings);
+        }
+        if (!lastInteractionAt || Date.now() - lastInteractionAt >= USER_IDLE_MS) {
+          await saveRuntime({
+            polling:false,
+            collector:false,
+            idle:true,
+            contributorOnly:false,
+            cycleStatus:'Paused after five minutes away from Leveling',
+            lastCycleAt:Date.now(),
+            lastCycleChecked:0,
+            nextPollSeconds:Math.max(60, Number(currentSettings.pollSeconds) || DEFAULT_POLL_SECONDS)
+          });
+          return { status:await publicStatus(), checks:[] };
         }
         await ensureSession();
         await syncUserDemand(false);
@@ -1080,3 +1092,4 @@
 
   SLINK.define('services', 'leveling', api);
 })(globalThis);
+

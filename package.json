@@ -1,10 +1,11 @@
 {
   "name": "slink-browser-extension",
-  "version": "0.18.26",
+  "version": "0.18.27",
   "private": true,
   "description": "Chrome-first SLINK browser extension with Combat and Efficiency reminder tools.",
   "scripts": {
-    "test": "node tests/validate-extension.mjs && node tests/core.test.mjs && node tests/background.test.mjs && node tests/armory.test.mjs && node tests/timestamps.test.mjs"
+    "test": "node tests/validate-extension.mjs && node tests/core.test.mjs && node tests/background.test.mjs && node tests/bounties.test.mjs && node tests/armory.test.mjs && node tests/timestamps.test.mjs"
   }
 }
+
 

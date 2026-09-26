@@ -97,6 +97,8 @@
       let leaderTimer = null;
       let localError = '';
       let lastActivityTouchAt = 0;
+      let activityTimer = null;
+      let visibilityObserver = null;
 
       context.ui.setTitle('SLINK Leveling');
       context.ui.setModuleStyles(MODULE_STYLES);
@@ -290,6 +292,19 @@
         } catch {}
       }
 
+      function moduleVisible() {
+        const view = context.ui.getContentElement()?.closest('.module-view');
+        return Boolean(view && !view.hidden);
+      }
+
+      function syncActivityHeartbeat() {
+        clearInterval(activityTimer);
+        activityTimer = null;
+        if (!moduleVisible()) return;
+        void markActivity();
+        activityTimer = setInterval(() => void markActivity(), 60_000);
+      }
+
       async function refreshStatus() {
         current = await SLINK.core.messaging.send('leveling.status');
         if (!current.configured) settingsOpen = true;
@@ -386,7 +401,13 @@
 
       leaderTimer = setInterval(() => void isLeader(), 5_000);
       await refreshStatus();
-      if (current.configured) void runCycle(false);
+      const moduleView = context.ui.getContentElement()?.closest('.module-view');
+      if (moduleView) {
+        visibilityObserver = new MutationObserver(syncActivityHeartbeat);
+        visibilityObserver.observe(moduleView, { attributes:true, attributeFilter:['hidden'] });
+      }
+      syncActivityHeartbeat();
+      if (current.configured && moduleVisible()) void runCycle(false);
       let attackAttempts = 0;
       const attackTimer = setInterval(async () => {
         attackAttempts++;
@@ -399,9 +420,12 @@
           clearTimeout(cycleTimer);
           clearInterval(leaderTimer);
           clearInterval(attackTimer);
+          clearInterval(activityTimer);
+          visibilityObserver?.disconnect();
           await SLINK.core.messaging.send('leveling.leader.release');
         }
       });
     }
   });
 })(globalThis);
+

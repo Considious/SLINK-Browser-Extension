@@ -2,6 +2,7 @@ importScripts(
   '../core/runtime.js',
   '../core/format.js',
   '../core/storage.js',
+  '../core/bounties.js',
   'local-vault.js',
   '../core/permissions.js',
   '../core/adhd.js',
@@ -20,6 +21,7 @@ importScripts(
   'merits-service.js',
   'player-stats-service.js',
   'leveling-service.js',
+  'bounties-service.js',
   'war-service.js',
   'contribution-service.js',
   'audio-service.js'
@@ -374,6 +376,7 @@ const routes = {
   },
 
   ...SLINK.services.leveling.routes,
+  ...SLINK.services.bounties.routes,
   ...SLINK.services.war.routes,
   ...SLINK.services.permissionAccess.routes,
   ...SLINK.services.adhd.routes,
@@ -420,3 +423,4 @@ chrome.alarms.onAlarm.addListener(alarm => {
 });
 
 void initialize().catch(error => console.error('[SLINK] Service worker initialization:', error));
+

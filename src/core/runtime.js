@@ -3,7 +3,7 @@
 
   if (global.SLINK_EXTENSION) return;
 
-  const VERSION = '0.18.26';
+  const VERSION = '0.18.27';
   const STORAGE_PREFIX = 'slink.';
 
   const runtime = {
@@ -21,19 +21,19 @@
       }
       Object.defineProperty(runtime[group], name, {
         value,
-        enumerable: true,
-        configurable: false,
-        writable: false
+        enumerable:true,
+        configurable:false,
+        writable:false
       });
       return value;
     }
   };
 
   Object.defineProperty(global, 'SLINK_EXTENSION', {
-    value: runtime,
-    enumerable: true,
-    configurable: false,
-    writable: false
+    value:runtime,
+    enumerable:true,
+    configurable:false,
+    writable:false
   });
 })(globalThis);
 
