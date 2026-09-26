@@ -61,69 +61,6 @@
         return Promise.resolve(copied);
       }
 
-      function factionContainer() {
-        const exact = [...document.querySelectorAll('[id^="faction-"]')].find(node => node.querySelector('textarea[placeholder="Type your message here..."],textarea[class*="textarea"]'));
-        if (exact) return exact;
-        return [...document.querySelectorAll('div,section')].find(node => {
-          const composer = node.querySelector('textarea[placeholder*="message" i],[contenteditable="true"]');
-          const title = node.querySelector('button span,header span');
-          return composer && String(title?.textContent || '').trim().toLowerCase() === 'faction';
-        }) || null;
-      }
-
-      function factionLauncher() {
-        return [...document.querySelectorAll('button,a,[role="button"]')].find(node => {
-          const label = [node.getAttribute?.('aria-label'), node.getAttribute?.('title'), node.textContent].filter(Boolean).join(' ').trim().toLowerCase();
-          return label === 'faction' || label.includes('faction chat') || label.includes('open faction');
-        }) || null;
-      }
-
-      function composer(container) {
-        return container?.querySelector('textarea[placeholder="Type your message here..."],textarea[class*="textarea"],textarea,[contenteditable="true"]') || null;
-      }
-
-      function setComposer(node, text) {
-        node.focus();
-        if (node.matches('textarea,input')) {
-          const prototype = node.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-          const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
-          if (setter) setter.call(node, text); else node.value = text;
-        } else {
-          node.innerHTML = '';
-          try { document.execCommand('insertHTML', false, text); } catch { node.innerHTML = text; }
-        }
-        node.dispatchEvent(new Event('input', { bubbles:true, composed:true }));
-        node.dispatchEvent(new Event('change', { bubbles:true, composed:true }));
-      }
-
-      async function waitFor(check, timeoutMs = 2000) {
-        const started = Date.now();
-        while (Date.now() - started < timeoutMs) {
-          const result = check(); if (result) return result;
-          await new Promise(resolve => global.setTimeout(resolve, 75));
-        }
-        return null;
-      }
-
-      async function sendToFaction(text) {
-        if (!focusedTornPage()) return false;
-        let container = factionContainer(); let input = composer(container);
-        if (!input) {
-          const launcher = factionLauncher(); if (!launcher) return false;
-          launcher.click();
-          const found = await waitFor(() => { const next = factionContainer(); const field = composer(next); return field ? { next, field } : null; });
-          container = found?.next; input = found?.field;
-        }
-        if (!input || !focusedTornPage()) return false;
-        setComposer(input, text);
-        const send = await waitFor(() => [...(container?.querySelectorAll('button,[role="button"]') || [])].find(button => {
-          const label = [button.getAttribute('aria-label'), button.getAttribute('title'), button.textContent].filter(Boolean).join(' ').toLowerCase();
-          return !button.disabled && (button.type === 'submit' || label.trim() === 'send' || label.includes('send message'));
-        }), 1500);
-        if (!send || !focusedTornPage()) return false;
-        send.click(); return true;
-      }
-
       async function claimMarketSound() {
         try { await SLINK.core.messaging.send('audio.flush'); } catch {}
       }
@@ -611,7 +548,7 @@
         sendAll?.addEventListener('click', async () => {
           if (!shareArm || shareArm.id !== 'all' || shareArm.expiresAt <= Date.now()) { updateShareButtons(root); return; }
           sendAll.disabled = true; sendAll.textContent = 'Sending…';
-          const sent = await sendToFaction(shareArm.text); sendAll.textContent = sent ? 'Sent to Faction' : 'Open/focus Faction Chat';
+          const result = await SLINK.core.factionChat.send(shareArm.text); sendAll.textContent = result.label;
           if (sent) shareArm = null;
           updateShareButtons(root);
         });
@@ -626,8 +563,8 @@
           const row = deals.find(item => item.id === button.dataset.marketSend);
           if (!row || shareArm?.id !== row.id || shareArm.expiresAt <= Date.now()) { updateShareButtons(root); return; }
           button.disabled = true; button.textContent = 'Sending…';
-          const sent = await sendToFaction(shareArm.text);
-          button.textContent = sent ? 'Sent to Faction' : 'Open/focus Faction Chat';
+          const result = await SLINK.core.factionChat.send(shareArm.text);
+          button.textContent = result.label;
           if (sent) shareArm = null;
           updateShareButtons(root);
         }));
@@ -667,3 +604,4 @@
     }
   });
 })(globalThis);
+

@@ -852,56 +852,6 @@
         }
       }
 
-      function findFactionChatLauncher() {
-        return [...document.querySelectorAll('button,a,[role="button"]')].find(node => {
-          const label = [node.getAttribute?.('aria-label'), node.getAttribute?.('title'), node.textContent].filter(Boolean).join(' ').trim().toLowerCase();
-          return label === 'faction' || label.includes('faction chat') || label.includes('open faction');
-        }) || null;
-      }
-
-      function findFactionChatContainer() {
-        const exact = [...document.querySelectorAll('[id^="faction-"]')].find(node => node.querySelector('textarea,[contenteditable="true"]'));
-        if (exact) return exact;
-        return [...document.querySelectorAll('div,section')].find(node => {
-          const composer = node.querySelector('textarea,[contenteditable="true"]');
-          const title = node.querySelector('button span,header span');
-          return composer && String(title?.textContent || '').trim().toLowerCase() === 'faction';
-        }) || null;
-      }
-
-      function setFactionComposerContent(composer, html) {
-        composer.focus();
-        if ('value' in composer) {
-          const prototype = composer.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-          const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
-          if (setter) setter.call(composer, html); else composer.value = html;
-        } else {
-          composer.innerHTML = html;
-        }
-        try { composer.dispatchEvent(new InputEvent('input', { bubbles:true, composed:true, inputType:'insertText', data:html })); }
-        catch { composer.dispatchEvent(new Event('input', { bubbles:true, composed:true })); }
-        composer.dispatchEvent(new Event('change', { bubbles:true, composed:true }));
-      }
-
-      function findFactionChatSendButton(container, composer) {
-        const buttons = [...(container || composer?.parentElement || document).querySelectorAll('button,[role="button"]')];
-        return buttons.find(button => {
-          const label = [button.getAttribute('aria-label'), button.getAttribute('title'), button.textContent].filter(Boolean).join(' ').trim().toLowerCase();
-          return button.type === 'submit' || label === 'send' || label.includes('send message') || Boolean(button.querySelector('svg[viewBox="0 0 18 18"]'));
-        }) || null;
-      }
-
-      async function waitForFactionComposer(timeoutMs = 2500) {
-        const started = Date.now();
-        while (Date.now() - started < timeoutMs) {
-          const container = findFactionChatContainer();
-          const composer = findFactionComposer();
-          if (container && composer) return { container, composer };
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        return { container:null, composer:null };
-      }
-
       async function sendRetal(retal, button) {
         const authorization = pendingRetalSend;
         if (!authorization || authorization.attackId !== String(retal.attackId) || authorization.expiresAt <= Date.now()) {
@@ -920,23 +870,8 @@
         button.disabled = true;
         button.textContent = 'Sending…';
         try {
-          let { container, composer } = await waitForFactionComposer(250);
-          if (!container || !composer) {
-            const launcher = findFactionChatLauncher();
-            if (!launcher) throw new Error('Faction Chat could not be found. Open it and try again.');
-            launcher.click();
-            ({ container, composer } = await waitForFactionComposer());
-          }
-          if (!container || !composer) throw new Error('Faction Chat opened, but its message box could not be found.');
-          setFactionComposerContent(composer, authorization.message);
-          const sendButton = findFactionChatSendButton(container, composer);
-          if (!sendButton) throw new Error('The Faction Chat send button could not be found.');
-          const started = Date.now();
-          while ((sendButton.disabled || sendButton.getAttribute('aria-disabled') === 'true') && Date.now() - started < 1500) {
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
-          if (sendButton.disabled || sendButton.getAttribute('aria-disabled') === 'true') throw new Error('The callout was inserted, but Torn did not enable Send.');
-          sendButton.click();
+          const result = await SLINK.core.factionChat.send(authorization.message);
+          if (!result.ok) throw new Error(result.label);
           pendingRetalSend = null;
           if (pendingRetalSendTimer) clearTimeout(pendingRetalSendTimer);
           pendingRetalSendTimer = null;
@@ -1472,3 +1407,4 @@
     }
   });
 })(globalThis);
+

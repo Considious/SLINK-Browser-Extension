@@ -39,10 +39,6 @@
         .slink-sound-toggle{display:flex;align-items:center;gap:6px;margin:7px 0;color:var(--slink-text);font-size:12px}.slink-sound-toggle input{margin:0}
       `);
 
-      function focusedTornPage() {
-        return document.visibilityState === 'visible' && document.hasFocus();
-      }
-
       async function claimAlertSound() {
         try { await SLINK.core.messaging.send('audio.flush'); } catch {}
       }
@@ -65,88 +61,8 @@
         }
       }
 
-      function findFactionChatContainer() {
-        const exact = [...document.querySelectorAll('[id^="faction-"]')].find(node => node.querySelector('textarea[placeholder="Type your message here..."],textarea[class*="textarea"]'));
-        if (exact) return exact;
-        return [...document.querySelectorAll('div,section')].find(node => {
-          const title = node.querySelector('button span,header span');
-          const composer = node.querySelector('textarea[placeholder*="message" i],[contenteditable="true"]');
-          return composer && String(title?.textContent || '').trim().toLowerCase() === 'faction';
-        }) || null;
-      }
-
-      function findFactionChatLauncher() {
-        return [...document.querySelectorAll('button,a,[role="button"]')].find(node => {
-          const label = [node.getAttribute?.('aria-label'), node.getAttribute?.('title'), node.textContent].filter(Boolean).join(' ').trim().toLowerCase();
-          return label === 'faction' || label.includes('faction chat') || label.includes('open faction');
-        }) || null;
-      }
-
-      function findFactionChatComposer(container) {
-        return container?.querySelector('textarea[placeholder="Type your message here..."],textarea[class*="textarea"],textarea,[contenteditable="true"]') || null;
-      }
-
-      function setFactionChatComposerContent(composer, text) {
-        composer.focus();
-        if (composer.matches('textarea,input')) {
-          const prototype = composer.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-          const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
-          if (setter) setter.call(composer, text); else composer.value = text;
-        } else {
-          composer.innerHTML = '';
-          try { document.execCommand('insertHTML', false, text); }
-          catch { composer.innerHTML = text; }
-        }
-        try { composer.dispatchEvent(new InputEvent('input', { bubbles:true, composed:true, inputType:'insertText', data:text })); }
-        catch { composer.dispatchEvent(new Event('input', { bubbles:true, composed:true })); }
-        composer.dispatchEvent(new Event('change', { bubbles:true, composed:true }));
-      }
-
-      function findFactionChatSendButton(container, composer) {
-        const sibling = composer?.parentElement?.querySelector('button');
-        if (sibling) return sibling;
-        return [...(container?.querySelectorAll('button,[role="button"]') || [])].find(button => {
-          const label = [button.getAttribute('aria-label'), button.getAttribute('title'), button.textContent].filter(Boolean).join(' ').trim().toLowerCase();
-          return button.type === 'submit' || label === 'send' || label.includes('send message') || Boolean(button.querySelector('svg[viewBox="0 0 18 18"]'));
-        }) || null;
-      }
-
-      async function waitFor(check, timeoutMs, intervalMs = 75) {
-        const started = Date.now();
-        while (Date.now() - started < timeoutMs) {
-          if (!focusedTornPage()) return null;
-          const result = check();
-          if (result) return result;
-          await new Promise(resolve => global.setTimeout(resolve, intervalMs));
-        }
-        return null;
-      }
-
       async function sendListingToFaction(text) {
-        if (!focusedTornPage()) return { ok:false, label:'Focus Torn first' };
-        let container = findFactionChatContainer();
-        let composer = findFactionChatComposer(container);
-        if (!container || !composer) {
-          const launcher = findFactionChatLauncher();
-          if (!launcher) return { ok:false, label:'Faction Chat not found' };
-          launcher.click();
-          const found = await waitFor(() => {
-            const nextContainer = findFactionChatContainer();
-            const nextComposer = findFactionChatComposer(nextContainer);
-            return nextContainer && nextComposer ? { container:nextContainer, composer:nextComposer } : null;
-          }, 2500, 100);
-          container = found?.container; composer = found?.composer;
-        }
-        if (!container || !composer) return { ok:false, label:'Faction message box not found' };
-        if (!focusedTornPage()) return { ok:false, label:'Focus Torn first' };
-        setFactionChatComposerContent(composer, text);
-        const sendButton = await waitFor(() => {
-          const button = findFactionChatSendButton(container, composer);
-          return button && !button.disabled && button.getAttribute('aria-disabled') !== 'true' ? button : null;
-        }, 1500, 50);
-        if (!sendButton || !focusedTornPage()) return { ok:false, label:sendButton ? 'Focus Torn first' : 'Faction send not ready' };
-        sendButton.click();
-        return { ok:true, label:'Sent to Faction' };
+        return SLINK.core.factionChat.send(text);
       }
 
       function chatShareArmed(alertId) {
@@ -325,3 +241,4 @@
     }
   });
 })(globalThis);
+
