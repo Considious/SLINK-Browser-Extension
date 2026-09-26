@@ -627,26 +627,26 @@
 
   function renderDollarBazaars() {
     if (!dollarBazaars) return;
-    const items = Array.isArray(dollarBazaars.items) ? [...dollarBazaars.items].sort((left, right) => Number(right.totalValue) - Number(left.totalValue)) : [];
-    byId('dollar-bazaars-count').textContent = items.length.toLocaleString('en-US');
+    const bazaars = Array.isArray(dollarBazaars.bazaars) ? [...dollarBazaars.bazaars].sort((left, right) => Number(right.totalValue) - Number(left.totalValue)) : [];
+    byId('dollar-bazaars-count').textContent = bazaars.length.toLocaleString('en-US');
     byId('dollar-bazaars-error').textContent = dollarBazaars.lastError || '';
     byId('dollar-bazaars-error').hidden = !dollarBazaars.lastError;
     const list = byId('dollar-bazaars-list');
-    list.replaceChildren(...(items.length ? items.map(item => {
+    list.replaceChildren(...(bazaars.length ? bazaars.map(bazaar => {
       const row = document.createElement('article'); row.className = 'dollar-bazaar-row';
       const copy = document.createElement('div');
-      const title = document.createElement('h3'); title.textContent = `${item.itemName} [${item.itemId}]`;
-      const detail = document.createElement('p'); detail.textContent = `${item.sellerName} [${item.sellerId}] · ${Number(item.quantity).toLocaleString('en-US')} available${item.itemType ? ` · ${item.itemType}` : ''}`;
+      const title = document.createElement('h3'); title.textContent = `${bazaar.sellerName} [${bazaar.sellerId}]`;
+      const detail = document.createElement('p'); detail.textContent = `${Number(bazaar.itemCount).toLocaleString('en-US')} $1 item${Number(bazaar.itemCount) === 1 ? '' : 's'}`;
       copy.append(title, detail);
       const value = document.createElement('div'); value.className = 'dollar-bazaar-value';
-      const total = document.createElement('strong'); total.textContent = money(item.totalValue);
-      const perItem = document.createElement('span'); perItem.textContent = `${money(item.marketPrice)} market value each`;
+      const total = document.createElement('strong'); total.textContent = money(bazaar.totalValue);
+      const perItem = document.createElement('span'); perItem.textContent = 'total market value';
       value.append(total, perItem);
       const actions = document.createElement('div'); actions.className = 'row-actions';
-      const updated = document.createElement('span'); updated.className = 'muted'; updated.textContent = item.updatedAt ? `Listing checked ${relativeTime(item.updatedAt)}` : '';
-      const link = document.createElement('a'); link.className = 'button small'; link.href = item.href; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'Open bazaar';
+      const updated = document.createElement('span'); updated.className = 'muted'; updated.textContent = 'Weaver bazaar total';
+      const link = document.createElement('a'); link.className = 'button small'; link.href = bazaar.href; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'Open bazaar';
       actions.append(updated, link); row.append(copy, value, actions); return row;
-    }) : [Object.assign(document.createElement('div'), { className:'dollar-bazaar-empty', textContent:dollarBazaars.lastError ? 'The last refresh failed and there are no saved results yet.' : 'Weaver returned no active $1 Bazaar listings.' })]));
+    }) : [Object.assign(document.createElement('div'), { className:'dollar-bazaar-empty', textContent:dollarBazaars.lastError ? 'The last refresh failed and there are no saved results yet.' : 'Weaver returned no active $1 Bazaars.' })]));
     updateDollarBazaarClock();
   }
 
@@ -1133,7 +1133,7 @@
       SLINK.core.messaging.send('playerStats.status', { refreshIfStale:true }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null })),
       SLINK.core.messaging.send('merits.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), goals:[], pinned:[], settings:SLINK.core.merits.defaultSettings() })),
       SLINK.core.messaging.send('market.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), opportunities:[], settings:SLINK.core.market.defaultSettings(), catalog:{ items:[] } })),
-      SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:true }).catch(error => ({ items:[], fetchedAt:0, nextRefreshAt:0, lastError:errorText(error) }))
+      SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:true }).catch(error => ({ bazaars:[], fetchedAt:0, nextRefreshAt:0, lastError:errorText(error) }))
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
     system = status; leveling = status.leveling; war = status.war; access = status.access; adhd = status.adhd; market = marketStatus; dollarBazaars = dollarStatus; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus; merits = meritsStatus;

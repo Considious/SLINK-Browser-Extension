@@ -481,11 +481,11 @@ context = vm.createContext({
       };
     } else if (url.hostname === 'weav3r.dev') {
       weaverMarketRequests += 1;
-      if (url.pathname === '/api/dollar-bazaars/items') {
+      if (url.pathname === '/api/dollar-bazaars/bazaars') {
         weaverDollarRequests += 1;
-        body = { items:[
-          { itemId:1, itemName:'Lower Value', itemType:'Other', playerId:44, sellerName:'Bazaar Seller', quantity:2, marketPrice:100, totalValue:200, lastUpdated:new Date().toISOString() },
-          { itemId:2, itemName:'Higher Value', itemType:'Drug', playerId:55, sellerName:'Dollar Seller', quantity:4, marketPrice:500, totalValue:2000, lastUpdated:new Date().toISOString() }
+        body = { bazaars:[
+          { playerId:44, name:'Bazaar Seller', itemCount:9, totalMarketValue:200 },
+          { playerId:55, name:'Dollar Seller', itemCount:4, totalMarketValue:2000 }
         ] };
       } else if (/^\/api\/pricelist\//.test(url.pathname)) {
         weaverPricelistRequests += 1;
@@ -567,7 +567,7 @@ assert(status.data.worker.connected === true, 'System status did not report a re
 assert(status.data.leveling.terms.accepted === false, 'Fresh Leveling terms should require acceptance.');
 
 const firstDollarStatus = await send('market.dollar.status', { refreshIfDue:true });
-assert(firstDollarStatus.ok && firstDollarStatus.data.items.length === 2 && firstDollarStatus.data.items[0].itemName === 'Higher Value', '$1 Bazaar API results were not returned in descending total-value order.');
+assert(firstDollarStatus.ok && firstDollarStatus.data.bazaars.length === 2 && firstDollarStatus.data.bazaars[0].sellerName === 'Dollar Seller' && firstDollarStatus.data.bazaars[0].totalValue === 2000, '$1 Bazaar API totals were not returned as one row per bazaar in descending total-value order.');
 assert(weaverDollarRequests === 1, '$1 Bazaar status did not make exactly one Weaver API request.');
 const cachedDollarStatus = await send('market.dollar.status', { refreshIfDue:true });
 assert(cachedDollarStatus.ok && weaverDollarRequests === 1, '$1 Bazaar hourly cache made a redundant Weaver API request.');

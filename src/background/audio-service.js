@@ -38,14 +38,17 @@
 
   async function play(sound = {}) {
     await ensureOffscreenDocument();
-    const response = await chrome.runtime.sendMessage({
-      target:'slink-offscreen-audio',
-      type:'play',
-      sound:{
-        soundChoice:String(sound.soundChoice || 'chime'),
-        customSoundDataUrl:String(sound.customSoundDataUrl || '')
-      }
-    });
+    const message = {
+      target:'slink-offscreen-audio', type:'play',
+      sound:{ soundChoice:String(sound.soundChoice || 'chime'), customSoundDataUrl:String(sound.customSoundDataUrl || '') }
+    };
+    let response;
+    try { response = await chrome.runtime.sendMessage(message); }
+    catch (error) {
+      if (!/receiving end does not exist/i.test(String(error?.message || error))) throw error;
+      await new Promise(resolve => setTimeout(resolve, 100));
+      response = await chrome.runtime.sendMessage(message);
+    }
     if (!response?.ok) throw new Error(response?.error || 'The SLINK background audio document could not play the alert.');
     return { played:true };
   }

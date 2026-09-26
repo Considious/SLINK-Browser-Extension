@@ -457,10 +457,16 @@
   }
 
   function buildDollarStatus(stored = {}) {
-    const items = MARKET.weaverDollarBazaarItems({ items:Array.isArray(stored.items) ? stored.items : [] });
+    const bazaars = MARKET.weaverDollarBazaars({
+      bazaars:Array.isArray(stored.bazaars) ? stored.bazaars : [],
+      items:Array.isArray(stored.items) ? stored.items : []
+    });
     return {
-      items,
-      itemCount:items.length,
+      bazaars,
+      // Keep the old field for tabs that were open during the extension update.
+      items:bazaars,
+      bazaarCount:bazaars.length,
+      itemCount:bazaars.reduce((total, bazaar) => total + Number(bazaar.itemCount || 0), 0),
       fetchedAt:Number(stored.fetchedAt) || 0,
       nextRefreshAt:Number(stored.nextRefreshAt) || 0,
       lastError:String(stored.lastError || ''),
@@ -476,9 +482,9 @@
       let next;
       try {
         const current = await runtime();
-        const body = await weaverJson('https://weav3r.dev/api/dollar-bazaars/items?page=1&limit=100', current);
+        const body = await weaverJson('https://weav3r.dev/api/dollar-bazaars/bazaars?page=1&limit=100', current);
         const now = Date.now();
-        next = { fetchedAt:now, nextRefreshAt:now + DOLLAR_REFRESH_MS, items:MARKET.weaverDollarBazaarItems(body), lastError:'' };
+        next = { fetchedAt:now, nextRefreshAt:now + DOLLAR_REFRESH_MS, bazaars:MARKET.weaverDollarBazaars(body), lastError:'' };
       } catch (error) {
         next = { ...previous, nextRefreshAt:Date.now() + DOLLAR_REFRESH_MS, lastError:SLINK.core.format.errorMessage(error) };
       }

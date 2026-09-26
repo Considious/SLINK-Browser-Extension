@@ -250,12 +250,17 @@ const soundOnly = SLINK.core.adhd.normalizeSettings({ enabled:{ drugCooldown:fal
 assert(!SLINK.core.adhd.buildAlerts(efficiencySnapshot, soundOnly).some(alert => alert.id === 'drugCooldown'), 'A hidden alert remained visible.');
 assert(SLINK.core.adhd.buildAlerts(efficiencySnapshot, soundOnly, Date.now(), { includeHidden:true }).some(alert => alert.id === 'drugCooldown'), 'A sound-only alert was unavailable to the sound notifier.');
 assert(SLINK.core.market.defaultSettings().soundEnabled === true && SLINK.core.market.normalizeSettings({ soundEnabled:false }).soundEnabled === false, 'Market Watch sound does not have a durable user-toggle default.');
-const dollarBazaars = SLINK.core.market.weaverDollarBazaarItems({ items:[
-  { itemId:1, itemName:'Cheap Stack', itemType:'Other', playerId:11, sellerName:'Seller A', quantity:2, marketPrice:100, totalValue:200, lastUpdated:'2026-09-20T00:00:00Z' },
-  { itemId:2, itemName:'Best Stack', itemType:'Drug', playerId:22, sellerName:'Seller B', quantity:3, marketPrice:500, totalValue:1500, lastUpdated:'2026-09-20T00:00:00Z' }
+const dollarBazaars = SLINK.core.market.weaverDollarBazaars({ bazaars:[
+  { playerId:11, name:'Seller A', itemCount:9, totalMarketValue:200 },
+  { playerId:22, name:'Seller B', itemCount:3, totalMarketValue:1500 }
 ] });
-assert(dollarBazaars.length === 2 && dollarBazaars[0].itemId === 2, 'Weaver $1 Bazaar items were not normalized and ranked by total market value.');
-assert(dollarBazaars[0].href.includes('bazaar.php') && dollarBazaars[0].href.includes('userId=22') && dollarBazaars[0].href.includes('price=1'), 'Weaver $1 Bazaar result did not create a direct highlighted Torn bazaar URL.');
+assert(dollarBazaars.length === 2 && dollarBazaars[0].sellerId === 22 && dollarBazaars[0].totalValue === 1500, 'Weaver $1 Bazaars were not normalized and ranked by complete bazaar market value.');
+assert(dollarBazaars[0].href.includes('bazaar.php') && dollarBazaars[0].href.includes('userId=22') && !dollarBazaars[0].href.includes('itemId='), 'Weaver $1 Bazaar result did not create one seller-level Torn bazaar URL.');
+const legacyDollarBazaars = SLINK.core.market.weaverDollarBazaars({ items:[
+  { itemId:1, playerId:11, sellerName:'Seller A', quantity:2, marketPrice:100, totalValue:200 },
+  { itemId:2, playerId:11, sellerName:'Seller A', quantity:3, marketPrice:500, totalValue:1500 }
+] });
+assert(legacyDollarBazaars.length === 1 && legacyDollarBazaars[0].totalValue === 1700 && legacyDollarBazaars[0].itemCount === 2, 'Legacy item-oriented $1 Bazaar cache was not safely grouped during migration.');
 assert(SLINK.core.war.makeWarId(46978, 46999, 1_777_000_000) === 'rw_46978_46999_1777000000', 'Second-based War identity was changed.');
 assert(SLINK.core.war.makeWarId(46978, 46999, 1_777_000_000_000) === 'rw_46978_46999_1777000000', 'Millisecond-based War identity was not normalized.');
 assert(SLINK.core.war.sortMembers([

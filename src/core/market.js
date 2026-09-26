@@ -212,30 +212,54 @@
     return Math.max(0, Math.trunc(Number(bulk ? item.bulkBuyPrice : item.buyPrice) || 0));
   }
 
-  function weaverDollarBazaarItems(body = {}) {
-    const rows = Array.isArray(body?.items) ? body.items : Array.isArray(body?.data?.items) ? body.data.items : [];
-    return rows.map(row => {
-      const itemId = Math.max(0, Math.trunc(Number(row?.itemId ?? row?.item_id) || 0));
+  function sellerBazaarUrl(sellerId) {
+    const url = new URL('https://www.torn.com/bazaar.php');
+    url.searchParams.set('userId', String(Math.trunc(Number(sellerId))));
+    url.hash = '/';
+    return url.toString();
+  }
+
+  function weaverDollarBazaars(body = {}) {
+    const bazaarRows = Array.isArray(body?.bazaars) ? body.bazaars : Array.isArray(body?.data?.bazaars) ? body.data.bazaars : [];
+    if (bazaarRows.length) return bazaarRows.map(row => {
+      const sellerId = Math.max(0, Math.trunc(Number(row?.playerId ?? row?.player_id ?? row?.sellerId ?? row?.seller_id) || 0));
+      return {
+        sellerId,
+        sellerName:String(row?.name ?? row?.sellerName ?? row?.seller_name ?? row?.playerName ?? row?.player_name ?? `Player ${sellerId}`).trim().slice(0, 160),
+        itemCount:Math.max(0, Math.trunc(Number(row?.itemCount ?? row?.item_count) || 0)),
+        totalValue:Math.max(0, Math.trunc(Number(row?.totalMarketValue ?? row?.total_market_value ?? row?.totalValue ?? row?.total_value) || 0)),
+        href:sellerBazaarUrl(sellerId)
+      };
+    }).filter(row => row.sellerId > 0 && row.itemCount > 0 && row.totalValue > 0)
+      .sort((left, right) => right.totalValue - left.totalValue || right.itemCount - left.itemCount || left.sellerName.localeCompare(right.sellerName))
+      .slice(0, 100);
+
+    // Migrate any result cached by 0.18.23-0.18.25, which stored the
+    // item-oriented endpoint. New refreshes use Weaver's complete bazaar totals.
+    const itemRows = Array.isArray(body?.items) ? body.items : Array.isArray(body?.data?.items) ? body.data.items : [];
+    const grouped = new Map();
+    for (const row of itemRows) {
       const sellerId = Math.max(0, Math.trunc(Number(row?.playerId ?? row?.player_id ?? row?.sellerId ?? row?.seller_id) || 0));
       const marketPrice = Math.max(0, Math.trunc(Number(row?.marketPrice ?? row?.market_price) || 0));
       const quantity = Math.max(0, Math.trunc(Number(row?.quantity ?? row?.amount) || 0));
-      const updatedAt = externalTimestampMs(row?.lastUpdated ?? row?.last_updated ?? row?.updatedAt ?? row?.updated_at);
-      return {
-        itemId,
-        itemName:String(row?.itemName ?? row?.item_name ?? row?.name ?? `Item ${itemId}`).trim().slice(0, 160),
-        itemType:String(row?.itemType ?? row?.item_type ?? row?.type ?? '').trim().slice(0, 80),
+      if (!(sellerId > 0) || !(quantity > 0) || !(marketPrice > 0)) continue;
+      const current = grouped.get(sellerId) || {
         sellerId,
         sellerName:String(row?.sellerName ?? row?.seller_name ?? row?.playerName ?? row?.player_name ?? `Player ${sellerId}`).trim().slice(0, 160),
-        quantity,
-        marketPrice,
-        totalValue:Math.max(0, Math.trunc(Number(row?.totalValue ?? row?.total_value) || marketPrice * quantity)),
-        updatedAt,
-        href:bazaarUrl(sellerId, itemId, 1, updatedAt)
+        itemCount:0,
+        totalValue:0,
+        href:sellerBazaarUrl(sellerId)
       };
-    }).filter(row => row.itemId > 0 && row.sellerId > 0 && row.marketPrice > 0 && row.quantity > 0)
-      .sort((left, right) => right.totalValue - left.totalValue || right.marketPrice - left.marketPrice || left.itemName.localeCompare(right.itemName))
+      current.itemCount += Math.max(1, Math.trunc(Number(row?.itemCount ?? row?.item_count) || 1));
+      current.totalValue += Math.max(0, Math.trunc(Number(row?.totalValue ?? row?.total_value) || marketPrice * quantity));
+      grouped.set(sellerId, current);
+    }
+    return [...grouped.values()]
+      .sort((left, right) => right.totalValue - left.totalValue || right.itemCount - left.itemCount || left.sellerName.localeCompare(right.sellerName))
       .slice(0, 100);
   }
+
+  const weaverDollarBazaarItems = weaverDollarBazaars;
 
   function itemMarketUrl(itemId, price = 0) {
     const target = Math.max(0, Math.trunc(Number(itemId) || 0));
@@ -358,6 +382,6 @@
     WEAVER_PRICELIST_REFRESH_MS, WEAVER_RATE_WINDOW_MS, WEAVER_REFRESH_MS, activeSlotCount, activeSlotKeys, bazaarUrl, catalogItems, defaultSettings, effectivePriority,
     itemMarketCache, itemMarketListings, itemMarketNextCheckAt, itemMarketUrl, listingHighlightState, normalizePriority, normalizeSettings,
     normalizeWatch, opportunityRows, pointsMarketListings, pointsMarketUrl, shopSellDetails, staleRetryMs, weaverListings,
-    weaverDollarBazaarItems, weaverMarketplaceItems, weaverPricelistItems, weaverPricelistTarget
+    sellerBazaarUrl, weaverDollarBazaars, weaverDollarBazaarItems, weaverMarketplaceItems, weaverPricelistItems, weaverPricelistTarget
   }));
 })(globalThis);
