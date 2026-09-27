@@ -275,34 +275,17 @@
 
   async function observeStatus(input = {}) {
     const targetId = CORE.validTargetId(input.targetId);
-    if (!targetId) return publicStatus();
+    const source = String(input.source || '').slice(0, 40);
+    if (!targetId || source !== 'bounty-profile') return publicStatus();
     const currentSettings = await settings();
     const lastInteractionAt = await SLINK.core.storage.get(KEYS.activity, 0);
     if (!currentSettings.enabled || !active(lastInteractionAt)) return publicStatus();
     const currentRuntime = await runtime();
     if (!currentRuntime.targets.some(target => Number(target.id) === targetId)) return publicStatus();
     const cache = await SLINK.core.storage.get(KEYS.status, {});
-    let state = CORE.normalizeState(input.state);
-    let until = Math.max(0, Number(input.until) || 0);
-    let description = String(input.description || '').slice(0, 500);
-    let source = String(input.source || 'DOM').slice(0, 40);
-
-    if (state === 'Hospital' && !until && source === 'attack') {
-      const keys = await credentials(currentSettings);
-      if (keys.tornKey) {
-        const data = await tornRequest(
-          `https://api.torn.com/v2/user/${targetId}/basic`,
-          keys.tornKey,
-          currentSettings,
-          `/v2/user/${targetId}/basic`
-        );
-        const status = data?.profile?.status || data?.status || {};
-        state = CORE.normalizeState(status.state || state);
-        until = Math.max(0, Number(status.until) || 0);
-        description = String(status.description || status.details || description).slice(0, 500);
-        source = 'attack+api';
-      }
-    }
+    const state = CORE.normalizeState(input.state);
+    const until = Math.max(0, Number(input.until) || 0);
+    const description = String(input.description || '').slice(0, 500);
 
     cache[targetId] = { state, until, description, source, checkedAt:Date.now() };
     await SLINK.core.storage.set(KEYS.status, cache);

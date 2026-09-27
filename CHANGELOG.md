@@ -2,6 +2,13 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.30 — 2026-09-27
+
+### Fixed
+
+- Bounty status scraping now runs only on a profile deliberately opened from the Bounty module. Ordinary profiles and all attack-result pages are ignored.
+- Removed the attack-result hospital fallback request that could repeatedly react to Torn DOM changes after Leave, Mug, or Hospitalize.
+
 ## 0.18.29 — 2026-09-26
 
 ### Fixed

@@ -3,6 +3,8 @@
 
   const SLINK = global.SLINK_EXTENSION;
   const ACTIVE_HEARTBEAT_MS = 60_000;
+  const BOUNTY_PROFILE_INTENT_KEY = 'slink-extension:bounty-profile-intent:v1';
+  const BOUNTY_PROFILE_INTENT_MS = 5 * 60_000;
   const MODULE_STYLES = `
     .bounty-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
     .bounty-stat { padding:6px; border-radius:6px; background:#202c39; text-align:center; }
@@ -57,12 +59,37 @@
     return '';
   }
 
+  function rememberBountyProfileIntent(id) {
+    const targetId = Math.trunc(Number(id) || 0);
+    if (!targetId) return;
+    try {
+      global.sessionStorage.setItem(BOUNTY_PROFILE_INTENT_KEY, JSON.stringify({
+        id:targetId,
+        expiresAt:Date.now() + BOUNTY_PROFILE_INTENT_MS
+      }));
+    } catch {}
+  }
+
+  function clearBountyProfileIntent() {
+    try { global.sessionStorage.removeItem(BOUNTY_PROFILE_INTENT_KEY); } catch {}
+  }
+
   function pageTarget() {
-    const url = new URL(global.location.href);
-    const attack = url.searchParams.get('sid') === 'attack';
-    const profile = url.pathname.toLowerCase().includes('profiles.php');
-    const id = Number(attack ? url.searchParams.get('user2ID') : profile ? url.searchParams.get('XID') : 0);
-    return Number.isInteger(id) && id > 0 ? { id, source:attack ? 'attack' : 'profile' } : null;
+    let url;
+    try { url = new URL(global.location.href); } catch { return null; }
+    if (!url.pathname.toLowerCase().includes('profiles.php')) return null;
+    const id = Math.trunc(Number(url.searchParams.get('XID')) || 0);
+    try {
+      const intent = JSON.parse(global.sessionStorage.getItem(BOUNTY_PROFILE_INTENT_KEY) || 'null');
+      if (!id || Math.trunc(Number(intent?.id) || 0) !== id || Number(intent?.expiresAt) <= Date.now()) {
+        if (intent && Number(intent?.expiresAt) <= Date.now()) clearBountyProfileIntent();
+        return null;
+      }
+      return { id, source:'bounty-profile' };
+    } catch {
+      clearBountyProfileIntent();
+      return null;
+    }
   }
 
   SLINK.modules.register({
@@ -87,6 +114,7 @@
       let visibilityObserver = null;
       let statusObserver = null;
       let lastObserved = '';
+      let statusObservationBusy = false;
 
       context.ui.setTitle('SLINK Bounties');
       context.ui.setModuleStyles(MODULE_STYLES);
@@ -135,7 +163,7 @@
           const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(target.id)}`;
           const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(target.id)}`;
           return `<article class="bounty-target">
-            <div class="bounty-head"><a href="${profile}">${escape(target.name)} [${target.id}]</a><span class="bounty-reward">$${Number(target.highestReward).toLocaleString()}</span></div>
+            <div class="bounty-head"><a href="${profile}" data-bounty-profile-id="${target.id}">${escape(target.name)} [${target.id}]</a><span class="bounty-reward">$${Number(target.highestReward).toLocaleString()}</span></div>
             <div class="bounty-meta">
               <span class="bounty-badge" data-state="${escape(target.status?.state || 'Unknown')}">${statusText(target)}</span>
               <span class="bounty-badge">Lv ${Number(target.level) || '?'}</span>
@@ -143,7 +171,7 @@
               <span class="bounty-badge">BS ${target.bsEstimate ? escape(SLINK.core.format.shortNumber(target.bsEstimate)) : '?'}</span>
               ${Number(target.highestQuantity) > 1 ? `<span class="bounty-badge">×${Number(target.highestQuantity)}</span>` : ''}
             </div>
-            <div class="bounty-actions"><a href="${profile}">Profile</a><a href="${attack}">Attack</a></div>
+            <div class="bounty-actions"><a href="${profile}" data-bounty-profile-id="${target.id}">Profile</a><a href="${attack}">Attack</a></div>
           </article>`;
         }).join('');
       }
@@ -174,6 +202,9 @@
 
       function bindEvents() {
         const root = context.ui.getContentElement();
+        root.querySelectorAll('[data-bounty-profile-id]').forEach(link => {
+          link.addEventListener('click', () => rememberBountyProfileIntent(link.dataset.bountyProfileId));
+        });
         root.querySelector('#bounty-save')?.addEventListener('click', async () => {
           const payload = {
             enabled:root.querySelector('#bounty-enabled')?.checked === true,
@@ -253,29 +284,36 @@
       }
 
       async function observeCurrentPage() {
+        if (statusObservationBusy) return;
         const target = pageTarget();
         if (!target || !current?.settings?.enabled) return;
-        const selectors = target.source === 'profile'
-          ? ['[class*="status"]', '[class*="basic-information"]', '[data-testid*="status"]']
-          : ['[class*="dialog"]', '[class*="status"]', '[class*="result"]', '[data-testid*="status"]'];
+        const selectors = ['[class*="status"]', '[class*="basic-information"]', '[data-testid*="status"]'];
         for (const node of document.querySelectorAll(selectors.join(','))) {
           const text = String(node.innerText || node.textContent || '').trim();
           const state = detectState(text);
           if (!state) continue;
           const remaining = parseRemainingMs(text);
-          const signature = `${target.id}:${target.source}:${state}:${Math.floor(remaining / 1000)}`;
-          if (signature === lastObserved) return;
-          lastObserved = signature;
+          const signature = `${target.id}:bounty-profile:${state}:${Math.floor(remaining / 1000)}`;
+          if (signature === lastObserved) {
+            clearBountyProfileIntent();
+            return;
+          }
+          statusObservationBusy = true;
           try {
             current = await SLINK.core.messaging.send('bounties.status.observe', {
               targetId:target.id,
               state,
               until:remaining > 0 ? Math.floor((Date.now() + remaining) / 1000) : 0,
               description:text.slice(0, 500),
-              source:target.source
+              source:'bounty-profile'
             });
+            lastObserved = signature;
+            clearBountyProfileIntent();
             render();
-          } catch {}
+          } catch {
+          } finally {
+            statusObservationBusy = false;
+          }
           return;
         }
       }
