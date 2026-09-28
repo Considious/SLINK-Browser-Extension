@@ -162,7 +162,7 @@
       }
 
       function targetsHtml(targets) {
-        if (!targets?.length) return `<div class="leveling-empty">${busy ? 'Asking SLINK for targets...' : 'No recommendations are currently assigned.'}</div>`;
+        if (!targets?.length) return `<div class="leveling-empty">${busy ? 'Asking SLINK for targets...' : 'No targets are currently loaded. Press Refresh to start or restart the five-minute Leveling cycle.'}</div>`;
         return targets.map(target => {
           const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(target.id)}`;
           const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(target.id)}`;

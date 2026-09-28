@@ -158,7 +158,7 @@
       }
 
       function candidatesHtml(candidates) {
-        if (!candidates?.length) return `<div class="bounty-empty">${busy ? 'Scanning and estimating targets…' : 'No targets match the current filters.'}</div>`;
+        if (!candidates?.length) return `<div class="bounty-empty">${busy ? 'Scanning and estimating targets…' : 'No targets are currently loaded. Press Refresh to start or restart the five-minute Bounty cycle.'}</div>`;
         return candidates.map(target => {
           const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(target.id)}`;
           const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(target.id)}`;

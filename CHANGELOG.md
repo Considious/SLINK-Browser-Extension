@@ -2,6 +2,12 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.31 — 2026-09-27
+
+### Changed
+
+- Empty Leveling and Bounty views now explain that Refresh starts or restarts their five-minute activity cycle.
+
 ## 0.18.30 — 2026-09-27
 
 ### Fixed
