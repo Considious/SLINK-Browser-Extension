@@ -30,6 +30,7 @@ let adhdCityCurrentRequests = 0;
 let adhdCityBaselineRequests = 0;
 let adhdCityBaselineTimestamp = 0;
 let adhdStockCatalogRequests = 0;
+let adhdMobilityRequests = 0;
 let optionsPageOpens = 0;
 let offscreenDocumentOpen = false;
 let offscreenDocumentsCreated = 0;
@@ -374,6 +375,14 @@ context = vm.createContext({
             dexterity:{ value:100, modifiers:[{ effect:'Addiction', type:'addiction', value:-5 }] }
           }
         };
+      } else if (url.pathname === '/v2/user' && url.searchParams.get('selections') === 'travel,profile,icons,races') {
+        adhdMobilityRequests += 1;
+        body = {
+          travel:{ time_left:0 },
+          profile:{ faction_id:46978, status:{ state:'Okay' } },
+          icons:[],
+          races:[]
+        };
       } else if (url.pathname === '/v2/torn/items') {
         marketCatalogRequests += 1;
         body = { items:[
@@ -683,6 +692,10 @@ assert(adhdRefreshed.data.activeAlerts.find(alert => alert.id === 'stockBenefits
 assert(!adhdRefreshed.data.activeAlerts.find(alert => alert.id === 'stockBenefits')?.detail.includes('WSU') && adhdStockCatalogRequests === 1, 'Passive stock benefit was not excluded or the stock catalog was fetched repeatedly.');
 assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'playerAddiction'), 'API battle-stat addiction did not create an Efficiency alert.');
 assert(!adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'raceOrFly'), 'Waiting-for-race API icon did not suppress the race reminder.');
+values.set('slink.adhd.runtime.v1', { ...values.get('slink.adhd.runtime.v1'), nextMobilityRefreshAt:0 });
+const mobilityRefreshed = await send('adhd.status');
+assert(mobilityRefreshed.ok && mobilityRefreshed.data.activeAlerts.some(alert => alert.id === 'raceOrFly'), 'The lightweight mobility refresh did not restore the race/travel reminder after a race ended.');
+assert(adhdMobilityRequests === 1 && adhdCityCurrentRequests === 1, 'Race/travel monitoring reran the full Efficiency API refresh instead of one lightweight mobility request.');
 assert(adhdRefreshed.data.activeAlerts.some(alert => alert.id === 'googlePlayPoints'), 'The first-run weekly Google Play Points reminder was not active.');
 const weeklyPrizeClaimed = await send('adhd.google-play-points.acknowledge');
 assert(weeklyPrizeClaimed.ok && !weeklyPrizeClaimed.data.activeAlerts.some(alert => alert.id === 'googlePlayPoints'), 'Claiming the weekly Google Play Points prize did not hide its reminder.');
@@ -893,4 +906,5 @@ const cancelledTimer = await send('adhd.reminder.control', { action:'timer-cance
 assert(cancelledTimer.data.settings.timer24EndsAt === 0, 'Timer cancel was not persisted.');
 assert(!cancelledTimer.data.activeAlerts.some(a => a.id === 'timer24'), 'Dismissed timer remains active.');
 console.log('Background startup, capabilities, services, Stack mode and 24-hour timer checks passed.');
+
 

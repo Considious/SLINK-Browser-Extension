@@ -11,7 +11,10 @@
   });
   const CITY_BASELINE_VERSION = 2;
   const USER_SELECTIONS = 'bars,cooldowns,travel,education,organizedcrime,refills,missions,casino,profile,icons,races,enlistedcars,stocks,battlestats';
+  const MOBILITY_SELECTIONS = 'travel,profile,icons,races';
+  const MOBILITY_REFRESH_MS = 60_000;
   let refreshing = null;
+  let mobilityRefreshing = null;
 
   async function settings() {
     return ADHD.normalizeSettings(await SLINK.core.storage.get(KEYS.settings, {}));
@@ -21,6 +24,7 @@
     return {
       fetchedAt:0,
       nextRefreshAt:0,
+      nextMobilityRefreshAt:0,
       lastError:'',
       snapshot:null,
       lastPurchase:null,
@@ -58,6 +62,20 @@
     url.searchParams.set('selections', USER_SELECTIONS);
     url.searchParams.set('comment', 'SLINK Efficiency alerts');
     return url.href;
+  }
+
+  function mobilityUrl() {
+    const url = new URL('https://api.torn.com/v2/user');
+    url.searchParams.set('selections', MOBILITY_SELECTIONS);
+    url.searchParams.set('comment', 'SLINK race and travel alerts');
+    return url.href;
+  }
+
+  function mobilityMonitoringEnabled(settingsValue) {
+    return settingsValue.enabled.raceOrFly !== false
+      || settingsValue.soundEnabled.raceOrFly === true
+      || settingsValue.enabled.landing !== false
+      || settingsValue.soundEnabled.landing === true;
   }
 
   function cityCurrentUrl() {
@@ -192,7 +210,7 @@
         } catch (clusterError) {
           cluster = { ...(cluster || {}), lastError:SLINK.core.format.errorMessage(clusterError), lastErrorAt:now };
         }
-        const snapshot = { day, fetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityBaselineVersion:CITY_BASELINE_VERSION, cityShops, stockCatalog, cluster };
+        const snapshot = { day, fetchedAt:now, mobilityFetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityBaselineVersion:CITY_BASELINE_VERSION, cityShops, stockCatalog, cluster };
         // Only a new measured energy reading may end Stack mode; never infer a drop.
         const latestSettings = await settings();
         const energy = data?.bars?.energy?.current;
@@ -205,6 +223,7 @@
         await saveRuntime({
           fetchedAt:now,
           nextRefreshAt:ADHD.nextRefreshAt(snapshot, latestSettings, now),
+          nextMobilityRefreshAt:now + MOBILITY_REFRESH_MS,
           lastError:'',
           snapshot,
           lastPurchase
@@ -217,6 +236,47 @@
     })();
     try { return await refreshing; }
     finally { refreshing = null; }
+  }
+
+  async function refreshMobility(force = false) {
+    if (refreshing) return refreshing;
+    if (mobilityRefreshing) return mobilityRefreshing;
+    mobilityRefreshing = (async () => {
+      const currentRuntime = await runtime();
+      const currentSettings = await settings();
+      if (!currentRuntime.snapshot || !mobilityMonitoringEnabled(currentSettings)) return publicStatus(false);
+      if (!force && Number(currentRuntime.nextMobilityRefreshAt || 0) > Date.now()) return publicStatus(false);
+      try {
+        await requireAccess();
+        const key = await accessKey();
+        if (!key) throw new Error('Enable Efficiency and save your Torn API key first.');
+        const now = Date.now();
+        const mobility = await tornJson(mobilityUrl(), key);
+        const previousData = currentRuntime.snapshot.data || {};
+        const data = { ...previousData };
+        for (const field of ['travel', 'icons', 'races']) {
+          if (Object.hasOwn(mobility || {}, field)) data[field] = mobility[field];
+        }
+        if (Object.hasOwn(mobility || {}, 'profile')) {
+          data.profile = { ...(previousData.profile || {}), ...(mobility.profile || {}) };
+        }
+        const snapshot = { ...currentRuntime.snapshot, data, mobilityFetchedAt:now };
+        await saveRuntime({
+          snapshot,
+          nextMobilityRefreshAt:now + MOBILITY_REFRESH_MS,
+          lastError:''
+        });
+        return publicStatus(false);
+      } catch (error) {
+        await saveRuntime({
+          lastError:SLINK.core.format.errorMessage(error),
+          nextMobilityRefreshAt:Date.now() + MOBILITY_REFRESH_MS
+        });
+        throw error;
+      }
+    })();
+    try { return await mobilityRefreshing; }
+    finally { mobilityRefreshing = null; }
   }
 
   async function saveSettings(input = {}) {
@@ -254,7 +314,10 @@
     });
     await SLINK.core.storage.set(KEYS.settings, next);
     const currentRuntime = await runtime();
-    if (currentRuntime.snapshot) await saveRuntime({ nextRefreshAt:ADHD.nextRefreshAt(currentRuntime.snapshot, next) });
+    if (currentRuntime.snapshot) await saveRuntime({
+      nextRefreshAt:ADHD.nextRefreshAt(currentRuntime.snapshot, next),
+      nextMobilityRefreshAt:0
+    });
     return publicStatus(false);
   }
 
@@ -350,6 +413,12 @@
       try { return await refresh(false); }
       catch {}
     }
+    if (refreshIfDue && access.configured && currentRuntime.snapshot
+      && mobilityMonitoringEnabled(currentSettings)
+      && Number(currentRuntime.nextMobilityRefreshAt || 0) <= Date.now()) {
+      try { return await refreshMobility(false); }
+      catch {}
+    }
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, ADHD.ALERT_SCOPE);
     const snapshot = currentRuntime.snapshot;
     return {
@@ -385,5 +454,6 @@
     'adhd.sound.ack':acknowledgeSound
   });
 
-  SLINK.define('services', 'adhd', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, routes }));
+  SLINK.define('services', 'adhd', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, refreshMobility, routes }));
 })(globalThis);
+

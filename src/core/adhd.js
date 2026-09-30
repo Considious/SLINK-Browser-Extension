@@ -325,6 +325,7 @@
     const settings = normalizeSettings(settingsInput);
     const body = snapshot.data || {};
     const fetchedAt = Number(snapshot.fetchedAt) || now;
+    const mobilityFetchedAt = Number(snapshot.mobilityFetchedAt) || fetchedAt;
     const bars = body.bars || {};
     const cooldowns = body.cooldowns || {};
     const travel = body.travel || {};
@@ -339,7 +340,7 @@
     const playerAddiction = addictionPercentFromBattleStats(body);
     const travelSeconds = Number(travel?.arrival_at) * 1000 > now
       ? Math.ceil((Number(travel.arrival_at) * 1000 - now) / 1000)
-      : countdown(travel?.time_left, fetchedAt, now);
+      : countdown(travel?.time_left, mobilityFetchedAt, now);
     const drug = countdown(cooldowns.drug, fetchedAt, now);
     const medical = countdown(cooldowns.medical, fetchedAt, now);
     const booster = countdown(cooldowns.booster, fetchedAt, now);
@@ -390,6 +391,7 @@
     const settings = normalizeSettings(settingsInput);
     const body = snapshot.data || {};
     const fetchedAt = Number(snapshot.fetchedAt) || now;
+    const mobilityFetchedAt = Number(snapshot.mobilityFetchedAt) || fetchedAt;
     const candidates = [now + 2 * 60 * 60 * 1000, nextUtcDay(now) + 15_000];
     if (settings.stackModeSince > 0) candidates.push(now + 5 * 60_000);
     if ((settings.enabled.googlePlayPoints !== false || settings.soundEnabled.googlePlayPoints === true)
@@ -410,6 +412,10 @@
     }
     const arrival = finite(body?.travel?.arrival_at);
     if (arrival && arrival * 1000 > now) candidates.push(Math.max(now + 60_000, arrival * 1000 - settings.landingLeadMinutes * 60_000));
+    else {
+      const travelRemaining = countdown(body?.travel?.time_left, mobilityFetchedAt, now);
+      if (travelRemaining && travelRemaining > 0) candidates.push(Math.max(now + 60_000, now + travelRemaining * 1000 - settings.landingLeadMinutes * 60_000));
+    }
     return Math.max(now + 60_000, Math.min(...candidates.filter(Number.isFinite)));
   }
 
@@ -533,3 +539,4 @@
     WEEK_MS
   }));
 })(globalThis);
+

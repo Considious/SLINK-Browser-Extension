@@ -2,6 +2,12 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.32 — 2026-09-30
+
+### Fixed
+
+- Race and travel alerts now use one lightweight mobility refresh per minute, so finishing a race or landing re-arms the reminder without rerunning the full Efficiency API snapshot.
+
 ## 0.18.31 — 2026-09-27
 
 ### Changed
