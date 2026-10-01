@@ -2,6 +2,13 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.33 — 2026-09-30
+
+### Fixed
+
+- Send to Faction now recognizes Torn’s exact `#faction` chat container and current resizable textarea after the chat redesign.
+- A collapsed faction chat now reopens through its current header before SLINK attempts to populate and send the message.
+
 ## 0.18.32 — 2026-09-30
 
 ### Fixed

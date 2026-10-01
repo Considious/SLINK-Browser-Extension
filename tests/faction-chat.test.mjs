@@ -23,6 +23,8 @@ for (const file of consumers) {
 
 const helperSource = read('src/core/faction-chat.js');
 assert(helperSource.includes("M18,0l-4.5,16.5-6.1-5.43"), 'The sender must identify the Torn paper-plane icon.');
+assert(helperSource.includes("document.querySelector('#faction')"), 'The sender must recognize Torn\'s current exact faction container ID.');
+assert(helperSource.includes('textarea[class*="_resizable-chat_"]'), 'The sender must recognize Torn\'s current resizable chat textarea.');
 assert(!helperSource.includes("parentElement?.querySelector('button')"), 'The sender must never accept the first nearby button.');
 assert(helperSource.includes('sendInFlight'), 'The sender must prevent duplicate concurrent sends.');
 
@@ -88,10 +90,8 @@ const container = {
 const document = {
   visibilityState:'visible',
   hasFocus:() => true,
-  querySelectorAll(selector) {
-    if (selector === '[id^="faction-"]') return [container];
-    return [];
-  },
+  querySelector(selector) { return selector === '#faction' ? container : null; },
+  querySelectorAll() { return []; },
   execCommand() { return false; }
 };
 const modules = {};

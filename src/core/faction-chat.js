@@ -5,6 +5,7 @@
   if (!SLINK) throw new Error('SLINK runtime must load before Faction Chat helpers.');
 
   const SEND_ICON_PATH_PREFIX = 'M18,0l-4.5,16.5-6.1-5.43';
+  const FACTION_COMPOSER_SELECTOR = 'textarea[placeholder="Type your message here..."],textarea[class*="_resizable-chat_"],textarea[class*="textarea___"]';
   let sendInFlight = false;
 
   function focusedTornPage() {
@@ -12,17 +13,21 @@
   }
 
   function findContainer() {
+    const current = document.querySelector('#faction');
+    if (current) return current;
     const exact = [...document.querySelectorAll('[id^="faction-"]')]
-      .find(node => node.querySelector('textarea[placeholder="Type your message here..."],textarea[class*="textarea"]'));
+      .find(node => node.querySelector(FACTION_COMPOSER_SELECTOR));
     if (exact) return exact;
     return [...document.querySelectorAll('div,section')].find(node => {
-      const title = node.querySelector('button span,header span');
-      const composer = node.querySelector('textarea[placeholder*="message" i],[contenteditable="true"]');
-      return composer && String(title?.textContent || '').trim().toLowerCase() === 'faction';
+      const composer = node.querySelector(FACTION_COMPOSER_SELECTOR);
+      const header = node.querySelector('button[data-prevent-flyout-swipe="true"][class*="header___"]');
+      return composer && Boolean(header?.querySelector('svg[class*="arrowIcon___"]'));
     }) || null;
   }
 
   function findLauncher() {
+    const currentHeader = document.querySelector('#faction button[data-prevent-flyout-swipe="true"][class*="header___"]');
+    if (currentHeader) return currentHeader;
     return [...document.querySelectorAll('button,a,[role="button"]')].find(node => {
       const label = [node.getAttribute?.('aria-label'), node.getAttribute?.('title'), node.textContent]
         .filter(Boolean).join(' ').trim().toLowerCase();
@@ -31,7 +36,7 @@
   }
 
   function findComposer(container) {
-    return container?.querySelector('textarea[placeholder="Type your message here..."],textarea[class*="textarea"],textarea,[contenteditable="true"]') || null;
+    return container?.querySelector(FACTION_COMPOSER_SELECTOR) || null;
   }
 
   function setComposerContent(composer, text) {
