@@ -290,7 +290,7 @@
     for (const text of [member.activity || 'Unknown', member.statusState || 'Okay', SLINK.core.war.isHospitalized(member) ? `Hospital ${SLINK.core.format.formatHumanDuration(remaining)}${readyAt ? ` / ${readyAt} TCT` : ''}` : '', Number.isFinite(member.battleStatsEstimate) ? `Estimated BS ${SLINK.core.format.shortNumber(member.battleStatsEstimate)}` : 'Estimated BS ?', Number.isFinite(member.fairFight) ? `FF ${member.fairFight.toFixed(2)}` : 'FF ?'].filter(Boolean)) article.querySelector('.target-meta').append(pill(text));
     const statusDescription = String(member.statusDescription || '').trim();
     const duplicateStatus = [member.statusState, member.activity].some(value => String(value || '').trim().toLowerCase() === statusDescription.toLowerCase());
-    article.querySelector('.secondary-meta').textContent = [duplicateStatus ? '' : statusDescription, member.lastActionRelative].filter(Boolean).join(' • ');
+    article.querySelector('.secondary-meta').textContent = duplicateStatus ? '' : statusDescription;
     const copyButton = article.querySelector('.copy-war-target');
     copyButton.addEventListener('click', async () => {
       await copyText(SLINK.core.war.factionCallout(member));
