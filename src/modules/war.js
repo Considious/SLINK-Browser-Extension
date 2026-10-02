@@ -122,7 +122,7 @@
       let timer = null;
       let localError = '';
       let targetSort = 'availability';
-      let targetFilters = { minFF:1, maxFF:3, status:'all' };
+      let targetFilters = { minFF:1, maxFF:3, status:'all', abroad:'all', location:'all' };
       let alertOverlay = null;
       let lastAlertSignature = '';
       let armoryMode = 'ranked-all';
@@ -773,9 +773,11 @@
       }
 
       function targetFilterControls() {
-        return `<div class="slink-war-settings slink-war-note"><label>Minimum FF<input id="slink-war-filter-min" type="number" min="0" step="0.1" value="${targetFilters.minFF}"></label><label>Maximum FF<input id="slink-war-filter-max" type="number" min="0" step="0.1" value="${targetFilters.maxFF}"></label><label>Status<select id="slink-war-filter-status"><option value="all" ${targetFilters.status === 'all' ? 'selected' : ''}>All statuses</option><option value="okay" ${targetFilters.status === 'okay' ? 'selected' : ''}>Okay only</option><option value="notOkay" ${targetFilters.status === 'notOkay' ? 'selected' : ''}>Not okay only</option></select></label><label>Sort<select id="slink-war-filter-sort"><option value="availability" ${targetSort === 'availability' ? 'selected' : ''}>Availability</option><option value="fairFightDesc" ${targetSort === 'fairFightDesc' ? 'selected' : ''}>FF high to low</option><option value="fairFightAsc" ${targetSort === 'fairFightAsc' ? 'selected' : ''}>FF low to high</option></select></label></div>`;
+        const locations = WAR.travelLocations(current?.runtime?.snapshot?.members || []);
+        if (!locations.includes(targetFilters.location)) targetFilters.location = 'all';
+        const locationOptions = ['<option value="all">All locations</option>', ...locations.map(location => `<option value="${escape(location)}" ${targetFilters.location === location ? 'selected' : ''}>${escape(location)}</option>`)].join('');
+        return `<div class="slink-war-settings slink-war-note"><label>Minimum FF<input id="slink-war-filter-min" type="number" min="0" step="0.1" value="${targetFilters.minFF}"></label><label>Maximum FF<input id="slink-war-filter-max" type="number" min="0" step="0.1" value="${targetFilters.maxFF}"></label><label>Status<select id="slink-war-filter-status"><option value="all" ${targetFilters.status === 'all' ? 'selected' : ''}>All statuses</option><option value="okay" ${targetFilters.status === 'okay' ? 'selected' : ''}>Okay only</option><option value="notOkay" ${targetFilters.status === 'notOkay' ? 'selected' : ''}>Not okay only</option></select></label><label>Abroad<select id="slink-war-filter-abroad"><option value="all" ${targetFilters.abroad === 'all' ? 'selected' : ''}>Show all targets</option><option value="hide" ${targetFilters.abroad === 'hide' ? 'selected' : ''}>Hide abroad</option><option value="only" ${targetFilters.abroad === 'only' ? 'selected' : ''}>Abroad only</option></select></label><label ${targetFilters.abroad === 'only' ? '' : 'hidden'}>Location<select id="slink-war-filter-location">${locationOptions}</select></label><label>Sort<select id="slink-war-filter-sort"><option value="availability" ${targetSort === 'availability' ? 'selected' : ''}>Availability</option><option value="fairFightDesc" ${targetSort === 'fairFightDesc' ? 'selected' : ''}>FF high to low</option><option value="fairFightAsc" ${targetSort === 'fairFightAsc' ? 'selected' : ''}>FF low to high</option></select></label></div>`;
       }
-
       function targetShareKey(member) {
         return `war:target:${Number(member?.id) || 0}`;
       }
@@ -859,9 +861,13 @@
           const ff = Number(member.fairFight);
           if (!Number.isFinite(ff) || ff < minimum || ff > maximum) return false;
           const okay = /^okay$/i.test(String(member.statusState || '').trim());
+          const abroad = WAR.isAbroad(member);
+          if (targetFilters.abroad === 'hide' && abroad) return false;
+          if (targetFilters.abroad === 'only' && !abroad) return false;
+          if (targetFilters.abroad === 'only' && targetFilters.location !== 'all' && WAR.travelLocation(member) !== targetFilters.location) return false;
           return targetFilters.status === 'okay' ? okay : targetFilters.status === 'notOkay' ? !okay : true;
         });
-        if (!members.length) return targetFilterControls() + assignmentControls() + '<div class="slink-war-empty">No targets match the current Fair Fight and status filters.</div>';
+        if (!members.length) return targetFilterControls() + assignmentControls() + '<div class="slink-war-empty">No targets match the current Fair Fight, status, and travel filters.</div>';
         return targetFilterControls() + assignmentControls() + members.map(member => {
           const hospitalized = WAR.isHospitalized(member);
           const remaining = WAR.statusSeconds(member);
@@ -1082,11 +1088,13 @@
         for (const button of root.querySelectorAll('[data-war-retal-send]')) button.addEventListener('click', () => void sendRetal(retals.get(String(button.dataset.warRetalSend)), button));
         for (const button of root.querySelectorAll('[data-war-retal-dismiss]')) button.addEventListener('click', () => void dismissRetal(retals.get(String(button.dataset.warRetalDismiss))));
         for (const link of root.querySelectorAll('[data-war-attack]')) link.addEventListener('click', event => void handleAttackLink(event, Number(link.dataset.warAttack)));
-        for (const id of ['slink-war-filter-min', 'slink-war-filter-max', 'slink-war-filter-status', 'slink-war-filter-sort']) root.querySelector(`#${id}`)?.addEventListener('change', async () => {
+        for (const id of ['slink-war-filter-min', 'slink-war-filter-max', 'slink-war-filter-status', 'slink-war-filter-abroad', 'slink-war-filter-location', 'slink-war-filter-sort']) root.querySelector(`#${id}`)?.addEventListener('change', async () => {
           targetFilters = {
             minFF:Math.max(0, Number(root.querySelector('#slink-war-filter-min')?.value) || 0),
             maxFF:Math.max(0, Number(root.querySelector('#slink-war-filter-max')?.value) || 3),
-            status:root.querySelector('#slink-war-filter-status')?.value || 'all'
+            status:root.querySelector('#slink-war-filter-status')?.value || 'all',
+            abroad:root.querySelector('#slink-war-filter-abroad')?.value || 'all',
+            location:root.querySelector('#slink-war-filter-location')?.value || 'all'
           };
           targetSort = root.querySelector('#slink-war-filter-sort')?.value || 'availability';
           await SLINK.core.storage.set('ui.war.targetFilters.v1', { ...targetFilters, sort:targetSort });
