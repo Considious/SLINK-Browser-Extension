@@ -267,12 +267,12 @@
     const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(member.id)}`;
     const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(member.id)}`;
     const remaining = SLINK.core.war.statusSeconds(member);
-    article.innerHTML = '<div class="target-head"><a></a><span class="level"></span></div><div class="target-meta"></div><div class="target-meta secondary-meta"></div><div class="target-actions"><a class="button" target="_blank" rel="noopener noreferrer">Attack</a><a class="button secondary" target="_blank" rel="noopener noreferrer">Profile</a><button class="secondary copy-war-target" type="button">Copy for faction chat</button></div>';
+    article.innerHTML = '<div class="target-head"><a></a><span class="level"></span></div><div class="target-meta"></div><div class="target-meta secondary-meta"></div><div class="target-actions"><a class="button" target="_blank" rel="noopener noreferrer">【ATTACK】</a><a class="button secondary" target="_blank" rel="noopener noreferrer">Profile</a><button class="secondary copy-war-target" type="button">Copy for faction chat</button></div>';
     const links = article.querySelectorAll('a');
     links[0].href = profile; links[0].textContent = `${member.name || 'Unknown'} [${member.id}]`;
     links[1].href = attack; links[2].href = profile;
     if (gate) {
-      links[1].textContent = gate.mode === 'block' ? 'INSIDES DISABLED' : 'Attack (warning)';
+      links[1].textContent = gate.mode === 'block' ? 'INSIDES DISABLED' : '【ATTACK】 (warning)';
       const warning = document.createElement('div');
       warning.className = 'error';
       warning.textContent = insideMessage(gate);
@@ -1308,8 +1308,8 @@
   for (const button of document.querySelectorAll('[data-target-view]')) button.addEventListener('click', () => { targetView = button.dataset.targetView; renderTargets(); });
   for (const id of ['war-min-ff', 'war-max-ff', 'war-status-filter', 'war-target-sort']) byId(id).addEventListener('change', async () => {
     warTargetFilters = {
-      minFF:Math.max(0, Math.min(100, Number(byId('war-min-ff').value) || 0)),
-      maxFF:Math.max(0, Math.min(100, Number(byId('war-max-ff').value) || 3)),
+      minFF:Math.max(0, Number(byId('war-min-ff').value) || 0),
+      maxFF:Math.max(0, Number(byId('war-max-ff').value) || 3),
       status:byId('war-status-filter').value,
       sort:byId('war-target-sort').value
     };

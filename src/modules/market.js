@@ -28,7 +28,6 @@
       let clockTimer = null;
       let observer = null;
       let formatTimer = null;
-      let shareArm = null;
       let quickBuyLayer = null;
       let quickBuyPositionFrame = null;
       let quickPurchaseFlow = null;
@@ -50,15 +49,6 @@
 
       function focusedTornPage() {
         return document.visibilityState === 'visible' && document.hasFocus();
-      }
-
-      function copyText(text) {
-        if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text).then(() => true, () => false);
-        const textarea = document.createElement('textarea');
-        textarea.value = text; textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
-        document.body.append(textarea); textarea.select();
-        const copied = document.execCommand('copy'); textarea.remove();
-        return Promise.resolve(copied);
       }
 
       async function claimMarketSound() {
@@ -501,14 +491,16 @@
         return opportunities.slice(0, 12).map(row => row.shareText).join('\n');
       }
 
+      function marketShareKey(id) {
+        return `market:${String(id || '')}`;
+      }
+
       function updateShareButtons(root) {
-        const armed = shareArm && shareArm.expiresAt > Date.now() ? shareArm : null;
-        if (!armed) shareArm = null;
         const all = root.querySelector('[data-market-send-all]');
-        if (all) all.disabled = armed?.id !== 'all';
+        if (all) all.disabled = !SLINK.core.factionChat.isPrimed(marketShareKey('all'));
         root.querySelectorAll('[data-market-send]').forEach(button => {
-          button.disabled = armed?.id !== button.dataset.marketSend;
-          button.title = button.disabled ? 'Copy this listing first to unlock sending' : 'Send this listing to Faction Chat';
+          button.disabled = !SLINK.core.factionChat.isPrimed(marketShareKey(button.dataset.marketSend));
+          button.title = button.disabled ? 'Copy this listing first to unlock sending' : 'Send the copied listing to Faction Chat';
         });
       }
 
@@ -541,31 +533,28 @@
           catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); event.currentTarget.disabled = false; }
         });
         copyAll?.addEventListener('click', async () => {
-          const text = aggregateShare(deals); const copied = await copyText(text);
-          copyAll.textContent = copied ? 'List copied' : 'Copy failed';
-          if (copied) { shareArm = { id:'all', text, expiresAt:Date.now() + 120_000 }; updateShareButtons(root); }
+          const result = await SLINK.core.factionChat.prime(aggregateShare(deals), { key:marketShareKey('all') });
+          copyAll.textContent = result.ok ? 'List copied' : result.label;
+          updateShareButtons(root);
         });
         sendAll?.addEventListener('click', async () => {
-          if (!shareArm || shareArm.id !== 'all' || shareArm.expiresAt <= Date.now()) { updateShareButtons(root); return; }
           sendAll.disabled = true; sendAll.textContent = 'Sending…';
-          const result = await SLINK.core.factionChat.send(shareArm.text); sendAll.textContent = result.label;
-          if (result.ok) shareArm = null;
+          const result = await SLINK.core.factionChat.sendPrimed({ key:marketShareKey('all') });
+          sendAll.textContent = result.label;
           updateShareButtons(root);
         });
         root.querySelectorAll('[data-market-copy]').forEach(button => button.addEventListener('click', async () => {
           const row = deals.find(item => item.id === button.dataset.marketCopy);
-          const copied = Boolean(row) && await copyText(row.shareText);
-          button.textContent = copied ? 'Copied' : 'Copy failed';
-          if (copied) shareArm = { id:row.id, text:row.shareText, expiresAt:Date.now() + 120_000 };
+          const result = row ? await SLINK.core.factionChat.prime(row.shareText, { key:marketShareKey(row.id) }) : { ok:false, label:'Copy failed' };
+          button.textContent = result.label;
           updateShareButtons(root);
         }));
         root.querySelectorAll('[data-market-send]').forEach(button => button.addEventListener('click', async () => {
           const row = deals.find(item => item.id === button.dataset.marketSend);
-          if (!row || shareArm?.id !== row.id || shareArm.expiresAt <= Date.now()) { updateShareButtons(root); return; }
+          if (!row) return;
           button.disabled = true; button.textContent = 'Sending…';
-          const result = await SLINK.core.factionChat.send(shareArm.text);
+          const result = await SLINK.core.factionChat.sendPrimed({ key:marketShareKey(row.id) });
           button.textContent = result.label;
-          if (result.ok) shareArm = null;
           updateShareButtons(root);
         }));
         root.querySelectorAll('[data-market-dismiss]').forEach(button => button.addEventListener('click', async () => {

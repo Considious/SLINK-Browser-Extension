@@ -4,6 +4,8 @@
   const SLINK = global.SLINK_EXTENSION;
   if (!SLINK) throw new Error('SLINK runtime must load before format helpers.');
 
+  const ATTACK_LABEL = '【ATTACK】';
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replaceAll('&', '&amp;')
@@ -11,6 +13,14 @@
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#39;');
+  }
+
+  function attackLink(href, options = {}) {
+    const attributes = [`href="${escapeHtml(href)}"`];
+    if (options.target) attributes.push(`target="${escapeHtml(options.target)}"`);
+    if (options.rel) attributes.push(`rel="${escapeHtml(options.rel)}"`);
+    if (options.className) attributes.push(`class="${escapeHtml(options.className)}"`);
+    return `<a ${attributes.join(' ')}>${escapeHtml(options.label || ATTACK_LABEL)}</a>`;
   }
 
   function errorMessage(error, fallback = 'Unknown error') {
@@ -48,6 +58,8 @@
   }
 
   SLINK.define('core', 'format', Object.freeze({
+    ATTACK_LABEL,
+    attackLink,
     errorMessage,
     escapeHtml,
     formatHumanDuration,

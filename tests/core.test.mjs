@@ -84,6 +84,7 @@ const SLINK = context.SLINK_EXTENSION;
 assert(SLINK.VERSION === '0.18.26', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
+assert(SLINK.core.format.attackLink('https://www.torn.com/page.php?sid=attack&user2ID=1') === '<a href="https://www.torn.com/page.php?sid=attack&amp;user2ID=1">【ATTACK】</a>', 'Shared attack-link formatter did not preserve Torn HTML and the bracketed label.');
 assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number formatting failed.');
 
 const permissions = SLINK.core.permissions;
@@ -271,6 +272,7 @@ const warCallout = SLINK.core.war.factionCallout({
   id:9001, name:'War Target', activity:'Online', statusState:'Hospital',
   statusUntil:Math.floor(Date.now() / 1000) + 600, battleStatsEstimate:2500000, fairFight:1.75
 });
+assert(warCallout.includes('<a href="https://www.torn.com/profiles.php?XID=9001">War Target [9001]</a>') && warCallout.includes('<a href="https://www.torn.com/page.php?sid=attack&amp;user2ID=9001">【ATTACK】</a>'), 'Faction-chat callout did not use HTML for every link or preserve the bracketed Attack label.');
 assert(warCallout.includes('Estimated BS: 2.5M'), 'Faction-chat callout omitted the estimated battle stats.');
 assert(warCallout.includes('TCT') && warCallout.includes('Status: Hospital / Online'), 'Faction-chat callout omitted current status or hospital release time.');
 

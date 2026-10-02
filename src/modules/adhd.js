@@ -25,7 +25,6 @@
       let timer = null;
       let clockTimer = null;
       let current = null;
-      let chatShareArm = null;
 
       ui.setModuleStyles(`
         .slink-adhd-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
@@ -43,30 +42,12 @@
         try { await SLINK.core.messaging.send('audio.flush'); } catch {}
       }
 
-      async function copyAlertText(value) {
-        const text = String(value || '').trim();
-        if (!text) return false;
-        try {
-          await navigator.clipboard.writeText(text);
-          return true;
-        } catch {
-          const textarea = document.createElement('textarea');
-          textarea.value = text;
-          textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
-          document.body.append(textarea);
-          textarea.select();
-          const copied = document.execCommand('copy');
-          textarea.remove();
-          return copied;
-        }
-      }
-
-      async function sendListingToFaction(text) {
-        return SLINK.core.factionChat.send(text);
+      function alertShareKey(alertId) {
+        return `adhd:${String(alertId || '')}`;
       }
 
       function chatShareArmed(alertId) {
-        return Boolean(chatShareArm && chatShareArm.alertId === alertId && chatShareArm.expiresAt > Date.now());
+        return SLINK.core.factionChat.isPrimed(alertShareKey(alertId));
       }
 
       function updateChatButtons(root) {
@@ -148,25 +129,18 @@
             const send = document.createElement('button'); send.type = 'button'; send.textContent = 'Send to Faction'; send.dataset.slinkChatSend = 'true'; send.dataset.alertId = alert.id;
             copy.addEventListener('click', async () => {
               const original = copy.textContent;
-              const copied = await copyAlertText(alert.shareText);
-              copy.textContent = copied ? 'Copied' : 'Copy failed';
-              if (copied) {
-                const arm = { alertId:alert.id, text:alert.shareText, expiresAt:Date.now() + 120_000 };
-                chatShareArm = arm;
-                updateChatButtons(root);
-                global.setTimeout(() => { if (chatShareArm === arm) { chatShareArm = null; updateChatButtons(root); } }, 120_100);
-              }
+              const result = await SLINK.core.factionChat.prime(alert.shareText, { key:alertShareKey(alert.id) });
+              copy.textContent = result.label;
+              updateChatButtons(root);
               global.setTimeout(() => { if (copy.isConnected) copy.textContent = original; }, 1500);
             });
             send.addEventListener('click', async () => {
               if (!chatShareArmed(alert.id)) { updateChatButtons(root); return; }
-              const arm = chatShareArm;
               const original = send.textContent;
               send.disabled = true; send.textContent = 'Sending…';
-              const result = await sendListingToFaction(arm.text);
+              const result = await SLINK.core.factionChat.sendPrimed({ key:alertShareKey(alert.id) });
               if (!send.isConnected) return;
               send.textContent = result.label;
-              if (result.ok) chatShareArm = null;
               updateChatButtons(root);
               global.setTimeout(() => { if (send.isConnected) send.textContent = original; }, 1800);
             });

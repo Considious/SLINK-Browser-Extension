@@ -72,7 +72,7 @@
     const profile = `https://www.torn.com/profiles.php?XID=${member.id}`;
     const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${member.id}`;
     const details = [
-      `<a href="${attack}">Attack</a>`,
+      SLINK.core.format.attackLink(attack),
       `Status: ${escape(member.statusState || 'Okay')} / ${escape(member.activity)}`
     ];
     if (isHospitalized(member)) {

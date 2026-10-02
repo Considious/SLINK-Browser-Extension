@@ -17,7 +17,9 @@ assert(helperIndex < firstConsumer, 'The shared Faction Chat helper must load be
 
 for (const file of consumers) {
   const source = read(file);
-  assert(source.includes('SLINK.core.factionChat.send'), file + ' must use the shared Faction Chat sender.');
+  assert(source.includes('SLINK.core.factionChat.prime'), file + ' must prime copied Faction Chat messages through the shared helper.');
+  assert(source.includes('SLINK.core.factionChat.sendPrimed'), file + ' must send only the shared primed Faction Chat message.');
+  assert(!source.includes('SLINK.core.factionChat.send('), file + ' must not bypass the shared primed-message workflow.');
   assert(!/function\s+findFactionChat(?:Container|Launcher|Composer|SendButton)/.test(source), file + ' must not contain a private Faction Chat automation copy.');
 }
 
@@ -104,6 +106,7 @@ const context = {
   HTMLInputElement:FakeTextArea,
   setTimeout,
   clearTimeout,
+  navigator:{ clipboard:{ writeText:async () => {} } },
   SLINK_EXTENSION:{
     define(namespace, name, value) {
       modules[namespace] ||= {};
@@ -112,12 +115,16 @@ const context = {
   }
 };
 vm.runInNewContext(helperSource, context, { filename:'faction-chat.js' });
+const primed = await modules.core.factionChat.prime('RETAL test', { key:'retal:1' });
+assert(primed.ok && modules.core.factionChat.isPrimed('retal:1'), 'Copy did not prime the shared frozen Faction Chat message.');
+const wrongKey = await modules.core.factionChat.sendPrimed({ key:'retal:2' });
+assert(!wrongKey.ok && sendClicks === 0, 'A different module/message key sent the wrong primed message.');
 const [first, duplicate] = await Promise.all([
-  modules.core.factionChat.send('RETAL test'),
-  modules.core.factionChat.send('RETAL duplicate')
+  modules.core.factionChat.sendPrimed({ key:'retal:1' }),
+  modules.core.factionChat.sendPrimed({ key:'retal:1' })
 ]);
 
-assert(first.ok, 'The real paper-plane button should send successfully.');
+assert(first.ok, 'The real paper-plane button should send the primed message successfully.');
 assert(!duplicate.ok, 'A concurrent duplicate send must be rejected.');
 assert(sendClicks === 1, 'The paper-plane button must be clicked exactly once.');
 assert(historyClicks === 0, 'The chat-history button must never be clicked.');

@@ -6,7 +6,9 @@
 
   const SEND_ICON_PATH_PREFIX = 'M18,0l-4.5,16.5-6.1-5.43';
   const FACTION_COMPOSER_SELECTOR = 'textarea[placeholder="Type your message here..."],textarea[class*="_resizable-chat_"],textarea[class*="textarea___"]';
+  const DEFAULT_PRIME_TTL_MS = 120_000;
   let sendInFlight = false;
+  let primedMessage = null;
 
   function focusedTornPage() {
     return document.visibilityState === 'visible' && document.hasFocus();
@@ -98,6 +100,48 @@
     return null;
   }
 
+  function currentPrimed(key = '') {
+    if (primedMessage && primedMessage.expiresAt <= Date.now()) primedMessage = null;
+    if (!primedMessage) return null;
+    return key && primedMessage.key !== String(key) ? null : primedMessage;
+  }
+
+  async function copyText(text) {
+    try {
+      if (global.navigator?.clipboard?.writeText) {
+        await global.navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {}
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+    document.body.append(textarea);
+    textarea.select();
+    const copied = document.execCommand('copy');
+    textarea.remove();
+    return copied;
+  }
+
+  async function prime(value, options = {}) {
+    const text = String(value || '').trim();
+    const key = String(options.key || '');
+    if (!text) return { ok:false, label:'Nothing to copy', key };
+    const copied = await copyText(text);
+    if (!copied) return { ok:false, label:'Copy failed', key };
+    const ttlMs = Math.max(1_000, Number(options.ttlMs) || DEFAULT_PRIME_TTL_MS);
+    primedMessage = { key, text, expiresAt:Date.now() + ttlMs };
+    return { ok:true, label:'Copied', key, expiresAt:primedMessage.expiresAt };
+  }
+
+  function isPrimed(key = '') {
+    return Boolean(currentPrimed(key));
+  }
+
+  function clearPrimed(key = '') {
+    if (!key || primedMessage?.key === String(key)) primedMessage = null;
+  }
+
   async function send(value) {
     const text = String(value || '').trim();
     if (!text) return { ok:false, label:'Nothing copied to send' };
@@ -142,5 +186,19 @@
     }
   }
 
-  SLINK.define('core', 'factionChat', Object.freeze({ send }));
+  async function sendPrimed(options = {}) {
+    const key = String(options.key || '');
+    const message = currentPrimed(key);
+    if (!message) return { ok:false, label:'Copy this message first' };
+    const result = await send(message.text);
+    if (result.ok && primedMessage === message) primedMessage = null;
+    return result;
+  }
+
+  SLINK.define('core', 'factionChat', Object.freeze({
+    clearPrimed,
+    isPrimed,
+    prime,
+    sendPrimed
+  }));
 })(globalThis);

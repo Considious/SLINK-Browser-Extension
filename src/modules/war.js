@@ -143,8 +143,6 @@
       let insideGateElement = null;
       let insideUnlockedTarget = 0;
       let insideUnlockedUntil = 0;
-      let pendingRetalSend = null;
-      let pendingRetalSendTimer = null;
       let dismissedRetalMap = {};
       const reportedMugNodes = new WeakSet();
       const recentMugResults = new Map();
@@ -775,36 +773,32 @@
       }
 
       function targetFilterControls() {
-        return `<div class="slink-war-settings slink-war-note"><label>Minimum FF<input id="slink-war-filter-min" type="number" min="0" max="100" step="0.1" value="${targetFilters.minFF}"></label><label>Maximum FF<input id="slink-war-filter-max" type="number" min="0" max="100" step="0.1" value="${targetFilters.maxFF}"></label><label>Status<select id="slink-war-filter-status"><option value="all" ${targetFilters.status === 'all' ? 'selected' : ''}>All statuses</option><option value="okay" ${targetFilters.status === 'okay' ? 'selected' : ''}>Okay only</option><option value="notOkay" ${targetFilters.status === 'notOkay' ? 'selected' : ''}>Not okay only</option></select></label><label>Sort<select id="slink-war-filter-sort"><option value="availability" ${targetSort === 'availability' ? 'selected' : ''}>Availability</option><option value="fairFightDesc" ${targetSort === 'fairFightDesc' ? 'selected' : ''}>FF high to low</option><option value="fairFightAsc" ${targetSort === 'fairFightAsc' ? 'selected' : ''}>FF low to high</option></select></label></div>`;
+        return `<div class="slink-war-settings slink-war-note"><label>Minimum FF<input id="slink-war-filter-min" type="number" min="0" step="0.1" value="${targetFilters.minFF}"></label><label>Maximum FF<input id="slink-war-filter-max" type="number" min="0" step="0.1" value="${targetFilters.maxFF}"></label><label>Status<select id="slink-war-filter-status"><option value="all" ${targetFilters.status === 'all' ? 'selected' : ''}>All statuses</option><option value="okay" ${targetFilters.status === 'okay' ? 'selected' : ''}>Okay only</option><option value="notOkay" ${targetFilters.status === 'notOkay' ? 'selected' : ''}>Not okay only</option></select></label><label>Sort<select id="slink-war-filter-sort"><option value="availability" ${targetSort === 'availability' ? 'selected' : ''}>Availability</option><option value="fairFightDesc" ${targetSort === 'fairFightDesc' ? 'selected' : ''}>FF high to low</option><option value="fairFightAsc" ${targetSort === 'fairFightAsc' ? 'selected' : ''}>FF low to high</option></select></label></div>`;
+      }
+
+      function targetShareKey(member) {
+        return `war:target:${Number(member?.id) || 0}`;
+      }
+
+      function retalShareKey(retal) {
+        return `war:retal:${String(retal?.attackId || retal?.attackerId || '')}`;
       }
 
       async function copyCallout(member, button) {
-        await navigator.clipboard.writeText(WAR.factionCallout(member));
-        const original = button.textContent; button.textContent = 'Copied';
+        const result = await SLINK.core.factionChat.prime(WAR.factionCallout(member), { key:targetShareKey(member) });
+        const original = button.textContent;
+        button.textContent = result.label;
+        updateWarSendButtons();
         setTimeout(() => { if (button.isConnected) button.textContent = original; }, 1400);
       }
 
-      function findFactionComposer() {
-        const windows = [...document.querySelectorAll('[id^="faction-"]')].filter(node => node.getClientRects().length);
-        for (const windowElement of windows) {
-          const composer = windowElement.querySelector('[contenteditable="true"],textarea,input[type="text"]');
-          if (composer) return composer;
-        }
-        return null;
-      }
-
-      function pasteCallout(member, button) {
-        const composer = findFactionComposer();
-        if (!composer) {
-          localError = 'Open Faction Chat first, then press Paste to faction chat.';
-          render(); return;
-        }
-        const callout = WAR.factionCallout(member);
-        composer.focus();
-        if ('value' in composer) composer.value = callout;
-        else composer.innerHTML = callout;
-        composer.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'insertText', data:callout }));
-        const original = button.textContent; button.textContent = 'Pasted';
+      async function sendCallout(member, button) {
+        const original = button.textContent;
+        button.disabled = true;
+        button.textContent = 'Sending…';
+        const result = await SLINK.core.factionChat.sendPrimed({ key:targetShareKey(member) });
+        button.textContent = result.label;
+        updateWarSendButtons();
         setTimeout(() => { if (button.isConnected) button.textContent = original; }, 1400);
       }
 
@@ -822,79 +816,40 @@
           `Status: ${retal.attackerStatus || retal.attackerActivity || 'Unknown'}`
         ].filter(Boolean);
         const name = escape(retal.attackerName || `Player ${retal.attackerId}`);
-        return `🚨 Retaliation: Please Hospitalize 🚨<br><a href="${profileUrl(retal.attackerId)}">${name} [${retal.attackerId}]</a> - <a href="${attackUrl(retal.attackerId)}">【ATTACK】</a> - (${escape(estimates.join(' | ') || 'Estimate unavailable')})${details.length ? `<br>${escape(details.join(' • '))}` : ''}`;
+        return `🚨 Retaliation: Please Hospitalize 🚨<br><a href="${profileUrl(retal.attackerId)}">${name} [${retal.attackerId}]</a> - ${SLINK.core.format.attackLink(attackUrl(retal.attackerId))} - (${escape(estimates.join(' | ') || 'Estimate unavailable')})${details.length ? `<br>${escape(details.join(' • '))}` : ''}`;
       }
 
       async function copyRetal(retal, button) {
-        const message = retalCallout(retal);
-        await navigator.clipboard.writeText(message);
-        if (pendingRetalSendTimer) clearTimeout(pendingRetalSendTimer);
-        pendingRetalSend = { attackId:String(retal.attackId), message, expiresAt:Date.now() + 30_000 };
-        pendingRetalSendTimer = setTimeout(() => {
-          pendingRetalSendTimer = null;
-          pendingRetalSend = null;
-          updateRetalSendButtons();
-        }, 30_000);
-        updateRetalSendButtons();
-        const original = button.textContent; button.textContent = '✅ Copied';
+        const result = await SLINK.core.factionChat.prime(retalCallout(retal), { key:retalShareKey(retal) });
+        const original = button.textContent;
+        button.textContent = result.label;
+        updateWarSendButtons();
         setTimeout(() => { if (button.isConnected) button.textContent = original; }, 1400);
       }
 
-      function updateRetalSendButtons() {
+      function updateWarSendButtons() {
         const root = fullUi ? context.ui.getContentElement() : null;
         if (!root) return;
-        if (pendingRetalSend && pendingRetalSend.expiresAt <= Date.now()) pendingRetalSend = null;
+        for (const button of root.querySelectorAll('[data-war-send]')) {
+          button.disabled = !SLINK.core.factionChat.isPrimed(`war:target:${button.dataset.warSend}`);
+          button.title = button.disabled ? 'Copy this target first' : 'Send the copied target to Faction Chat';
+        }
         for (const button of root.querySelectorAll('[data-war-retal-send]')) {
-          const enabled = Boolean(pendingRetalSend && pendingRetalSend.attackId === String(button.dataset.warRetalSend));
-          button.disabled = !enabled;
-          button.classList.toggle('slink-war-chat-authorized', enabled);
-          button.title = enabled ? 'Send the copied callout to Faction Chat' : 'Press Copy first. Send remains available for 30 seconds.';
+          button.disabled = !SLINK.core.factionChat.isPrimed(`war:retal:${button.dataset.warRetalSend}`);
+          button.classList.toggle('slink-war-chat-authorized', !button.disabled);
+          button.title = button.disabled ? 'Copy this retaliation first' : 'Send the copied retaliation to Faction Chat';
         }
       }
 
       async function sendRetal(retal, button) {
-        const authorization = pendingRetalSend;
-        if (!authorization || authorization.attackId !== String(retal.attackId) || authorization.expiresAt <= Date.now()) {
-          pendingRetalSend = null;
-          updateRetalSendButtons();
-          localError = 'Press Copy on this retaliation first. Send remains available for 30 seconds.';
-          render();
-          return;
-        }
-        if (!pageIsFocused()) {
-          localError = 'Focus this Torn tab before sending to Faction Chat.';
-          render();
-          return;
-        }
         const original = button.textContent;
         button.disabled = true;
         button.textContent = 'Sending…';
-        try {
-          const result = await SLINK.core.factionChat.send(authorization.message);
-          if (!result.ok) throw new Error(result.label);
-          pendingRetalSend = null;
-          if (pendingRetalSendTimer) clearTimeout(pendingRetalSendTimer);
-          pendingRetalSendTimer = null;
-          button.textContent = '✓ Sent';
-          localError = '';
-        } catch (error) {
-          button.textContent = 'Send failed';
-          localError = SLINK.core.format.errorMessage(error);
-        } finally {
-          setTimeout(() => {
-            if (button.isConnected) button.textContent = original;
-            updateRetalSendButtons();
-          }, 1400);
-        }
-      }
-
-      function memberContext(member) {
-        const known = new Set([member?.activity, member?.statusState].map(value => String(value || '').trim().toLowerCase()).filter(Boolean));
-        const description = String(member?.statusDescription || '').trim();
-        const details = [];
-        if (description && !known.has(description.toLowerCase())) details.push(description);
-        if (member?.lastActionRelative) details.push(member.lastActionRelative);
-        return details.length ? `<span class="slink-war-context">${escape(details.join(' • '))}</span>` : '';
+        const result = await SLINK.core.factionChat.sendPrimed({ key:retalShareKey(retal) });
+        button.textContent = result.label;
+        localError = result.ok ? '' : result.label;
+        updateWarSendButtons();
+        setTimeout(() => { if (button.isConnected) button.textContent = original; }, 1400);
       }
 
       function targetCards() {
@@ -916,7 +871,7 @@
             <div class="slink-war-card-head"><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">${escape(member.name)} [${member.id}]</a><span>Lv ${member.level || '?'}</span></div>
             <div class="slink-war-meta"><span class="slink-war-pill ${member.activity === 'Online' ? 'slink-war-online' : ''}">${escape(member.activity || 'Unknown')}</span><span class="slink-war-pill ${hospitalized ? 'slink-war-hospital' : ''}">${escape(member.statusState || 'Okay')}${hospitalized ? ` ${duration(remaining)}${readyAt ? ` / ${readyAt} TCT` : ''}` : ''}</span><span class="slink-war-pill">Estimated BS ${Number.isFinite(member.battleStatsEstimate) ? SLINK.core.format.shortNumber(member.battleStatsEstimate) : '?'}</span><span class="slink-war-pill">FF ${Number.isFinite(member.fairFight) ? member.fairFight.toFixed(2) : '?'}</span>${memberContext(member)}</div>
             ${gate.active ? `<div class="slink-war-inside-disabled">${escape(insideGateMessage(gate))}</div>` : ''}
-            <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">${gate.active && gate.mode === 'block' ? 'INSIDES DISABLED' : 'Attack'}</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-paste="${member.id}" type="button">Paste to faction chat</button></div>
+            <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">${gate.active && gate.mode === 'block' ? 'INSIDES DISABLED' : '【ATTACK】'}</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-send="${member.id}" type="button" disabled>Send to Faction</button></div>
           </article>`;
         }).join('');
       }
@@ -931,7 +886,7 @@
         const cards = members.map(member => `<article class="slink-war-card">
           <div class="slink-war-card-head"><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">${escape(member.name)} [${member.id}]</a><span>Lv ${member.level || '?'}</span></div>
           <div class="slink-war-meta"><span class="slink-war-pill">${escape(member.activity || 'Unknown')}</span><span class="slink-war-pill">${escape(member.statusState || 'Unknown')}</span><span class="slink-war-pill">Estimated BS ${Number.isFinite(member.battleStatsEstimate) ? SLINK.core.format.shortNumber(member.battleStatsEstimate) : '?'}</span><span class="slink-war-pill">FF ${Number.isFinite(member.fairFight) ? member.fairFight.toFixed(2) : '?'}</span>${memberContext(member)}</div>
-          <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">Attack</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-paste="${member.id}" type="button">Paste to faction chat</button></div>
+          <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">【ATTACK】</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-send="${member.id}" type="button" disabled>Send to Faction</button></div>
         </article>`).join('');
         return controls + message + cards;
       }
@@ -972,7 +927,7 @@
           <div class="slink-war-card-head"><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">${escape(retal.attackerName || `Player ${retal.attackerId}`)} [${retal.attackerId}]</a><span>${duration(Number(retal.expiresAt) - now)}</span></div>
           <div class="slink-war-meta">${retal.isWar ? '<span class="slink-war-pill">⚔ War</span>' : ''}${retal.isRetal ? '<span class="slink-war-pill">🛡 Retal</span>' : ''}</div>
           <div class="slink-war-retal-report"><span>Faction</span><span>${escape(faction + tag)}</span><span>Attacked</span><span>${escape(retal.defenderName || `Player ${retal.defenderId}`)}${retal.defenderId ? ` [${retal.defenderId}]` : ''}</span><span>Status</span><span>${escape(status)}${readyAt ? ` • out ${escape(readyAt)} TCT` : ''}${retal.attackerStatusDescription ? ` • ${escape(retal.attackerStatusDescription)}` : ''}</span><span>Estimated BS</span><span>${Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : 'Unknown'}</span><span>Fair Fight</span><span>${Number.isFinite(retal.fairFight) ? retal.fairFight.toFixed(2) : 'Unknown'}</span></div>
-          <div class="slink-war-card-actions"><button data-war-retal-copy="${retal.attackId}" type="button">📋 Copy</button><button data-war-retal-send="${retal.attackId}" type="button" disabled title="Press Copy first. Send remains available for 30 seconds.">💬 Send</button><a class="slink-war-retal-attack" href="${attackUrl(retal.attackerId)}" data-war-attack="${retal.attackerId}" target="_blank" rel="noopener noreferrer">⚔ ATTACK</a><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">Profile</a></div>
+          <div class="slink-war-card-actions"><button data-war-retal-copy="${retal.attackId}" type="button">📋 Copy</button><button data-war-retal-send="${retal.attackId}" type="button" disabled title="Press Copy first. Send remains available for 30 seconds.">💬 Send</button><a class="slink-war-retal-attack" href="${attackUrl(retal.attackerId)}" data-war-attack="${retal.attackerId}" target="_blank" rel="noopener noreferrer">⚔ 【ATTACK】</a><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">Profile</a></div>
         </article>`;
         }).join('');
       }
@@ -1122,15 +1077,15 @@
         const members = new Map([...(current?.runtime?.snapshot?.members || []), ...(current?.runtime?.outsideTargets || [])].map(member => [Number(member.id), member]));
         const retals = new Map((current?.runtime?.snapshot?.retals || []).map(retal => [String(retal.attackId), retal]));
         for (const button of root.querySelectorAll('[data-war-copy]')) button.addEventListener('click', () => void copyCallout(members.get(Number(button.dataset.warCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
-        for (const button of root.querySelectorAll('[data-war-paste]')) button.addEventListener('click', () => pasteCallout(members.get(Number(button.dataset.warPaste)), button));
+        for (const button of root.querySelectorAll('[data-war-send]')) button.addEventListener('click', () => void sendCallout(members.get(Number(button.dataset.warSend)), button));
         for (const button of root.querySelectorAll('[data-war-retal-copy]')) button.addEventListener('click', () => void copyRetal(retals.get(String(button.dataset.warRetalCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
         for (const button of root.querySelectorAll('[data-war-retal-send]')) button.addEventListener('click', () => void sendRetal(retals.get(String(button.dataset.warRetalSend)), button));
         for (const button of root.querySelectorAll('[data-war-retal-dismiss]')) button.addEventListener('click', () => void dismissRetal(retals.get(String(button.dataset.warRetalDismiss))));
         for (const link of root.querySelectorAll('[data-war-attack]')) link.addEventListener('click', event => void handleAttackLink(event, Number(link.dataset.warAttack)));
         for (const id of ['slink-war-filter-min', 'slink-war-filter-max', 'slink-war-filter-status', 'slink-war-filter-sort']) root.querySelector(`#${id}`)?.addEventListener('change', async () => {
           targetFilters = {
-            minFF:Math.max(0, Math.min(100, Number(root.querySelector('#slink-war-filter-min')?.value) || 0)),
-            maxFF:Math.max(0, Math.min(100, Number(root.querySelector('#slink-war-filter-max')?.value) || 3)),
+            minFF:Math.max(0, Number(root.querySelector('#slink-war-filter-min')?.value) || 0),
+            maxFF:Math.max(0, Number(root.querySelector('#slink-war-filter-max')?.value) || 3),
             status:root.querySelector('#slink-war-filter-status')?.value || 'all'
           };
           targetSort = root.querySelector('#slink-war-filter-sort')?.value || 'availability';
@@ -1196,7 +1151,7 @@
             void runCycle(true);
           } catch (error) { localError = SLINK.core.format.errorMessage(error); render(); }
         });
-        updateRetalSendButtons();
+        updateWarSendButtons();
       }
 
       async function dismissedRetals() {
@@ -1385,9 +1340,6 @@
         for (const timerId of armoryRankCaptureTimers) clearTimeout(timerId);
         armoryRankCaptureTimers = [];
         clearInterval(leaderTimer);
-        if (pendingRetalSendTimer) clearTimeout(pendingRetalSendTimer);
-        pendingRetalSendTimer = null;
-        pendingRetalSend = null;
         armoryObserver?.disconnect();
         clearArmoryEnhancements();
         clearAttackPageGate();
