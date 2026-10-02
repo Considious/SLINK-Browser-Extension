@@ -45,6 +45,7 @@
       statusState: String(member?.statusState || ''),
       statusDescription: String(member?.statusDescription || ''),
       statusUntil: Math.max(0, Number(member?.statusUntil) || 0),
+      travelLocation: String(member?.travelLocation ?? member?.travel_location ?? member?.location?.name ?? (typeof member?.location === 'string' ? member.location : '')),
       position: String(member?.position || ''),
       fairFight:Number.isFinite(Number(member?.fairFight ?? member?.fair_fight)) ? Number(member?.fairFight ?? member?.fair_fight) : null,
       battleStatsEstimate:Number.isFinite(Number(member?.battleStatsEstimate ?? member?.battle_stats_estimate ?? member?.bs_estimate)) ? Number(member?.battleStatsEstimate ?? member?.battle_stats_estimate ?? member?.bs_estimate) : null
@@ -89,10 +90,40 @@
     return /hospital/i.test(String(member?.statusState || ''));
   }
 
-  function isTraveling(member) {
-    return /travel|abroad|returning to/i.test(`${member?.statusState || ''} ${member?.statusDescription || ''}`);
+  const TORN_TRAVEL_LOCATIONS = Object.freeze([
+    'Mexico', 'Cayman Islands', 'Canada', 'Hawaii', 'United Kingdom', 'Argentina',
+    'Switzerland', 'Japan', 'China', 'United Arab Emirates', 'South Africa'
+  ]);
+
+  const TRAVEL_LOCATION_ALIASES = Object.freeze([
+    ['United Arab Emirates', ['united arab emirates', 'uae']],
+    ['United Kingdom', ['united kingdom', 'uk']],
+    ...TORN_TRAVEL_LOCATIONS
+      .filter(location => !['United Arab Emirates', 'United Kingdom'].includes(location))
+      .map(location => [location, [location.toLowerCase()]])
+  ]);
+
+  function travelLocation(member) {
+    const explicit = String(member?.travelLocation ?? member?.travel_location ?? member?.location?.name ?? (typeof member?.location === 'string' ? member.location : '')).trim();
+    const status = `${member?.statusState || member?.status?.state || ''} ${member?.statusDescription || member?.status?.description || ''} ${explicit}`.toLowerCase();
+    for (const [location, aliases] of TRAVEL_LOCATION_ALIASES) {
+      if (aliases.some(alias => status.includes(alias))) return location;
+    }
+    return '';
   }
 
+  function isAbroad(member) {
+    if (travelLocation(member)) return true;
+    return /\babroad\b|\btravel(?:ing|ling)\b|\breturning to torn\b/i.test(`${member?.statusState || member?.status?.state || ''} ${member?.statusDescription || member?.status?.description || ''}`);
+  }
+
+  function isTraveling(member) {
+    return isAbroad(member);
+  }
+
+  function travelLocations(values) {
+    return [...new Set((Array.isArray(values) ? values : []).map(travelLocation).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+  }
   function statusSeconds(member, now = Date.now()) {
     return Math.max(0, Number(member?.statusUntil) - Math.floor(now / 1000));
   }
@@ -175,6 +206,7 @@
     TERMS_VERSION,
     WORKER_BASE,
     factionCallout,
+    isAbroad,
     isHospitalized,
     isTraveling,
     makeWarId,
@@ -184,6 +216,8 @@
     sortMembers,
     statusSeconds,
     tctTime,
+    travelLocation,
+    travelLocations,
     summarizeLogs
   }));
 })(globalThis);
