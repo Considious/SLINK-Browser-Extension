@@ -772,6 +772,11 @@
         return `<div class="slink-war-settings slink-war-note"><label>Target Torn ID<input id="slink-war-claim-target-id" type="number" min="1" placeholder="Required"></label><label>Target name<input id="slink-war-claim-target-name" type="text" maxlength="80" placeholder="Optional"></label>${officer ? '<label>Assign to Torn ID<input id="slink-war-assignee-id" type="number" min="1" placeholder="Blank = yourself"></label><label>Assignee name<input id="slink-war-assignee-name" type="text" maxlength="80" placeholder="Optional"></label>' : ''}<div class="slink-war-settings-actions"><button id="slink-war-claim-submit" type="button">Claim med partner</button></div></div>`;
       }
 
+      function memberContext(member) {
+        const description = String(member?.statusDescription || '').trim();
+        if (!description || description.toLowerCase() === String(member?.statusState || '').trim().toLowerCase()) return '';
+        return `<span class="slink-war-context">${escape(description)}</span>`;
+      }
       function targetFilterControls() {
         const locations = WAR.travelLocations(current?.runtime?.snapshot?.members || []);
         if (!locations.includes(targetFilters.location)) targetFilters.location = 'all';
