@@ -268,6 +268,11 @@ assert(SLINK.core.war.sortMembers([
   { id:2, name:'Hospital', activity:'Offline', statusState:'Hospital', statusUntil:Math.floor(Date.now() / 1000) + 60 },
   { id:1, name:'Ready', activity:'Online', statusState:'Okay' }
 ])[0].id === 1, 'Available War targets were not sorted before hospitalized targets.');
+const japanTarget = { id:3, name:'Traveler', statusState:'Abroad', statusDescription:'In Japan' };
+assert(SLINK.core.war.isAbroad(japanTarget) && SLINK.core.war.travelLocation(japanTarget) === 'Japan', 'War travel status did not identify an abroad target location.');
+assert(SLINK.core.war.travelLocation({ statusState:'Traveling', statusDescription:'Returning to Torn from the United Arab Emirates' }) === 'United Arab Emirates', 'War travel status did not parse a returning destination.');
+assert(SLINK.core.war.travelLocations([japanTarget, { statusState:'Abroad', statusDescription:'In Switzerland' }, japanTarget]).join(',') === 'Japan,Switzerland', 'War location filter options were not unique and sorted.');
+assert(!SLINK.core.war.isAbroad({ statusState:'Okay', statusDescription:'' }), 'An available Torn target was incorrectly marked abroad.');
 const warCallout = SLINK.core.war.factionCallout({
   id:9001, name:'War Target', activity:'Online', statusState:'Hospital',
   statusUntil:Math.floor(Date.now() / 1000) + 600, battleStatsEstimate:2500000, fairFight:1.75
