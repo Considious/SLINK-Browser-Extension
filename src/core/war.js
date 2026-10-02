@@ -80,9 +80,10 @@
       const readyAt = tctTime(member.statusUntil);
       details.push(`Hospital: ${SLINK.core.format.formatHumanDuration(statusSeconds(member))}${readyAt ? ` / ready ${readyAt} TCT` : ''}`);
     }
+    const statusDescription = String(member.statusDescription || '').trim();
+    if (statusDescription && statusDescription.toLowerCase() !== String(member.statusState || '').trim().toLowerCase()) details.push(`Status detail: ${escape(statusDescription)}`);
     if (Number.isFinite(member.battleStatsEstimate)) details.push(`Estimated BS: ${SLINK.core.format.shortNumber(member.battleStatsEstimate)}`);
     if (Number.isFinite(member.fairFight)) details.push(`FF: ${member.fairFight.toFixed(2)}`);
-    if (member.lastActionRelative) details.push(`Last action: ${escape(member.lastActionRelative)}`);
     return `${statusEmoji(member)} <a href="${profile}">${escape(member.name)} [${member.id}]</a> - ${details.join(' - ')}`;
   }
 
