@@ -274,12 +274,13 @@ assert(SLINK.core.war.travelLocation({ statusState:'Traveling', statusDescriptio
 assert(SLINK.core.war.travelLocations([japanTarget, { statusState:'Abroad', statusDescription:'In Switzerland' }, japanTarget]).join(',') === 'Japan,Switzerland', 'War location filter options were not unique and sorted.');
 assert(!SLINK.core.war.isAbroad({ statusState:'Okay', statusDescription:'' }), 'An available Torn target was incorrectly marked abroad.');
 const warCallout = SLINK.core.war.factionCallout({
-  id:9001, name:'War Target', activity:'Online', statusState:'Hospital',
+  id:9001, name:'War Target', activity:'Online', statusState:'Hospital', statusDescription:'In hospital', lastActionRelative:'4 hours ago',
   statusUntil:Math.floor(Date.now() / 1000) + 600, battleStatsEstimate:2500000, fairFight:1.75
 });
 assert(warCallout.includes('<a href="https://www.torn.com/profiles.php?XID=9001">War Target [9001]</a>') && warCallout.includes('<a href="https://www.torn.com/page.php?sid=attack&amp;user2ID=9001">【ATTACK】</a>'), 'Faction-chat callout did not use HTML for every link or preserve the bracketed Attack label.');
 assert(warCallout.includes('Estimated BS: 2.5M'), 'Faction-chat callout omitted the estimated battle stats.');
 assert(warCallout.includes('TCT') && warCallout.includes('Status: Hospital / Online'), 'Faction-chat callout omitted current status or hospital release time.');
+assert(warCallout.includes('Status detail: In hospital') && !warCallout.includes('Last action') && !warCallout.includes('4 hours ago'), 'Faction-chat callout used stale last-action data instead of the current Torn status.');
 
 await SLINK.core.storage.set('test.value', { working: true });
 assert((await SLINK.core.storage.get('test.value')).working, 'Extension storage adapter failed.');
