@@ -23,7 +23,7 @@
   let dismissedRetals = {};
   let pendingCustomSoundDataUrl = null;
   let soundClaiming = false;
-  let warTargetFilters = { minFF:1, maxFF:3, status:'all', sort:'availability' };
+  let warTargetFilters = { minFF:1, maxFF:3, status:'all', abroad:'all', location:'all', sort:'availability' };
   const warLeaderClientId = `war-dashboard:${globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
   const INSIDE_WINDOWS = Object.freeze([[0, 100], [200, 250], [450, 500], [950, 1000], [2350, 2500], [4850, 5000], [9900, 10000]]);
 
@@ -300,6 +300,14 @@
     return article;
   }
 
+  function syncWarTravelFilter(values) {
+    const locations = SLINK.core.war.travelLocations(values || []);
+    if (!locations.includes(warTargetFilters.location)) warTargetFilters.location = 'all';
+    const select = byId('war-location-filter');
+    select.replaceChildren(new Option('All locations', 'all'), ...locations.map(location => new Option(location, location)));
+    select.value = warTargetFilters.location;
+    byId('war-location-filter-label').hidden = warTargetFilters.abroad !== 'only';
+  }
   function filteredWarTargets(values) {
     const minimum = Math.min(Number(warTargetFilters.minFF) || 1, Number(warTargetFilters.maxFF) || 3);
     const maximum = Math.max(Number(warTargetFilters.minFF) || 1, Number(warTargetFilters.maxFF) || 3);
@@ -309,6 +317,10 @@
       const okay = /^okay$/i.test(String(member.statusState || '').trim());
       if (warTargetFilters.status === 'okay' && !okay) return false;
       if (warTargetFilters.status === 'notOkay' && okay) return false;
+      const abroad = SLINK.core.war.isAbroad(member);
+      if (warTargetFilters.abroad === 'hide' && abroad) return false;
+      if (warTargetFilters.abroad === 'only' && !abroad) return false;
+      if (warTargetFilters.abroad === 'only' && warTargetFilters.location !== 'all' && SLINK.core.war.travelLocation(member) !== warTargetFilters.location) return false;
       return true;
     });
   }
@@ -972,7 +984,9 @@
       byId('target-deck-title').textContent = 'Outside targets';
       byId('target-summary').textContent = members.length ? `${members.length} FFScouter targets` : (war?.runtime?.outsideError || 'Choose a Fair Fight range and poll FFScouter');
     } else if (targetView === 'war') {
-      const members = filteredWarTargets(war?.runtime?.snapshot?.members || []);
+      const source = war?.runtime?.snapshot?.members || [];
+      syncWarTravelFilter(source);
+      const members = filteredWarTargets(source);
       root.replaceChildren(...members.map(warTargetCard));
       byId('target-deck-title').textContent = 'War targets';
       byId('target-summary').textContent = members.length ? `${members.length} matching opponents` : 'No War targets match the current filters';
@@ -1144,6 +1158,7 @@
     byId('war-min-ff').value = warTargetFilters.minFF;
     byId('war-max-ff').value = warTargetFilters.maxFF;
     byId('war-status-filter').value = warTargetFilters.status;
+    byId('war-abroad-filter').value = warTargetFilters.abroad;
     byId('war-target-sort').value = warTargetFilters.sort;
     system.levelingInTorn = await SLINK.core.storage.get('ui.modules.leveling.showInTorn', true);
     system.adhdInTorn = await SLINK.core.storage.get('ui.modules.adhd.showInTorn', true);
@@ -1306,11 +1321,13 @@
     } catch (error) { showError('war-error', error); } finally { setBusy(button, false); }
   });
   for (const button of document.querySelectorAll('[data-target-view]')) button.addEventListener('click', () => { targetView = button.dataset.targetView; renderTargets(); });
-  for (const id of ['war-min-ff', 'war-max-ff', 'war-status-filter', 'war-target-sort']) byId(id).addEventListener('change', async () => {
+  for (const id of ['war-min-ff', 'war-max-ff', 'war-status-filter', 'war-abroad-filter', 'war-location-filter', 'war-target-sort']) byId(id).addEventListener('change', async () => {
     warTargetFilters = {
       minFF:Math.max(0, Number(byId('war-min-ff').value) || 0),
       maxFF:Math.max(0, Number(byId('war-max-ff').value) || 3),
       status:byId('war-status-filter').value,
+      abroad:byId('war-abroad-filter').value,
+      location:byId('war-location-filter').value,
       sort:byId('war-target-sort').value
     };
     await SLINK.core.storage.set('ui.war.targetFilters.v1', warTargetFilters);
