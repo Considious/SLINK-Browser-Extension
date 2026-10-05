@@ -2,6 +2,13 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.37 — 2026-10-04
+
+### Fixed
+
+- Every item shown below its configured filter by the five-second Weaver bulk summary is now expanded immediately through the item-detail API.
+- Unchanged listing identities continue to use the existing Market Watch alert and sound deduplication, while Weaver's rolling request cap handles bursts.
+
 ## 0.18.36 — 2026-10-04
 
 ### Changed

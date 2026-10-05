@@ -644,16 +644,14 @@ const firstMarketUid = firstMarketWatch.data.settings.watches.find(watch => watc
 let marketRuntime = structuredClone(values.get('market.runtime.v1'));
 const firstBazaarRuntime = marketRuntime.results[firstMarketUid].bazaar;
 assert(firstBazaarRuntime.nextCheckAt - firstBazaarRuntime.screenedAt === 5_000, 'Weaver summary did not schedule its next market-wide screen in five seconds.');
-assert(firstBazaarRuntime.detailNextCheckAt - firstBazaarRuntime.fetchedAt === 70_000, 'Five-second summary screening incorrectly accelerated normal item-detail requests.');
 marketRuntime.weaverSummary.fetchedAt = Date.now() - 5_001;
 marketRuntime.results[firstMarketUid].bazaar.nextCheckAt = Date.now() - 1;
-marketRuntime.results[firstMarketUid].bazaar.detailNextCheckAt = Date.now() + 60_000;
 values.set('market.runtime.v1', marketRuntime);
 const summaryRequestsBeforeFiveSecondRefresh = weaverSummaryRequests;
 const detailRequestsBeforeFiveSecondRefresh = weaverDetailRequests;
 await send('market.status', { refreshIfDue:true });
 assert(weaverSummaryRequests === summaryRequestsBeforeFiveSecondRefresh + 1, 'A due five-second Weaver summary screen did not run.');
-assert(weaverDetailRequests === detailRequestsBeforeFiveSecondRefresh, 'A five-second Weaver summary screen redundantly fetched unchanged item details.');
+assert(weaverDetailRequests === detailRequestsBeforeFiveSecondRefresh + 1, 'A qualifying five-second Weaver summary did not immediately fetch that item\'s current listings.');
 assert(firstMarketWatch.data.opportunities.every(row => row.shareText.includes('shop sell $125')), 'Market Watch did not expose Torn shop sell pricing.');
 const firstMarketSound = await send('market.sound.claim');
 await send('market.sound.ack', { dealKeys:firstMarketSound.data.dealKeys });
@@ -668,7 +666,7 @@ const secondUid = secondMarketWatch.data.settings.watches.find(watch => watch.it
 const editedMarketWatch = await send('market.watch.save', { uid:secondUid, itemId:2, maxPrice:95, priority:'normal', marketEnabled:true, bazaarEnabled:true });
 assert(editedMarketWatch.ok && editedMarketWatch.data.marketWatchLimit === 40, 'Signed Market Watch tier was not enforced or exposed.');
 assert(editedMarketWatch.data.settings.lastPriority === 'normal', 'Saved Market Watch priority was not remembered for the next watch.');
-assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverSummaryRequests === 2 && weaverDetailRequests === 3, 'Editing one watch force-refreshed unrelated watches, bypassed the local catalog cache, or skipped Weaver summary screening.');
+assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverSummaryRequests === 2 && weaverDetailRequests === 4, 'Editing one watch force-refreshed unrelated watches, bypassed the local catalog cache, or skipped Weaver summary screening.');
 const enabledWeaverPricelist = await send('market.settings.save', { weaverPricelistEnabled:true, listedItemsEnabled:false, weaverSourceOrder:'pricelist-first' });
 assert(enabledWeaverPricelist.ok, 'Weaver price-list settings could not be enabled.');
 const syncedWeaverPricelist = await send('market.weaver.pricelist.sync');

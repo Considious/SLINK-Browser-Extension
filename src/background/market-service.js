@@ -172,31 +172,22 @@
     return current.weaverSummary;
   }
 
-  function weaverTargets(currentSettings, allowed, current, force) {
+  function weaverTargets(currentSettings, allowed, current) {
     const targets = new Map();
-    const add = (itemId, threshold, source, priority, destination) => {
+    const add = (itemId, threshold, source, priority) => {
       if (!(itemId > 0) || !(threshold > 0)) return;
-      const bazaar = destination?.bazaar || null;
-      const previous = targets.get(itemId) || {
-        itemId, threshold:0, priority, manual:[], pricelist:false,
-        detailDue:false, previousBazaar:null
-      };
-      const detailAt = Number(bazaar?.detailNextCheckAt);
-      const legacyAt = Number(bazaar?.nextCheckAt);
-      previous.detailDue = previous.detailDue || force || !bazaar
-        || (detailAt > 0 ? detailAt <= Date.now() : legacyAt <= Date.now());
-      previous.previousBazaar ||= bazaar;
+      const previous = targets.get(itemId) || { itemId, threshold:0, priority, manual:[], pricelist:false };
       previous.threshold = Math.max(previous.threshold, threshold);
       if (MARKET.PRIORITIES[priority] < MARKET.PRIORITIES[previous.priority]) previous.priority = priority;
       if (source === 'pricelist') previous.pricelist = true; else previous.manual.push(source);
       targets.set(itemId, previous);
     };
     if (currentSettings.listedItemsEnabled) for (const watch of allowed) if (watch.enabled && watch.marketType === 'item' && watch.bazaarEnabled) {
-      add(watch.itemId, watch.maxPrice, watch, priorityFor(watch, current.results[watch.uid]), current.results[watch.uid]);
+      add(watch.itemId, watch.maxPrice, watch, priorityFor(watch, current.results[watch.uid]));
     }
     const activePricelistIds = new Set(currentSettings.weaverActiveItemIds);
     if (currentSettings.weaverPricelistEnabled) for (const item of MARKET.weaverPricelistItems(current.weaverPricelist?.items || []).filter(row => activePricelistIds.has(row.itemId))) {
-      add(item.itemId, Math.max(item.buyPrice, item.bulkBuyPrice || 0), 'pricelist', 'normal', current.pricelistResults[item.itemId]);
+      add(item.itemId, Math.max(item.buyPrice, item.bulkBuyPrice || 0), 'pricelist', 'normal');
     }
     const first = currentSettings.weaverSourceOrder === 'pricelist-first' ? 'pricelist' : 'manual';
     return [...targets.values()].sort((a, b) => {
@@ -215,60 +206,39 @@
   }
 
   async function pollWeaverTargets(currentSettings, allowed, current, force) {
-    const targets = weaverTargets(currentSettings, allowed, current, force); if (!targets.length) return;
-    const previousSummary = current.weaverSummary;
-    const previousLowest = new Map(MARKET.weaverMarketplaceItems(previousSummary?.items || []).map(item => [item.itemId, item.lowestPrice]));
+    const targets = weaverTargets(currentSettings, allowed, current); if (!targets.length) return;
     let summary;
     try { summary = await ensureWeaverSummary(current, force, MARKET.WEAVER_SUMMARY_REFRESH_MS); }
     catch (error) {
       const retryAt = Date.now() + (Number(error?.retryAfterMs) || 5_000);
-      for (const target of targets) storeWeaverResult(target, allowed, current, {
-        ...(target.previousBazaar || {}), nextCheckAt:retryAt,
-        detailNextCheckAt:Number(target.previousBazaar?.detailNextCheckAt) || retryAt
-      });
+      for (const target of targets) storeWeaverResult(target, allowed, current, { nextCheckAt:retryAt, listings:[] });
       throw error;
     }
     const lowest = new Map(summary.items.map(item => [item.itemId, item.lowestPrice]));
-    const summaryRefreshed = Number(summary.fetchedAt) > Number(previousSummary?.fetchedAt);
     for (const target of targets) {
       const now = Date.now();
-      const summaryNextCheckAt = Math.max(now + 1_000, Number(summary.fetchedAt) + MARKET.WEAVER_SUMMARY_REFRESH_MS);
-      const detailNextCheckAt = Number(target.previousBazaar?.detailNextCheckAt)
-        || (target.detailDue ? 0 : Number(target.previousBazaar?.nextCheckAt))
-        || now + MARKET.WEAVER_REFRESH_MS[target.priority];
+      const nextCheckAt = Math.max(now + 1_000, Number(summary.fetchedAt) + MARKET.WEAVER_SUMMARY_REFRESH_MS);
       const currentLowest = Number(lowest.get(target.itemId));
       if (!(currentLowest > 0) || currentLowest > target.threshold) {
         storeWeaverResult(target, allowed, current, {
-          fetchedAt:now, nextCheckAt:summaryNextCheckAt, detailNextCheckAt,
-          screenedAt:summary.fetchedAt, lowestPrice:currentLowest || 0, listings:[]
-        });
-        continue;
-      }
-      const priorLowest = Number(previousLowest.get(target.itemId));
-      const crossedThreshold = summaryRefreshed && (!(priorLowest > 0) || priorLowest > target.threshold);
-      if (!target.detailDue && !crossedThreshold) {
-        storeWeaverResult(target, allowed, current, {
-          ...(target.previousBazaar || {}), nextCheckAt:summaryNextCheckAt,
-          detailNextCheckAt, screenedAt:summary.fetchedAt, lowestPrice:currentLowest
+          fetchedAt:now, nextCheckAt, screenedAt:summary.fetchedAt,
+          lowestPrice:currentLowest || 0, listings:[]
         });
         continue;
       }
       const url = `https://weav3r.dev/api/marketplace/${encodeURIComponent(target.itemId)}?maxPrice=${encodeURIComponent(target.threshold)}&limit=5`;
       try {
         const body = await weaverJson(url, current);
-        const fetchedAt = Date.now();
         storeWeaverResult(target, allowed, current, {
-          fetchedAt, nextCheckAt:summaryNextCheckAt,
-          detailNextCheckAt:fetchedAt + MARKET.WEAVER_REFRESH_MS[target.priority],
-          screenedAt:summary.fetchedAt, lowestPrice:currentLowest, sourceUrl:url,
+          fetchedAt:Date.now(), nextCheckAt, screenedAt:summary.fetchedAt,
+          lowestPrice:currentLowest, sourceUrl:url,
           listings:MARKET.weaverListings(body, target.itemId)
         });
       } catch (error) {
         const retry = Date.now() + (Number(error?.retryAfterMs) || 5_000);
         storeWeaverResult(target, allowed, current, {
-          ...(target.previousBazaar || {}), nextCheckAt:summaryNextCheckAt,
-          detailNextCheckAt:retry, screenedAt:summary.fetchedAt, lowestPrice:currentLowest,
-          listings:[]
+          fetchedAt:now, nextCheckAt:retry, screenedAt:summary.fetchedAt,
+          lowestPrice:currentLowest, listings:[]
         });
         if (error?.code === 'SLINK_WEAVER_RATE_LIMIT') break;
       }
