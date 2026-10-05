@@ -7,6 +7,7 @@
   const PRIORITIES = Object.freeze({ high:0, normal:1, low:2 });
   const TORN_PRIORITY_LIMITS = Object.freeze({ high:60, normal:50, low:40 });
   const WEAVER_REFRESH_MS = Object.freeze({ high:35_000, normal:70_000, low:140_000 });
+  const WEAVER_SUMMARY_REFRESH_MS = 5_000;
   const ITEM_MARKET_FALLBACK_MS = 30_000;
   const ITEM_MARKET_CACHE_SAFETY_MS = 1_000;
   const ITEM_MARKET_STALE_RETRY_MIN_MS = 2_000;
@@ -379,7 +380,7 @@
   SLINK.define('core', 'market', Object.freeze({
     ITEM_MARKET_CACHE_SAFETY_MS, ITEM_MARKET_FALLBACK_MS, POINTS_MARKET_REFRESH_MS, PRIORITIES, SAVED_WATCH_LIMIT,
     TORN_PRIORITY_LIMITS, WEAVER_FALLBACK_BACKOFF_MS, WEAVER_MIN_REQUEST_SPACING_MS, WEAVER_RATE_LIMIT,
-    WEAVER_PRICELIST_REFRESH_MS, WEAVER_RATE_WINDOW_MS, WEAVER_REFRESH_MS, activeSlotCount, activeSlotKeys, bazaarUrl, catalogItems, defaultSettings, effectivePriority,
+    WEAVER_PRICELIST_REFRESH_MS, WEAVER_RATE_WINDOW_MS, WEAVER_REFRESH_MS, WEAVER_SUMMARY_REFRESH_MS, activeSlotCount, activeSlotKeys, bazaarUrl, catalogItems, defaultSettings, effectivePriority,
     itemMarketCache, itemMarketListings, itemMarketNextCheckAt, itemMarketUrl, listingHighlightState, normalizePriority, normalizeSettings,
     normalizeWatch, opportunityRows, pointsMarketListings, pointsMarketUrl, shopSellDetails, staleRetryMs, weaverListings,
     sellerBazaarUrl, weaverDollarBazaars, weaverDollarBazaarItems, weaverMarketplaceItems, weaverPricelistItems, weaverPricelistTarget

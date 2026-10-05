@@ -2,6 +2,13 @@
 
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
+## 0.18.36 — 2026-10-04
+
+### Changed
+
+- Weaver's single market-wide lowest-price summary is now refreshed every five seconds while Bazaar watches are active.
+- Item-specific Weaver detail requests retain their existing priority cadence and also run immediately when the bulk summary crosses a configured price threshold.
+
 ## 0.18.33 — 2026-09-30
 
 ### Fixed

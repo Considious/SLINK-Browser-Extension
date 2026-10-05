@@ -144,6 +144,7 @@ assert(weaverSummary.length === 1 && weaverSummary[0].lowestPrice === 85, 'Weave
 const weaverPrices = SLINK.core.market.weaverPricelistItems([{ itemId:1, name:'Current Shops', buyPrice:90, bulkThreshold:5, bulkBuyPrice:95 }, { itemId:-1, buyPrice:100 }, { itemId:2, buyPrice:0 }]);
 assert(weaverPrices.length === 1 && SLINK.core.market.weaverPricelistTarget(weaverPrices[0], 4) === 90 && SLINK.core.market.weaverPricelistTarget(weaverPrices[0], 5) === 95, 'Weaver price-list or bulk threshold normalization failed.');
 assert(SLINK.core.market.TORN_PRIORITY_LIMITS.high === 60 && SLINK.core.market.TORN_PRIORITY_LIMITS.normal === 50 && SLINK.core.market.TORN_PRIORITY_LIMITS.low === 40, 'Market priority API headroom did not match the dashboard scheduler.');
+assert(SLINK.core.market.WEAVER_SUMMARY_REFRESH_MS === 5_000, 'Weaver market-wide summary screening is not scheduled every five seconds.');
 const cacheNext = SLINK.core.market.itemMarketNextCheckAt({ fetchedAt:1_000_000, cacheTimestamp:1_000, cacheDelayMs:30_000 });
 assert(cacheNext === 1_031_000, 'Item Market scheduling did not use cache timestamp + delay + one second.');
 const marketDeals = SLINK.core.market.opportunityRows({ catalog:{ items:marketCatalog }, results:{ one:{ market:{ listings:[{ price:80, quantity:3 }] }, bazaar:{ listings:[{ sellerId:44, sellerName:'Seller', price:85, quantity:2, href:'https://www.torn.com/bazaar.php?userId=44&itemId=1&price=85&slinkHighlight=1#/' }] } } } }, marketSettings);

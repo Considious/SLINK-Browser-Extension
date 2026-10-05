@@ -165,7 +165,7 @@
     return next;
   }
 
-  async function ensureWeaverSummary(current, force = false, maxAgeMs = MARKET.WEAVER_REFRESH_MS.normal) {
+  async function ensureWeaverSummary(current, force = false, maxAgeMs = MARKET.WEAVER_SUMMARY_REFRESH_MS) {
     if (!force && current.weaverSummary?.items?.length && Date.now() - Number(current.weaverSummary.fetchedAt) < maxAgeMs) return current.weaverSummary;
     const body = await weaverJson('https://weav3r.dev/api/marketplace', current); const now = Date.now();
     current.weaverSummary = { fetchedAt:now, items:MARKET.weaverMarketplaceItems(body) };
@@ -175,8 +175,17 @@
   function weaverTargets(currentSettings, allowed, current, force) {
     const targets = new Map();
     const add = (itemId, threshold, source, priority, destination) => {
-      if (!(itemId > 0) || !(threshold > 0) || !due(destination?.bazaar, force)) return;
-      const previous = targets.get(itemId) || { itemId, threshold:0, priority, manual:[], pricelist:false };
+      if (!(itemId > 0) || !(threshold > 0)) return;
+      const bazaar = destination?.bazaar || null;
+      const previous = targets.get(itemId) || {
+        itemId, threshold:0, priority, manual:[], pricelist:false,
+        detailDue:false, previousBazaar:null
+      };
+      const detailAt = Number(bazaar?.detailNextCheckAt);
+      const legacyAt = Number(bazaar?.nextCheckAt);
+      previous.detailDue = previous.detailDue || force || !bazaar
+        || (detailAt > 0 ? detailAt <= Date.now() : legacyAt <= Date.now());
+      previous.previousBazaar ||= bazaar;
       previous.threshold = Math.max(previous.threshold, threshold);
       if (MARKET.PRIORITIES[priority] < MARKET.PRIORITIES[previous.priority]) previous.priority = priority;
       if (source === 'pricelist') previous.pricelist = true; else previous.manual.push(source);
@@ -207,27 +216,60 @@
 
   async function pollWeaverTargets(currentSettings, allowed, current, force) {
     const targets = weaverTargets(currentSettings, allowed, current, force); if (!targets.length) return;
-    const maxAge = Math.min(...targets.map(target => MARKET.WEAVER_REFRESH_MS[target.priority]));
+    const previousSummary = current.weaverSummary;
+    const previousLowest = new Map(MARKET.weaverMarketplaceItems(previousSummary?.items || []).map(item => [item.itemId, item.lowestPrice]));
     let summary;
-    try { summary = await ensureWeaverSummary(current, force, maxAge); }
+    try { summary = await ensureWeaverSummary(current, force, MARKET.WEAVER_SUMMARY_REFRESH_MS); }
     catch (error) {
       const retryAt = Date.now() + (Number(error?.retryAfterMs) || 5_000);
-      for (const target of targets) storeWeaverResult(target, allowed, current, { nextCheckAt:retryAt, listings:[] });
+      for (const target of targets) storeWeaverResult(target, allowed, current, {
+        ...(target.previousBazaar || {}), nextCheckAt:retryAt,
+        detailNextCheckAt:Number(target.previousBazaar?.detailNextCheckAt) || retryAt
+      });
       throw error;
     }
     const lowest = new Map(summary.items.map(item => [item.itemId, item.lowestPrice]));
+    const summaryRefreshed = Number(summary.fetchedAt) > Number(previousSummary?.fetchedAt);
     for (const target of targets) {
-      const now = Date.now(); const nextCheckAt = now + MARKET.WEAVER_REFRESH_MS[target.priority];
-      if (!(Number(lowest.get(target.itemId)) > 0) || Number(lowest.get(target.itemId)) > target.threshold) {
-        storeWeaverResult(target, allowed, current, { fetchedAt:now, nextCheckAt, screenedAt:summary.fetchedAt, listings:[] }); continue;
+      const now = Date.now();
+      const summaryNextCheckAt = Math.max(now + 1_000, Number(summary.fetchedAt) + MARKET.WEAVER_SUMMARY_REFRESH_MS);
+      const detailNextCheckAt = Number(target.previousBazaar?.detailNextCheckAt)
+        || (target.detailDue ? 0 : Number(target.previousBazaar?.nextCheckAt))
+        || now + MARKET.WEAVER_REFRESH_MS[target.priority];
+      const currentLowest = Number(lowest.get(target.itemId));
+      if (!(currentLowest > 0) || currentLowest > target.threshold) {
+        storeWeaverResult(target, allowed, current, {
+          fetchedAt:now, nextCheckAt:summaryNextCheckAt, detailNextCheckAt,
+          screenedAt:summary.fetchedAt, lowestPrice:currentLowest || 0, listings:[]
+        });
+        continue;
+      }
+      const priorLowest = Number(previousLowest.get(target.itemId));
+      const crossedThreshold = summaryRefreshed && (!(priorLowest > 0) || priorLowest > target.threshold);
+      if (!target.detailDue && !crossedThreshold) {
+        storeWeaverResult(target, allowed, current, {
+          ...(target.previousBazaar || {}), nextCheckAt:summaryNextCheckAt,
+          detailNextCheckAt, screenedAt:summary.fetchedAt, lowestPrice:currentLowest
+        });
+        continue;
       }
       const url = `https://weav3r.dev/api/marketplace/${encodeURIComponent(target.itemId)}?maxPrice=${encodeURIComponent(target.threshold)}&limit=5`;
       try {
         const body = await weaverJson(url, current);
-        storeWeaverResult(target, allowed, current, { fetchedAt:Date.now(), nextCheckAt, screenedAt:summary.fetchedAt, sourceUrl:url, listings:MARKET.weaverListings(body, target.itemId) });
+        const fetchedAt = Date.now();
+        storeWeaverResult(target, allowed, current, {
+          fetchedAt, nextCheckAt:summaryNextCheckAt,
+          detailNextCheckAt:fetchedAt + MARKET.WEAVER_REFRESH_MS[target.priority],
+          screenedAt:summary.fetchedAt, lowestPrice:currentLowest, sourceUrl:url,
+          listings:MARKET.weaverListings(body, target.itemId)
+        });
       } catch (error) {
         const retry = Date.now() + (Number(error?.retryAfterMs) || 5_000);
-        storeWeaverResult(target, allowed, current, { nextCheckAt:retry, listings:[] });
+        storeWeaverResult(target, allowed, current, {
+          ...(target.previousBazaar || {}), nextCheckAt:summaryNextCheckAt,
+          detailNextCheckAt:retry, screenedAt:summary.fetchedAt, lowestPrice:currentLowest,
+          listings:[]
+        });
         if (error?.code === 'SLINK_WEAVER_RATE_LIMIT') break;
       }
     }
