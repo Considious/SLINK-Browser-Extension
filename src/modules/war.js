@@ -882,7 +882,7 @@
             <div class="slink-war-card-head"><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">${escape(member.name)} [${member.id}]</a><span>Lv ${member.level || '?'}</span></div>
             <div class="slink-war-meta"><span class="slink-war-pill ${member.activity === 'Online' ? 'slink-war-online' : ''}">${escape(member.activity || 'Unknown')}</span><span class="slink-war-pill ${hospitalized ? 'slink-war-hospital' : ''}">${escape(member.statusState || 'Okay')}${hospitalized ? ` ${duration(remaining)}${readyAt ? ` / ${readyAt} TCT` : ''}` : ''}</span><span class="slink-war-pill">Estimated BS ${Number.isFinite(member.battleStatsEstimate) ? SLINK.core.format.shortNumber(member.battleStatsEstimate) : '?'}</span><span class="slink-war-pill">FF ${Number.isFinite(member.fairFight) ? member.fairFight.toFixed(2) : '?'}</span>${memberContext(member)}</div>
             ${gate.active ? `<div class="slink-war-inside-disabled">${escape(insideGateMessage(gate))}</div>` : ''}
-            <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">${gate.active && gate.mode === 'block' ? 'INSIDES DISABLED' : '【ATTACK】'}</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-send="${member.id}" type="button" disabled>Send to Faction</button></div>
+            <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">${gate.active && gate.mode === 'block' ? 'INSIDES DISABLED' : '【ATTACK】'}</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-save-target="${member.id}" data-war-save-source="war" type="button">Save Target</button><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-send="${member.id}" type="button" disabled>Send to Faction</button></div>
           </article>`;
         }).join('');
       }
@@ -897,7 +897,7 @@
         const cards = members.map(member => `<article class="slink-war-card">
           <div class="slink-war-card-head"><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">${escape(member.name)} [${member.id}]</a><span>Lv ${member.level || '?'}</span></div>
           <div class="slink-war-meta"><span class="slink-war-pill">${escape(member.activity || 'Unknown')}</span><span class="slink-war-pill">${escape(member.statusState || 'Unknown')}</span><span class="slink-war-pill">Estimated BS ${Number.isFinite(member.battleStatsEstimate) ? SLINK.core.format.shortNumber(member.battleStatsEstimate) : '?'}</span><span class="slink-war-pill">FF ${Number.isFinite(member.fairFight) ? member.fairFight.toFixed(2) : '?'}</span>${memberContext(member)}</div>
-          <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">【ATTACK】</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-send="${member.id}" type="button" disabled>Send to Faction</button></div>
+          <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">【ATTACK】</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-save-target="${member.id}" data-war-save-source="outside" type="button">Save Target</button><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-send="${member.id}" type="button" disabled>Send to Faction</button></div>
         </article>`).join('');
         return controls + message + cards;
       }
@@ -1087,6 +1087,48 @@
         });
         const members = new Map([...(current?.runtime?.snapshot?.members || []), ...(current?.runtime?.outsideTargets || [])].map(member => [Number(member.id), member]));
         const retals = new Map((current?.runtime?.snapshot?.retals || []).map(retal => [String(retal.attackId), retal]));
+        for (const button of root.querySelectorAll('[data-war-save-target]')) button.addEventListener('click', async () => {
+          const targetId = Number(button.dataset.warSaveTarget);
+          const source = button.dataset.warSaveSource === 'outside' ? 'outside-targets' : 'war';
+          const rows = source === 'war' ? (current?.runtime?.snapshot?.members || []) : (current?.runtime?.outsideTargets || []);
+          const member = rows.find(row => Number(row.id) === targetId);
+          if (!member) return;
+          const original = button.textContent;
+          button.disabled = true;
+          button.textContent = 'Saving…';
+          try {
+            await SLINK.core.messaging.send('targetList.add', {
+              playerId:targetId,
+              name:member.name,
+              tags:[source === 'war' ? 'War' : 'Target'],
+              source,
+              sourceLabel:source === 'war' ? 'War Panel' : 'Outside Targets',
+              sourceContext:{
+                warId:String(current?.activeWar?.warId || current?.activeWar?.id || ''),
+                fairFight:Number(member.fairFight) || 0,
+                battleStatsEstimate:Number(member.battleStatsEstimate) || 0
+              },
+              status:{
+                state:member.statusState,
+                until:Number(member.statusUntil) || 0,
+                description:member.statusDescription || member.statusState || '',
+                source
+              }
+            });
+            button.textContent = 'Saved';
+            localError = '';
+          } catch (error) {
+            button.textContent = 'Save failed';
+            button.title = SLINK.core.format.errorMessage(error);
+            localError = button.title;
+          } finally {
+            setTimeout(() => {
+              if (!button.isConnected) return;
+              button.disabled = false;
+              button.textContent = original;
+            }, 1400);
+          }
+        });
         for (const button of root.querySelectorAll('[data-war-copy]')) button.addEventListener('click', () => void copyCallout(members.get(Number(button.dataset.warCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
         for (const button of root.querySelectorAll('[data-war-send]')) button.addEventListener('click', () => void sendCallout(members.get(Number(button.dataset.warSend)), button));
         for (const button of root.querySelectorAll('[data-war-retal-copy]')) button.addEventListener('click', () => void copyRetal(retals.get(String(button.dataset.warRetalCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));

@@ -29,7 +29,7 @@
     .bounty-badge[data-state="Hospital"] { background:#522c35; color:#ffc4cc; }
     .bounty-badge[data-state="Okay"] { background:#244b36; color:#b9f3cc; }
     .bounty-actions { margin-top:6px; }
-    .bounty-actions a { padding:4px 7px; border:1px solid rgba(255,255,255,.15); border-radius:5px; background:#2b3745; color:#fff; text-decoration:none; }
+    .bounty-actions a, .bounty-actions button { min-height:28px; padding:4px 7px; border:1px solid rgba(255,255,255,.15); border-radius:5px; background:#2b3745; color:#fff; text-decoration:none; }
     .bounty-empty { padding:14px 3px; color:#9eb0c2; text-align:center; }
     @media (max-width:420px) { .bounty-settings { grid-template-columns:1fr; } .bounty-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   `;
@@ -171,7 +171,7 @@
               <span class="bounty-badge">BS ${target.bsEstimate ? escape(SLINK.core.format.shortNumber(target.bsEstimate)) : '?'}</span>
               ${Number(target.highestQuantity) > 1 ? `<span class="bounty-badge">×${Number(target.highestQuantity)}</span>` : ''}
             </div>
-            <div class="bounty-actions"><a href="${profile}" data-bounty-profile-id="${target.id}">Profile</a><a href="${attack}">Attack</a></div>
+            <div class="bounty-actions"><a href="${profile}" data-bounty-profile-id="${target.id}">Profile</a><a href="${attack}">Attack</a><button data-bounty-save-target="${target.id}" type="button">Save Target</button></div>
           </article>`;
         }).join('');
       }
@@ -204,6 +204,46 @@
         const root = context.ui.getContentElement();
         root.querySelectorAll('[data-bounty-profile-id]').forEach(link => {
           link.addEventListener('click', () => rememberBountyProfileIntent(link.dataset.bountyProfileId));
+        });
+        root.querySelectorAll('[data-bounty-save-target]').forEach(button => {
+          button.addEventListener('click', async () => {
+            const targetId = Number(button.dataset.bountySaveTarget);
+            const target = (current?.runtime?.candidates || []).find(row => Number(row.id) === targetId);
+            if (!target) return;
+            const original = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Saving…';
+            try {
+              await SLINK.core.messaging.send('targetList.add', {
+                playerId:targetId,
+                name:target.name,
+                tags:['Target'],
+                source:'bounties',
+                sourceLabel:'Bounties',
+                sourceContext:{
+                  highestReward:Number(target.highestReward) || 0,
+                  quantity:Number(target.highestQuantity) || 1
+                },
+                status:{
+                  state:target.status?.state,
+                  until:Number(target.status?.until) || 0,
+                  description:target.status?.description || '',
+                  source:'bounties'
+                }
+              });
+              button.textContent = 'Saved';
+              localError = '';
+            } catch (error) {
+              button.textContent = 'Save failed';
+              localError = SLINK.core.format.errorMessage(error);
+            } finally {
+              setTimeout(() => {
+                if (!button.isConnected) return;
+                button.disabled = false;
+                button.textContent = original;
+              }, 1400);
+            }
+          });
         });
         root.querySelector('#bounty-save')?.addEventListener('click', async () => {
           const payload = {

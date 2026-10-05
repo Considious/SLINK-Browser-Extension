@@ -1,5 +1,18 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.40 — 2026-10-05
+
+### Added
+
+- Added explicit **Save Target** actions to Leveling, Bounties, the ranked-war target panel, and Outside Targets.
+- Source saves reuse the Target List service, preserve source context, merge tags by Torn player ID, and feed already-visible status, timer, Fair Fight, battle-stat estimate, and bounty details into the shared player-intelligence cache.
+- No source automatically imports players; every saved target still requires a deliberate button press.
+
+### Rollback baseline
+
+- The completed Target List release before source integrations is preserved at commit `e570eb0a1849713a1a761a24ea9a6da5bd3f1bfb`.
+- GitHub backup branch: `backup/pre-target-list-integrations-phase3-2026-10-05`.
+
 ## 0.18.39 — 2026-10-05
 
 ### Added

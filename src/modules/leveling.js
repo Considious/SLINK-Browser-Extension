@@ -30,7 +30,7 @@
     .leveling-target-meta { margin-top:4px; color:#9eb0c2; }
     .leveling-badge { padding:1px 5px; border-radius:8px; background:#303e4d; color:#e3edf6; }
     .leveling-target-actions { margin-top:6px; }
-    .leveling-target-actions a { padding:4px 7px; border:1px solid rgba(255,255,255,.15); border-radius:5px; background:#2b3745; color:#fff; text-decoration:none; }
+    .leveling-target-actions a, .leveling-target-actions button { min-height:28px; padding:4px 7px; border:1px solid rgba(255,255,255,.15); border-radius:5px; background:#2b3745; color:#fff; text-decoration:none; }
     .leveling-empty { padding:14px 3px; color:#9eb0c2; text-align:center; }
     @media (max-width:420px) {
       .leveling-settings { grid-template-columns:1fr; }
@@ -187,6 +187,7 @@
               <div class="leveling-target-actions">
                 <a href="${attack}" target="_blank" rel="noopener noreferrer">Attack</a>
                 <a href="${profile}" target="_blank" rel="noopener noreferrer">Profile</a>
+                <button data-leveling-save-target="${escape(target.id)}" type="button">Save Target</button>
               </div>
             </article>
           `;
@@ -232,6 +233,44 @@
       function bindEvents() {
         const root = context.ui.getContentElement();
         root.addEventListener('pointerdown', () => void markActivity(), { once: true });
+        for (const button of root.querySelectorAll('[data-leveling-save-target]')) button.addEventListener('click', async () => {
+          const targetId = Number(button.dataset.levelingSaveTarget);
+          const target = (current?.runtime?.targets || []).find(row => Number(row.id) === targetId);
+          if (!target) return;
+          const original = button.textContent;
+          button.disabled = true;
+          button.textContent = 'Saving…';
+          try {
+            await SLINK.core.messaging.send('targetList.add', {
+              playerId:targetId,
+              name:target.name,
+              tags:['Level'],
+              source:'leveling',
+              sourceLabel:'Leveling',
+              sourceContext:{
+                level:Number(target.level) || 0,
+                fairFight:Number(target.fair_fight ?? target.fair_fight_estimated) || 0
+              },
+              status:{
+                state:target.status,
+                until:Number(target.status_until ?? target.until) || 0,
+                description:target.status_description || target.status || '',
+                source:'leveling'
+              }
+            });
+            button.textContent = 'Saved';
+            localError = '';
+          } catch (error) {
+            button.textContent = 'Save failed';
+            localError = SLINK.core.format.errorMessage(error);
+          } finally {
+            setTimeout(() => {
+              if (!button.isConnected) return;
+              button.disabled = false;
+              button.textContent = original;
+            }, 1400);
+          }
+        });
         root.querySelector('#leveling-show-terms')?.addEventListener('click', () => { termsOpen = true; render(); });
         root.querySelector('#leveling-hide-terms')?.addEventListener('click', () => { termsOpen = false; render(); });
         root.querySelector('#leveling-clear-session')?.addEventListener('click', async () => {
