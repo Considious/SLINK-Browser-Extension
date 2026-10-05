@@ -1,5 +1,18 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.39 — 2026-10-05
+
+### Added
+
+- Added the reusable Combat / Target List with explicit manual saving, player-ID deduplication, multiple tags, notes, source metadata, Profile/Attack shortcuts, editing, removal confirmation, and smart manual status refresh.
+- Saved targets immediately display shared cached player status, status timers, last checked time, Last Seen Mugged, and bounty totals when those fields are already known.
+- Added a reusable Target List service so Mugging, Leveling, War, and Outside Targets can add selected players in the next integration phase without duplicating storage logic.
+
+### Rollback baseline
+
+- The completed shared-intelligence foundation before Target List is preserved at commit `db5a718f382eb379d1e5c0f8050c41d8e2aeed02`.
+- GitHub backup branch: `backup/pre-target-list-phase2-2026-10-05`.
+
 ## 0.18.38 — 2026-10-04
 
 ### Added

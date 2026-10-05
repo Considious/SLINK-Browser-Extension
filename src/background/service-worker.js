@@ -3,6 +3,7 @@ importScripts(
   '../core/format.js',
   '../core/storage.js',
   '../core/player-intelligence.js',
+  '../core/target-list.js',
   '../core/bounties.js',
   'local-vault.js',
   '../core/permissions.js',
@@ -16,6 +17,7 @@ importScripts(
   '../core/worker-client.js',
   '../core/torn-api-limiter.js',
   'player-intelligence-service.js',
+  'target-list-service.js',
   'theme-service.js',
   'permission-service.js',
   'adhd-service.js',
@@ -379,6 +381,7 @@ const routes = {
 
   ...SLINK.services.leveling.routes,
   ...SLINK.services.playerIntelligence.routes,
+  ...SLINK.services.targetList.routes,
   ...SLINK.services.bounties.routes,
   ...SLINK.services.war.routes,
   ...SLINK.services.permissionAccess.routes,
