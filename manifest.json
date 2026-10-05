@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.18.37",
+  "version": "0.18.38",
   "description": "Shared Live Intelligence NetworK with Combat and Efficiency reminder tools for Torn.",
   "permissions": [
     "alarms",
@@ -40,6 +40,7 @@
         "src/core/ui-state.js",
         "src/core/storage.js",
         "src/core/permissions.js",
+        "src/core/player-intelligence.js",
         "src/core/adhd.js",
         "src/core/market.js",
         "src/core/merits.js",

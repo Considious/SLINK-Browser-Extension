@@ -16,6 +16,7 @@
   const PAGES_PER_BATCH = 2;
   let scanPromise = null;
   let budgetQueue = Promise.resolve();
+  let legacyStatusMigration = null;
 
   function defaultRuntime() {
     return {
@@ -273,6 +274,31 @@
     return publicStatus();
   }
 
+  async function sharedStatuses() {
+    if (!legacyStatusMigration) {
+      legacyStatusMigration = (async () => {
+        const legacy = await SLINK.core.storage.get(KEYS.status, {});
+        const entries = Object.entries(
+          legacy && typeof legacy === 'object' ? legacy : {}
+        );
+        if (!entries.length) return;
+        await SLINK.services.playerIntelligence.observeMany(
+          entries.map(([playerId, record]) => ({
+            ...(record || {}),
+            playerId:Number(playerId),
+            source:String(record?.source || 'legacy-bounties')
+          }))
+        );
+        await SLINK.core.storage.remove(KEYS.status);
+      })().catch(error => {
+        legacyStatusMigration = null;
+        throw error;
+      });
+    }
+    await legacyStatusMigration;
+    return SLINK.services.playerIntelligence.cacheMap();
+  }
+
   async function observeStatus(input = {}) {
     const targetId = CORE.validTargetId(input.targetId);
     const source = String(input.source || '').slice(0, 40);
@@ -281,14 +307,18 @@
     const lastInteractionAt = await SLINK.core.storage.get(KEYS.activity, 0);
     if (!currentSettings.enabled || !active(lastInteractionAt)) return publicStatus();
     const currentRuntime = await runtime();
-    if (!currentRuntime.targets.some(target => Number(target.id) === targetId)) return publicStatus();
-    const cache = await SLINK.core.storage.get(KEYS.status, {});
-    const state = CORE.normalizeState(input.state);
-    const until = Math.max(0, Number(input.until) || 0);
-    const description = String(input.description || '').slice(0, 500);
-
-    cache[targetId] = { state, until, description, source, checkedAt:Date.now() };
-    await SLINK.core.storage.set(KEYS.status, cache);
+    if (!currentRuntime.targets.some(target => Number(target.id) === targetId)) {
+      return publicStatus();
+    }
+    await SLINK.services.playerIntelligence.observe({
+      playerId:targetId,
+      state:CORE.normalizeState(input.state),
+      until:Math.max(0, Number(input.until) || 0),
+      description:String(input.description || '').slice(0, 500),
+      source,
+      observedAt:Date.now(),
+      checkedAt:Date.now()
+    });
     return publicStatus();
   }
 
@@ -300,7 +330,7 @@
   async function publicStatus() {
     const [currentSettings, currentRuntime, fairFight, statuses, lastInteractionAt] = await Promise.all([
       settings(), runtime(), SLINK.core.storage.get(KEYS.fairFight, {}),
-      SLINK.core.storage.get(KEYS.status, {}), SLINK.core.storage.get(KEYS.activity, 0)
+      sharedStatuses(), SLINK.core.storage.get(KEYS.activity, 0)
     ]);
     const keys = await credentials(currentSettings);
     const candidates = CORE.filteredCandidates(currentRuntime.targets, fairFight, statuses, currentSettings);

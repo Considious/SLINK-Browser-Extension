@@ -68,6 +68,7 @@ for (const file of [
   'src/core/format.js',
   'src/core/storage.js',
   'src/core/permissions.js',
+  'src/core/player-intelligence.js',
   'src/core/adhd.js',
   'src/core/market.js',
   'src/core/merits.js',
@@ -81,7 +82,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.26', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.38', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.attackLink('https://www.torn.com/page.php?sid=attack&user2ID=1') === '<a href="https://www.torn.com/page.php?sid=attack&amp;user2ID=1">【ATTACK】</a>', 'Shared attack-link formatter did not preserve Torn HTML and the bracketed label.');

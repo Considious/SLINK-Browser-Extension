@@ -1,5 +1,18 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.38 — 2026-10-04
+
+### Added
+
+- Added the shared player-intelligence foundation used by upcoming Mugging, Target List, and Stakeout work.
+- Player status observations now share one persistent cache, one in-flight lookup per player, and known Hospital/Jail/Travel timers that suppress redundant API checks.
+- Bounty profile DOM observations now feed the shared intelligence cache instead of a Bounty-only status store.
+
+### Rollback baseline
+
+- The last pre-foundation working release is **0.18.37** at commit `97d7584f20a2164c9056e015a3dc2ed8c1f3eed6`.
+- GitHub backup branch: `backup/pre-mugging-foundation-2026-10-04`.
+
 This changelog covers the `0.18.x` release series. It focuses on user-visible behavior, reliability, privacy, and compatibility changes.
 
 ## 0.18.37 — 2026-10-04
