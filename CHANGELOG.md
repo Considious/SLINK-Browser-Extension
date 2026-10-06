@@ -1,5 +1,23 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.44 — 2026-10-05
+
+### Added
+
+- Added the permission-gated **Combat / Mugging** interface. The module is registered only for authenticated sessions carrying the backend-managed `slink.mugging` scope.
+- Added a local Mugging enable/disable control, cached-result shell, and explicit **Save Target** handoff into the shared Target List.
+- Added an intentionally non-networked Phase 7 boundary: rough Fair Fight assignment and contributor scheduling remain disabled until their dedicated phases.
+
+### Security and permissions
+
+- A refreshed permission snapshot now restarts in-page modules without navigating or reloading Torn, so granting or revoking `slink.mugging` takes effect after the normal **Refresh Permissions** action.
+- No test users, faction IDs, or client-side permission overrides are embedded in the extension.
+
+### Rollback baseline
+
+- The completed Stakeout release before Mugging UI is preserved at commit `5928b9d1cd063fe60163d45bae814c321d7b11ba`.
+- GitHub backup branch: `backup/pre-mugging-ui-phase7-2026-10-05`.
+
 ## 0.18.43 — 2026-10-05
 
 ### Added

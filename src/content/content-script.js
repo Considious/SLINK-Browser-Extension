@@ -123,7 +123,11 @@
       try { SLINK.core.themes.installCatalog(changes[catalogKey].newValue.catalog); }
       catch (error) { console.error('[SLINK] Rejected invalid cached theme catalog:', error); }
     }
-    if (changes[themeKey] || changes[permissionsKey] || changes[catalogKey]) {
+    if (changes[permissionsKey] && initialized) {
+      void restartModules().catch(error => console.error('[SLINK] Could not apply refreshed permissions in place:', error));
+      return;
+    }
+    if (changes[themeKey] || changes[catalogKey]) {
       void Promise.all([
         SLINK.core.storage.get(SLINK.core.themes.STORAGE_KEY, SLINK.core.themes.DEFAULT_THEME_ID),
         SLINK.core.messaging.send('permissions.get')
