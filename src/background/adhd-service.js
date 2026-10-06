@@ -362,6 +362,10 @@
 
   async function snooze(input = {}) {
     const id = String(input.id || '').trim();
+    if (id.startsWith('stakeout:')) {
+      await SLINK.services.targetList.snoozeAlert(input);
+      return publicStatus(false);
+    }
     if (!ADHD.ALERT_DEFINITIONS.some(definition => definition.id === id) && !/^cityStock:\d+$/.test(id)) throw new Error('Unknown Efficiency alert.');
     const durationMs = Math.min(ADHD.DAY_MS, Math.max(60_000, Number(input.durationMs) || 60 * 60_000));
     const next = await settings();
@@ -374,8 +378,10 @@
     const [currentSettings, currentRuntime, previous] = await Promise.all([
       settings(), runtime(), SLINK.core.storage.get(KEYS.soundState, { activeIds:[], pendingIds:[] })
     ]);
-    const candidates = ADHD.buildAlerts(currentRuntime.snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
+    const efficiencyAlerts = ADHD.buildAlerts(currentRuntime.snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
       .filter(alert => (currentRuntime.snapshot || alert.id === 'timer24') && currentSettings.soundEnabled[alert.id] === true);
+    const stakeoutAlerts = await SLINK.services.targetList.activeAlerts();
+    const candidates = [...efficiencyAlerts, ...stakeoutAlerts];
     const activeIds = candidates.map(alert => alert.id).sort();
     const activeSet = new Set((Array.isArray(previous?.activeIds) ? previous.activeIds : []).filter(id => activeIds.includes(id)));
     const pendingSet = new Set((Array.isArray(previous?.pendingIds) ? previous.pendingIds : []).filter(id => activeIds.includes(id)));
@@ -421,12 +427,16 @@
     }
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, ADHD.ALERT_SCOPE);
     const snapshot = currentRuntime.snapshot;
+    const stakeoutAlerts = await SLINK.services.targetList.activeAlerts();
     return {
       configured:Boolean(access.configured),
       permitted,
       requiredScope:ADHD.ALERT_SCOPE,
       settings:currentSettings,
-      activeAlerts:ADHD.buildAlerts(snapshot || {}, currentSettings).filter(alert => snapshot || alert.id === 'timer24'),
+      activeAlerts:[
+        ...ADHD.buildAlerts(snapshot || {}, currentSettings).filter(alert => snapshot || alert.id === 'timer24'),
+        ...stakeoutAlerts
+      ],
       city:snapshot ? ADHD.cityProgress(snapshot, currentSettings) : { bought:null, remaining:null, complete:false, manuallyDone:false },
       lastPurchase:currentRuntime.lastPurchase,
       fetchedAt:Number(currentRuntime.fetchedAt) || 0,

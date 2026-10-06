@@ -1,5 +1,25 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.43 — 2026-10-05
+
+### Added
+
+- Added per-target **Stakeout** monitoring with configurable 10–3600 second evaluation intervals. Active Stakeouts sort to the top and are visually distinguished.
+- Added smart Stakeout scheduling that reuses fresh DOM observations, recent cache records, in-flight lookups, and known Hospital/Jail/Travel timers before requesting Torn.
+- Added Stakeout status and bounty-change alerts with Profile and Attack links, 5-minute and 1-hour snoozes, and background alert audio through the existing SLINK alert pipeline.
+- Added a Torn-page heartbeat so 10-second Stakeouts can be evaluated while Torn is open; the existing background alarm remains a lower-frequency safety pass.
+- Added clear API-load estimates and a warning that Stakeout should be used sparingly. Three 10-second Stakeouts are shown as up to 18 evaluations per minute before smart skips.
+
+### Changed
+
+- Stakeout targets are excluded from ordinary rolling Target List polling so they are not scheduled twice.
+- Efficiency Alerts now include active Stakeout alerts instead of creating a separate alert interface.
+
+### Rollback baseline
+
+- The completed rolling Target List release before Stakeout is preserved at commit `7df6af3106f43a520f479114422f91182e6a824b`.
+- GitHub backup branch: `backup/pre-stakeout-phase6-2026-10-05`.
+
 ## 0.18.42 — 2026-10-05
 
 ### Added

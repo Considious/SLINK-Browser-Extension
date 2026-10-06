@@ -9,6 +9,8 @@
   let restarting = null;
   let apiLedgerSyncing = false;
   let apiLedgerTimer = null;
+  let stakeoutTimer = null;
+  let stakeoutTicking = false;
 
   ui.setHidden(await SLINK.core.storage.get('ui.pagePanelHidden', false));
 
@@ -148,11 +150,25 @@
     initialized = true;
     await syncSharedApiLedger();
     apiLedgerTimer = global.setInterval(() => void syncSharedApiLedger(), 2_000);
+    const runStakeoutTick = async () => {
+      if (stakeoutTicking || !global.chrome?.runtime?.id) return;
+      stakeoutTicking = true;
+      try {
+        await SLINK.core.messaging.send('targetList.stakeout.run');
+      } catch (error) {
+        if (global.chrome?.runtime?.id) console.debug('[SLINK] Stakeout heartbeat paused:', error);
+      } finally {
+        stakeoutTicking = false;
+      }
+    };
+    await runStakeoutTick();
+    stakeoutTimer = global.setInterval(() => void runStakeoutTick(), 5_000);
   } catch (error) {
     console.error('[SLINK] Content startup:', error);
   }
 
   global.addEventListener('pagehide', () => {
     if (apiLedgerTimer) global.clearInterval(apiLedgerTimer);
+    if (stakeoutTimer) global.clearInterval(stakeoutTimer);
   }, { once:true });
 })(globalThis);

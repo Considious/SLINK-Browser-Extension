@@ -428,8 +428,13 @@ chrome.alarms.onAlarm.addListener(alarm => {
     }).catch(error => console.error('[SLINK] Daily player stats:', error));
   }
   if (alarm.name === SLINK.services.targetList.POLL_ALARM) {
-    void SLINK.services.targetList.runPolling()
-      .catch(error => console.error('[SLINK] Target List polling:', error));
+    void Promise.allSettled([
+      SLINK.services.targetList.runPolling(),
+      SLINK.services.targetList.runStakeouts()
+    ]).then(results => {
+      const rejected = results.find(result => result.status === 'rejected');
+      if (rejected) console.error('[SLINK] Target List scheduling:', rejected.reason);
+    });
   }
 });
 

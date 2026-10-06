@@ -5,6 +5,7 @@ import vm from 'node:vm';
 const values = new Map();
 const alarmRows = new Map();
 const refreshed = [];
+const intelligence = {};
 const context = vm.createContext({
   console,
   URL,
@@ -39,7 +40,7 @@ SLINK.define('core', 'format', Object.freeze({
 load('src/core/target-list.js');
 
 SLINK.define('services', 'playerIntelligence', Object.freeze({
-  async cacheMap() { return {}; },
+  async cacheMap() { return structuredClone(intelligence); },
   async observe(value) { return value; },
   async refresh({ playerId, now = Date.now() }) {
     refreshed.push(playerId);
@@ -47,7 +48,7 @@ SLINK.define('services', 'playerIntelligence', Object.freeze({
       fetched:true,
       reason:'api',
       nextCheckAt:now + 600_000,
-      record:{ playerId, state:'Okay' }
+      record:intelligence[String(playerId)] || { playerId, state:'Okay', observedAt:now, checkedAt:now }
     };
   }
 }));
@@ -98,4 +99,23 @@ assert.ok(refreshed.length > 0);
 assert.ok(refreshed.every(playerId => playerId <= 10),
   'Mug-only polling checked a target without the Mug tag.');
 
-console.log('Target List rolling polling tests passed.');
+for (let id = 1; id <= 3; id += 1) {
+  entries[String(id)] = SLINK.core.targetList.updateTarget(entries[String(id)], {
+    stakeout:true,
+    stakeoutIntervalSeconds:10
+  });
+}
+await SLINK.core.storage.set(service.STORE_KEY, entries);
+const stakeoutStatus = await service.stakeoutStatus();
+assert.equal(stakeoutStatus.targetCount, 3);
+assert.equal(stakeoutStatus.estimatedChecksPerMinute, 18);
+const rollingAfterStakeout = await service.pollingStatus();
+assert.equal(rollingAfterStakeout.eligibleCount, 7,
+  'Stakeout targets should not also consume the regular rolling schedule.');
+
+refreshed.length = 0;
+await service.runStakeouts({ now:now + 180_000 });
+assert.ok(refreshed.length > 0 && refreshed.length <= 3,
+  'Stakeout did not evaluate its due targets safely.');
+
+console.log('Target List rolling polling and Stakeout tests passed.');

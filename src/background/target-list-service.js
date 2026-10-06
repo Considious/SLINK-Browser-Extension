@@ -11,8 +11,13 @@
   const DEFAULT_INTERVAL_MINUTES = 10;
   const MIN_INTERVAL_MINUTES = 1;
   const MAX_INTERVAL_MINUTES = 1440;
+  const STAKEOUT_RUNTIME_KEY = 'targetList.stakeout.runtime.v1';
+  const STAKEOUT_ALERTS_KEY = 'targetList.stakeout.alerts.v1';
+  const STAKEOUT_ALERT_LIFETIME_MS = 24 * 60 * 60_000;
+  const STAKEOUT_MAX_DUE_PER_TICK = 20;
   let writeQueue = Promise.resolve();
   let pollInFlight = null;
+  let stakeoutInFlight = null;
 
   async function entryMap() {
     const stored = await SLINK.core.storage.get(STORE_KEY, {});
@@ -80,6 +85,7 @@
   function eligibleTargets(entries, settings) {
     return Object.values(entries)
       .map(target => CORE.normalizeTarget(target))
+      .filter(target => !target.stakeout)
       .filter(target => !settings.mugOnly || target.tags.some(tag => String(tag).toLowerCase() === 'mug'))
       .sort((left, right) => left.playerId - right.playerId);
   }
@@ -133,6 +139,231 @@
     };
   }
 
+  function normalizeStakeoutRuntime(value = {}) {
+    return {
+      schedule:value.schedule && typeof value.schedule === 'object' && !Array.isArray(value.schedule) ? value.schedule : {},
+      observed:value.observed && typeof value.observed === 'object' && !Array.isArray(value.observed) ? value.observed : {},
+      lastRunAt:Math.max(0, Number(value.lastRunAt) || 0),
+      lastProcessed:Math.max(0, Math.trunc(Number(value.lastProcessed) || 0)),
+      lastApiFetched:Math.max(0, Math.trunc(Number(value.lastApiFetched) || 0)),
+      lastSkipped:Math.max(0, Math.trunc(Number(value.lastSkipped) || 0)),
+      lastError:String(value.lastError || '').slice(0, 500)
+    };
+  }
+
+  async function stakeoutRuntime() {
+    return normalizeStakeoutRuntime(await SLINK.core.storage.get(STAKEOUT_RUNTIME_KEY, {}));
+  }
+
+  function stakeoutTargets(entries) {
+    return Object.values(entries)
+      .map(target => CORE.normalizeTarget(target))
+      .filter(target => target.stakeout)
+      .sort((left, right) =>
+        left.stakeoutIntervalSeconds - right.stakeoutIntervalSeconds ||
+        left.name.localeCompare(right.name)
+      );
+  }
+
+  function normalizeAlertState(value = {}) {
+    return {
+      items:value.items && typeof value.items === 'object' && !Array.isArray(value.items) ? value.items : {},
+      snoozedUntil:value.snoozedUntil && typeof value.snoozedUntil === 'object' && !Array.isArray(value.snoozedUntil) ? value.snoozedUntil : {}
+    };
+  }
+
+  async function alertState() {
+    return normalizeAlertState(await SLINK.core.storage.get(STAKEOUT_ALERTS_KEY, {}));
+  }
+
+  async function saveStakeoutAlerts(alerts = [], now = Date.now()) {
+    if (!alerts.length) return 0;
+    const state = await alertState();
+    for (const alert of alerts) state.items[alert.id] = alert;
+    for (const [id, alert] of Object.entries(state.items)) {
+      if (Number(alert?.expiresAt) <= now) delete state.items[id];
+    }
+    await SLINK.core.storage.set(STAKEOUT_ALERTS_KEY, state);
+    return alerts.length;
+  }
+
+  async function activeAlerts(now = Date.now()) {
+    const state = await alertState();
+    let changed = false;
+    const alerts = [];
+    for (const [id, alert] of Object.entries(state.items)) {
+      if (Number(alert?.expiresAt) <= now) {
+        delete state.items[id];
+        changed = true;
+        continue;
+      }
+      if (Number(state.snoozedUntil[id] || 0) > now) continue;
+      alerts.push(alert);
+    }
+    if (changed) await SLINK.core.storage.set(STAKEOUT_ALERTS_KEY, state);
+    return alerts.sort((left, right) => Number(right.createdAt) - Number(left.createdAt));
+  }
+
+  async function snoozeAlert(input = {}) {
+    const id = String(input.id || '');
+    if (!id.startsWith('stakeout:')) throw new Error('Unknown Stakeout alert.');
+    const durationMs = Math.min(24 * 60 * 60_000, Math.max(60_000, Number(input.durationMs) || 5 * 60_000));
+    const state = await alertState();
+    state.snoozedUntil[id] = Date.now() + durationMs;
+    await SLINK.core.storage.set(STAKEOUT_ALERTS_KEY, state);
+    return { ok:true };
+  }
+
+  function stakeoutObservation(record = null, now = Date.now()) {
+    if (!record) return null;
+    const status = SLINK.core.playerIntelligence.effectiveStatus(record, now);
+    return {
+      state:String(status?.state || 'Unknown'),
+      bountyCount:Math.max(0, Math.trunc(Number(record.bountyCount) || 0)),
+      bountyTotal:Math.max(0, Number(record.bountyTotal) || 0),
+      observedAt:Math.max(0, Number(record.observedAt || record.checkedAt) || now)
+    };
+  }
+
+  function collectStakeoutChanges(target, runtime, record, now = Date.now()) {
+    const id = String(target.playerId);
+    const current = stakeoutObservation(record, now);
+    if (!current) return [];
+    const previous = runtime.observed[id] || null;
+    runtime.observed[id] = current;
+    if (!previous) return [];
+    const profile = `https://www.torn.com/profiles.php?XID=${target.playerId}`;
+    const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${target.playerId}`;
+    const links = [['Profile', profile], ['Attack', attack]];
+    const alerts = [];
+    if (previous.state !== current.state && current.state !== 'Unknown') {
+      const attackable = current.state === 'Okay';
+      const event = attackable ? 'attackable' : `state-${current.state.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+      alerts.push({
+        id:`stakeout:${target.playerId}:${event}`,
+        title:attackable ? `${target.name} is attackable` : `${target.name} changed status`,
+        detail:`${previous.state || 'Unknown'} → ${current.state}`,
+        tone:attackable ? 'ready' : current.state === 'Hospital' ? 'danger' : 'warning',
+        links,
+        shareText:`${target.name} [${target.playerId}] is ${current.state}. <a href="${profile}">Profile</a> · <a href="${attack}">Attack</a>`,
+        createdAt:now,
+        expiresAt:now + STAKEOUT_ALERT_LIFETIME_MS,
+        source:'stakeout',
+        playerId:target.playerId
+      });
+    }
+    if (
+      current.bountyCount > previous.bountyCount ||
+      current.bountyTotal > previous.bountyTotal
+    ) {
+      alerts.push({
+        id:`stakeout:${target.playerId}:bounty`,
+        title:`Bounty appeared on ${target.name}`,
+        detail:`${current.bountyCount} active · ${current.bountyTotal.toLocaleString()}`,
+        tone:'ready',
+        links,
+        shareText:`${target.name} [${target.playerId}] has ${current.bountyCount} active bounties worth ${current.bountyTotal.toLocaleString()}. <a href="${profile}">Profile</a> · <a href="${attack}">Attack</a>`,
+        createdAt:now,
+        expiresAt:now + STAKEOUT_ALERT_LIFETIME_MS,
+        source:'stakeout',
+        playerId:target.playerId
+      });
+    }
+    return alerts;
+  }
+
+  async function stakeoutStatus(entries = null) {
+    const [storedEntries, runtime, alerts] = await Promise.all([
+      entries ? Promise.resolve(entries) : entryMap(),
+      stakeoutRuntime(),
+      activeAlerts()
+    ]);
+    const targets = stakeoutTargets(storedEntries);
+    const estimate = targets.reduce((total, target) => total + 60 / target.stakeoutIntervalSeconds, 0);
+    return {
+      targetCount:targets.length,
+      estimatedChecksPerMinute:Number(estimate.toFixed(1)),
+      activeAlerts:alerts,
+      runtime:{
+        lastRunAt:runtime.lastRunAt,
+        lastProcessed:runtime.lastProcessed,
+        lastApiFetched:runtime.lastApiFetched,
+        lastSkipped:runtime.lastSkipped,
+        lastError:runtime.lastError
+      }
+    };
+  }
+
+  async function runStakeouts(input = {}) {
+    if (stakeoutInFlight) return stakeoutInFlight;
+    stakeoutInFlight = (async () => {
+      const now = Math.max(0, Number(input.now) || Date.now());
+      const [entries, runtime, intelligence] = await Promise.all([
+        entryMap(), stakeoutRuntime(), SLINK.services.playerIntelligence.cacheMap()
+      ]);
+      const targets = stakeoutTargets(entries);
+      const ids = new Set(targets.map(target => String(target.playerId)));
+      for (const id of Object.keys(runtime.schedule)) if (!ids.has(id)) delete runtime.schedule[id];
+      for (const id of Object.keys(runtime.observed)) if (!ids.has(id)) delete runtime.observed[id];
+
+      targets.forEach((target, index) => {
+        const id = String(target.playerId);
+        if (!Number.isFinite(Number(runtime.schedule[id])) || Number(runtime.schedule[id]) <= 0) {
+          runtime.schedule[id] = now + Math.min(index * 1_000, target.stakeoutIntervalSeconds * 1_000);
+        }
+      });
+      const due = targets
+        .filter(target => Number(runtime.schedule[String(target.playerId)]) <= now)
+        .sort((left, right) => Number(runtime.schedule[String(left.playerId)]) - Number(runtime.schedule[String(right.playerId)]))
+        .slice(0, STAKEOUT_MAX_DUE_PER_TICK);
+      let processed = 0;
+      let apiFetched = 0;
+      let skipped = 0;
+      let lastError = '';
+      const generated = [];
+
+      for (const target of due) {
+        const id = String(target.playerId);
+        const intervalMs = target.stakeoutIntervalSeconds * 1_000;
+        generated.push(...collectStakeoutChanges(target, runtime, intelligence[id] || null, now));
+        try {
+          const result = await SLINK.services.playerIntelligence.refresh({
+            playerId:target.playerId,
+            priority:'high',
+            maxAgeMs:intervalMs,
+            timerBufferMs:1_000
+          });
+          processed += 1;
+          if (result.fetched) apiFetched += 1;
+          else skipped += 1;
+          generated.push(...collectStakeoutChanges(target, runtime, result.record, now));
+          runtime.schedule[id] = result.reason === 'known-timer' || result.reason === 'fresh-cache'
+            ? Math.max(now + 1_000, Number(result.nextCheckAt) || now + intervalMs)
+            : now + intervalMs;
+        } catch (error) {
+          processed += 1;
+          lastError = SLINK.core.format.errorMessage(error);
+          runtime.schedule[id] = now + Math.max(10_000, intervalMs);
+        }
+      }
+
+      runtime.lastRunAt = now;
+      runtime.lastProcessed = processed;
+      runtime.lastApiFetched = apiFetched;
+      runtime.lastSkipped = skipped;
+      runtime.lastError = lastError;
+      await Promise.all([
+        SLINK.core.storage.set(STAKEOUT_RUNTIME_KEY, runtime),
+        saveStakeoutAlerts(generated, now)
+      ]);
+      if (generated.length && SLINK.services.audio?.flush) {
+        void SLINK.services.audio.flush().catch(() => undefined);
+      }
+      return stakeoutStatus(entries);
+    })().finally(() => { stakeoutInFlight = null; });
+    return stakeoutInFlight;
+  }
+
   async function status() {
     const [entries, intelligence] = await Promise.all([
       entryMap(),
@@ -144,13 +375,18 @@
         target,
         record ? { ...record, status:SLINK.core.playerIntelligence.effectiveStatus(record) } : null
       );
-    }).sort((a, b) => b.updatedAt - a.updatedAt || a.name.localeCompare(b.name));
+    }).sort((a, b) =>
+      Number(b.stakeout) - Number(a.stakeout) ||
+      b.updatedAt - a.updatedAt ||
+      a.name.localeCompare(b.name)
+    );
     return {
       targets,
       count:targets.length,
       availableTags:[...CORE.DEFAULT_TAGS],
       storage:'local',
-      polling:await pollingStatus(entries)
+      polling:await pollingStatus(entries),
+      stakeout:await stakeoutStatus(entries)
     };
   }
 
@@ -326,6 +562,9 @@
     POLLING_SETTINGS_KEY,
     POLLING_RUNTIME_KEY,
     POLL_ALARM,
+    STAKEOUT_RUNTIME_KEY,
+    STAKEOUT_ALERTS_KEY,
+    activeAlerts,
     add,
     configurePolling,
     eligibleTargets,
@@ -333,6 +572,10 @@
     entryMap,
     pollingSettings,
     pollingStatus,
+    runStakeouts,
+    snoozeAlert,
+    stakeoutStatus,
+    stakeoutTargets,
     refresh,
     remove,
     runPolling,
@@ -345,7 +588,10 @@
       'targetList.remove':remove,
       'targetList.refresh':refresh,
       'targetList.polling.configure':configurePolling,
-      'targetList.polling.run':runPolling
+      'targetList.polling.run':runPolling,
+      'targetList.stakeout.run':runStakeouts,
+      'targetList.stakeout.alerts':async () => ({ alerts:await activeAlerts() }),
+      'targetList.stakeout.alert.snooze':snoozeAlert
     })
   }));
 })(globalThis);

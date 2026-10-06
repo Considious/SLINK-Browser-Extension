@@ -15,6 +15,10 @@
     .target-list-form-actions { display:flex; flex-wrap:wrap; gap:6px; }
     .target-list-entry { padding:9px 0; border-top:1px solid rgba(255,255,255,.08); }
     .target-list-entry:first-child { border-top:0; }
+    .target-list-entry.is-stakeout { margin:6px 0; padding:9px; border:1px solid #ffb347; border-radius:7px; background:rgba(255,179,71,.08); }
+    .target-list-stakeout { padding:2px 6px; border-radius:9px; background:#7a3f00; color:#ffe0ad; font-weight:700; }
+    .target-list-alerts { display:grid; gap:6px; margin:8px 0; }
+    .target-list-alert { padding:7px; border:1px solid #8b5a20; border-radius:6px; background:#2f2417; color:#ffe2b8; }
     .target-list-head { display:flex; align-items:center; gap:7px; }
     .target-list-head a { min-width:0; flex:1; overflow:hidden; color:#fff; font-weight:700; text-decoration:none; text-overflow:ellipsis; white-space:nowrap; }
     .target-list-tag,.target-list-badge,.target-list-source { padding:1px 5px; border-radius:8px; background:#303e4d; color:#e3edf6; }
@@ -75,6 +79,8 @@
       let busyId = null;
       let localError = '';
       let countdownTimer = null;
+      let stakeoutTimer = null;
+      let stakeoutTicking = false;
 
       context.ui.setTitle('Target List');
       context.ui.setModuleStyles(MODULE_STYLES);
@@ -90,6 +96,8 @@
           <label>Player ID<input id="target-list-id" type="number" min="1" inputmode="numeric" value="${target?.id || ''}" ${target ? 'disabled' : ''} placeholder="123456"></label>
           <label>Name (optional)<input id="target-list-name" type="text" maxlength="80" value="${escape(target?.name || '')}" placeholder="Player name"></label>
           <label class="wide">Notes<textarea id="target-list-description" maxlength="500" placeholder="Why are you tracking this player?">${escape(target?.description || '')}</textarea></label>
+          <label class="wide check"><input id="target-list-stakeout" type="checkbox" ${target?.stakeout ? 'checked' : ''}>Stakeout — monitor this target substantially more often</label>
+          <label>Stakeout interval (seconds)<input id="target-list-stakeout-interval" type="number" min="10" max="3600" step="1" value="${Number(target?.stakeoutIntervalSeconds) || 10}"></label>
           <div class="target-list-tags">${current.availableTags.map(tag => `<label><input type="checkbox" data-target-list-tag="${escape(tag)}" ${tags.has(tag) ? 'checked' : ''}>${escape(tag)}</label>`).join('')}</div>
           <div class="target-list-form-actions"><button id="target-list-save" type="button">${target ? 'Save changes' : 'Add target'}</button><button id="target-list-cancel" type="button">Cancel</button></div>
         </div>`;
@@ -105,7 +113,8 @@
             <input id="target-list-poll-interval" type="number" min="1" max="1440" step="1" value="${Number(settings.intervalMinutes) || 10}">
           </label>
           <label class="check"><input id="target-list-poll-mug-only" type="checkbox" ${settings.mugOnly ? 'checked' : ''}>Only auto-check targets tagged Mug</label>
-          <div class="target-list-polling-summary">${Number(polling.eligibleCount) || 0} eligible · up to ${Number(polling.estimatedChecksPerMinute) || 0} scheduled checks/min before cache and timer skips${runtime.lastRunAt ? ` · last cycle ${escape(elapsed(runtime.lastRunAt))}` : ''}${runtime.lastError ? ` · ${escape(runtime.lastError)}` : ''}</div>
+          <div class="target-list-polling-summary">${Number(polling.eligibleCount) || 0} rolling-poll targets · up to ${Number(polling.estimatedChecksPerMinute) || 0} scheduled checks/min before cache and timer skips${runtime.lastRunAt ? ` · last cycle ${escape(elapsed(runtime.lastRunAt))}` : ''}${runtime.lastError ? ` · ${escape(runtime.lastError)}` : ''}</div>
+          <div class="target-list-polling-summary"><strong>Stakeout:</strong> ${Number(current.stakeout?.targetCount) || 0} targets · up to ${Number(current.stakeout?.estimatedChecksPerMinute) || 0} evaluations/min before DOM, cache, and known-timer skips. Use sparingly; active Stakeouts can consume substantially more Torn API capacity.</div>
           <button id="target-list-poll-save" type="button">Save polling</button>
         </div>`;
       }
@@ -113,8 +122,8 @@
       function targetHtml(target) {
         const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(target.id)}`;
         const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(target.id)}`;
-        return `<article class="target-list-entry" data-target-list-id="${target.id}">
-          <div class="target-list-head"><a href="${profile}" data-target-list-profile="${target.id}">${escape(target.name)} [${target.id}]</a><span class="target-list-badge" data-state="${escape(target.status?.state || 'Unknown')}">${escape(statusLabel(target))}</span></div>
+        return `<article class="target-list-entry${target.stakeout ? ' is-stakeout' : ''}" data-target-list-id="${target.id}">
+          <div class="target-list-head"><a href="${profile}" data-target-list-profile="${target.id}">${escape(target.name)} [${target.id}]</a>${target.stakeout ? `<span class="target-list-stakeout">Stakeout · ${target.stakeoutIntervalSeconds}s</span>` : ''}<span class="target-list-badge" data-state="${escape(target.status?.state || 'Unknown')}">${escape(statusLabel(target))}</span></div>
           <div class="target-list-tags">${target.tags.map(tag => `<span class="target-list-tag">${escape(tag)}</span>`).join('')}</div>
           ${target.description ? `<div class="target-list-description">${escape(target.description)}</div>` : ''}
           <div class="target-list-meta">
@@ -128,10 +137,17 @@
           <div class="target-list-actions">
             <a href="${profile}" data-target-list-profile="${target.id}">Profile</a><a href="${attack}">Attack</a>
             <button type="button" data-target-list-action="refresh" ${busyId === target.id ? 'disabled' : ''}>${busyId === target.id ? 'Refreshing…' : 'Refresh'}</button>
+            <button type="button" data-target-list-action="stakeout">${target.stakeout ? 'Stop Stakeout' : 'Stakeout'}</button>
             <button type="button" data-target-list-action="edit">Edit</button>
             <button type="button" data-target-list-action="remove">Remove</button>
           </div>
         </article>`;
+      }
+
+      function stakeoutAlertsHtml() {
+        const alerts = Array.isArray(current.stakeout?.activeAlerts) ? current.stakeout.activeAlerts : [];
+        if (!alerts.length) return '';
+        return `<div class="target-list-alerts">${alerts.map(alert => `<article class="target-list-alert"><strong>${escape(alert.title)}</strong><div>${escape(alert.detail)}</div><div class="target-list-actions">${(alert.links || []).map(([label, href]) => `<a href="${escape(href)}">${escape(label)}</a>`).join('')}<button type="button" data-stakeout-alert-id="${escape(alert.id)}" data-duration-ms="300000">Snooze 5m</button><button type="button" data-stakeout-alert-id="${escape(alert.id)}" data-duration-ms="3600000">Snooze 1h</button></div></article>`).join('')}</div>`;
       }
 
       function render() {
@@ -142,7 +158,8 @@
           { id:'polling', label:pollingOpen ? 'Close polling' : 'Polling', onClick:() => { pollingOpen = !pollingOpen; localError = ''; render(); } }
         ]);
         context.ui.setContentHtml(`
-          <div class="target-list-note">This list is user-curated. Other SLINK target feeds are not copied here automatically.${current.polling?.settings?.enabled ? ` Rolling checks are spread across ${current.polling.settings.intervalMinutes} minutes.` : ''}</div>
+          <div class="target-list-note">This list is user-curated. Other SLINK target feeds are not copied here automatically.${current.polling?.settings?.enabled ? ` Rolling checks are spread across ${current.polling.settings.intervalMinutes} minutes.` : ''}${current.stakeout?.targetCount ? ' Stakeouts use DOM/cache/timer-aware checks and only request Torn when the saved information is due.' : ''}</div>
+          ${stakeoutAlertsHtml()}
           ${localError ? `<div class="target-list-error">${escape(localError)}</div>` : ''}
           ${formOpen ? formHtml() : ''}
           ${pollingOpen ? pollingHtml() : ''}
@@ -159,6 +176,16 @@
               Number(link.dataset.targetListProfile),
               'target-list'
             );
+          });
+        });
+        root.querySelectorAll('[data-stakeout-alert-id]').forEach(button => {
+          button.addEventListener('click', async () => {
+            await SLINK.core.messaging.send('targetList.stakeout.alert.snooze', {
+              id:button.dataset.stakeoutAlertId,
+              durationMs:Number(button.dataset.durationMs) || 300_000
+            });
+            current = await SLINK.core.messaging.send('targetList.status');
+            render();
           });
         });
         root.querySelector('#target-list-poll-save')?.addEventListener('click', async () => {
@@ -186,6 +213,8 @@
             playerId,
             name:root.querySelector('#target-list-name')?.value || '',
             description:root.querySelector('#target-list-description')?.value || '',
+            stakeout:root.querySelector('#target-list-stakeout')?.checked === true,
+            stakeoutIntervalSeconds:root.querySelector('#target-list-stakeout-interval')?.value,
             tags,
             source:'manual',
             sourceLabel:'Manual'
@@ -206,6 +235,19 @@
               editingId = playerId; formOpen = true; localError = ''; render(); return;
             }
             if (action === 'remove' && !global.confirm('Remove this player from Target List?')) return;
+            if (action === 'stakeout') {
+              const target = current.targets.find(value => Number(value.id) === playerId);
+              try {
+                current = await SLINK.core.messaging.send('targetList.update', {
+                  playerId,
+                  stakeout:target?.stakeout !== true,
+                  stakeoutIntervalSeconds:Number(target?.stakeoutIntervalSeconds) || 10
+                });
+                localError = '';
+              } catch (error) { localError = SLINK.core.format.errorMessage(error); }
+              render();
+              return;
+            }
             try {
               localError = '';
               if (action === 'remove') current = await SLINK.core.messaging.send('targetList.remove', { playerId });
@@ -227,10 +269,25 @@
       current = await SLINK.core.messaging.send('targetList.status');
       if (!current.targets.length) formOpen = true;
       countdownTimer = setInterval(render, 30_000);
+      const runStakeoutTick = async () => {
+        if (stakeoutTicking) return;
+        stakeoutTicking = true;
+        try {
+          await SLINK.core.messaging.send('targetList.stakeout.run');
+          current = await SLINK.core.messaging.send('targetList.status');
+          render();
+        } catch (error) {
+          localError = SLINK.core.format.errorMessage(error);
+          render();
+        } finally {
+          stakeoutTicking = false;
+        }
+      };
+      stakeoutTimer = setInterval(() => void runStakeoutTick(), 5_000);
       render();
 
       return Object.freeze({
-        stop() { clearInterval(countdownTimer); }
+        stop() { clearInterval(countdownTimer); clearInterval(stakeoutTimer); }
       });
     }
   });
