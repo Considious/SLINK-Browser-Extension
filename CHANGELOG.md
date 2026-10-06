@@ -1,5 +1,23 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.45 — 2026-10-05
+
+### Added
+
+- Added permission-session authenticated rough Fair Fight assignments backed by the Mugging Worker’s existing R2 target intelligence.
+- Added one shared-limiter Torn battle-stat request for the requesting player, configurable rough FF range, result limit, cached assignment display, and manual **Find targets** refresh.
+- Every assignment is explicitly labeled **Rough FF** with estimate age/confidence. Contributor polling is still disabled until Phase 9.
+
+### Security and efficiency
+
+- The browser never receives the Mugging Worker service token; its existing SLINK permission session is validated server-side against current individual and faction grants.
+- Candidate discovery uses cached backend target estimates and does not call FFScouter from the client or auto-copy candidates into Target List.
+
+### Rollback baseline
+
+- The completed permission-gated Mugging UI before rough assignment is preserved at commit `2e1bcb11eb83fa29969d408a7af5db66b4c02662`.
+- GitHub backup branch: `backup/pre-mugging-assignments-phase8-2026-10-05`.
+
 ## 0.18.44 — 2026-10-05
 
 ### Added

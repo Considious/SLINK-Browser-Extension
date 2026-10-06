@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.18.44",
+  "version": "0.18.45",
   "description": "Shared Live Intelligence NetworK with Combat and Efficiency reminder tools for Torn.",
   "permissions": [
     "alarms",
@@ -15,7 +15,8 @@
     "https://weav3r.dev/*",
     "https://slinkyleveling.richard-johnson554.workers.dev/*",
     "https://slinkcontributionworker.richard-johnson554.workers.dev/*",
-    "https://slinkwarworker.richard-johnson554.workers.dev/*"
+    "https://slinkwarworker.richard-johnson554.workers.dev/*",
+    "https://slinkmuggingworker.richard-johnson554.workers.dev/*"
   ],
   "background": {
     "service_worker": "src/background/service-worker.js"
