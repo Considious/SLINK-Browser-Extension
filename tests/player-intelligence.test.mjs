@@ -68,11 +68,17 @@ const observed = await service.observe({
   state:'Hospital',
   until:Math.floor((now + 8 * 60_000) / 1000),
   description:'In hospital',
-  source:'bounty-profile',
+  source:'dom:bounties',
+  observationKind:'dom',
+  lastDomObservedAt:now,
   observedAt:now,
   checkedAt:now
 });
 assert(observed.state === 'Hospital', 'DOM observation was not stored.');
+assert(observed.lastDomObservedAt === now,
+  'DOM observation timestamp was not stored separately from API checks.');
+assert(observed.lastApiCheckAt === 0,
+  'DOM observation was incorrectly counted as an API check.');
 
 const timerResult = await service.refresh({ playerId:123, now });
 assert(timerResult.fetched === false && timerResult.reason === 'known-timer',
@@ -82,6 +88,8 @@ assert(apiCalls === 0, 'Known Hospital timer consumed an API request.');
 const forced = await service.refresh({ playerId:123, forceApi:true });
 assert(forced.fetched === true && apiCalls === 1,
   'Explicit forced refresh did not perform exactly one API request.');
+assert(forced.record.lastApiCheckAt > 0,
+  'API refresh timestamp was not recorded.');
 
 await SLINK.core.storage.set(service.CACHE_KEY, {});
 apiCalls = 0;

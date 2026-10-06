@@ -92,17 +92,19 @@
         const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(target.id)}`;
         const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(target.id)}`;
         return `<article class="target-list-entry" data-target-list-id="${target.id}">
-          <div class="target-list-head"><a href="${profile}">${escape(target.name)} [${target.id}]</a><span class="target-list-badge" data-state="${escape(target.status?.state || 'Unknown')}">${escape(statusLabel(target))}</span></div>
+          <div class="target-list-head"><a href="${profile}" data-target-list-profile="${target.id}">${escape(target.name)} [${target.id}]</a><span class="target-list-badge" data-state="${escape(target.status?.state || 'Unknown')}">${escape(statusLabel(target))}</span></div>
           <div class="target-list-tags">${target.tags.map(tag => `<span class="target-list-tag">${escape(tag)}</span>`).join('')}</div>
           ${target.description ? `<div class="target-list-description">${escape(target.description)}</div>` : ''}
           <div class="target-list-meta">
-            <span>Checked: ${escape(elapsed(target.lastChecked))}</span>
+            <span>Observed: ${escape(elapsed(target.lastChecked))}</span>
+            ${target.intelligence?.lastDomObservedAt ? `<span>DOM: ${escape(elapsed(target.intelligence.lastDomObservedAt))}</span>` : ''}
+            ${target.intelligence?.lastApiCheckAt ? `<span>API: ${escape(elapsed(target.intelligence.lastApiCheckAt))}</span>` : ''}
             ${target.lastSeenMugged ? `<span>Mugged: ${escape(elapsed(target.lastSeenMugged))}</span>` : ''}
             ${target.bountyCount ? `<span>Bounties: ${target.bountyCount} · $${Number(target.bountyTotal).toLocaleString()}</span>` : ''}
           </div>
           <div class="target-list-sources">${target.sources.map(source => `<span class="target-list-source">${escape(source.label || source.source)}</span>`).join('')}</div>
           <div class="target-list-actions">
-            <a href="${profile}">Profile</a><a href="${attack}">Attack</a>
+            <a href="${profile}" data-target-list-profile="${target.id}">Profile</a><a href="${attack}">Attack</a>
             <button type="button" data-target-list-action="refresh" ${busyId === target.id ? 'disabled' : ''}>${busyId === target.id ? 'Refreshing…' : 'Refresh'}</button>
             <button type="button" data-target-list-action="edit">Edit</button>
             <button type="button" data-target-list-action="remove">Remove</button>
@@ -127,6 +129,14 @@
 
       function bindEvents() {
         const root = context.ui.getContentElement();
+        root.querySelectorAll('[data-target-list-profile]').forEach(link => {
+          link.addEventListener('click', () => {
+            SLINK.core.playerIntelligenceDom.rememberIntent(
+              Number(link.dataset.targetListProfile),
+              'target-list'
+            );
+          });
+        });
         root.querySelector('#target-list-cancel')?.addEventListener('click', () => {
           formOpen = false; editingId = null; localError = ''; render();
         });
@@ -162,6 +172,11 @@
               if (action === 'remove') current = await SLINK.core.messaging.send('targetList.remove', { playerId });
               if (action === 'refresh') {
                 busyId = playerId; render();
+                await SLINK.core.playerIntelligenceDom.observeCurrentPage({
+                  playerId,
+                  source:'target-list',
+                  requireIntent:false
+                });
                 current = await SLINK.core.messaging.send('targetList.refresh', { playerId });
               }
             } catch (error) { localError = SLINK.core.format.errorMessage(error); }

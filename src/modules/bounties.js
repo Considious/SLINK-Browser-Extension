@@ -60,36 +60,7 @@
   }
 
   function rememberBountyProfileIntent(id) {
-    const targetId = Math.trunc(Number(id) || 0);
-    if (!targetId) return;
-    try {
-      global.sessionStorage.setItem(BOUNTY_PROFILE_INTENT_KEY, JSON.stringify({
-        id:targetId,
-        expiresAt:Date.now() + BOUNTY_PROFILE_INTENT_MS
-      }));
-    } catch {}
-  }
-
-  function clearBountyProfileIntent() {
-    try { global.sessionStorage.removeItem(BOUNTY_PROFILE_INTENT_KEY); } catch {}
-  }
-
-  function pageTarget() {
-    let url;
-    try { url = new URL(global.location.href); } catch { return null; }
-    if (!url.pathname.toLowerCase().includes('profiles.php')) return null;
-    const id = Math.trunc(Number(url.searchParams.get('XID')) || 0);
-    try {
-      const intent = JSON.parse(global.sessionStorage.getItem(BOUNTY_PROFILE_INTENT_KEY) || 'null');
-      if (!id || Math.trunc(Number(intent?.id) || 0) !== id || Number(intent?.expiresAt) <= Date.now()) {
-        if (intent && Number(intent?.expiresAt) <= Date.now()) clearBountyProfileIntent();
-        return null;
-      }
-      return { id, source:'bounty-profile' };
-    } catch {
-      clearBountyProfileIntent();
-      return null;
-    }
+    SLINK.core.playerIntelligenceDom.rememberIntent(id, 'bounties');
   }
 
   SLINK.modules.register({
@@ -112,9 +83,6 @@
       let heartbeatTimer = null;
       let countdownTimer = null;
       let visibilityObserver = null;
-      let statusObserver = null;
-      let lastObserved = '';
-      let statusObservationBusy = false;
 
       context.ui.setTitle('SLINK Bounties');
       context.ui.setModuleStyles(MODULE_STYLES);
@@ -323,52 +291,14 @@
         }
       }
 
-      async function observeCurrentPage() {
-        if (statusObservationBusy) return;
-        const target = pageTarget();
-        if (!target || !current?.settings?.enabled) return;
-        const selectors = ['[class*="status"]', '[class*="basic-information"]', '[data-testid*="status"]'];
-        for (const node of document.querySelectorAll(selectors.join(','))) {
-          const text = String(node.innerText || node.textContent || '').trim();
-          const state = detectState(text);
-          if (!state) continue;
-          const remaining = parseRemainingMs(text);
-          const signature = `${target.id}:bounty-profile:${state}:${Math.floor(remaining / 1000)}`;
-          if (signature === lastObserved) {
-            clearBountyProfileIntent();
-            return;
-          }
-          statusObservationBusy = true;
-          try {
-            current = await SLINK.core.messaging.send('bounties.status.observe', {
-              targetId:target.id,
-              state,
-              until:remaining > 0 ? Math.floor((Date.now() + remaining) / 1000) : 0,
-              description:text.slice(0, 500),
-              source:'bounty-profile'
-            });
-            lastObserved = signature;
-            clearBountyProfileIntent();
-            render();
-          } catch {
-          } finally {
-            statusObservationBusy = false;
-          }
-          return;
-        }
-      }
-
       await refreshStatus();
       const view = context.ui.getContentElement()?.closest('.module-view');
       if (view) {
         visibilityObserver = new MutationObserver(syncActivity);
         visibilityObserver.observe(view, { attributes:true, attributeFilter:['hidden'] });
       }
-      statusObserver = new MutationObserver(() => void observeCurrentPage());
-      statusObserver.observe(document.documentElement, { childList:true, subtree:true });
       countdownTimer = setInterval(updateCountdowns, 1_000);
       syncActivity();
-      void observeCurrentPage();
 
       return Object.freeze({
         stop() {
@@ -377,7 +307,6 @@
           clearInterval(heartbeatTimer);
           clearInterval(countdownTimer);
           visibilityObserver?.disconnect();
-          statusObserver?.disconnect();
         }
       });
     }

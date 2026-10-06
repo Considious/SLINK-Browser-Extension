@@ -1,5 +1,28 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.41 — 2026-10-05
+
+### Added
+
+- Added the shared DOM-first player-status collector for deliberately opened Torn profile pages.
+- Active, focused profile pages can now contribute reliable status, Hospital/Jail/Travel timers, player identity, and visible bounty totals to the same player-intelligence cache used by API responses.
+- Target List profile links register a short-lived observation intent, and manual Target List refresh now checks the currently visible matching profile before considering an API request.
+- Player intelligence now records separate last-DOM-observation and last-API-check timestamps.
+
+### Changed
+
+- Bounties now uses the shared profile collector instead of maintaining its own DOM observer.
+- Fresh DOM observations and unexpired known timers suppress redundant Torn API status checks.
+
+### Safety
+
+- DOM collection runs only on a visible, focused Torn profile page. It does not scrape attack-result pages or hidden/background pages.
+
+### Rollback baseline
+
+- The completed source-integration release before DOM-first collection is preserved at commit `6acc2c9d058f0ffcd0c668a7fe619617143ab32f`.
+- GitHub backup branch: `backup/pre-dom-status-phase4-2026-10-05`.
+
 ## 0.18.40 — 2026-10-05
 
 ### Added

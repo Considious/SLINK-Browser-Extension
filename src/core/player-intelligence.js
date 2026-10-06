@@ -61,6 +61,19 @@
       existing.description ?? existing.status?.description ?? ''
     ).slice(0, 500);
     const source = String(input.source || existing.source || 'unknown').slice(0, 80);
+    const observationKind = String(input.observationKind || '').toLowerCase();
+    const inferredDom = observationKind === 'dom' || source.startsWith('dom:');
+    const inferredApi = observationKind === 'api' || source === 'torn-api';
+    const lastDomObservedAt = Math.max(
+      0,
+      Number(input.lastDomObservedAt) || (inferredDom ? observedAt : 0),
+      Number(existing.lastDomObservedAt) || 0
+    );
+    const lastApiCheckAt = Math.max(
+      0,
+      Number(input.lastApiCheckAt) || (inferredApi ? observedAt : 0),
+      Number(existing.lastApiCheckAt) || 0
+    );
     const bountyCount = Math.max(
       0,
       Math.trunc(Number(input.bountyCount ?? input.bounty_count ??
@@ -81,6 +94,8 @@
       source,
       observedAt,
       checkedAt:Math.max(0, Number(input.checkedAt) || observedAt),
+      lastDomObservedAt,
+      lastApiCheckAt,
       fairFight:Number.isFinite(Number(input.fairFight ?? existing.fairFight))
         ? Number(input.fairFight ?? existing.fairFight)
         : null,
@@ -134,6 +149,8 @@
       lastSeenMugged:Math.max(previous.lastSeenMugged, next.lastSeenMugged),
       checkedAt:Math.max(previous.checkedAt, next.checkedAt),
       observedAt:Math.max(previous.observedAt, next.observedAt),
+      lastDomObservedAt:Math.max(previous.lastDomObservedAt || 0, next.lastDomObservedAt || 0),
+      lastApiCheckAt:Math.max(previous.lastApiCheckAt || 0, next.lastApiCheckAt || 0),
       sources:[...new Set([...previous.sources, ...next.sources])].sort()
     };
     if (useIncomingStatus) {
@@ -218,6 +235,8 @@
         0
       ),
       source:'torn-api',
+      observationKind:'api',
+      lastApiCheckAt:now,
       observedAt:now,
       checkedAt:now
     });
