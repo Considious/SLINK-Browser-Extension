@@ -59,6 +59,9 @@
         skipped:Math.max(0, Number(value.contribution?.skipped) || 0),
         errors:Math.max(0, Number(value.contribution?.errors) || 0),
         pendingSync:Math.max(0, Number(value.contribution?.pendingSync) || 0),
+        lastSyncAt:Math.max(0, Number(value.contribution?.lastSyncAt) || 0),
+        synced:Math.max(0, Number(value.contribution?.synced) || 0),
+        syncError:String(value.contribution?.syncError || ''),
         at:Math.max(0, Number(value.contribution?.at) || 0)
       },
       targets:(Array.isArray(value.targets) ? value.targets : []).map(target => ({
@@ -169,7 +172,7 @@
             <label>Maximum rough FF<input id="mugging-max-ff" type="number" min="1" max="3" step=".1" value="${settings.maxFairFight}"></label>
             <label>Target count<input id="mugging-limit" type="number" min="1" max="100" step="1" value="${settings.limit}"></label>
             <button class="mugging-wide" id="mugging-find" type="button" ${busy ? 'disabled' : ''}>${busy ? 'Finding targets…' : 'Find targets'}</button>
-            <div class="mugging-note mugging-wide">Phase 9 contribution uses the shared Torn limiter: up to 10 checks/min while Mugging was used in the last five minutes, then up to 5/min at low priority. Inactive mode keeps this cached list visible and does not assign new personal targets. Shared-result upload remains queued locally for Phase 10.</div>
+            <div class="mugging-note mugging-wide">Contributor checks use the shared Torn limiter: up to 10/min while Mugging was used in the last five minutes, then up to 5/min at low priority. Results are deduplicated locally and synchronized to shared SLINK intelligence in acknowledged batches every six hours. Pending: ${cache.contribution.pendingSync}${cache.contribution.lastSyncAt ? ` · Last sync ${escape(new Date(cache.contribution.lastSyncAt).toLocaleString())}` : ''}${cache.contribution.syncError ? ` · Sync retry pending: ${escape(cache.contribution.syncError)}` : ''}.</div>
             ${error ? `<div class="mugging-note mugging-wide">${escape(error)}</div>` : ''}
             ${notice ? `<div class="mugging-note mugging-wide">${escape(notice)}</div>` : ''}
           </div>

@@ -1,5 +1,18 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.47 — 2026-10-06
+
+### Added
+
+- Added Phase 10 shared Mugging intelligence synchronization.
+- Contributor observations are deduplicated locally, sent to the permission-gated Mugging Worker in batches of up to 100 no more than once every six hours, and removed only after the Worker acknowledges their stable report IDs.
+- Status, bounty totals, battle-stat estimates, and Fair Fight observations can now improve the shared R2 intelligence pool without per-target D1 writes.
+
+### Changed
+
+- Failed or unacknowledged uploads remain queued for a later retry.
+- The Mugging panel now shows pending synchronization count, last successful synchronization time, and retry errors.
+
 ## 0.18.46 — 2026-10-06
 
 ### Added

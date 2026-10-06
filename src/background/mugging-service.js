@@ -9,6 +9,7 @@
   const ACTIVITY_KEY = 'mugging.activity.v1';
   const CONTRIBUTION_KEY = 'mugging.contribution.v1';
   const PENDING_KEY = 'mugging.contribution.pending.v1';
+  const SYNC_KEY = 'mugging.contribution.sync.v1';
   const CLIENT_KEY = 'mugging.clientId.v1';
   const OWN_STATS_KEY = 'mugging.ownBattleStats.v1';
   const ALARM = 'slink.mugging.contributor';
@@ -17,8 +18,12 @@
   const INACTIVE_BUDGET = 5;
   const OWN_STATS_TTL_MS = 6 * 60 * 60_000;
   const ASSIGNMENT_REFRESH_MS = 5 * 60_000;
+  const SYNC_INTERVAL_MS = 6 * 60 * 60_000;
+  const SYNC_BATCH_SIZE = 100;
+  const SYNC_MAX_BATCHES = 5;
   let refreshing = null;
   let contributing = null;
+  let syncing = null;
 
   function finiteStat(value) {
     const candidate = value && typeof value === 'object'
@@ -107,6 +112,92 @@
       .sort((left, right) => Number(right.observedAt) - Number(left.observedAt)).slice(0, 500));
   }
 
+  function reportForObservation(row, client) {
+    const record = row?.record && typeof row.record === 'object' ? row.record : {};
+    const playerId = Math.max(0, Math.trunc(Number(row?.playerId ?? record.playerId ?? record.id) || 0));
+    const observedAt = Math.max(0, Number(row?.observedAt ?? record.observedAt) || Date.now());
+    return {
+      report_id:`${client}:${playerId}:${Math.trunc(observedAt)}`,
+      player_id:playerId,
+      name:String(record.name || '').slice(0, 80),
+      observed_at:observedAt,
+      state:String(record.state ?? record.status?.state ?? '').slice(0, 40),
+      description:String(record.description ?? record.status?.description ?? '').slice(0, 500),
+      until:Math.max(0, Math.trunc(Number(record.until ?? record.status?.until) || 0)),
+      level:Math.max(0, Number(record.level) || 0),
+      bountyCount:Math.max(0, Math.trunc(Number(record.bountyCount) || 0)),
+      bountyTotal:Math.max(0, Number(record.bountyTotal) || 0),
+      battleStatsEstimate:Number.isFinite(Number(record.battleStatsEstimate)) ? Number(record.battleStatsEstimate) : null,
+      fairFight:Number.isFinite(Number(record.fairFight)) ? Number(record.fairFight) : null
+    };
+  }
+
+  async function syncPending(force = false) {
+    if (syncing) return syncing;
+    syncing = (async () => {
+      const now = Date.now();
+      const previous = await SLINK.core.storage.get(SYNC_KEY, {});
+      if (!force && now - Number(previous?.lastAttemptAt || 0) < SYNC_INTERVAL_MS) return previous;
+      const settings = await SLINK.core.storage.get(SETTINGS_KEY, {});
+      if (settings?.enabled !== true) return previous;
+      const session = await SLINK.services.permissionAccess.ensureSession(false, REQUIRED_SCOPE);
+      if (!SLINK.core.permissions.hasScope(session, REQUIRED_SCOPE)) throw new Error('Your SLINK account does not have slink.mugging permission.');
+      const client = await clientId();
+      let accepted = 0;
+      let batches = 0;
+      try {
+        for (; batches < SYNC_MAX_BATCHES; batches++) {
+          const pending = await SLINK.core.storage.get(PENDING_KEY, []);
+          const rows = (Array.isArray(pending) ? pending : []).slice(0, SYNC_BATCH_SIZE);
+          if (!rows.length) break;
+          const reports = rows.map(row => reportForObservation(row, client)).filter(report => report.player_id > 0);
+          if (!reports.length) {
+            await SLINK.core.storage.set(PENDING_KEY, []);
+            break;
+          }
+          const response = await SLINK.core.http.requestJson('muggingWorker', `${BASE_URL}/api/contributor/reports`, {
+            method:'POST',
+            headers:{ Authorization:`Bearer ${session.token}`, 'Content-Type':'application/json' },
+            cache:'no-store',
+            body:JSON.stringify({ client_id:client, reports })
+          });
+          const acknowledged = new Set(Array.isArray(response?.acknowledged_report_ids) ? response.acknowledged_report_ids.map(String) : []);
+          if (!acknowledged.size) throw new Error('The Mugging Worker did not acknowledge the contributor batch.');
+          const latest = await SLINK.core.storage.get(PENDING_KEY, []);
+          const remaining = (Array.isArray(latest) ? latest : []).filter(row => !acknowledged.has(reportForObservation(row, client).report_id));
+          await SLINK.core.storage.set(PENDING_KEY, remaining);
+          accepted += acknowledged.size;
+          if (rows.length < SYNC_BATCH_SIZE) break;
+        }
+        const pending = await SLINK.core.storage.get(PENDING_KEY, []);
+        const status = {
+          lastAttemptAt:now,
+          lastSuccessAt:Date.now(),
+          accepted,
+          batches,
+          pendingSync:Array.isArray(pending) ? pending.length : 0,
+          error:''
+        };
+        await SLINK.core.storage.set(SYNC_KEY, status);
+        return status;
+      } catch (error) {
+        const pending = await SLINK.core.storage.get(PENDING_KEY, []);
+        const status = {
+          ...previous,
+          lastAttemptAt:now,
+          accepted:0,
+          batches,
+          pendingSync:Array.isArray(pending) ? pending.length : 0,
+          error:error instanceof Error ? error.message : String(error)
+        };
+        await SLINK.core.storage.set(SYNC_KEY, status);
+        return status;
+      }
+    })();
+    try { return await syncing; }
+    finally { syncing = null; }
+  }
+
   async function maybeRefreshActiveAssignments(now) {
     const cache = normalizeCache(await SLINK.core.storage.get(CACHE_KEY, {}));
     if (now - cache.updatedAt < ASSIGNMENT_REFRESH_MS) return false;
@@ -156,12 +247,16 @@
       if (mode === 'active') {
         try { assignmentsRefreshed = await maybeRefreshActiveAssignments(now); } catch {}
       }
+      const sync = await syncPending(false);
       const pending = await SLINK.core.storage.get(PENDING_KEY, []);
       const status = {
         at:Date.now(), enabled:true, mode, apiBudgetPerMinute:budget,
         tasksOffered:Array.isArray(response?.tasks) ? response.tasks.length : 0,
         fetched, skipped, errors, assignmentsRefreshed,
-        pendingSync:Array.isArray(pending) ? pending.length : 0
+        pendingSync:Array.isArray(pending) ? pending.length : 0,
+        lastSyncAt:Math.max(0, Number(sync?.lastSuccessAt) || 0),
+        synced:Math.max(0, Number(sync?.accepted) || 0),
+        syncError:String(sync?.error || '')
       };
       await SLINK.core.storage.set(CONTRIBUTION_KEY, status);
       return status;
@@ -249,9 +344,20 @@
   }
 
   async function status() {
+    const [contribution, sync, pending] = await Promise.all([
+      SLINK.core.storage.get(CONTRIBUTION_KEY, { enabled:false, mode:'disabled', fetched:0, skipped:0, errors:0, pendingSync:0 }),
+      SLINK.core.storage.get(SYNC_KEY, {}),
+      SLINK.core.storage.get(PENDING_KEY, [])
+    ]);
     return {
       ...normalizeCache(await SLINK.core.storage.get(CACHE_KEY, {})),
-      contribution:await SLINK.core.storage.get(CONTRIBUTION_KEY, { enabled:false, mode:'disabled', fetched:0, skipped:0, errors:0, pendingSync:0 })
+      contribution:{
+        ...contribution,
+        pendingSync:Array.isArray(pending) ? pending.length : 0,
+        lastSyncAt:Math.max(0, Number(sync?.lastSuccessAt) || 0),
+        synced:Math.max(0, Number(sync?.accepted) || 0),
+        syncError:String(sync?.error || '')
+      }
     };
   }
 
@@ -259,12 +365,13 @@
     'mugging.activity.touch':touchActivity,
     'mugging.assignments.refresh':refresh,
     'mugging.contribution.run':runContribution,
+    'mugging.contribution.sync':input => syncPending(input?.force === true),
     'mugging.status':status
   });
 
   SLINK.define('services', 'mugging', Object.freeze({
     ACTIVE_BUDGET, ALARM, BASE_URL, INACTIVE_AFTER_MS, INACTIVE_BUDGET,
     battleStatsTotal, contributionBudget, contributionMode, ensureAlarm,
-    normalizeCache, refresh, routes, runContribution, status, touchActivity
+    normalizeCache, refresh, reportForObservation, routes, runContribution, status, syncPending, touchActivity
   }));
 })(globalThis);
