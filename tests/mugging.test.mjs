@@ -11,8 +11,12 @@ const moduleSource = read('src/modules/mugging.js');
 const serviceSource = read('src/background/mugging-service.js');
 const workerSource = read('src/background/service-worker.js');
 const contentSource = read('src/content/content-script.js');
+for (const [label, source] of [['Mugging service', serviceSource], ['Mugging module', moduleSource]]) {
+  try { new Function(source); }
+  catch (error) { throw new Error(`${label} has a parse-time syntax error: ${error.message}`); }
+}
 
-assert(manifest.version === '0.18.45', 'Unexpected Phase 8 extension version.');
+assert(manifest.version === '0.18.46', 'Unexpected Phase 9 extension version.');
 assert(manifest.host_permissions.includes('https://slinkmuggingworker.richard-johnson554.workers.dev/*'), 'Mugging Worker host permission is missing.');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/mugging.js')), 'Mugging module is not loaded by the Torn content script.');
 assert(moduleSource.includes("requiredScopes:[REQUIRED_SCOPE]") && moduleSource.includes("const REQUIRED_SCOPE = 'slink.mugging'"), 'Mugging is not gated exclusively by the backend-managed scope.');
@@ -25,7 +29,16 @@ assert(serviceSource.includes("SLINK.services.permissionAccess.ensureSession(fal
 assert(serviceSource.includes("SLINK.core.tornApiLimiter.reserve"), 'Own battle stats bypass the shared Torn API limiter.');
 assert(serviceSource.includes('/v2/user/battlestats') && serviceSource.includes('/api/assignments/rough'), 'Phase 8 battle-stat or assignment endpoint is missing.');
 assert(serviceSource.includes("['strength', 'defense', 'speed', 'dexterity']"), 'Own battle-stat total does not include all four battle stats.');
+assert(serviceSource.includes("const ACTIVE_BUDGET = 10") && serviceSource.includes("const INACTIVE_BUDGET = 5"), 'Active/inactive Mugging contribution budgets are incorrect.');
+assert(serviceSource.includes("const INACTIVE_AFTER_MS = 5 * 60_000"), 'Mugging does not switch to inactive contribution after five minutes.');
+assert(serviceSource.includes('/api/contributor/tasks') && serviceSource.includes("SLINK.services.playerIntelligence.refresh"), 'Contributor tasks do not use shared player intelligence.');
+assert(serviceSource.includes("wait:false") && serviceSource.includes("priority:mode === 'active' ? 'normal' : 'low'"), 'Background contribution does not yield to the shared Torn API limiter.');
+assert(serviceSource.includes('PENDING_KEY') && serviceSource.includes('pendingSync:true'), 'Phase 9 observations are not retained for Phase 10 synchronization.');
+assert(serviceSource.includes("if (mode === 'active')") && serviceSource.includes('maybeRefreshActiveAssignments'), 'Inactive users can still refresh personal Mugging assignments.');
+assert(moduleSource.includes("SLINK.core.messaging.send('mugging.activity.touch'"), 'Mugging UI activity is not reported to the Phase 9 scheduler.');
+assert(moduleSource.includes('cached list visible') && moduleSource.includes('up to 5/min'), 'Mugging UI does not explain inactive contribution and cached results.');
 assert(!/MUGGING_SERVICE_TOKEN|X-SLINK-Service-Token/.test(serviceSource), 'A backend service secret leaked into the extension.');
 assert(workerSource.includes("'mugging-service.js'") && workerSource.includes('...SLINK.services.mugging.routes'), 'Mugging background routes are not registered.');
+assert(workerSource.includes('SLINK.services.mugging.ensureAlarm()') && workerSource.includes('SLINK.services.mugging.runContribution()'), 'The Mugging contributor alarm is not registered.');
 assert(contentSource.includes('Could not apply refreshed permissions in place') && contentSource.includes('restartModules()'), 'Refreshed permissions do not restart module gating in place.');
-console.log('Mugging Phase 8 rough assignment checks passed.');
+console.log('Mugging Phase 9 contributor scheduling checks passed.');

@@ -6,7 +6,7 @@
   const CACHE_KEY = 'mugging.cache.v1';
   const REQUIRED_SCOPE = 'slink.mugging';
   const MODULE_STYLES = `
-    .mugging-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+    .mugging-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; }
     .mugging-stat { padding:7px; border-radius:6px; background:#202c39; text-align:center; }
     .mugging-stat b { display:block; font-size:13px; }
     .mugging-stat span { color:#8fa3b6; font-size:9px; }
@@ -43,26 +43,36 @@
   function normalizeCache(value = {}) {
     return {
       updatedAt:Math.max(0, Number(value.updatedAt ?? value.generated_at) || 0),
-      estimateKind:String(value.estimateKind ?? value.estimate_kind || 'rough'),
-      estimateSource:String(value.estimateSource ?? value.estimate_source || 'cached battle-stat estimate'),
+      estimateKind:String((value.estimateKind ?? value.estimate_kind) || 'rough'),
+      estimateSource:String((value.estimateSource ?? value.estimate_source) || 'cached battle-stat estimate'),
       userBattleStats:Math.max(0, Number(value.userBattleStats ?? value.user_battle_stats) || 0),
       pool:{
         total:Math.max(0, Number(value.pool?.total) || 0),
         estimable:Math.max(0, Number(value.pool?.estimable) || 0),
         eligible:Math.max(0, Number(value.pool?.eligible) || 0)
       },
+      contribution:{
+        enabled:value.contribution?.enabled === true,
+        mode:String(value.contribution?.mode || 'disabled'),
+        apiBudgetPerMinute:Math.max(0, Number(value.contribution?.apiBudgetPerMinute) || 0),
+        fetched:Math.max(0, Number(value.contribution?.fetched) || 0),
+        skipped:Math.max(0, Number(value.contribution?.skipped) || 0),
+        errors:Math.max(0, Number(value.contribution?.errors) || 0),
+        pendingSync:Math.max(0, Number(value.contribution?.pendingSync) || 0),
+        at:Math.max(0, Number(value.contribution?.at) || 0)
+      },
       targets:(Array.isArray(value.targets) ? value.targets : []).map(target => ({
         id:Math.max(0, Math.trunc(Number(target?.id ?? target?.playerId) || 0)),
         name:String(target?.name || '').trim(),
-        companyName:String(target?.companyName ?? target?.company_name || ''),
-        companyType:String(target?.companyType ?? target?.company_type || ''),
+        companyName:String((target?.companyName ?? target?.company_name) || ''),
+        companyType:String((target?.companyType ?? target?.company_type) || ''),
         companyRating:Math.max(0, Number(target?.companyRating ?? target?.company_rating) || 0),
         position:String(target?.position || ''),
         status:target?.status && typeof target.status === 'object' ? target.status : null,
         fairFight:Number.isFinite(Number(target?.fairFight ?? target?.fair_fight)) ? Number(target?.fairFight ?? target?.fair_fight) : null,
         battleStatsEstimate:Number.isFinite(Number(target?.battleStatsEstimate ?? target?.battle_stats_estimate)) ? Number(target?.battleStatsEstimate ?? target?.battle_stats_estimate) : null,
-        estimateKind:String(target?.estimateKind ?? target?.estimate_kind || 'rough'),
-        estimateSource:String(target?.estimateSource ?? target?.estimate_source || 'cached'),
+        estimateKind:String((target?.estimateKind ?? target?.estimate_kind) || 'rough'),
+        estimateSource:String((target?.estimateSource ?? target?.estimate_source) || 'cached'),
         confidence:String(target?.confidence || '')
       })).filter(target => target.id > 0)
     };
@@ -89,6 +99,10 @@
     async start(context) {
       let settings = normalizeSettings(await SLINK.core.storage.get(SETTINGS_KEY, {}));
       let cache = normalizeCache(await SLINK.core.storage.get(CACHE_KEY, {}));
+      try {
+        cache = normalizeCache(await SLINK.core.messaging.send('mugging.status'));
+        if (settings.enabled) await SLINK.core.messaging.send('mugging.activity.touch');
+      } catch {}
       let notice = '';
       let error = '';
       let busy = false;
@@ -147,6 +161,7 @@
             <div class="mugging-stat"><b>${cache.targets.length}</b><span>Assignments</span></div>
             <div class="mugging-stat"><b>${cache.pool.eligible}</b><span>Eligible pool</span></div>
             <div class="mugging-stat"><b>${cache.userBattleStats ? escape(SLINK.core.format.shortNumber(cache.userBattleStats)) : '—'}</b><span>Your BS</span></div>
+            <div class="mugging-stat"><b>${escape(cache.contribution.mode)}</b><span>${cache.contribution.fetched}/${cache.contribution.apiBudgetPerMinute || 0} contributor checks</span></div>
           </div>
           <div class="mugging-controls">
             <label class="mugging-check"><input id="mugging-enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}><span>Enable Mugging on this device</span></label>
@@ -154,7 +169,7 @@
             <label>Maximum rough FF<input id="mugging-max-ff" type="number" min="1" max="3" step=".1" value="${settings.maxFairFight}"></label>
             <label>Target count<input id="mugging-limit" type="number" min="1" max="100" step="1" value="${settings.limit}"></label>
             <button class="mugging-wide" id="mugging-find" type="button" ${busy ? 'disabled' : ''}>${busy ? 'Finding targets…' : 'Find targets'}</button>
-            <div class="mugging-note mugging-wide">Phase 8 uses one shared-limiter Torn request for your own battle-stat total, then filters the Mugging Worker’s cached target estimates. Every displayed FF is explicitly rough. Contributor scheduling remains off until Phase 9.</div>
+            <div class="mugging-note mugging-wide">Phase 9 contribution uses the shared Torn limiter: up to 10 checks/min while Mugging was used in the last five minutes, then up to 5/min at low priority. Inactive mode keeps this cached list visible and does not assign new personal targets. Shared-result upload remains queued locally for Phase 10.</div>
             ${error ? `<div class="mugging-note mugging-wide">${escape(error)}</div>` : ''}
             ${notice ? `<div class="mugging-note mugging-wide">${escape(notice)}</div>` : ''}
           </div>
@@ -169,7 +184,14 @@
           settings = normalizeSettings({ ...settings, enabled:event.target.checked });
           await persistSettings();
           error = '';
-          notice = settings.enabled ? 'Mugging enabled locally.' : 'Mugging disabled locally; cached assignments were kept.';
+          notice = settings.enabled ? 'Mugging enabled locally; contributor scheduling started.' : 'Mugging disabled locally; cached assignments were kept.';
+          if (settings.enabled) {
+            await SLINK.core.messaging.send('mugging.activity.touch').catch(() => null);
+            void SLINK.core.messaging.send('mugging.contribution.run').then(value => {
+              cache = normalizeCache({ ...cache, contribution:value });
+              render();
+            }).catch(() => null);
+          }
           render();
         });
         const saveFilters = async () => {
@@ -180,6 +202,7 @@
             limit:root.querySelector('#mugging-limit')?.value
           });
           await persistSettings();
+          if (settings.enabled) await SLINK.core.messaging.send('mugging.activity.touch').catch(() => null);
         };
         root.querySelector('#mugging-min-ff')?.addEventListener('change', saveFilters);
         root.querySelector('#mugging-max-ff')?.addEventListener('change', saveFilters);

@@ -107,7 +107,7 @@
       if (!key) throw new Error('Save a Torn API key before refreshing player intelligence.');
       const endpoint = `/v2/user/${playerId}/basic`;
       await SLINK.core.tornApiLimiter.reserve({
-        wait:true,
+        wait:input.wait !== false,
         script:'SLINK Player Intelligence',
         priority:String(input.priority || 'normal'),
         endpoint

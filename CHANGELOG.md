@@ -1,5 +1,23 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.46 — 2026-10-06
+
+### Added
+
+- Added Phase 9 Mugging contributor scheduling through the shared Torn API limiter.
+- Active Mugging use reserves up to 10 contributor checks per minute. After five minutes without Mugging activity, contribution drops to 5 checks per minute at low priority.
+- Active clients may progressively refresh cached personal rough assignments; inactive clients keep cached assignments visible without receiving new personal assignments.
+- Contributor observations remain local in a deduplicated pending-sync queue until Phase 10 adds shared synchronization.
+
+### Fixed
+
+- Fixed invalid mixed nullish/fallback expressions in the Phase 8 Mugging background service and content module. Those expressions could stop the extension Mugging code from parsing.
+
+### Changed
+
+- Player-intelligence refreshes can decline to wait when the shared Torn API budget is full, allowing background Mugging work to yield immediately to higher-priority SLINK jobs.
+- Mugging own battle stats are cached for six hours to avoid consuming one extra Torn request on every assignment refresh.
+
 ## 0.18.45 — 2026-10-05
 
 ### Added
