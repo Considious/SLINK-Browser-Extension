@@ -135,6 +135,7 @@ async function ensureConnectionAlarm() {
   await SLINK.services.market.ensureAlarm();
   await SLINK.services.market.ensureDollarAlarm();
   await SLINK.services.playerStats.ensureAlarm();
+  await SLINK.services.targetList.ensureAlarm();
 }
 
 async function connectionStatus() {
@@ -425,6 +426,10 @@ chrome.alarms.onAlarm.addListener(alarm => {
       if (status.configured) return SLINK.services.playerStats.refresh(true);
       return null;
     }).catch(error => console.error('[SLINK] Daily player stats:', error));
+  }
+  if (alarm.name === SLINK.services.targetList.POLL_ALARM) {
+    void SLINK.services.targetList.runPolling()
+      .catch(error => console.error('[SLINK] Target List polling:', error));
   }
 });
 

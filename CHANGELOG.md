@@ -1,5 +1,23 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.42 — 2026-10-05
+
+### Added
+
+- Added configurable automatic Target List status checking with an enable/disable switch, a 1–1440 minute rolling cycle, and an option to check only targets tagged **Mug**.
+- Added a persistent distributed schedule: targets are spread across the selected interval instead of being requested simultaneously.
+- Added polling visibility in Target List, including eligible target count, estimated scheduled checks per minute, last cycle time, and the latest polling error.
+
+### Efficiency
+
+- Every scheduled target still passes through shared player intelligence before an API request. Fresh DOM observations, recent cache entries, unexpired known timers, and concurrent in-flight checks are reused or skipped.
+- Automatic checks use the existing shared Torn API limiter at low priority. Manual Target List refresh remains available for every saved target, including non-Mug targets.
+
+### Rollback baseline
+
+- The completed DOM-first release before rolling polling is preserved at commit `f6ce243da15101000b15bbbcef69540c8c9c16a0`.
+- GitHub backup branch: `backup/pre-target-polling-phase5-2026-10-05`.
+
 ## 0.18.41 — 2026-10-05
 
 ### Added

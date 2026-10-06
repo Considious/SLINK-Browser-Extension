@@ -26,7 +26,13 @@
     .target-list-actions { margin-top:7px; }
     .target-list-actions a,.target-list-actions button { min-height:28px; padding:4px 7px; border:1px solid rgba(255,255,255,.15); border-radius:5px; background:#2b3745; color:#fff; text-decoration:none; }
     .target-list-empty { padding:15px 4px; color:#9eb0c2; text-align:center; }
-    @media (max-width:420px) { .target-list-form { grid-template-columns:1fr; } .target-list-form .wide,.target-list-tags,.target-list-form-actions { grid-column:auto; } }
+    .target-list-polling { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin:8px 0; padding:8px; border:1px solid #45586b; border-radius:7px; background:#111821; }
+    .target-list-polling label { display:grid; gap:3px; color:#9eb0c2; }
+    .target-list-polling .wide { grid-column:1/-1; }
+    .target-list-polling .check { display:flex; align-items:center; gap:6px; color:#e6f0f8; }
+    .target-list-polling input[type="number"] { min-width:0; padding:6px; border:1px solid #45586b; border-radius:5px; background:#18222d; color:#edf7ff; }
+    .target-list-polling-summary { grid-column:1/-1; color:#9eb0c2; }
+    @media (max-width:420px) { .target-list-form,.target-list-polling { grid-template-columns:1fr; } .target-list-form .wide,.target-list-tags,.target-list-form-actions,.target-list-polling .wide,.target-list-polling-summary { grid-column:auto; } }
   `;
 
   function escape(value) {
@@ -65,6 +71,7 @@
       let current = { targets:[], availableTags:['Level', 'Mug', 'War', 'Target'] };
       let editingId = null;
       let formOpen = false;
+      let pollingOpen = false;
       let busyId = null;
       let localError = '';
       let countdownTimer = null;
@@ -85,6 +92,21 @@
           <label class="wide">Notes<textarea id="target-list-description" maxlength="500" placeholder="Why are you tracking this player?">${escape(target?.description || '')}</textarea></label>
           <div class="target-list-tags">${current.availableTags.map(tag => `<label><input type="checkbox" data-target-list-tag="${escape(tag)}" ${tags.has(tag) ? 'checked' : ''}>${escape(tag)}</label>`).join('')}</div>
           <div class="target-list-form-actions"><button id="target-list-save" type="button">${target ? 'Save changes' : 'Add target'}</button><button id="target-list-cancel" type="button">Cancel</button></div>
+        </div>`;
+      }
+
+      function pollingHtml() {
+        const polling = current.polling || {};
+        const settings = polling.settings || {};
+        const runtime = polling.runtime || {};
+        return `<div class="target-list-polling">
+          <label class="wide check"><input id="target-list-poll-enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}>Automatically check saved targets</label>
+          <label>Complete each rolling cycle every
+            <input id="target-list-poll-interval" type="number" min="1" max="1440" step="1" value="${Number(settings.intervalMinutes) || 10}">
+          </label>
+          <label class="check"><input id="target-list-poll-mug-only" type="checkbox" ${settings.mugOnly ? 'checked' : ''}>Only auto-check targets tagged Mug</label>
+          <div class="target-list-polling-summary">${Number(polling.eligibleCount) || 0} eligible · up to ${Number(polling.estimatedChecksPerMinute) || 0} scheduled checks/min before cache and timer skips${runtime.lastRunAt ? ` · last cycle ${escape(elapsed(runtime.lastRunAt))}` : ''}${runtime.lastError ? ` · ${escape(runtime.lastError)}` : ''}</div>
+          <button id="target-list-poll-save" type="button">Save polling</button>
         </div>`;
       }
 
@@ -116,12 +138,14 @@
         context.ui.setSubtitle(`${current.count || 0} saved target${current.count === 1 ? '' : 's'} · local`);
         context.ui.setStatus(localError || 'Targets are added only when you explicitly save them.', localError ? 'error' : 'ready');
         context.ui.setActions([
-          { id:'add', label:formOpen ? 'Close form' : 'Add target', onClick:() => { formOpen = !formOpen; editingId = null; localError = ''; render(); } }
+          { id:'add', label:formOpen ? 'Close form' : 'Add target', onClick:() => { formOpen = !formOpen; editingId = null; localError = ''; render(); } },
+          { id:'polling', label:pollingOpen ? 'Close polling' : 'Polling', onClick:() => { pollingOpen = !pollingOpen; localError = ''; render(); } }
         ]);
         context.ui.setContentHtml(`
-          <div class="target-list-note">This list is user-curated. Other SLINK target feeds are not copied here automatically.</div>
+          <div class="target-list-note">This list is user-curated. Other SLINK target feeds are not copied here automatically.${current.polling?.settings?.enabled ? ` Rolling checks are spread across ${current.polling.settings.intervalMinutes} minutes.` : ''}</div>
           ${localError ? `<div class="target-list-error">${escape(localError)}</div>` : ''}
           ${formOpen ? formHtml() : ''}
+          ${pollingOpen ? pollingHtml() : ''}
           <div>${current.targets.length ? current.targets.map(targetHtml).join('') : '<div class="target-list-empty">No saved targets yet. Use Add target to save one manually.</div>'}</div>
         `);
         bindEvents();
@@ -136,6 +160,21 @@
               'target-list'
             );
           });
+        });
+        root.querySelector('#target-list-poll-save')?.addEventListener('click', async () => {
+          const button = root.querySelector('#target-list-poll-save');
+          if (button) { button.disabled = true; button.textContent = 'Saving…'; }
+          try {
+            localError = '';
+            current = await SLINK.core.messaging.send('targetList.polling.configure', {
+              enabled:root.querySelector('#target-list-poll-enabled')?.checked === true,
+              intervalMinutes:root.querySelector('#target-list-poll-interval')?.value,
+              mugOnly:root.querySelector('#target-list-poll-mug-only')?.checked === true
+            });
+          } catch (error) {
+            localError = SLINK.core.format.errorMessage(error);
+          }
+          render();
         });
         root.querySelector('#target-list-cancel')?.addEventListener('click', () => {
           formOpen = false; editingId = null; localError = ''; render();
