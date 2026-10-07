@@ -1,5 +1,13 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.48 — 2026-10-06
+
+### Fixed
+
+- Restored the original ADHD Dashboard bazaar and Item Market highlighting selectors so eligible cards and seller rows are highlighted before opening an item.
+- Restored the original stationary, multi-stage ADHD Dashboard BUY overlay so opening, buying, filling the maximum quantity, and confirming remain under one mouse position.
+- Removed SLINK's Armory-page Last Active and Request Item row/cell injection, which was restructuring Torn's item rows and interfering with Torn Tools filtering. The Armory request, officer-alert, whitelist, and recall services remain available through SLINK's own interface.
+
 ## 0.18.47 — 2026-10-06
 
 ### Added

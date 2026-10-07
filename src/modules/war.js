@@ -67,39 +67,10 @@
   `;
 
   const PAGE_STYLES = `
-    .slink-armory-enhanced { overflow-x:auto; }
-    .slink-armory-enhanced ul.item-list { min-width:805px; }
-    .slink-armory-enhanced ul.item-list > li { position:relative; display:grid !important; grid-template-columns:62px minmax(170px,1fr) 145px 70px 120px 112px 126px; align-items:stretch !important; min-width:805px; min-height:62px; }
-    .slink-armory-enhanced ul.item-list > li > *,.slink-armory-header > * { box-sizing:border-box; }
-    .slink-armory-enhanced ul.item-list > li > .img-wrap { float:none !important; grid-column:1; min-width:0; }
-    .slink-armory-enhanced ul.item-list > li > .name { float:none !important; grid-column:2; min-width:0 !important; width:auto !important; overflow:hidden; }
-    .slink-armory-enhanced ul.item-list > li > .options-wrap { position:absolute !important; left:62px; top:0; z-index:2; }
-    .slink-armory-enhanced ul.item-list > li > .bonuses { float:none !important; grid-column:3; min-width:0 !important; width:auto !important; overflow:hidden; }
-    .slink-armory-enhanced ul.item-list > li > .type { float:none !important; grid-column:4; min-width:0 !important; width:auto !important; overflow:hidden; }
-    .slink-armory-enhanced ul.item-list > li > .loaned { float:none !important; grid-column:5; min-width:0 !important; width:auto !important; overflow:hidden; }
-    .slink-armory-enhanced ul.item-list > li > .item-action { float:none !important; grid-column:6; min-width:0 !important; width:auto !important; overflow:hidden; }
-    .slink-armory-enhanced ul.item-list > li > .slink-armory-request-cell { display:grid; grid-column:7; grid-template-rows:14px 13px 26px; align-content:center; gap:1px; min-width:0; width:auto; min-height:62px; padding:4px 6px; border-left:1px solid rgba(128,128,128,.35); color:inherit; text-align:left; }
-    .slink-armory-request-status { overflow:hidden; font-size:11px; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
-    .slink-armory-request-last { overflow:hidden; opacity:.75; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
-    .slink-armory-request-action { display:flex; align-items:end; min-width:0; min-height:26px; }
-    .slink-armory-request-button { width:100%; min-height:24px; margin-top:2px; padding:2px 5px; border:1px solid #5781a6; border-radius:4px; background:#253f57; color:#eaf6ff; cursor:pointer; font:700 11px Arial,sans-serif; white-space:nowrap; }
-    .slink-armory-request-button:disabled { cursor:wait; opacity:.65; }
-    .slink-armory-enhanced ul.item-list > li > .action-cont,
-    .slink-armory-enhanced ul.item-list > li > .view-item-info { grid-column:1/-1 !important; width:100% !important; }
-    .slink-armory-enhanced ul.item-list > li > .clear { display:none !important; }
-    .slink-armory-header { display:grid !important; grid-template-columns:62px minmax(170px,1fr) 145px 70px 120px 112px 126px; align-items:stretch; min-width:805px; }
-    .slink-armory-header > [data-slink-armory-heading="item"] { grid-column:1/3; min-width:0 !important; width:auto !important; }
-    .slink-armory-header > [data-slink-armory-heading="details"] { grid-column:3; min-width:0 !important; width:auto !important; }
-    .slink-armory-header > [data-slink-armory-heading="type"] { grid-column:4; min-width:0 !important; width:auto !important; }
-    .slink-armory-header > [data-slink-armory-heading="loaned"] { grid-column:5; min-width:0 !important; width:auto !important; }
-    .slink-armory-header > [data-slink-armory-heading="action"] { grid-column:6; min-width:0 !important; width:auto !important; }
-    .slink-armory-request-header { display:flex; grid-column:7; align-items:center; min-width:0; width:auto; padding:0 6px; border-left:1px solid rgba(128,128,128,.35); font-weight:700; }
-    .slink-armory-request-header-fallback { display:flex; justify-content:flex-end; min-width:805px; padding:5px 8px; border-bottom:1px solid rgba(128,128,128,.35); font-weight:700; }
     a.slink-profile-inside-gate { position:relative; border-radius:8px; outline:4px solid #ff3434 !important; background:#5d1010 !important; box-shadow:0 0 18px rgba(255,0,0,.85) !important; }
     a.slink-profile-inside-gate[data-slink-inside-mode="warn"] { outline-color:#ff9f1c !important; box-shadow:0 0 18px rgba(255,159,28,.8) !important; }
     .slink-profile-inside-message { display:inline-flex; align-items:center; margin:4px 0 4px 8px; padding:4px 7px; border:2px solid #ff3434; border-radius:5px; background:#4c0d0d; color:#fff; font:800 11px Arial,sans-serif; }
   `;
-
   function escape(value) {
     return SLINK.core.format.escapeHtml(value);
   }
@@ -138,7 +109,6 @@
       let armoryBusy = false;
       let armoryTimestampValue = new Date().toISOString().slice(0, 16);
       let armoryObserver = null;
-      let armoryDecorateTimer = null;
       let pageStyleElement = null;
       let insideGateElement = null;
       let insideUnlockedTarget = 0;
@@ -495,128 +465,6 @@
         const title = String(bonus.getAttribute('title') || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
         const known = ['Revitalize', 'Warlord'].find(name => title.toLowerCase().includes(name.toLowerCase()) || [...bonus.classList].some(value => value.toLowerCase().includes(name.toLowerCase())));
         return known || title.split(' ')[0] || 'Ranked';
-      }
-
-      function queueArmoryEnhancement() {
-        clearTimeout(armoryDecorateTimer);
-        armoryDecorateTimer = setTimeout(() => void enhanceArmoryRows(), 250);
-      }
-
-      function ensureArmoryHeader(tab, list) {
-        if (tab.querySelector('.slink-armory-request-header,.slink-armory-request-header-fallback')) return;
-        const expected = new Set(['item', 'details', 'type', 'loaned', 'action']);
-        const actionLabels = [...tab.querySelectorAll('*')].filter(node =>
-          !node.closest('ul.item-list') &&
-          node.children.length === 0 &&
-          node.textContent.trim().toLowerCase() === 'action'
-        );
-        for (const label of actionLabels) {
-          let cell = label;
-          while (cell.parentElement && cell.parentElement !== tab) {
-            const siblings = [...cell.parentElement.children];
-            const matches = siblings.map(node => node.textContent.trim().toLowerCase()).filter(text => expected.has(text));
-            if (matches.length >= 4) {
-              const header = cell.parentElement;
-              header.classList.add('slink-armory-header');
-              for (const sibling of siblings) {
-                const heading = sibling.textContent.trim().toLowerCase();
-                if (expected.has(heading)) sibling.dataset.slinkArmoryHeading = heading;
-              }
-              const requestHeader = document.createElement(cell.tagName);
-              requestHeader.className = 'slink-armory-request-header';
-              requestHeader.textContent = 'SLINK';
-              cell.insertAdjacentElement('afterend', requestHeader);
-              return;
-            }
-            cell = cell.parentElement;
-          }
-        }
-        const fallback = document.createElement('div');
-        fallback.className = 'slink-armory-request-header-fallback';
-        fallback.textContent = 'SLINK status / request';
-        list.insertAdjacentElement('beforebegin', fallback);
-      }
-
-      function clearArmoryEnhancements() {
-        document.querySelectorAll('.slink-armory-request-cell,.slink-armory-request-header,.slink-armory-request-header-fallback').forEach(node => node.remove());
-        for (const header of document.querySelectorAll('.slink-armory-header')) {
-          header.classList.remove('slink-armory-header');
-          for (const child of header.children) delete child.dataset.slinkArmoryHeading;
-        }
-        document.querySelectorAll('.slink-armory-enhanced').forEach(node => node.classList.remove('slink-armory-enhanced'));
-      }
-
-      async function enhanceArmoryRows() {
-        const tab = activeArmoryTab();
-        if (!tab || !current?.session?.authenticated) return;
-        ensurePageStyles();
-        tab.classList.add('slink-armory-enhanced');
-        const list = tab.querySelector('ul.item-list');
-        if (!list) return;
-        ensureArmoryHeader(tab, list);
-        try {
-          if (!armoryMembers.length) await ensureArmoryMembers(false);
-          const statusRefreshDue = Date.now() - armoryMembersSavedAt >= 60_000 || !armoryMembers.some(member => member.statusState || member.lastActionRelative);
-          if (statusRefreshDue) await ensureArmoryMembers(true);
-        } catch (error) {
-          localError = `Armory status unavailable: ${SLINK.core.format.errorMessage(error)}`;
-          if (fullUi) render();
-        }
-        const byMember = new Map(armoryMembers.map(member => [String(member.id), member]));
-        for (const row of list.querySelectorAll(':scope > li')) {
-          const bonusName = armoryBonus(row);
-          const borrower = armoryBorrower(row);
-          const member = borrower ? byMember.get(String(borrower.id)) : null;
-          let cell = row.querySelector(':scope > .slink-armory-request-cell');
-          if (!cell) {
-            cell = document.createElement('div');
-            cell.className = 'slink-armory-request-cell';
-            cell.setAttribute('role', 'cell');
-            const nativeAction = row.querySelector('.item-action');
-            if (nativeAction) nativeAction.insertAdjacentElement('afterend', cell);
-            else row.append(cell);
-          }
-          const requestable = Boolean(borrower && /^(revitalize|warlord)$/i.test(bonusName));
-          cell.replaceChildren();
-          const status = document.createElement('span');
-          status.className = 'slink-armory-request-status';
-          status.textContent = borrower ? member?.statusState || 'Unknown' : '';
-          status.title = borrower ? member?.statusDescription || status.textContent : '';
-          cell.append(status);
-          const lastAction = document.createElement('span');
-          lastAction.className = 'slink-armory-request-last';
-          lastAction.textContent = borrower ? member?.lastActionRelative || 'Last action unknown' : '';
-          lastAction.title = lastAction.textContent;
-          cell.append(lastAction);
-          const actionSlot = document.createElement('span');
-          actionSlot.className = 'slink-armory-request-action';
-          cell.append(actionSlot);
-          if (requestable) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'slink-armory-request-button';
-            button.textContent = 'Request Item';
-            button.title = `Request this ${bonusName} item from ${borrower.name}`;
-            button.addEventListener('click', async () => {
-              button.disabled = true;
-              const itemName = row.querySelector('.name')?.textContent.trim() || 'ranked item';
-              const armoryId = row.querySelector('.img-wrap')?.dataset.armoryid || '';
-              try {
-                await SLINK.core.messaging.send('war.armory.request', {
-                  holderId:Number(borrower.id), holderName:borrower.name, itemName, bonusName, armoryId,
-                  armoryUrl:location.href, holderStatus:member?.statusState || 'Unknown', holderLastAction:member?.lastActionRelative || 'Unknown'
-                });
-                button.textContent = 'Sent';
-              } catch (error) {
-                button.textContent = 'Failed';
-                localError = SLINK.core.format.errorMessage(error);
-                if (fullUi) render();
-                setTimeout(() => { if (button.isConnected) { button.disabled = false; button.textContent = 'Request Item'; } }, 2500);
-              }
-            });
-            actionSlot.append(button);
-          }
-        }
       }
 
       // Retrieval and pagination adapted from Considious Armory Recaller 1.2.6.
@@ -1316,7 +1164,6 @@
           await renderHybridAlerts();
           evaluateAlerts();
           renderInsideGateSurfaces();
-          queueArmoryEnhancement();
         } catch (error) {
           localError = SLINK.core.format.errorMessage(error);
           if (!force && /terms|API key|permission/i.test(localError)) localError = '';
@@ -1380,23 +1227,19 @@
         renderProfileAttackGate();
         scanAttackMugResults();
         if (rankPanelIsVisible()) scheduleRankOrderCapture();
-        if (activeArmoryTab() && records.some(record => !record.target?.closest?.('.slink-armory-request-cell,.slink-armory-request-header'))) queueArmoryEnhancement();
       });
       armoryObserver.observe(document.body, { childList:true, subtree:true });
       render();
       renderInsideGateSurfaces();
       scanAttackMugResults();
-      queueArmoryEnhancement();
       void runCycle(false);
       return { stop() {
         stopped = true;
         clearTimeout(timer);
-        clearTimeout(armoryDecorateTimer);
         for (const timerId of armoryRankCaptureTimers) clearTimeout(timerId);
         armoryRankCaptureTimers = [];
         clearInterval(leaderTimer);
         armoryObserver?.disconnect();
-        clearArmoryEnhancements();
         clearAttackPageGate();
         clearProfileAttackGate();
         pageStyleElement?.remove();

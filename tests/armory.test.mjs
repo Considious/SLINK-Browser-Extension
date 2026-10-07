@@ -55,4 +55,7 @@ assert(success.clicks.includes('next'));
 assert.equal(success.context.location.hash, 'armoury-page-2', 'Exact Torn hash route fallback was not applied');
 next.disabled = true;
 assert.equal(success.context.findNextArmoryPageControl(page), null);
-console.log('Armory immediate button recovery, double-click guard, errors, empty pages and pagination passed.');
+assert(!source.includes('slink-armory-request-cell'), 'Torn Armory rows must not receive SLINK request cells');
+assert(!source.includes('queueArmoryEnhancement'), 'Torn Armory DOM decoration must remain removed');
+assert(source.includes('war.armory.request'), 'Underlying Armory request handling must remain available');
+console.log('Armory retrieval remains available without Torn row restructuring; recovery, guards and pagination passed.');

@@ -277,7 +277,7 @@
     url.searchParams.set('userId', String(Math.trunc(Number(sellerId))));
     url.searchParams.set('itemId', String(Math.trunc(Number(itemId))));
     url.searchParams.set('price', String(Math.trunc(Number(price))));
-    url.searchParams.set('slinkHighlight', '1');
+    url.searchParams.set('highlight', '1');
     if (Number(updatedAt) > 0) url.searchParams.set('v', String(Math.trunc(Number(updatedAt) / 1000)));
     url.hash = '/';
     return url.toString();
