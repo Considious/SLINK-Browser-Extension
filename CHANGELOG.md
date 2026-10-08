@@ -1,5 +1,13 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.50 — 2026-10-07
+
+### Fixed
+
+- Permission sessions are now bound to the exact Torn API key that authenticated them. Replacing a key automatically forces fresh Torn identity and faction validation instead of reusing a still-valid session from the previous key.
+- Preserved backend permission-source metadata in the local session so faction-derived grants remain identifiable after authentication.
+
+
 ## 0.18.49 — 2026-10-07
 
 ### Fixed

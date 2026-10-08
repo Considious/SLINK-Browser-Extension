@@ -12,6 +12,12 @@
   });
   let authenticating = null;
 
+  async function apiKeyFingerprint(apiKey) {
+    const bytes = new TextEncoder().encode(`SLINK permission key\u0000${String(apiKey || '').trim()}`);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
   async function settings() {
     return { enabled:false, tornKey:'', ...(await SLINK.core.storage.get(KEYS.settings, {})) };
   }
@@ -76,8 +82,14 @@
         error.code = 'SLINK_ADHD_TERMS_REQUIRED';
         throw error;
       }
+      const currentKeyFingerprint = await apiKeyFingerprint(tornKey);
       const existing = await SLINK.core.storage.get(KEYS.session, null);
-      if (!force && existing?.token && Number(existing.expiresAt) > Date.now() + 60_000) return existing;
+      if (
+        !force &&
+        existing?.token &&
+        existing.apiKeyFingerprint === currentKeyFingerprint &&
+        Number(existing.expiresAt) > Date.now() + 60_000
+      ) return existing;
       await SLINK.core.tornApiLimiter.reserve({ wait:true });
       const response = await SLINK.core.http.requestJson('contributionWorker', `${BASE_URL}/api/permissions/auth`, {
         method:'POST',
@@ -100,7 +112,9 @@
         userName:String(response.user_name || `Player ${response.user_id}`),
         factionId:Number(response.faction_id) || 0,
         roles:Array.isArray(response.roles) ? response.roles : [],
-        scopes:Array.isArray(response.scopes) ? response.scopes : []
+        scopes:Array.isArray(response.scopes) ? response.scopes : [],
+        scopeSources:response?.scope_sources && typeof response.scope_sources === 'object' ? { ...response.scope_sources } : {},
+        apiKeyFingerprint:currentKeyFingerprint
       };
       if (requiredScope && !SLINK.core.permissions.hasScope(session, requiredScope)) {
         const error = new Error(`Your SLINK account does not have ${requiredScope} permission.`);
