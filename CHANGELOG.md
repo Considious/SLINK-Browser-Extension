@@ -1,5 +1,14 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.49 — 2026-10-07
+
+### Fixed
+
+- Prevented attack-result DOM mutations from repeatedly retrying mug reports and locking the Torn attack frame.
+- Throttled attack-result scans to one pass per 120 ms instead of querying the full result dialog on every mutation.
+- Hardened player-status and Hospital timer scraping to the exact `/profiles.php` page. Attack and log pages are never used for status timers.
+
+
 ## 0.18.48 — 2026-10-06
 
 ### Fixed

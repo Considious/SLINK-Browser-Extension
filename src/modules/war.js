@@ -116,6 +116,7 @@
       let dismissedRetalMap = {};
       const reportedMugNodes = new WeakSet();
       const recentMugResults = new Map();
+      let attackMugScanTimer = null;
       let leader = false;
       let leaderTimer = null;
       const leaderClientId = `war:${global.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
@@ -209,16 +210,20 @@
           });
           render();
         } catch (error) {
-          recentMugResults.delete(fingerprint);
-          reportedMugNodes.delete(node);
+          // One attack-result node gets one reporting attempt. Torn mutates the
+          // result frame heavily; retrying on every mutation can lock the page.
           console.debug('[SLINK] Mug result report paused:', SLINK.core.format.errorMessage(error));
         }
       }
 
       function scanAttackMugResults() {
-        if (!onAttackPage()) return;
-        const nodes = new Set(document.querySelectorAll('div[class*="dialog___"] div[class*="title___"],div[class*="green___"] div[class*="title___"]'));
-        for (const node of nodes) void reportMugResultNode(node);
+        if (!onAttackPage() || attackMugScanTimer) return;
+        attackMugScanTimer = setTimeout(() => {
+          attackMugScanTimer = null;
+          if (!onAttackPage()) return;
+          const nodes = new Set(document.querySelectorAll('div[class*="dialog___"] div[class*="title___"],div[class*="green___"] div[class*="title___"]'));
+          for (const node of nodes) void reportMugResultNode(node);
+        }, 120);
       }
 
       function profileAttackButton() {
@@ -1236,6 +1241,8 @@
       return { stop() {
         stopped = true;
         clearTimeout(timer);
+        clearTimeout(attackMugScanTimer);
+        attackMugScanTimer = null;
         for (const timerId of armoryRankCaptureTimers) clearTimeout(timerId);
         armoryRankCaptureTimers = [];
         clearInterval(leaderTimer);

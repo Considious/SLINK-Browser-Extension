@@ -23,4 +23,11 @@ assert.equal(DOM.detectState('Federal jail'), 'Federal');
 assert.equal(DOM.parseRemainingMs('1h 2m 3s'), 3_723_000);
 assert.equal(DOM.parseRemainingMs('00:05:30'), 330_000);
 
+context.document = { visibilityState:'visible', hasFocus:() => true };
+context.location = { href:'https://www.torn.com/profiles.php?XID=123456' };
+assert.equal(DOM.activeProfile().active, true);
+context.location.href = 'https://www.torn.com/page.php?sid=attack&user2ID=123456';
+assert.equal(DOM.activeProfile().active, false);
+assert.equal(DOM.activeProfile().reason, 'not-profile');
+
 console.log('DOM player intelligence parser tests passed.');

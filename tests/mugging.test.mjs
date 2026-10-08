@@ -11,12 +11,13 @@ const moduleSource = read('src/modules/mugging.js');
 const serviceSource = read('src/background/mugging-service.js');
 const workerSource = read('src/background/service-worker.js');
 const contentSource = read('src/content/content-script.js');
+const warSource = read('src/modules/war.js');
 for (const [label, source] of [['Mugging service', serviceSource], ['Mugging module', moduleSource]]) {
   try { new Function(source); }
   catch (error) { throw new Error(`${label} has a parse-time syntax error: ${error.message}`); }
 }
 
-assert(manifest.version === '0.18.47', 'Unexpected Phase 10 extension version.');
+assert(manifest.version === '0.18.49', 'Unexpected attack-frame safety extension version.');
 assert(manifest.host_permissions.includes('https://slinkmuggingworker.richard-johnson554.workers.dev/*'), 'Mugging Worker host permission is missing.');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/mugging.js')), 'Mugging module is not loaded by the Torn content script.');
 assert(moduleSource.includes("requiredScopes:[REQUIRED_SCOPE]") && moduleSource.includes("const REQUIRED_SCOPE = 'slink.mugging'"), 'Mugging is not gated exclusively by the backend-managed scope.');
@@ -45,4 +46,7 @@ assert(!/MUGGING_SERVICE_TOKEN|X-SLINK-Service-Token/.test(serviceSource), 'A ba
 assert(workerSource.includes("'mugging-service.js'") && workerSource.includes('...SLINK.services.mugging.routes'), 'Mugging background routes are not registered.');
 assert(workerSource.includes('SLINK.services.mugging.ensureAlarm()') && workerSource.includes('SLINK.services.mugging.runContribution()'), 'The Mugging contributor alarm is not registered.');
 assert(contentSource.includes('Could not apply refreshed permissions in place') && contentSource.includes('restartModules()'), 'Refreshed permissions do not restart module gating in place.');
+assert(warSource.includes('let attackMugScanTimer = null') && warSource.includes('}, 120);'), 'Attack-result scanning is not throttled.');
+assert(warSource.includes('reportedMugNodes.add(node)') && !warSource.includes('reportedMugNodes.delete(node)'), 'Attack-result nodes can be retried indefinitely.');
+assert(!warSource.includes('recordMugResultNode(node); });'), 'Attack-result reporting still contains a recursive refresh callback.');
 console.log('Mugging Phase 10 contributor synchronization checks passed.');

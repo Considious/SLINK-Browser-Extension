@@ -80,7 +80,7 @@
     }
     let url;
     try { url = new URL(global.location.href); } catch { return { active:false, reason:'invalid-url' }; }
-    if (!url.pathname.toLowerCase().includes('profiles.php')) return { active:false, reason:'not-profile' };
+    if (!/^\/profiles\.php$/i.test(url.pathname)) return { active:false, reason:'not-profile' };
     const playerId = SLINK.core.playerIntelligence.validPlayerId(url.searchParams.get('XID'));
     if (!playerId) return { active:false, reason:'missing-player' };
     if (expectedPlayerId && Number(expectedPlayerId) !== playerId) return { active:false, reason:'different-player' };
