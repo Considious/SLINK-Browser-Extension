@@ -1,5 +1,20 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.52 — 2026-10-08
+
+### Added
+
+- Added Quality of Life as a third top-level Torn panel section, with Racing as its first module.
+- Added a maintainable Class A build guide with Needed, Completed, and All views, persistent completion state, and persistent custom nicknames.
+- Added a 22-character nickname generator and validator with normalized track abbreviations and exact character counts.
+- Added the official-race assistant using Torn DOM data only: it recognizes the supplied official-race track text, matches only completed builds by exact saved nickname, and highlights without selecting the car.
+- Added centralized Raceway selectors and MutationObserver-based SPA handling so future Torn DOM changes can be repaired without rewriting the Racing module.
+
+### Safety
+
+- Racing does not consume Torn API calls and never clicks or auto-selects a car.
+- A missing or invalid expected nickname produces a warning instead of guessing at another car.
+
 ## 0.18.51 — 2026-10-07
 
 ### Fixed

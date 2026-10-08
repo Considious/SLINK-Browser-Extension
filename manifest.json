@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.18.51",
-  "description": "Shared Live Intelligence NetworK with Combat and Efficiency reminder tools for Torn.",
+  "version": "0.18.52",
+  "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
     "offscreen",
@@ -50,6 +50,7 @@
         "src/core/messaging.js",
         "src/content/player-intelligence-dom.js",
         "src/core/faction-chat.js",
+        "src/core/racing.js",
         "src/core/modules.js",
         "src/core/war.js",
         "src/core/bounties.js",
@@ -64,6 +65,7 @@
         "src/modules/market.js",
         "src/modules/merits.js",
         "src/modules/dollar-bazaars.js",
+        "src/modules/racing.js",
         "src/modules/contribution.js",
         "src/content/content-script.js"
       ]
