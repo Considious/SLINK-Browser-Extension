@@ -40,9 +40,11 @@
         quickPurchaseFlow:null,
         quickPurchaseOverlays:new Map(),
         quickPurchaseControlSpecs:new WeakMap(),
+        domTestEnabled:false,
         bazaarOneDollarTimer:null,
         quickPurchaseSyncTimer:null
       };
+      const marketDomTestAllowed = SLINK.core.permissions.hasScope(context.permissions, 'admin.*');
 
       ui.setModuleStyles(`
         .slink-market-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.slink-market-summary>div{padding:7px;border:1px solid var(--slink-border-soft);border-radius:7px;background:var(--slink-bg-control);text-align:center}.slink-market-summary strong,.slink-market-summary small{display:block}.slink-market-summary small{color:var(--slink-muted)}
@@ -52,7 +54,9 @@
       `);
 
       function focusedTornPage() {
-        return document.visibilityState === 'visible' && document.hasFocus();
+        // PDA/WebView and some Torn SPA transitions can report hasFocus() as
+        // false while the visible page is still fully interactive.
+        return document.visibilityState !== 'hidden';
       }
 
       async function claimMarketSound() {
@@ -133,7 +137,8 @@
         style.textContent = `
           [data-tdd-bazaar-targeted],
           [data-tdd-bazaar-one-dollar],
-          [data-tdd-item-market-one-dollar] {
+          [data-tdd-item-market-one-dollar],
+          [data-tdd-market-dom-test] {
             outline: 4px solid #39ff14 !important;
             outline-offset: 2px !important;
             box-shadow: 0 0 18px 5px rgba(57,255,20,.72), inset 0 0 0 2px rgba(57,255,20,.5) !important;
@@ -287,11 +292,38 @@
         return { oneDollar, shopProfit };
       }
 
+      function clearMarketDomTestMarks(kind = '') {
+        const selector = kind
+          ? `[data-tdd-market-dom-test="${kind}"]`
+          : '[data-tdd-market-dom-test]';
+        document.querySelectorAll(selector).forEach((element) => element.removeAttribute('data-tdd-market-dom-test'));
+      }
+
+      function marketDomTestTarget(kind, elements) {
+        const candidates = Array.from(elements || []);
+        const enabled = marketDomTestAllowed && purchaseState.domTestEnabled;
+        const target = enabled ? candidates.find((element) => {
+          if (!element?.isConnected || !elementVisible(element)) return false;
+          if (kind === 'bazaar') {
+            if (bazaarCardUnavailable(element)) return false;
+            return Boolean(nativeQuickPurchaseControl(element, 'button[data-testid="buy-button"], button[data-testid="activate-buy-button"]'));
+          }
+          if (itemMarketRowUnavailable(element)) return false;
+          return Boolean(nativeQuickPurchaseControl(element, 'button[class*="buyButton___"], button[aria-label^="Buy "]'));
+        }) || null : null;
+        document.querySelectorAll(`[data-tdd-market-dom-test="${kind}"]`).forEach((element) => {
+          if (element !== target) element.removeAttribute('data-tdd-market-dom-test');
+        });
+        if (target) target.setAttribute('data-tdd-market-dom-test', kind);
+        return target;
+      }
+
       function formatBazaarOneDollarListings() {
         if (!focusedTornPage() || !onBazaarPage()) return;
         ensurePurchaseHighlightStyles();
         requestPurchaseSellPriceCatalog();
         const cards = new Set(bazaarListingCards());
+        marketDomTestTarget('bazaar', cards);
         const target = targetedBazaarListing();
         document.querySelectorAll('[data-tdd-bazaar-targeted]').forEach((card) => {
           if (!cards.has(card)) card.removeAttribute('data-tdd-bazaar-targeted');
@@ -431,6 +463,7 @@
       function formatItemMarketPurchaseOpportunities() {
         if (!focusedTornPage() || !onItemMarketPage()) return;
         const rows = new Set(itemMarketSellerRows());
+        marketDomTestTarget('item-market', rows);
         document.querySelectorAll('[data-tdd-item-market-one-dollar], [data-tdd-item-market-shop-profit]').forEach((row) => {
           if (!rows.has(row)) {
             row.removeAttribute('data-tdd-item-market-one-dollar');
@@ -588,9 +621,12 @@
         if (kind === 'bazaar') {
           return element.hasAttribute('data-tdd-bazaar-targeted')
             || element.hasAttribute('data-tdd-bazaar-one-dollar')
-            || element.hasAttribute('data-tdd-bazaar-shop-profit');
+            || element.hasAttribute('data-tdd-bazaar-shop-profit')
+            || element.getAttribute('data-tdd-market-dom-test') === 'bazaar';
         }
-        return element.hasAttribute('data-tdd-item-market-one-dollar') || element.hasAttribute('data-tdd-item-market-shop-profit');
+        return element.hasAttribute('data-tdd-item-market-one-dollar')
+          || element.hasAttribute('data-tdd-item-market-shop-profit')
+          || element.getAttribute('data-tdd-market-dom-test') === 'item-market';
       }
 
       function quickPurchaseQuantity(listing) {
@@ -644,8 +680,8 @@
 
       function highlightedQuickPurchaseElements(kind) {
         const selector = kind === 'bazaar'
-          ? '[data-tdd-bazaar-targeted], [data-tdd-bazaar-one-dollar], [data-tdd-bazaar-shop-profit]'
-          : '[data-tdd-item-market-one-dollar], [data-tdd-item-market-shop-profit]';
+          ? '[data-tdd-bazaar-targeted], [data-tdd-bazaar-one-dollar], [data-tdd-bazaar-shop-profit], [data-tdd-market-dom-test="bazaar"]'
+          : '[data-tdd-item-market-one-dollar], [data-tdd-item-market-shop-profit], [data-tdd-market-dom-test="item-market"]';
         return Array.from(document.querySelectorAll(selector));
       }
 
@@ -1075,7 +1111,7 @@
         const attributes = [
           'data-tdd-bazaar-targeted', 'data-tdd-bazaar-one-dollar', 'data-tdd-bazaar-shop-profit',
           'data-tdd-item-market-one-dollar', 'data-tdd-item-market-shop-profit', 'data-tdd-item-market-max-applied',
-          'data-tdd-purchase-reason'
+          'data-tdd-purchase-reason', 'data-tdd-market-dom-test'
         ];
         for (const attribute of attributes) document.querySelectorAll(`[${attribute}]`).forEach(node => node.removeAttribute(attribute));
         document.getElementById('tdd-purchase-highlight-styles')?.remove();
@@ -1167,11 +1203,22 @@
         catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
       }
 
-      ui.setActions([
+      const marketActions = [
         { id:'refresh', label:'Refresh', onClick:async event => { event.currentTarget.disabled = true; try { render(await SLINK.core.messaging.send('market.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
         { id:'permissions', label:'Refresh permissions', onClick:async event => { event.currentTarget.disabled = true; try { render(await SLINK.core.messaging.send('market.permissions.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
         { id:'settings', label:'Settings', onClick:() => SLINK.core.messaging.send('ui.dashboard.open', { page:'alerts', efficiencyView:'market' }) }
-      ]);
+      ];
+      if (marketDomTestAllowed) marketActions.push({
+        id:'dom-test',
+        label:'Market DOM Test',
+        onClick:event => {
+          purchaseState.domTestEnabled = !purchaseState.domTestEnabled;
+          event.currentTarget.textContent = purchaseState.domTestEnabled ? 'Stop DOM Test' : 'Market DOM Test';
+          clearMarketDomTestMarks();
+          schedulePurchaseOpportunityFormatting(0);
+        }
+      });
+      ui.setActions(marketActions);
       observer = new MutationObserver(() => schedulePurchaseOpportunityFormatting(80));
       observer.observe(document.body, { childList:true, subtree:true });
       global.addEventListener('hashchange', schedulePurchaseOpportunityFormatting);

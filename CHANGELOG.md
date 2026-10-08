@@ -1,5 +1,18 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.51 — 2026-10-07
+
+### Fixed
+
+- Restored Market Watch DOM activation when Torn is visibly interactive but the browser or PDA WebView reports `document.hasFocus() === false`.
+- Kept the original ADHD Dashboard row parsing, dollar/shop-profit highlights, quantity filling, stationary SLINK Buy overlay, and Torn-native purchase confirmation path intact across SPA rerenders.
+- Added an admin-only Market DOM Test that forces the first compatible visible Bazaar or Item Market listing through the real production highlight and SLINK Buy path without automatically completing a purchase.
+
+### Security
+
+- Market DOM Test is shown and accepted only when the authenticated permission snapshot includes `admin.*`.
+
+
 ## 0.18.50 — 2026-10-07
 
 ### Fixed

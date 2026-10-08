@@ -31,4 +31,13 @@ assert(marketCore.includes("url.searchParams.set('highlight', '1')"), 'Bazaar al
 assert(!war.includes('slink-armory-request-cell'), 'SLINK must not add request cells to Torn Armory rows');
 assert(!war.includes('queueArmoryEnhancement'), 'SLINK must not restructure Torn Armory rows');
 assert(war.includes('war.armory.request'), 'Armory request handling must remain available');
-console.log('Original ADHD market highlighting/BUY flow is wired and Torn Armory rows are untouched.');
+
+assert(market.includes("return document.visibilityState !== 'hidden';"), 'Market DOM formatting must not depend on document.hasFocus() in PDA/WebView or Torn SPA transitions.');
+assert(market.includes("const marketDomTestAllowed = SLINK.core.permissions.hasScope(context.permissions, 'admin.*');"), 'Market DOM Test must derive visibility from admin.*.');
+assert(market.includes("if (marketDomTestAllowed) marketActions.push"), 'Market DOM Test must only be added for administrators.');
+assert(market.includes("data-tdd-market-dom-test"), 'Market DOM Test must mark a real production listing.');
+assert(market.includes("[data-tdd-market-dom-test=\"bazaar\"]") && market.includes("[data-tdd-market-dom-test=\"item-market\"]"), 'Forced test listings must enter the production quick-buy selector path.');
+assert(market.includes("if (!event.isTrusted"), 'SLINK Buy must remain user-initiated.');
+assert(market.includes("spec.native.click();"), 'SLINK Buy must delegate to Torn native controls.');
+
+console.log('ADHD market DOM flow, admin-only diagnostic, and focus-independent SPA wiring are verified.');
