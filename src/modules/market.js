@@ -27,6 +27,10 @@
       let timer = null;
       let clockTimer = null;
       let observer = null;
+      let visibilityObserver = null;
+      let moduleView = null;
+      let lastActivityTouchAt = 0;
+      const INACTIVE_AFTER_MS = 5 * 60_000;
       const QUICK_PURCHASE_TRANSITION_TIMEOUT_MS = 2_500;
       const QUICK_PURCHASE_FLOW_TIMEOUT_MS = 10_000;
       const purchaseState = {
@@ -61,6 +65,32 @@
 
       async function claimMarketSound() {
         try { await SLINK.core.messaging.send('audio.flush'); } catch {}
+      }
+
+      function moduleVisible() {
+        return Boolean(moduleView && !moduleView.hidden);
+      }
+
+      async function touchMarketActivity(force = false) {
+        if (!moduleVisible()) return false;
+        const now = Date.now();
+        if (!force && now - lastActivityTouchAt < 10_000) return true;
+        lastActivityTouchAt = now;
+        try { await SLINK.core.messaging.send('market.activity.touch'); } catch {}
+        return true;
+      }
+
+      function noteMarketInteraction() {
+        if (moduleVisible()) void touchMarketActivity(false);
+      }
+
+      function syncMarketVisibility() {
+        if (!moduleVisible()) return;
+        void touchMarketActivity(true).then(() => {
+          if (stopped) return;
+          void load(false);
+          void load(true);
+        });
       }
 
       function syncPurchaseCatalog(status = current) {
@@ -1204,9 +1234,9 @@
       }
 
       const marketActions = [
-        { id:'refresh', label:'Refresh', onClick:async event => { event.currentTarget.disabled = true; try { render(await SLINK.core.messaging.send('market.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
-        { id:'permissions', label:'Refresh permissions', onClick:async event => { event.currentTarget.disabled = true; try { render(await SLINK.core.messaging.send('market.permissions.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
-        { id:'settings', label:'Settings', onClick:() => SLINK.core.messaging.send('ui.dashboard.open', { page:'alerts', efficiencyView:'market' }) }
+        { id:'refresh', label:'Refresh', onClick:async event => { event.currentTarget.disabled = true; try { await touchMarketActivity(true); render(await SLINK.core.messaging.send('market.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
+        { id:'permissions', label:'Refresh permissions', onClick:async event => { event.currentTarget.disabled = true; try { await touchMarketActivity(true); render(await SLINK.core.messaging.send('market.permissions.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
+        { id:'settings', label:'Settings', onClick:async () => { await touchMarketActivity(true); return SLINK.core.messaging.send('ui.dashboard.open', { page:'alerts', efficiencyView:'market' }); } }
       ];
       if (marketDomTestAllowed) marketActions.push({
         id:'dom-test',
@@ -1229,9 +1259,20 @@
       document.addEventListener('click', handleBazaarPurchaseClick, true);
       await load(false);
       global.addEventListener('slink:api-usage', updateApiUsage);
-      timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
+      moduleView = ui.getContentElement()?.closest('.module-view') || null;
+      if (moduleView) {
+        visibilityObserver = new MutationObserver(syncMarketVisibility);
+        visibilityObserver.observe(moduleView, { attributes:true, attributeFilter:['hidden'] });
+        moduleView.addEventListener('click', noteMarketInteraction, true);
+        moduleView.addEventListener('input', noteMarketInteraction, true);
+        moduleView.addEventListener('change', noteMarketInteraction, true);
+      }
+      syncMarketVisibility();
+      timer = global.setInterval(() => {
+        if (!stopped && moduleVisible() && Date.now() - lastActivityTouchAt <= INACTIVE_AFTER_MS) void load(true);
+      }, 5_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
-      return { stop() { stopped = true; observer?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); global.removeEventListener('slink:api-usage', updateApiUsage); global.removeEventListener('hashchange', schedulePurchaseOpportunityFormatting); global.removeEventListener('popstate', schedulePurchaseOpportunityFormatting); global.removeEventListener('resize', scheduleQuickPurchaseControlSync); global.removeEventListener('scroll', scheduleQuickPurchaseControlSync, true); document.removeEventListener('click', handleHighlightedQuickPurchaseClick, true); document.removeEventListener('click', handleBazaarPurchaseClick, true); ui.setAlertCount('market', 0); clearPurchaseOpportunityFormatting(); } };
+      return { stop() { stopped = true; observer?.disconnect(); visibilityObserver?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); moduleView?.removeEventListener('click', noteMarketInteraction, true); moduleView?.removeEventListener('input', noteMarketInteraction, true); moduleView?.removeEventListener('change', noteMarketInteraction, true); global.removeEventListener('slink:api-usage', updateApiUsage); global.removeEventListener('hashchange', schedulePurchaseOpportunityFormatting); global.removeEventListener('popstate', schedulePurchaseOpportunityFormatting); global.removeEventListener('resize', scheduleQuickPurchaseControlSync); global.removeEventListener('scroll', scheduleQuickPurchaseControlSync, true); document.removeEventListener('click', handleHighlightedQuickPurchaseClick, true); document.removeEventListener('click', handleBazaarPurchaseClick, true); ui.setAlertCount('market', 0); clearPurchaseOpportunityFormatting(); } };
     }
   });
 })(globalThis);

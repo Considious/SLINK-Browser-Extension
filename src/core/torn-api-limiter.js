@@ -9,6 +9,8 @@
   const SHARED_LOCK_NAME = 'considious-torn-api-limiter-v1';
   const WINDOW_MS = 60_000;
   const DEFAULT_LIMIT = 60;
+  const CONTRIBUTION_CEILING = 40;
+  const INTERACTIVE_RESERVE = 10;
   let queue = Promise.resolve();
 
   function eventId(prefix = 'extension') {
@@ -99,6 +101,29 @@
     return usageFromLedger(await storedLedger(), limit);
   }
 
+  function contributionCapacityFromLedger(value, options = {}) {
+    const ledger = normalizeLedger(value, Number(options.now) || Date.now());
+    const limit = Math.max(1, Number(options.limit) || DEFAULT_LIMIT);
+    const ceiling = Math.max(0, Number(options.ceiling) || CONTRIBUTION_CEILING);
+    const interactiveReserve = Math.max(0, Number(options.interactiveReserve) || INTERACTIVE_RESERVE);
+    const contributionCount = ledger.events.filter(event => event.priority === 'contribution').length;
+    const totalHeadroom = Math.max(0, limit - interactiveReserve - ledger.events.length);
+    const contributionHeadroom = Math.max(0, ceiling - contributionCount);
+    return Object.freeze({
+      available:Math.min(totalHeadroom, contributionHeadroom),
+      count:ledger.events.length,
+      contributionCount,
+      limit,
+      ceiling,
+      interactiveReserve,
+      cooldownUntil:ledger.cooldownUntil
+    });
+  }
+
+  async function getContributionCapacity(options = {}) {
+    return contributionCapacityFromLedger(await storedLedger(), options);
+  }
+
   async function reserve(options = {}) {
     return serialize(async () => {
       const limit = Math.max(1, Number(options.limit) || DEFAULT_LIMIT);
@@ -134,6 +159,53 @@
     });
   }
 
+  async function reserveContribution(options = {}) {
+    return serialize(async () => {
+      const wait = options.wait === true;
+      while (true) {
+        const now = Date.now();
+        const ledger = await storedLedger(now);
+        const capacity = contributionCapacityFromLedger(ledger, {
+          ...options,
+          now
+        });
+        if (ledger.cooldownUntil <= now && capacity.available > 0) {
+          ledger.events.push({
+            at:now,
+            id:eventId('slink-extension'),
+            script:String(options.script || 'SLINK Shared Contribution').slice(0, 80),
+            priority:'contribution',
+            method:String(options.method || 'GET').slice(0, 12),
+            endpoint:String(options.endpoint || 'unknown').slice(0, 180),
+            tabId:'extension'
+          });
+          await saveLedger(ledger);
+          return Object.freeze({
+            reservedAt:now,
+            count:ledger.events.length,
+            limit:capacity.limit,
+            contributionCount:capacity.contributionCount + 1,
+            contributionCeiling:capacity.ceiling,
+            interactiveReserve:capacity.interactiveReserve
+          });
+        }
+        const nextEvent = ledger.events[0]?.at + WINDOW_MS + 25 || now + 250;
+        if (!wait) {
+          const error = new Error('No spare Torn API capacity is currently available for shared contribution.');
+          error.code = 'SLINK_TORN_API_LIMIT';
+          error.retryAfterMs = Math.max(50, Math.max(nextEvent, ledger.cooldownUntil || 0) - now);
+          error.usage = ledger.events.length;
+          error.limit = capacity.limit;
+          error.contributionUsage = capacity.contributionCount;
+          error.contributionCeiling = capacity.ceiling;
+          throw error;
+        }
+        const delay = Math.max(50, Math.min(5_000, Math.max(nextEvent, ledger.cooldownUntil || 0) - now));
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    });
+  }
+
   async function syncShared(input = {}) {
     return serialize(async () => {
       const now = Date.now();
@@ -144,7 +216,7 @@
   }
 
   SLINK.define('core', 'tornApiLimiter', Object.freeze({
-    DEFAULT_LIMIT, SHARED_LEDGER_KEY, SHARED_LOCK_NAME, WINDOW_MS,
-    getUsage, mergeLedgers, normalizeLedger, prune, reserve, syncShared
+    CONTRIBUTION_CEILING, DEFAULT_LIMIT, INTERACTIVE_RESERVE, SHARED_LEDGER_KEY, SHARED_LOCK_NAME, WINDOW_MS,
+    contributionCapacityFromLedger, getContributionCapacity, getUsage, mergeLedgers, normalizeLedger, prune, reserve, reserveContribution, syncShared
   }));
 })(globalThis);

@@ -1,5 +1,24 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.53 — 2026-10-09
+
+### Changed
+
+- Added independent five-minute activity clocks for Leveling, War, Mugging, and Market Watch. General Torn browsing no longer keeps those module refresh loops alive.
+- Market Watch now serves cached results immediately, refreshes the Weaver marketplace summary every five seconds only while Market Watch is active, and stops both UI and alarm-driven Market Watch polling after five minutes of Market-specific inactivity.
+- War now falls back to a lightweight worker snapshot for time-sensitive retaliation alerts after its full UI becomes inactive, instead of continuing the full War panel refresh.
+- Mugging assignments stop when the Mugging UI becomes inactive, while shared intelligence contribution remains independent.
+
+### API capacity
+
+- Shared contribution now uses the existing Torn API ledger opportunistically, reserves 10 calls per rolling minute for interactive work, and caps contribution at 40 calls per rolling minute.
+- Contribution yields immediately when the shared ledger has no spare capacity; it does not create a second limiter or scheduler.
+
+### Safety
+
+- Weaver still uses the existing `/api/marketplace` bulk summary and only performs an item-specific lookup when the bulk result crosses a configured threshold.
+- SLINK Buy behavior and selectors were not changed.
+
 ## 0.18.52 — 2026-10-08
 
 ### Added

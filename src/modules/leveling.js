@@ -99,6 +99,7 @@
       let lastActivityTouchAt = 0;
       let activityTimer = null;
       let visibilityObserver = null;
+      const INACTIVE_AFTER_MS = 5 * 60_000;
 
       context.ui.setTitle('SLINK Leveling');
       context.ui.setModuleStyles(MODULE_STYLES);
@@ -336,12 +337,17 @@
         return Boolean(view && !view.hidden);
       }
 
+      function cycleActive() {
+        return moduleVisible() || (lastActivityTouchAt > 0 && Date.now() - lastActivityTouchAt <= INACTIVE_AFTER_MS);
+      }
+
       function syncActivityHeartbeat() {
         clearInterval(activityTimer);
         activityTimer = null;
         if (!moduleVisible()) return;
         void markActivity();
         activityTimer = setInterval(() => void markActivity(), 60_000);
+        if (current?.configured && !busy) void runCycle(false);
       }
 
       async function refreshStatus() {
@@ -383,6 +389,12 @@
 
       async function runCycle(force = false) {
         if (busy || stopped) return;
+        if (!force && !cycleActive()) {
+          clearTimeout(cycleTimer);
+          cycleTimer = null;
+          await SLINK.core.messaging.send('leveling.leader.release').catch(() => {});
+          return;
+        }
         if (force) await markActivity();
         if (!await isLeader()) {
           if (force) localError = 'Another Torn tab is currently coordinating SLINK Leveling.';

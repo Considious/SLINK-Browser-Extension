@@ -104,16 +104,44 @@
       let cache = normalizeCache(await SLINK.core.storage.get(CACHE_KEY, {}));
       try {
         cache = normalizeCache(await SLINK.core.messaging.send('mugging.status'));
-        if (settings.enabled) await SLINK.core.messaging.send('mugging.activity.touch');
       } catch {}
       let notice = '';
       let error = '';
       let busy = false;
+      let moduleView = null;
+      let visibilityObserver = null;
+      let lastActivityTouchAt = 0;
       context.ui.setTitle('SLINK Mugging');
       context.ui.setModuleStyles(MODULE_STYLES);
 
       async function persistSettings() {
         await SLINK.core.storage.set(SETTINGS_KEY, settings);
+      }
+
+      function moduleVisible() {
+        return Boolean(moduleView && !moduleView.hidden);
+      }
+
+      async function touchMuggingUi(force = false) {
+        if (!moduleVisible() || !settings.enabled) return false;
+        const now = Date.now();
+        if (!force && now - lastActivityTouchAt < 10_000) return true;
+        lastActivityTouchAt = now;
+        await SLINK.core.messaging.send('mugging.activity.touch').catch(() => null);
+        return true;
+      }
+
+      function noteMuggingInteraction() {
+        if (moduleVisible()) void touchMuggingUi(false);
+      }
+
+      function syncMuggingVisibility() {
+        if (!moduleVisible()) return;
+        void touchMuggingUi(true);
+        void SLINK.core.messaging.send('mugging.status').then(value => {
+          cache = normalizeCache(value);
+          render();
+        }).catch(() => null);
       }
 
       async function refreshAssignments() {
@@ -172,7 +200,7 @@
             <label>Maximum rough FF<input id="mugging-max-ff" type="number" min="1" max="3" step=".1" value="${settings.maxFairFight}"></label>
             <label>Target count<input id="mugging-limit" type="number" min="1" max="100" step="1" value="${settings.limit}"></label>
             <button class="mugging-wide" id="mugging-find" type="button" ${busy ? 'disabled' : ''}>${busy ? 'Finding targets…' : 'Find targets'}</button>
-            <div class="mugging-note mugging-wide">Contributor checks use the shared Torn limiter: up to 10/min while Mugging was used in the last five minutes, then up to 5/min at low priority. Results are deduplicated locally and synchronized to shared SLINK intelligence in acknowledged batches every six hours. Pending: ${cache.contribution.pendingSync}${cache.contribution.lastSyncAt ? ` · Last sync ${escape(new Date(cache.contribution.lastSyncAt).toLocaleString())}` : ''}${cache.contribution.syncError ? ` · Sync retry pending: ${escape(cache.contribution.syncError)}` : ''}.</div>
+            <div class="mugging-note mugging-wide">Contributor checks use only spare shared Torn capacity, keep 10 calls/min reserved for interactive work, and never exceed 40 contribution calls/min. Mugging assignments stop after five minutes away, while low-priority contribution may continue independently. Results are deduplicated locally and synchronized to shared SLINK intelligence in acknowledged batches every six hours. Pending: ${cache.contribution.pendingSync}${cache.contribution.lastSyncAt ? ` · Last sync ${escape(new Date(cache.contribution.lastSyncAt).toLocaleString())}` : ''}${cache.contribution.syncError ? ` · Sync retry pending: ${escape(cache.contribution.syncError)}` : ''}.</div>
             ${error ? `<div class="mugging-note mugging-wide">${escape(error)}</div>` : ''}
             ${notice ? `<div class="mugging-note mugging-wide">${escape(notice)}</div>` : ''}
           </div>
@@ -241,7 +269,21 @@
       }
 
       render();
-      return { stop() {} };
+      moduleView = context.ui.getContentElement()?.closest('.module-view') || null;
+      if (moduleView) {
+        visibilityObserver = new MutationObserver(syncMuggingVisibility);
+        visibilityObserver.observe(moduleView, { attributes:true, attributeFilter:['hidden'] });
+        moduleView.addEventListener('click', noteMuggingInteraction, true);
+        moduleView.addEventListener('input', noteMuggingInteraction, true);
+        moduleView.addEventListener('change', noteMuggingInteraction, true);
+      }
+      syncMuggingVisibility();
+      return { stop() {
+        visibilityObserver?.disconnect();
+        moduleView?.removeEventListener('click', noteMuggingInteraction, true);
+        moduleView?.removeEventListener('input', noteMuggingInteraction, true);
+        moduleView?.removeEventListener('change', noteMuggingInteraction, true);
+      } };
     }
   });
 })(globalThis);

@@ -6,12 +6,30 @@
   const ALARM = 'slink.market.watch';
   const DOLLAR_ALARM = 'slink.market.dollar-bazaars';
   const DOLLAR_REFRESH_MS = 60 * 60_000;
-  const KEYS = Object.freeze({ settings:'market.settings.v1', runtime:'market.runtime.v1', dollarBazaars:'market.dollar-bazaars.v1', dismissals:'market.dismissals.v1', soundState:'market.sound.state.v1' });
+  const INACTIVE_AFTER_MS = 5 * 60_000;
+  const KEYS = Object.freeze({ settings:'market.settings.v1', runtime:'market.runtime.v1', activity:'market.activity.v1', dollarBazaars:'market.dollar-bazaars.v1', dismissals:'market.dismissals.v1', soundState:'market.sound.state.v1' });
   const CATALOG_MAX_AGE_MS = 24 * 60 * 60_000;
   let refreshing = null;
   let dollarRefreshing = null;
 
   async function settings() { return MARKET.normalizeSettings(await SLINK.core.storage.get(KEYS.settings, {})); }
+
+  async function activityStatus(now = Date.now()) {
+    const activity = await SLINK.core.storage.get(KEYS.activity, {});
+    const lastActiveAt = Math.max(0, Number(activity?.lastActiveAt) || 0);
+    return {
+      lastActiveAt,
+      active:lastActiveAt > 0 && now - lastActiveAt <= INACTIVE_AFTER_MS,
+      inactiveAfterMs:INACTIVE_AFTER_MS
+    };
+  }
+
+  async function touchActivity() {
+    const activity = { lastActiveAt:Date.now() };
+    await SLINK.core.storage.set(KEYS.activity, activity);
+    await scheduleAlarm(Date.now() + 1_000);
+    return activityStatus(activity.lastActiveAt);
+  }
   async function runtime() {
     const stored = await SLINK.core.storage.get(KEYS.runtime, {});
     return {
@@ -287,7 +305,10 @@
 
   async function buildStatus(currentSettings, current, access) {
     const usage = await SLINK.core.tornApiLimiter.getUsage(); const allowed = currentSettings.watches.filter(watch => watch.enabled);
-    const nextRefreshAt = nextAt(currentSettings, current, access.limit || 0); await scheduleAlarm(nextRefreshAt);
+    const activity = await activityStatus();
+    const nextRefreshAt = nextAt(currentSettings, current, access.limit || 0);
+    if (activity.active) await scheduleAlarm(nextRefreshAt);
+    else await chrome.alarms.clear(ALARM);
     const dismissals = await activeDismissals();
     const opportunities = MARKET.opportunityRows({ ...current, catalog:current.catalog }, { ...currentSettings, watches:allowed })
       .map(row => ({ ...row, dismissKey:dealDismissKey(row) }))
@@ -297,6 +318,7 @@
       activeWatchCount:MARKET.activeSlotCount(currentSettings), savedWatchCount:currentSettings.watches.length,
       weaverPricelist:{ userId:current.weaverPricelist?.userId || null, fetchedAt:Number(current.weaverPricelist?.fetchedAt) || 0, itemCount:MARKET.weaverPricelistItems(current.weaverPricelist?.items || []).length, items:MARKET.weaverPricelistItems(current.weaverPricelist?.items || []), lastError:String(current.weaverPricelist?.lastError || '') },
       opportunities,
+      activity,
       fetchedAt:current.fetchedAt, nextRefreshAt, lastError:current.lastError, tornApiUsage:usage };
   }
 
@@ -344,7 +366,8 @@
   async function publicStatus(refreshIfDue = false) {
     const currentSettings = await settings(); const access = await accessState(); let current = await runtime();
     const configured = Boolean((await SLINK.services.permissionAccess.settings()).enabled);
-    if (refreshIfDue && configured && access.permitted && currentSettings.enabled) {
+    const activity = await activityStatus();
+    if (refreshIfDue && activity.active && configured && access.permitted && currentSettings.enabled) {
       if (!current.catalog?.items?.length || Date.now() - Number(current.catalog?.fetchedAt) >= CATALOG_MAX_AGE_MS) {
         try { current.catalog = await ensureCatalog({ current }); } catch (error) { current.lastError = SLINK.core.format.errorMessage(error); await saveRuntime(current); }
       }
@@ -517,17 +540,31 @@
     return chrome.alarms.get(DOLLAR_ALARM);
   }
 
-  async function ensureAlarm() { if (!await chrome.alarms.get(ALARM)) await scheduleAlarm(Date.now() + 1_000); return chrome.alarms.get(ALARM); }
+  async function ensureAlarm() {
+    const activity = await activityStatus();
+    if (!activity.active) { await chrome.alarms.clear(ALARM); return null; }
+    if (!await chrome.alarms.get(ALARM)) await scheduleAlarm(Date.now() + 1_000);
+    return chrome.alarms.get(ALARM);
+  }
+  async function withActivity(operation, payload) {
+    await touchActivity();
+    return operation(payload);
+  }
   const routes = Object.freeze({
-    'market.status':payload => publicStatus(payload?.refreshIfDue !== false), 'market.refresh':() => refresh(true), 'market.settings.save':saveSettings,
-    'market.permissions.refresh':refreshPermissions,
-    'market.weaver.pricelist.sync':syncPricelist,
-    'market.weaver.selection.save':saveWeaverSelection,
+    'market.activity.touch':touchActivity,
+    'market.status':payload => publicStatus(payload?.refreshIfDue !== false),
+    'market.refresh':() => withActivity(() => refresh(true)),
+    'market.settings.save':payload => withActivity(saveSettings, payload),
+    'market.permissions.refresh':() => withActivity(refreshPermissions),
+    'market.weaver.pricelist.sync':payload => withActivity(syncPricelist, payload),
+    'market.weaver.selection.save':payload => withActivity(saveWeaverSelection, payload),
     'market.dollar.status':payload => dollarStatus(payload?.refreshIfDue !== false),
     'market.dollar.refresh':() => refreshDollarBazaars(true),
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },
-    'market.watch.save':upsertWatch, 'market.watch.remove':removeWatch, 'market.deal.dismiss':dismissDeal,
+    'market.watch.save':payload => withActivity(upsertWatch, payload),
+    'market.watch.remove':payload => withActivity(removeWatch, payload),
+    'market.deal.dismiss':payload => withActivity(dismissDeal, payload),
     'market.sound.claim':claimSound, 'market.sound.ack':acknowledgeSound
   });
-  SLINK.define('services', 'market', Object.freeze({ ALARM, DOLLAR_ALARM, dollarStatus, ensureAlarm, ensureDollarAlarm, publicStatus, refresh, routes }));
+  SLINK.define('services', 'market', Object.freeze({ ALARM, DOLLAR_ALARM, INACTIVE_AFTER_MS, activityStatus, dollarStatus, ensureAlarm, ensureDollarAlarm, publicStatus, refresh, routes, touchActivity }));
 })(globalThis);

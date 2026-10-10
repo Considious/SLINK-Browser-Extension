@@ -119,6 +119,11 @@
       let attackMugScanTimer = null;
       let leader = false;
       let leaderTimer = null;
+      let activityTimer = null;
+      let visibilityObserver = null;
+      let moduleView = null;
+      let lastActivityAt = 0;
+      const INACTIVE_AFTER_MS = 5 * 60_000;
       const leaderClientId = `war:${global.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
       const shownAlerts = new Set();
       const shownRequestAlerts = new Set();
@@ -134,6 +139,35 @@
       function duration(seconds) { return SLINK.core.format.formatHumanDuration(Math.max(0, seconds)); }
       function money(value) { return `$${Math.max(0, Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits:0 })}`; }
       function pageIsFocused() { return document.visibilityState === 'visible' && document.hasFocus(); }
+
+      function moduleVisible() {
+        return Boolean(fullUi && moduleView && !moduleView.hidden);
+      }
+
+      function warUiActive() {
+        return moduleVisible() || (lastActivityAt > 0 && Date.now() - lastActivityAt <= INACTIVE_AFTER_MS);
+      }
+
+      async function touchWarActivity(force = false) {
+        if (!moduleVisible()) return false;
+        const now = Date.now();
+        if (!force && now - lastActivityAt < 10_000) return true;
+        lastActivityAt = now;
+        await SLINK.core.messaging.send('war.activity.touch').catch(() => null);
+        return true;
+      }
+
+      function noteWarInteraction() {
+        if (moduleVisible()) void touchWarActivity(false);
+      }
+
+      function syncWarVisibility() {
+        clearInterval(activityTimer);
+        activityTimer = null;
+        if (!moduleVisible()) return;
+        void touchWarActivity(true).then(() => { if (!stopped) void runCycle(true); });
+        activityTimer = setInterval(() => void touchWarActivity(false), 60_000);
+      }
 
       function ensurePageStyles() {
         if (pageStyleElement?.isConnected) return pageStyleElement;
@@ -1164,7 +1198,12 @@
         if (fullUi) render();
         try {
           current = await SLINK.core.messaging.send('war.status');
-          if (force || leader) current = await SLINK.core.messaging.send('war.cycle.prepare', { manual:force });
+          if (force || leader) {
+            current = await SLINK.core.messaging.send(
+              warUiActive() ? 'war.cycle.prepare' : 'war.alerts.prepare',
+              { manual:force }
+            );
+          }
           localError = '';
           await renderHybridAlerts();
           evaluateAlerts();
@@ -1225,6 +1264,16 @@
       document.addEventListener('click', handleProfileAttack, true);
       document.addEventListener('click', handleRankTabClick, true);
       document.addEventListener('visibilitychange', refreshLeader);
+      if (fullUi) {
+        moduleView = context.ui.getContentElement()?.closest('.module-view') || null;
+        if (moduleView) {
+          visibilityObserver = new MutationObserver(syncWarVisibility);
+          visibilityObserver.observe(moduleView, { attributes:true, attributeFilter:['hidden'] });
+          moduleView.addEventListener('click', noteWarInteraction, true);
+          moduleView.addEventListener('input', noteWarInteraction, true);
+          moduleView.addEventListener('change', noteWarInteraction, true);
+        }
+      }
       if (fullUi && !current.configured) activeTab = 'settings';
       await refreshLeader();
       leaderTimer = setInterval(() => void refreshLeader(), 5_000);
@@ -1237,6 +1286,7 @@
       render();
       renderInsideGateSurfaces();
       scanAttackMugResults();
+      syncWarVisibility();
       void runCycle(false);
       return { stop() {
         stopped = true;
@@ -1246,6 +1296,11 @@
         for (const timerId of armoryRankCaptureTimers) clearTimeout(timerId);
         armoryRankCaptureTimers = [];
         clearInterval(leaderTimer);
+        clearInterval(activityTimer);
+        visibilityObserver?.disconnect();
+        moduleView?.removeEventListener('click', noteWarInteraction, true);
+        moduleView?.removeEventListener('input', noteWarInteraction, true);
+        moduleView?.removeEventListener('change', noteWarInteraction, true);
         armoryObserver?.disconnect();
         clearAttackPageGate();
         clearProfileAttackGate();

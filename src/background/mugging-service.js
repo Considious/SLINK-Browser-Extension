@@ -14,8 +14,8 @@
   const OWN_STATS_KEY = 'mugging.ownBattleStats.v1';
   const ALARM = 'slink.mugging.contributor';
   const INACTIVE_AFTER_MS = 5 * 60_000;
-  const ACTIVE_BUDGET = 10;
-  const INACTIVE_BUDGET = 5;
+  const CONTRIBUTION_CEILING = 40;
+  const INTERACTIVE_RESERVE = 10;
   const OWN_STATS_TTL_MS = 6 * 60 * 60_000;
   const ASSIGNMENT_REFRESH_MS = 5 * 60_000;
   const SYNC_INTERVAL_MS = 6 * 60 * 60_000;
@@ -77,12 +77,16 @@
     return Number(lastActiveAt) > 0 && now - Number(lastActiveAt) <= INACTIVE_AFTER_MS ? 'active' : 'inactive';
   }
 
-  function contributionBudget(mode) { return mode === 'active' ? ACTIVE_BUDGET : INACTIVE_BUDGET; }
+  function contributionBudget() { return CONTRIBUTION_CEILING; }
 
   async function touchActivity() {
     const activity = { lastActiveAt:Date.now() };
     await SLINK.core.storage.set(ACTIVITY_KEY, activity);
-    return { ...activity, mode:'active', apiBudgetPerMinute:ACTIVE_BUDGET };
+    const capacity = await SLINK.core.tornApiLimiter.getContributionCapacity({
+      ceiling:CONTRIBUTION_CEILING,
+      interactiveReserve:INTERACTIVE_RESERVE
+    });
+    return { ...activity, mode:'active', apiBudgetPerMinute:capacity.available };
   }
 
   async function clientId() {
@@ -221,17 +225,23 @@
       if (!SLINK.core.permissions.hasScope(session, REQUIRED_SCOPE)) throw new Error('Your SLINK account does not have slink.mugging permission.');
       const activity = await SLINK.core.storage.get(ACTIVITY_KEY, {});
       const mode = contributionMode(activity?.lastActiveAt, now);
-      const budget = contributionBudget(mode);
-      const response = await requestTasks(session, mode, Math.min(40, budget * 4));
+      const capacity = await SLINK.core.tornApiLimiter.getContributionCapacity({
+        ceiling:CONTRIBUTION_CEILING,
+        interactiveReserve:INTERACTIVE_RESERVE
+      });
+      const response = capacity.available > 0
+        ? await requestTasks(session, mode, Math.min(100, capacity.available * 4))
+        : { tasks:[] };
       let fetched = 0, skipped = 0, errors = 0;
       const observations = [];
       for (const task of (Array.isArray(response?.tasks) ? response.tasks : [])) {
-        if (fetched >= budget) break;
+        if (fetched >= capacity.available) break;
         try {
           const result = await SLINK.services.playerIntelligence.refresh({
             playerId:task.player_id,
-            maxAgeMs:mode === 'active' ? 5 * 60_000 : 15 * 60_000,
-            priority:mode === 'active' ? 'normal' : 'low',
+            maxAgeMs:15 * 60_000,
+            priority:'contribution',
+            contribution:true,
             wait:false
           });
           if (!result?.fetched) { skipped++; continue; }
@@ -250,7 +260,10 @@
       const sync = await syncPending(false);
       const pending = await SLINK.core.storage.get(PENDING_KEY, []);
       const status = {
-        at:Date.now(), enabled:true, mode, apiBudgetPerMinute:budget,
+        at:Date.now(), enabled:true, mode, apiBudgetPerMinute:capacity.available,
+        contributionCeiling:CONTRIBUTION_CEILING,
+        interactiveReserve:INTERACTIVE_RESERVE,
+        sharedUsageAtStart:capacity.count,
         tasksOffered:Array.isArray(response?.tasks) ? response.tasks.length : 0,
         fetched, skipped, errors, assignmentsRefreshed,
         pendingSync:Array.isArray(pending) ? pending.length : 0,
@@ -370,7 +383,7 @@
   });
 
   SLINK.define('services', 'mugging', Object.freeze({
-    ACTIVE_BUDGET, ALARM, BASE_URL, INACTIVE_AFTER_MS, INACTIVE_BUDGET,
+    ALARM, BASE_URL, CONTRIBUTION_CEILING, INACTIVE_AFTER_MS, INTERACTIVE_RESERVE,
     battleStatsTotal, contributionBudget, contributionMode, ensureAlarm,
     normalizeCache, refresh, reportForObservation, routes, runContribution, status, syncPending, touchActivity
   }));

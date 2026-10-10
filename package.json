@@ -1,9 +1,9 @@
 {
   "name": "slink-browser-extension",
-  "version": "0.18.52",
+  "version": "0.18.53",
   "private": true,
   "description": "Chrome-first SLINK browser extension with Combat, Efficiency, and Quality of Life tools.",
   "scripts": {
-    "test": "node tests/validate-extension.mjs && node tests/core.test.mjs && node tests/racing.test.mjs && node tests/market-dom.test.mjs && node tests/player-intelligence.test.mjs && node tests/player-intelligence-dom.test.mjs && node tests/target-list.test.mjs && node tests/target-list-polling.test.mjs && node tests/target-list-integrations.test.mjs && node tests/mugging.test.mjs && node tests/background.test.mjs && node tests/bounties.test.mjs && node tests/faction-chat.test.mjs && node tests/armory.test.mjs && node tests/timestamps.test.mjs"
+    "test": "node tests/validate-extension.mjs && node tests/core.test.mjs && node tests/activity.test.mjs && node tests/racing.test.mjs && node tests/market-dom.test.mjs && node tests/player-intelligence.test.mjs && node tests/player-intelligence-dom.test.mjs && node tests/target-list.test.mjs && node tests/target-list-polling.test.mjs && node tests/target-list-integrations.test.mjs && node tests/mugging.test.mjs && node tests/background.test.mjs && node tests/bounties.test.mjs && node tests/faction-chat.test.mjs && node tests/armory.test.mjs && node tests/timestamps.test.mjs"
   }
 }

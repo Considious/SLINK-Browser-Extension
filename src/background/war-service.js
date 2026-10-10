@@ -28,7 +28,8 @@
     scheduledRoster: 'war.scheduledRoster.v1',
     retalProfileCache: 'war.retalProfileCache.v1',
     armoryMembers: 'war.armoryMembers.v1',
-    armoryMembersAt: 'war.armoryMembersAt.v1'
+    armoryMembersAt: 'war.armoryMembersAt.v1',
+    activity: 'war.activity.v1'
   });
   const STATUS_INTERVAL_MS = 10_000;
   const ATTACK_INTERVAL_MS = 30_000;
@@ -39,7 +40,9 @@
   const LOCAL_LEADER_LEASE_MS = 15_000;
   let authenticating = null;
   let cycling = null;
+  let alertCycling = null;
   let lastCycleStartedAt = 0;
+  let lastAlertCycleStartedAt = 0;
   let localLeader = { clientId:'', expiresAt:0 };
 
   function defaults() {
@@ -91,6 +94,18 @@
     const next = { ...(await runtime()), ...changes };
     await SLINK.core.storage.set(KEYS.runtime, next);
     return next;
+  }
+
+  async function touchActivity() {
+    const activity = { lastActiveAt:Date.now() };
+    await SLINK.core.storage.set(KEYS.activity, activity);
+    return activity;
+  }
+
+  async function activityStatus(now = Date.now()) {
+    const activity = await SLINK.core.storage.get(KEYS.activity, {});
+    const lastActiveAt = Math.max(0, Number(activity?.lastActiveAt) || 0);
+    return { lastActiveAt, active:lastActiveAt > 0 && now - lastActiveAt <= 5 * 60_000 };
   }
 
   async function fetchTerms(force = false) {
@@ -857,6 +872,51 @@
     };
   }
 
+  async function prepareAlerts() {
+    if (alertCycling) return alertCycling;
+    const now = Date.now();
+    if (now - lastAlertCycleStartedAt < STATUS_INTERVAL_MS - 1_000) return publicStatus();
+    lastAlertCycleStartedAt = now;
+    alertCycling = (async () => {
+      const [currentSettings, activeWar, currentRuntime] = await Promise.all([
+        settings(),
+        SLINK.core.storage.get(KEYS.activeWar, null),
+        runtime()
+      ]);
+      if (!activeWar?.warId || phaseForStart(activeWar.startedAt) !== 'active') return publicStatus();
+      await ensureSession(false);
+      const snapshot = await fetchSnapshot({ ...activeWar, phase:'active' }, currentSettings);
+      const previousSnapshot = currentRuntime?.snapshot && typeof currentRuntime.snapshot === 'object'
+        ? currentRuntime.snapshot
+        : {};
+      const previousRetals = new Map((Array.isArray(previousSnapshot.retals) ? previousSnapshot.retals : []).map(retal => [
+        String(retal.attackId || retal.attackerId || ''),
+        retal
+      ]));
+      const retals = (Array.isArray(snapshot?.retals) ? snapshot.retals : []).map(retal => {
+        const previous = previousRetals.get(String(retal.attackId || retal.attackerId || '')) || {};
+        return {
+          ...previous,
+          ...retal,
+          fairFight:Number.isFinite(Number(previous.fairFight)) ? Number(previous.fairFight) : retal.fairFight,
+          battleStatsEstimate:Number.isFinite(Number(previous.battleStatsEstimate)) ? Number(previous.battleStatsEstimate) : retal.battleStatsEstimate
+        };
+      });
+      await setRuntime({
+        snapshot:{
+          ...previousSnapshot,
+          ...snapshot,
+          members:Array.isArray(previousSnapshot.members) ? previousSnapshot.members : (snapshot?.members || []),
+          retals
+        },
+        lastAlertCycleAt:Date.now()
+      });
+      return publicStatus();
+    })();
+    try { return await alertCycling; }
+    finally { alertCycling = null; }
+  }
+
   async function prepareCycle(payload = {}) {
     if (cycling) return cycling;
     const now = Date.now();
@@ -1136,6 +1196,9 @@
       'war.settings.save': saveSettings,
       'war.session.clear': async () => { await clearSession(); return publicStatus(); },
       'war.active.detect': async payload => { lastCycleStartedAt = 0; const activeWar = await registerActiveWar(payload); return { activeWar, status:await publicStatus() }; },
+      'war.activity.touch': touchActivity,
+      'war.activity.status': activityStatus,
+      'war.alerts.prepare': prepareAlerts,
       'war.cycle.prepare': prepareCycle,
       'war.leader.claim': claimLeader,
       'war.leader.release': releaseLeader,
@@ -1153,9 +1216,12 @@
         return activeWar?.warId ? (await fetchLogs(activeWar, true)).rows : [];
       }
     }),
+    activityStatus,
+    prepareAlerts,
     prepareCycle,
     health,
-    publicStatus
+    publicStatus,
+    touchActivity
   });
 
   SLINK.define('services', 'war', api);
