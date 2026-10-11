@@ -7,6 +7,7 @@
   const HOST_ID = 'slink-extension-panel';
   const ACTIVE_MODULE_STORAGE_KEY = 'ui.main.activeModule';
   const ACTIVE_MODULES_BY_GROUP_STORAGE_KEY = 'ui.main.activeModulesByGroup';
+  const ACTIVE_NAVIGATION_MIRROR_KEY = 'slink-extension:ui:main:navigation:v1';
   const STYLES = `
     :host { all: initial; ${SLINK.core.themes.cssVariables('slink-dark')} }
     * { box-sizing:border-box; }
@@ -129,6 +130,44 @@
     let navigationSelectionChanged = false;
     const bubbleAlertSources = new Map();
 
+    function readNavigationMirror() {
+      try {
+        const value = JSON.parse(global.localStorage.getItem(ACTIVE_NAVIGATION_MIRROR_KEY) || 'null');
+        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function writeNavigationMirror() {
+      try {
+        global.localStorage.setItem(ACTIVE_NAVIGATION_MIRROR_KEY, JSON.stringify({
+          activeModule:preferredActiveId,
+          activeModulesByGroup:Object.fromEntries(preferredActiveIdsByGroup),
+          updatedAt:Date.now()
+        }));
+      } catch {}
+    }
+
+    const mirroredNavigation = readNavigationMirror();
+    preferredActiveId = String(mirroredNavigation.activeModule || '');
+    if (mirroredNavigation.activeModulesByGroup && typeof mirroredNavigation.activeModulesByGroup === 'object' && !Array.isArray(mirroredNavigation.activeModulesByGroup)) {
+      for (const [groupId, moduleId] of Object.entries(mirroredNavigation.activeModulesByGroup)) {
+        if (typeof moduleId === 'string' && moduleId) preferredActiveIdsByGroup.set(groupId, moduleId);
+      }
+    }
+    const navigationPreferencesReady = Promise.all([
+      SLINK.core.storage.get(ACTIVE_MODULE_STORAGE_KEY, ''),
+      SLINK.core.storage.get(ACTIVE_MODULES_BY_GROUP_STORAGE_KEY, {})
+    ]).then(([legacyActiveId, storedByGroup]) => {
+      if (!preferredActiveId) preferredActiveId = String(legacyActiveId || '');
+      if (storedByGroup && typeof storedByGroup === 'object' && !Array.isArray(storedByGroup)) {
+        for (const [groupId, moduleId] of Object.entries(storedByGroup)) {
+          if (!preferredActiveIdsByGroup.has(groupId) && typeof moduleId === 'string' && moduleId) preferredActiveIdsByGroup.set(groupId, moduleId);
+        }
+      }
+    });
+
     function displayAlertCount(count) {
       return Number(count) > 99 ? '99+' : String(Math.max(1, Number(count) || 1));
     }
@@ -242,6 +281,7 @@
         navigationSelectionChanged = true;
         preferredActiveId = id;
         preferredActiveIdsByGroup.set(activeGroup, id);
+        writeNavigationMirror();
         void Promise.all([
           SLINK.core.storage.set(ACTIVE_MODULE_STORAGE_KEY, id),
           SLINK.core.storage.set(ACTIVE_MODULES_BY_GROUP_STORAGE_KEY, Object.fromEntries(preferredActiveIdsByGroup))
@@ -368,6 +408,7 @@
     }
 
     async function createModuleView(module) {
+      await navigationPreferencesReady;
       if (views.has(module.id)) return views.get(module.id).api;
       const element = document.createElement('section');
       element.className = 'module-view';
@@ -454,16 +495,7 @@
 
     const bubbleMover = makeBubbleMovable();
     main.element.querySelector('.hide').addEventListener('click', () => void setCollapsed(true));
-    void Promise.all([
-      SLINK.core.storage.get(ACTIVE_MODULE_STORAGE_KEY, ''),
-      SLINK.core.storage.get(ACTIVE_MODULES_BY_GROUP_STORAGE_KEY, {})
-    ]).then(([legacyActiveId, storedByGroup]) => {
-      if (!preferredActiveId) preferredActiveId = String(legacyActiveId || '');
-      if (storedByGroup && typeof storedByGroup === 'object' && !Array.isArray(storedByGroup)) {
-        for (const [groupId, moduleId] of Object.entries(storedByGroup)) {
-          if (!preferredActiveIdsByGroup.has(groupId) && typeof moduleId === 'string' && moduleId) preferredActiveIdsByGroup.set(groupId, moduleId);
-        }
-      }
+    void navigationPreferencesReady.then(() => {
       if (navigationSelectionChanged) return;
       const preferredForCurrentGroup = preferredActiveIdsByGroup.get(activeGroup);
       const selection = views.has(preferredActiveId) ? preferredActiveId : views.has(preferredForCurrentGroup) ? preferredForCurrentGroup : '';

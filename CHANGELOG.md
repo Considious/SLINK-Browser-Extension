@@ -1,5 +1,13 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.54 — 2026-10-11
+
+### Fixed
+
+- Torn-page navigation now restores the last selected top-level section and the last module selected within each section after a page reload.
+- Navigation preferences are loaded before module tabs are created and mirrored synchronously, preventing a quick Torn navigation from falling back to Quality of Life → Racing.
+
+
 ## 0.18.53 — 2026-10-09
 
 ### Changed

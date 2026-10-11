@@ -102,6 +102,11 @@ assert(!read(manifest.action.default_popup).includes('Optional access'), 'Popup 
 const runtimeSource = read('src/core/runtime.js');
 assert(runtimeSource.includes(`const VERSION = '${manifest.version}'`), 'Core runtime version must match the manifest.');
 
+const uiShellSource = read('src/content/ui-shell.js');
+assert(uiShellSource.includes('ACTIVE_NAVIGATION_MIRROR_KEY'), 'Torn-page navigation must have an immediate reload-safe mirror.');
+assert(uiShellSource.includes('await navigationPreferencesReady'), 'Saved navigation must load before module tabs are created.');
+assert(uiShellSource.includes('writeNavigationMirror();'), 'Navigation changes must be mirrored before asynchronous extension storage completes.');
+
 const dashboardHtml = read('src/dashboard/dashboard.html');
 const dashboardSource = read('src/dashboard/dashboard.js');
 const dashboardIds = new Set([...dashboardHtml.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
