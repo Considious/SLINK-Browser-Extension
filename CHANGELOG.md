@@ -1,5 +1,13 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.56 — 2026-10-11
+
+### Fixed
+
+- Weaver throttling now explains whether the per-minute budget queued items for the next cycle or Weaver reported that its daily request allowance was exhausted.
+- The dedicated extension dashboard now includes an **Enable Mugging on this device** control and preserves the shared Torn key for Mugging even when Efficiency is disabled.
+
+
 ## 0.18.55 — 2026-10-11
 
 ### Fixed

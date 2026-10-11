@@ -88,10 +88,36 @@
     return SLINK.core.http.requestJson('tornApi', url, { headers:{ Authorization:`ApiKey ${key}` }, cache:'no-store' });
   }
 
+  const WEAVER_MINUTE_LIMIT_MESSAGE = 'Weaver per-minute request budget is capped. Remaining items are queued for the next cycle.';
+  const WEAVER_DAILY_LIMIT_MESSAGE = 'Weaver daily request limit has been reached. Bazaar watches will resume when Weaver resets the daily allowance. Consider disabling lower-priority Bazaar watches.';
+
+  function weaverLimitKind(error) {
+    const detail = [
+      error?.message,
+      error?.data?.error?.message,
+      error?.data?.error,
+      error?.data?.message,
+      error?.data?.detail,
+      error?.data?.code
+    ].filter(value => typeof value === 'string').join(' ').toLowerCase();
+    return /\b(daily|per[ -]?day|day[ -]?(?:limit|quota)|daily[ -]?(?:limit|quota))\b/.test(detail) ? 'daily' : 'minute';
+  }
+
+  function weaverLimitError(kind, retryAfterMs = 0) {
+    const daily = kind === 'daily';
+    const error = new Error(daily ? WEAVER_DAILY_LIMIT_MESSAGE : WEAVER_MINUTE_LIMIT_MESSAGE);
+    error.code = daily ? 'SLINK_WEAVER_DAILY_LIMIT' : 'SLINK_WEAVER_RATE_LIMIT';
+    error.retryAfterMs = Math.max(0, Number(retryAfterMs) || 0);
+    error.limitKind = daily ? 'daily' : 'minute';
+    return error;
+  }
+
   function pruneWeaver(value, now = Date.now()) {
+    const cooldownUntil = Number(value?.cooldownUntil) > now ? Number(value.cooldownUntil) : 0;
     return {
       events:(Array.isArray(value?.events) ? value.events : []).map(Number).filter(at => at > now - MARKET.WEAVER_RATE_WINDOW_MS && at <= now + 5_000).sort((a, b) => a - b),
-      cooldownUntil:Number(value?.cooldownUntil) > now ? Number(value.cooldownUntil) : 0
+      cooldownUntil,
+      cooldownReason:cooldownUntil && value?.cooldownReason === 'daily' ? 'daily' : 'minute'
     };
   }
 
@@ -104,12 +130,19 @@
     if (retryAt > now && retryAt - now <= MARKET.WEAVER_MIN_REQUEST_SPACING_MS + 100) {
       await new Promise(resolve => setTimeout(resolve, retryAt - now)); now = Date.now(); current.weaver = pruneWeaver(current.weaver, now);
     } else if (retryAt > now) {
-      const error = new Error('Weaver request budget is reserved for a later watch.'); error.code = 'SLINK_WEAVER_RATE_LIMIT'; error.retryAfterMs = retryAt - now; throw error;
+      const kind = current.weaver.cooldownUntil === retryAt ? current.weaver.cooldownReason : 'minute';
+      throw weaverLimitError(kind, retryAt - now);
     }
     current.weaver.events.push(now);
     try { return await SLINK.core.http.requestJson('weaver', url, { cache:'no-store' }); }
     catch (error) {
-      if (Number(error?.status) === 429) current.weaver.cooldownUntil = Date.now() + (Number(error?.retryAfterMs) || MARKET.WEAVER_FALLBACK_BACKOFF_MS);
+      if (Number(error?.status) === 429) {
+        const kind = weaverLimitKind(error);
+        const retryAfterMs = Number(error?.retryAfterMs) || MARKET.WEAVER_FALLBACK_BACKOFF_MS;
+        current.weaver.cooldownUntil = Date.now() + retryAfterMs;
+        current.weaver.cooldownReason = kind;
+        throw weaverLimitError(kind, retryAfterMs);
+      }
       throw error;
     }
   }

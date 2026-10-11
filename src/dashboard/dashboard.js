@@ -10,6 +10,7 @@
   let adhd = null;
   let market = null;
   let dollarBazaars = null;
+  let muggingSettings = null;
   let contribution = null;
   let contributionTerms = null;
   let playerStats = null;
@@ -353,6 +354,9 @@
     byId('use-leveling').checked = leveling?.settings?.hasTornKey === true;
     byId('use-war').checked = war?.settings?.hasTornKey === true;
     byId('use-adhd').checked = access?.settings?.enabled === true && access?.settings?.hasTornKey === true;
+    byId('use-mugging').checked = muggingSettings?.enabled === true;
+    byId('use-mugging').disabled = !hasScope('slink.mugging');
+    byId('use-mugging').closest('label').title = hasScope('slink.mugging') ? '' : 'Requires slink.mugging permission.';
     byId('shared-torn-key').placeholder = levelAccepted || warAccepted || adhdAccepted ? 'Saved locally — leave blank to keep' : 'Enter once for selected SLINK modules';
     byId('shared-ff-key').placeholder = leveling?.settings?.hasFfKey || war?.settings?.hasFfKey ? 'Saved locally — leave blank to keep' : 'Optional FFScouter key';
     const terms = leveling?.terms || war?.terms || access?.terms || {};
@@ -369,7 +373,7 @@
     byId('access-config').hidden = compact;
     byId('toggle-access').textContent = compact ? 'API & access settings' : authenticated ? 'Collapse' : 'Setup required';
     byId('toggle-access').disabled = !authenticated && accessExpanded;
-    const enabledModules = [leveling?.settings?.hasTornKey ? 'Leveling' : '', war?.settings?.hasTornKey ? 'War' : '', access?.settings?.enabled && access?.settings?.hasTornKey ? 'Efficiency' : ''].filter(Boolean);
+    const enabledModules = [leveling?.settings?.hasTornKey ? 'Leveling' : '', war?.settings?.hasTornKey ? 'War' : '', access?.settings?.enabled && access?.settings?.hasTornKey ? 'Efficiency' : '', muggingSettings?.enabled ? 'Mugging' : ''].filter(Boolean);
     byId('access-summary').textContent = compact
       ? `${enabledModules.join(' + ') || 'No modules'} enabled with locally saved credentials.`
       : 'Enter each local credential once, then choose which SLINK modules may use it.';
@@ -1140,17 +1144,18 @@
   }
 
   async function refresh() {
-    const [status, terms, themeRecord, statsStatus, meritsStatus, marketStatus, dollarStatus] = await Promise.all([
+    const [status, terms, themeRecord, statsStatus, meritsStatus, marketStatus, dollarStatus, savedMuggingSettings] = await Promise.all([
       SLINK.core.messaging.send('system.status'),
       SLINK.core.messaging.send('contribution.terms').catch(() => null),
       SLINK.core.messaging.send('themes.catalog').catch(() => null),
       SLINK.core.messaging.send('playerStats.status', { refreshIfStale:true }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null })),
       SLINK.core.messaging.send('merits.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), goals:[], pinned:[], settings:SLINK.core.merits.defaultSettings() })),
       SLINK.core.messaging.send('market.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), opportunities:[], settings:SLINK.core.market.defaultSettings(), catalog:{ items:[] } })),
-      SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:true }).catch(error => ({ bazaars:[], fetchedAt:0, nextRefreshAt:0, lastError:errorText(error) }))
+      SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:true }).catch(error => ({ bazaars:[], fetchedAt:0, nextRefreshAt:0, lastError:errorText(error) })),
+      SLINK.core.storage.get('mugging.settings.v1', {})
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
-    system = status; leveling = status.leveling; war = status.war; access = status.access; adhd = status.adhd; market = marketStatus; dollarBazaars = dollarStatus; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus; merits = meritsStatus;
+    system = status; leveling = status.leveling; war = status.war; access = status.access; adhd = status.adhd; market = marketStatus; dollarBazaars = dollarStatus; muggingSettings = savedMuggingSettings || {}; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus; merits = meritsStatus;
     system.tornApiUsage = await SLINK.core.messaging.send('tornApi.usage').catch(() => status.tornApiUsage);
     dismissedRetals = await SLINK.core.storage.get('war.dismissedRetals.v1', {});
     dismissedRetals = Object.fromEntries(Object.entries(dismissedRetals || {}).filter(([, expiresAt]) => Number(expiresAt) > Math.floor(Date.now() / 1000)));
@@ -1197,11 +1202,14 @@
       alertPanelFlash:byId('war-alert-panel').checked, alertPageFlash:byId('war-alert-page').checked, chainAlert:byId('war-chain-alert').checked,
       turtleAlert:byId('war-turtle-alert').checked, turtleMinutes:byId('war-turtle-minutes').value, acceptTerms:acceptTerms && !war?.terms?.accepted
     })); else if (war?.settings?.hasTornKey) tasks.push(SLINK.core.messaging.send('war.settings.save', { clearTornKey:true, clearFfKey:true }).then(() => SLINK.core.messaging.send('war.session.clear')));
-    if (byId('use-adhd').checked) tasks.push(SLINK.core.messaging.send('access.settings.save', {
-      enabled:true,
+    const useEfficiency = byId('use-adhd').checked;
+    const useMugging = byId('use-mugging').checked;
+    if (useEfficiency || useMugging) tasks.push(SLINK.core.messaging.send('access.settings.save', {
+      enabled:useEfficiency,
       tornKey,
       acceptTerms:acceptTerms && !access?.terms?.accepted
     })); else if (access?.settings?.hasTornKey || access?.settings?.enabled) tasks.push(SLINK.core.messaging.send('access.settings.save', { enabled:false, clearTornKey:true }).then(() => SLINK.core.messaging.send('access.session.clear')));
+    tasks.push(SLINK.core.storage.set('mugging.settings.v1', { ...(muggingSettings || {}), enabled:useMugging }));
     const results = await Promise.allSettled(tasks);
     const failures = results.filter(result => result.status === 'rejected');
     if (failures.length) throw new Error(failures.map(result => errorText(result.reason)).join(' / '));
@@ -1234,18 +1242,18 @@
   byId('access-form').addEventListener('submit', async event => {
     event.preventDefault(); const submit = byId('save-access'); setBusy(submit, true); byId('access-message').textContent = '';
     try {
-      if (!byId('use-leveling').checked && !byId('use-war').checked && !byId('use-adhd').checked) throw new Error('Choose at least one SLINK module for this key.');
-      const needsTerms = (byId('use-leveling').checked && !leveling?.terms?.accepted) || (byId('use-war').checked && !war?.terms?.accepted) || (byId('use-adhd').checked && !access?.terms?.accepted);
+      if (!byId('use-leveling').checked && !byId('use-war').checked && !byId('use-adhd').checked && !byId('use-mugging').checked) throw new Error('Choose at least one SLINK module for this key.');
+      const needsTerms = (byId('use-leveling').checked && !leveling?.terms?.accepted) || (byId('use-war').checked && !war?.terms?.accepted) || ((byId('use-adhd').checked || byId('use-mugging').checked) && !access?.terms?.accepted);
       if (needsTerms && !byId('accept-shared-terms').checked) throw new Error('Accept the current SLINK terms before verification.');
       await saveModuleSettings(byId('shared-torn-key').value.trim(), byId('shared-ff-key').value.trim(), byId('accept-shared-terms').checked);
-      if ((byId('use-leveling').checked && byId('page-panel').checked) || (byId('use-war').checked && byId('war-display-mode').value !== 'extension') || (byId('use-adhd').checked && byId('adhd-show-in-torn').checked)) await SLINK.core.storage.set('ui.pagePanelHidden', false);
+      if ((byId('use-leveling').checked && byId('page-panel').checked) || (byId('use-war').checked && byId('war-display-mode').value !== 'extension') || (byId('use-adhd').checked && byId('adhd-show-in-torn').checked) || byId('use-mugging').checked) await SLINK.core.storage.set('ui.pagePanelHidden', false);
       byId('shared-torn-key').value = ''; byId('shared-ff-key').value = ''; byId('accept-shared-terms').checked = false;
       byId('access-message').textContent = 'Saved locally and verified. Available features are now unlocked by signed SLINK permissions.';
       accessExpanded = false;
       await refresh();
     } catch (error) { byId('access-message').textContent = errorText(error); } finally { setBusy(submit, false); }
   });
-  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('access.settings.save',{enabled:false,clearTornKey:true})]); await Promise.all([SLINK.core.messaging.send('leveling.session.clear'),SLINK.core.messaging.send('war.session.clear'),SLINK.core.messaging.send('access.session.clear')]); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
+  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('access.settings.save',{enabled:false,clearTornKey:true}),SLINK.core.storage.set('mugging.settings.v1',{...(muggingSettings||{}),enabled:false})]); await Promise.all([SLINK.core.messaging.send('leveling.session.clear'),SLINK.core.messaging.send('war.session.clear'),SLINK.core.messaging.send('access.session.clear')]); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
   byId('backup-local-data').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true);
     try {
