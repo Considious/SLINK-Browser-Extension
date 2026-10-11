@@ -1,5 +1,13 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.55 — 2026-10-11
+
+### Fixed
+
+- The authenticated owner `admin.*` scope now satisfies product permission checks, including `slink.mugging`, so the Mugging panel is no longer filtered out for the administrator.
+- Non-owner accounts cannot use an injected `admin.*` string as an override; the existing owner identity check remains enforced.
+
+
 ## 0.18.54 — 2026-10-11
 
 ### Fixed

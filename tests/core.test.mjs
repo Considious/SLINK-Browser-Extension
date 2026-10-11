@@ -114,6 +114,8 @@ try {
 assert(rejectedRemoteCode, 'Remote URL/code-like theme content was not rejected.');
 assert(permissions.hasScope({ scopes: ['slink.level'] }, 'slink.level'), 'Exact scope matching failed.');
 assert(permissions.hasScope({ userId:3853023, scopes: ['admin.*'] }, 'admin.users'), 'Wildcard scope matching failed.');
+assert(permissions.hasScope({ userId:3853023, scopes: ['admin.*'] }, 'slink.mugging'), 'Owner admin scope did not unlock Mugging.');
+assert(permissions.hasAllScopes({ userId:3853023, scopes: ['admin.*'] }, ['slink.mugging']), 'Owner admin scope did not satisfy module gating.');
 assert(!permissions.hasScope({ roles: ['admin'], scopes: ['slink.level'] }, 'admin.users'), 'Roles must not bypass signed scope checks.');
 assert(!permissions.hasScope({ userId:12, scopes:['admin.*'] }, 'admin.permissions'), 'A non-owner admin wildcard was trusted.');
 const combinedPermissions = permissions.combineSnapshots(

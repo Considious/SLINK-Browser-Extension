@@ -67,7 +67,10 @@
     const normalized = normalizeSnapshot(snapshot);
     const required = String(requiredScope || '').trim();
     if (!required) return true;
-    if ((required === 'admin.*' || required.startsWith('admin.')) && normalized.userId !== SOLE_ADMIN_USER_ID) return false;
+    const ownerAdmin = normalized.userId === SOLE_ADMIN_USER_ID
+      && normalized.scopes.some(scope => scope === '*' || scope === 'admin.*');
+    if (ownerAdmin) return true;
+    if (required === 'admin.*' || required.startsWith('admin.')) return false;
     return normalized.scopes.some(scope => scopeMatches(scope, required));
   }
 
