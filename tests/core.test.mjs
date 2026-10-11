@@ -91,6 +91,7 @@ assert(SLINK.core.format.shortNumber(1_250_000) === '1.25M', 'Short-number forma
 const permissions = SLINK.core.permissions;
 assert(Object.values(permissions.BROWSER_CAPABILITIES).every(capability => capability.optional === false), 'A core host was marked optional.');
 assert(permissions.BROWSER_CAPABILITIES.contributionWorker, 'Contribution Worker capability is missing.');
+assert(permissions.BROWSER_CAPABILITIES.muggingWorker, 'Mugging Worker capability is missing.');
 assert(SLINK.core.themes.get().tokens['--slink-bg'], 'Theme token registry is missing.');
 assert(Object.keys(SLINK.core.themes.THEMES).length === 4, 'Expected the free theme and three premium SLINK themes.');
 assert(SLINK.core.themes.resolve('slinky-underglow', { userId:12, scopes:[] }).id === 'slink-dark', 'Locked theme did not fall back safely.');
@@ -355,6 +356,10 @@ await SLINK.modules.stopAll();
 assert(
   SLINK.core.http.validateUrl('tornApi', 'https://api.torn.com/v2/user').hostname === 'api.torn.com',
   'Approved HTTP origin was rejected.'
+);
+assert(
+  SLINK.core.http.validateUrl('muggingWorker', 'https://slinkmuggingworker.richard-johnson554.workers.dev/api/assignments/rough').hostname === 'slinkmuggingworker.richard-johnson554.workers.dev',
+  'Mugging Worker HTTP origin was rejected.'
 );
 let blocked = false;
 try {

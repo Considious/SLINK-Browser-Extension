@@ -1,5 +1,12 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.57 — 2026-10-11
+
+### Fixed
+
+- Registered the SLINK Mugging Worker in both shared HTTP origin registries. Enabling Mugging can now request assignments instead of failing with `No HTTP origin is configured for muggingWorker`.
+
+
 ## 0.18.56 — 2026-10-11
 
 ### Fixed

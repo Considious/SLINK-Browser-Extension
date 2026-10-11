@@ -10,7 +10,8 @@
     weaver: 'https://weav3r.dev',
     slinkWorker: 'https://slinkyleveling.richard-johnson554.workers.dev',
     contributionWorker: 'https://slinkcontributionworker.richard-johnson554.workers.dev',
-    warWorker: 'https://slinkwarworker.richard-johnson554.workers.dev'
+    warWorker: 'https://slinkwarworker.richard-johnson554.workers.dev',
+    muggingWorker: 'https://slinkmuggingworker.richard-johnson554.workers.dev'
   });
 
   async function hasCapability(name) {

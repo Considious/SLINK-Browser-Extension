@@ -35,6 +35,11 @@
       label: 'SLINK War Service',
       optional: false,
       origins: Object.freeze(['https://slinkwarworker.richard-johnson554.workers.dev/*'])
+    }),
+    muggingWorker: Object.freeze({
+      label: 'SLINK Mugging Service',
+      optional: false,
+      origins: Object.freeze(['https://slinkmuggingworker.richard-johnson554.workers.dev/*'])
     })
   });
 
