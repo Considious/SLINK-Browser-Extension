@@ -1,3 +1,10 @@
+## 0.18.62 - 2026-10-12
+
+- Added the permission-gated Museums module under Quality of Life with live inventory progress for every official Museum set.
+- Added idempotent set handoff to Abroad Stocks for travel-sourced plushies and flowers.
+- Added per-item Market Watch handoff with an explicit maximum price; Museum watches use and respect the user's existing Market Watch permission and slot limit.
+- Museum inventory is refreshed hourly and the Torn item catalog weekly to minimize API usage.
+
 ## 0.18.61 - 2026-10-12
 
 - Added the permission-gated Company & Job Points module under Quality of Life for both employees and verified company directors.

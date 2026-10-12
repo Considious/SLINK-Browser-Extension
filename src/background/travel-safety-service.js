@@ -18,7 +18,7 @@
   async function refresh(force = false) {
     if (refreshing) return refreshing;
     refreshing = (async () => {
-      await SLINK.services.permissionAccess.ensureSession(false, TRAVEL.SCOPE);
+      await SLINK.services.permissionAccess.ensureSession(false);
       const cached = await SLINK.core.storage.get(CACHE_KEY, null);
       if (!force && cached?.fetchedAt && Date.now() - Number(cached.fetchedAt) < TRAVEL.CACHE_MS) return cached;
       const key = await tornKey();

@@ -178,6 +178,28 @@
     return publicStatus(false);
   }
 
+  async function addItemWatches(itemNames = []) {
+    const wanted = new Set((Array.isArray(itemNames) ? itemNames : []).map(value => String(value || '').trim().toLowerCase()).filter(Boolean));
+    if (!wanted.size) throw new Error('Choose at least one museum item.');
+    const [currentRuntime, currentWatches] = await Promise.all([runtime(), watches()]);
+    const existing = new Set(currentWatches.map(entry => entry.key));
+    let added = 0;
+    for (const row of currentRuntime.rows || []) {
+      if (!wanted.has(String(row.itemName || '').trim().toLowerCase()) || existing.has(row.key)) continue;
+      currentWatches.push({
+        key:row.key,
+        countryCode:String(row.countryCode || ''),
+        countryName:String(row.countryName || ''),
+        itemId:Number(row.itemId) || null,
+        itemName:String(row.itemName || '')
+      });
+      existing.add(row.key);
+      added += 1;
+    }
+    await SLINK.core.storage.set(KEYS.watches, currentWatches);
+    return { ...(await publicStatus(false)), added, matched:existing.size };
+  }
+
   async function snoozeAlert(input = {}) {
     const id = String(input.id || '');
     if (!id.startsWith('abroad:')) throw new Error('Unknown Abroad Stocks alert.');
@@ -245,12 +267,14 @@
     'abroadStocks.activity.touch':() => touchActivity(),
     'abroadStocks.settings.save':payload => saveSettings(payload?.settings || payload),
     'abroadStocks.watch.toggle':payload => toggleWatch(payload),
+    'abroadStocks.watch.addItems':payload => addItemWatches(payload?.itemNames),
     'abroadStocks.alert.snooze':payload => snoozeAlert(payload)
   });
 
   SLINK.define('services', 'abroadStocks', Object.freeze({
     ALARM,
     activeAlerts,
+    addItemWatches,
     ensureAlarm,
     publicStatus,
     refresh,

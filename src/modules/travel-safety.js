@@ -15,11 +15,13 @@
     shortTitle:'Travel Safety',
     group:'quality-of-life',
     groupTitle:'Quality of Life',
-    requiredScopes:[TRAVEL.SCOPE],
+    requiredScopes:[],
     defaultShowInTorn:true,
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {
       const ui = context.ui;
+      // Travel safety is an always-on background safeguard, not a visible dashboard tab.
+      ui.remove?.();
       const bypass = new WeakSet();
       const pending = new WeakSet();
       let stopped = false;
