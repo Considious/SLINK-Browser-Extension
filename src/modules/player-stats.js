@@ -42,7 +42,7 @@
     group:'combat',
     groupTitle:'Combat',
     defaultShowInTorn:true,
-    requiredScopes:[],
+    requiredScopes:['slink.combat.player-stats'],
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {
       const ui = context.ui;

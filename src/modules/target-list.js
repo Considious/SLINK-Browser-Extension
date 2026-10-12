@@ -68,7 +68,7 @@
     group:'combat',
     groupTitle:'Combat',
     defaultShowInTorn:true,
-    requiredScopes:[],
+    requiredScopes:['slink.combat.target-list'],
     matches:url => url.hostname === 'www.torn.com',
 
     async start(context) {

@@ -4,7 +4,7 @@
   const SLINK = global.SLINK_EXTENSION;
   if (!SLINK) throw new Error('SLINK runtime must load before Merit helpers.');
 
-  const REQUIRED_SCOPE = SLINK.core.adhd.ALERT_SCOPE;
+  const REQUIRED_SCOPE = 'slink.efficiency.merits';
   const TRACK_LIMIT = 3;
   const DEFAULT_REFRESH_MINUTES = 15;
   const CATALOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;

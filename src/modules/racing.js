@@ -17,7 +17,7 @@
     shortTitle:'Racing',
     group:'quality-of-life',
     groupTitle:'Quality of Life',
-    requiredScopes:[],
+    requiredScopes:['slink.qol.racing'],
     defaultShowInTorn:true,
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {

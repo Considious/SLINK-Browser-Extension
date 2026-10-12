@@ -29,7 +29,7 @@
     shortTitle:'Abroad Stocks',
     group:'quality-of-life',
     groupTitle:'Quality of Life',
-    requiredScopes:[],
+    requiredScopes:['slink.qol.abroad-stocks'],
     defaultShowInTorn:true,
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {

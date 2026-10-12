@@ -2,7 +2,6 @@
   'use strict';
 
   const SLINK = global.SLINK_EXTENSION;
-  const SOLE_ADMIN_USER_ID = 3853023;
   if (!SLINK) throw new Error('SLINK runtime must load before permissions.');
 
   const BROWSER_CAPABILITIES = Object.freeze({
@@ -92,10 +91,8 @@
     const normalized = normalizeSnapshot(snapshot);
     const required = String(requiredScope || '').trim();
     if (!required) return true;
-    const ownerAdmin = normalized.userId === SOLE_ADMIN_USER_ID
-      && normalized.scopes.some(scope => scope === '*' || scope === 'admin.*');
-    if (ownerAdmin) return true;
-    if (required === 'admin.*' || required.startsWith('admin.')) return false;
+    const admin = normalized.scopes.some(scope => scope === '*' || scope === 'admin.*');
+    if (admin) return true;
     return normalized.scopes.some(scope => scopeMatches(scope, required));
   }
 

@@ -20,7 +20,7 @@
     shortTitle:'$1 Bazaars',
     group:'efficiency',
     groupTitle:'Efficiency',
-    requiredScopes:[SLINK.core.adhd.ALERT_SCOPE],
+    requiredScopes:['slink.efficiency.dollar-bazaars'],
     defaultShowInTorn:true,
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {

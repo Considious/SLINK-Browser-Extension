@@ -70,7 +70,7 @@
     group:'combat',
     groupTitle:'Combat',
     defaultShowInTorn:true,
-    requiredScopes:[],
+    requiredScopes:['slink.combat.bounties'],
     matches:url => url.hostname === 'www.torn.com',
 
     async start(context) {

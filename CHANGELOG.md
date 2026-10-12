@@ -1,3 +1,9 @@
+## 0.18.63 - 2026-10-12
+
+- Made every valid `admin.*` or `*` grant override all feature gates, without a hard-coded user ID.
+- Added explicit permission gates for Bounties, Player Stats, Target List, Merits, $1 Bazaars, Racing, and Abroad Stocks.
+- Kept Organized Crime Travel Safety as an always-on background safeguard with no module permission.
+
 ## 0.18.62 - 2026-10-12
 
 - Added the permission-gated Museums module under Quality of Life with live inventory progress for every official Museum set.
