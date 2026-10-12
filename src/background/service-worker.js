@@ -5,6 +5,7 @@ importScripts(
   '../core/player-intelligence.js',
   '../core/target-list.js',
   '../core/bounties.js',
+  '../core/abroad-stocks.js',
   'local-vault.js',
   '../core/permissions.js',
   '../core/adhd.js',
@@ -29,6 +30,7 @@ importScripts(
   'bounties-service.js',
   'war-service.js',
   'contribution-service.js',
+  'abroad-stocks-service.js',
   'audio-service.js'
 );
 
@@ -138,6 +140,7 @@ async function ensureConnectionAlarm() {
   await SLINK.services.playerStats.ensureAlarm();
   await SLINK.services.targetList.ensureAlarm();
   await SLINK.services.mugging.ensureAlarm();
+  await SLINK.services.abroadStocks.ensureAlarm();
 }
 
 async function connectionStatus() {
@@ -395,6 +398,7 @@ const routes = {
   ...SLINK.services.themes.routes,
   ...SLINK.services.playerStats.routes,
   ...SLINK.services.contributionRoutes,
+  ...SLINK.services.abroadStocks.routes,
   ...SLINK.services.audio.routes
 };
 
@@ -432,6 +436,11 @@ chrome.alarms.onAlarm.addListener(alarm => {
   }
   if (alarm.name === SLINK.services.mugging.ALARM) {
     void SLINK.services.mugging.runContribution().catch(error => console.error('[SLINK] Mugging contribution:', error));
+  }
+  if (alarm.name === SLINK.services.abroadStocks.ALARM) {
+    void SLINK.services.abroadStocks.refresh(false)
+      .then(() => SLINK.services.audio.flush())
+      .catch(error => console.error('[SLINK] Abroad Stocks:', error));
   }
   if (alarm.name === SLINK.services.targetList.POLL_ALARM) {
     void Promise.allSettled([

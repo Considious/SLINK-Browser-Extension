@@ -366,6 +366,10 @@
       await SLINK.services.targetList.snoozeAlert(input);
       return publicStatus(false);
     }
+    if (id.startsWith('abroad:')) {
+      await SLINK.services.abroadStocks.snoozeAlert(input);
+      return publicStatus(false);
+    }
     if (!ADHD.ALERT_DEFINITIONS.some(definition => definition.id === id) && !/^cityStock:\d+$/.test(id)) throw new Error('Unknown Efficiency alert.');
     const durationMs = Math.min(ADHD.DAY_MS, Math.max(60_000, Number(input.durationMs) || 60 * 60_000));
     const next = await settings();
@@ -380,8 +384,12 @@
     ]);
     const efficiencyAlerts = ADHD.buildAlerts(currentRuntime.snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
       .filter(alert => (currentRuntime.snapshot || alert.id === 'timer24') && currentSettings.soundEnabled[alert.id] === true);
-    const stakeoutAlerts = await SLINK.services.targetList.activeAlerts();
-    const candidates = [...efficiencyAlerts, ...stakeoutAlerts];
+    const [stakeoutAlerts, abroadAlerts] = await Promise.all([
+      SLINK.services.targetList.activeAlerts(),
+      SLINK.services.abroadStocks.activeAlerts()
+    ]);
+    const abroadSettings = await SLINK.services.abroadStocks.publicStatus(false);
+    const candidates = [...efficiencyAlerts, ...stakeoutAlerts, ...(abroadSettings.settings.soundEnabled ? abroadAlerts : [])];
     const activeIds = candidates.map(alert => alert.id).sort();
     const activeSet = new Set((Array.isArray(previous?.activeIds) ? previous.activeIds : []).filter(id => activeIds.includes(id)));
     const pendingSet = new Set((Array.isArray(previous?.pendingIds) ? previous.pendingIds : []).filter(id => activeIds.includes(id)));
@@ -427,7 +435,10 @@
     }
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, ADHD.ALERT_SCOPE);
     const snapshot = currentRuntime.snapshot;
-    const stakeoutAlerts = await SLINK.services.targetList.activeAlerts();
+    const [stakeoutAlerts, abroadAlerts] = await Promise.all([
+      SLINK.services.targetList.activeAlerts(),
+      SLINK.services.abroadStocks.activeAlerts()
+    ]);
     return {
       configured:Boolean(access.configured),
       permitted,
@@ -435,7 +446,8 @@
       settings:currentSettings,
       activeAlerts:[
         ...ADHD.buildAlerts(snapshot || {}, currentSettings).filter(alert => snapshot || alert.id === 'timer24'),
-        ...stakeoutAlerts
+        ...stakeoutAlerts,
+        ...abroadAlerts
       ],
       city:snapshot ? ADHD.cityProgress(snapshot, currentSettings) : { bought:null, remaining:null, complete:false, manuallyDone:false },
       lastPurchase:currentRuntime.lastPurchase,

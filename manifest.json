@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.18.57",
+  "version": "0.18.58",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -16,7 +16,11 @@
     "https://slinkyleveling.richard-johnson554.workers.dev/*",
     "https://slinkcontributionworker.richard-johnson554.workers.dev/*",
     "https://slinkwarworker.richard-johnson554.workers.dev/*",
-    "https://slinkmuggingworker.richard-johnson554.workers.dev/*"
+    "https://slinkmuggingworker.richard-johnson554.workers.dev/*",
+    "https://yata.yt/*",
+    "https://prombot.co.uk:8443/*",
+    "https://torn-intel.com/*",
+    "https://droqsdb.com/*"
   ],
   "background": {
     "service_worker": "src/background/service-worker.js"
@@ -50,6 +54,7 @@
         "src/core/messaging.js",
         "src/content/player-intelligence-dom.js",
         "src/core/faction-chat.js",
+        "src/core/abroad-stocks.js",
         "src/core/racing.js",
         "src/core/modules.js",
         "src/core/war.js",
@@ -65,6 +70,7 @@
         "src/modules/market.js",
         "src/modules/merits.js",
         "src/modules/dollar-bazaars.js",
+        "src/modules/abroad-stocks.js",
         "src/modules/racing.js",
         "src/modules/contribution.js",
         "src/content/content-script.js"

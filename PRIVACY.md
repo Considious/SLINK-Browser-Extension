@@ -79,6 +79,16 @@ and page path locally for extension-injection diagnostics.
 SLINK does not monitor pages on unrelated websites or maintain a general
 browsing-history profile.
 
+### Abroad-stock information
+
+When Abroad Stocks is used, SLINK requests public foreign-stock data directly
+from YATA, Prometheus, and Torn Intel. Optional DroqsDB enrichment is used only
+when enabled. A user-provided Torn Intel client key, if required, is stored
+locally and sent only to Torn Intel over HTTPS. SLINK locally stores provider
+timestamps, recent stock observations, derived restock intervals, saved watches,
+travel preferences, and reminder state. Premium-only fields that a provider does
+not return are omitted.
+
 ### Preferences, diagnostics, and temporary operational data
 
 SLINK stores settings such as enabled modules, polling preferences, panel

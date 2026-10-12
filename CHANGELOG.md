@@ -1,5 +1,15 @@
 # SLINK Browser Extension Changelog
 
+## 0.18.58 — 2026-10-11
+
+### Added
+
+- Added **Quality of Life → Abroad Stocks**, with item or country search and side-by-side stock, cost, and update-age readings from YATA, Prometheus, and Torn Intel.
+- Added observed restock history, reliable next-restock estimates, travel-method timing, and calculated departure times without inventing estimates while history is still learning.
+- Added per-item/country departure watches. The Alerts tab can now remind users a configurable number of minutes before they need to leave and includes the exact TCT departure/restock times.
+- Added local settings for travel method, arrival buffer, alert lead time, reminder sound, optional Torn Intel client key, and optional DroqsDB enrichment.
+- Added provider caching, five-minute inactive-module shutdown, and restock-window deduplication to avoid unnecessary polling and duplicate alerts.
+
 ## 0.18.57 — 2026-10-11
 
 ### Fixed

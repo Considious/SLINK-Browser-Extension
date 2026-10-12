@@ -21,6 +21,26 @@
       optional: false,
       origins: Object.freeze(['https://weav3r.dev/*'])
     }),
+    yataTravel: Object.freeze({
+      label: 'YATA abroad stock',
+      optional: false,
+      origins: Object.freeze(['https://yata.yt/*'])
+    }),
+    prometheusTravel: Object.freeze({
+      label: 'Prometheus abroad stock',
+      optional: false,
+      origins: Object.freeze(['https://prombot.co.uk:8443/*'])
+    }),
+    tornIntelTravel: Object.freeze({
+      label: 'Torn Intel abroad stock',
+      optional: false,
+      origins: Object.freeze(['https://torn-intel.com/*'])
+    }),
+    droqsTravel: Object.freeze({
+      label: 'DroqsDB travel enrichment',
+      optional: false,
+      origins: Object.freeze(['https://droqsdb.com/*'])
+    }),
     slinkWorker: Object.freeze({
       label: 'SLINK Worker',
       optional: false,
