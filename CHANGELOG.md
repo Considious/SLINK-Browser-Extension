@@ -1,3 +1,9 @@
+## 0.18.59 - 2026-10-12
+
+- Added the permission-gated Organized Crime Travel Guard under Quality of Life.
+- Travel buttons now use Torn's displayed one-way duration, a round trip, and a 10% buffer before warning about an upcoming organized crime.
+- Added a deliberate Leave anyway bypass while failing open if Torn or permission data cannot be verified.
+
 # SLINK Browser Extension Changelog
 
 ## 0.18.58 — 2026-10-11
