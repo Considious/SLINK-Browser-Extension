@@ -384,9 +384,10 @@
     ]);
     const efficiencyAlerts = ADHD.buildAlerts(currentRuntime.snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
       .filter(alert => (currentRuntime.snapshot || alert.id === 'timer24') && currentSettings.soundEnabled[alert.id] === true);
-    const [stakeoutAlerts, abroadAlerts] = await Promise.all([
+    const [stakeoutAlerts, abroadAlerts, companyAlerts] = await Promise.all([
       SLINK.services.targetList.activeAlerts(),
-      SLINK.services.abroadStocks.activeAlerts()
+      SLINK.services.abroadStocks.activeAlerts(),
+      SLINK.services.company.activeAlerts()
     ]);
     const abroadSettings = await SLINK.services.abroadStocks.publicStatus(false);
     const candidates = [...efficiencyAlerts, ...stakeoutAlerts, ...(abroadSettings.settings.soundEnabled ? abroadAlerts : [])];
@@ -447,7 +448,8 @@
       activeAlerts:[
         ...ADHD.buildAlerts(snapshot || {}, currentSettings).filter(alert => snapshot || alert.id === 'timer24'),
         ...stakeoutAlerts,
-        ...abroadAlerts
+        ...abroadAlerts,
+        ...companyAlerts
       ],
       city:snapshot ? ADHD.cityProgress(snapshot, currentSettings) : { bought:null, remaining:null, complete:false, manuallyDone:false },
       lastPurchase:currentRuntime.lastPurchase,

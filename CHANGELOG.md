@@ -1,3 +1,10 @@
+## 0.18.61 - 2026-10-12
+
+- Added the permission-gated Company & Job Points module under Quality of Life for both employees and verified company directors.
+- Added configurable addiction warnings to the shared Alerts pipeline, including director-only employee reminders and direct profile/message actions.
+- Added a director train-priority estimate based on Torn's working-stat effectiveness headroom, clearly separated from exact projected stat gains.
+- Added shared reminder text controls for Torn messages and already-open private chats.
+
 ## 0.18.60 - 2026-10-12
 
 - Added a shared form-state guard so background refreshes cannot overwrite active text fields, selects, checkboxes, or cursor focus across Torn modules and the extension dashboard.
