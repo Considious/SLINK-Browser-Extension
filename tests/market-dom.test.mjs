@@ -11,7 +11,8 @@ for (const functionName of [
   'fillBazaarPurchaseMaximum',
   'fillItemMarketPurchaseMaximum',
   'syncHighlightedQuickPurchaseControls',
-  'handleHighlightedQuickPurchaseClick'
+  'handleHighlightedQuickPurchaseClick',
+  'elementVisible'
 ]) {
   assert(market.includes(`function ${functionName}`), `Missing ADHD Dashboard purchase function: ${functionName}`);
 }
@@ -32,6 +33,7 @@ assert(!war.includes('slink-armory-request-cell'), 'SLINK must not add request c
 assert(!war.includes('queueArmoryEnhancement'), 'SLINK must not restructure Torn Armory rows');
 assert(war.includes('war.armory.request'), 'Armory request handling must remain available');
 
+assert.equal((market.match(/function elementVisible\(element\)/g) || []).length, 1, 'The shared PDA visibility helper must exist exactly once.');
 assert(market.includes("return document.visibilityState !== 'hidden';"), 'Market DOM formatting must not depend on document.hasFocus() in PDA/WebView or Torn SPA transitions.');
 assert(market.includes("const marketDomTestAllowed = SLINK.core.permissions.hasScope(context.permissions, 'admin.*');"), 'Market DOM Test must derive visibility from admin.*.');
 assert(market.includes("if (marketDomTestAllowed) marketActions.push"), 'Market DOM Test must only be added for administrators.');

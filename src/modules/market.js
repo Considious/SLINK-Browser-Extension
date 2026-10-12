@@ -63,6 +63,14 @@
         return document.visibilityState !== 'hidden';
       }
 
+      function elementVisible(element) {
+        if (!element?.isConnected) return false;
+        const style = getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      }
+
       async function claimMarketSound() {
         try { await SLINK.core.messaging.send('audio.flush'); } catch {}
       }

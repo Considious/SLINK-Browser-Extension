@@ -1,3 +1,9 @@
+## 0.18.60 - 2026-10-12
+
+- Added a shared form-state guard so background refreshes cannot overwrite active text fields, selects, checkboxes, or cursor focus across Torn modules and the extension dashboard.
+- Restored the missing visibility helper used by the proven PDA/ADHD market DOM path, re-enabling extension highlights, the administrator DOM test, and fixed-position SLINK Buy controls.
+- Mugging clients now rely on the worker's uncapped rough Fair Fight estimate so a maximum of 3 is a real hard ceiling rather than an unlimited 3+ bucket.
+
 ## 0.18.59 - 2026-10-12
 
 - Added the permission-gated Organized Crime Travel Guard under Quality of Life.

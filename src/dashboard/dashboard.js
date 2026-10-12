@@ -2,6 +2,7 @@
   'use strict';
 
   const SLINK = globalThis.SLINK_EXTENSION;
+  SLINK.core.formState?.protect(document);
   const byId = id => document.getElementById(id);
   let system = null;
   let leveling = null;

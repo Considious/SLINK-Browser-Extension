@@ -90,6 +90,7 @@
     style.textContent = STYLES;
     const themeStyle = document.createElement('style');
     shadow.append(style, themeStyle);
+    SLINK.core.formState?.protect(shadow);
 
     function setTheme(id, permissions = {}) {
       const theme = SLINK.core.themes.resolve(id, permissions);
@@ -412,6 +413,7 @@
       if (views.has(module.id)) return views.get(module.id).api;
       const element = document.createElement('section');
       element.className = 'module-view';
+      element.dataset.slinkModuleId = module.id;
       element.innerHTML = `<div class="module-head"><strong></strong></div><div class="status" role="status"></div><div class="content"></div><div class="actions"></div>`;
       element.querySelector('strong').textContent = module.title;
       const tab = document.createElement('button');
