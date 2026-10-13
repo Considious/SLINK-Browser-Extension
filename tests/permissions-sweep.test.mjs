@@ -10,6 +10,7 @@ const expected = new Map([
   ['src/modules/abroad-stocks.js', 'slink.qol.abroad-stocks'],
   ['src/modules/bounties.js', 'slink.combat.bounties'],
   ['src/modules/dollar-bazaars.js', 'slink.efficiency.dollar-bazaars'],
+  ['src/modules/events.js', 'slink.qol.events'],
   ['src/modules/player-stats.js', 'slink.combat.player-stats'],
   ['src/modules/racing.js', 'slink.qol.racing'],
   ['src/modules/target-list.js', 'slink.combat.target-list'],
