@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.18.63",
+  "version": "0.18.64",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -60,6 +60,7 @@
         "src/core/travel-safety.js",
         "src/core/company.js",
         "src/core/museum.js",
+        "src/core/money-property.js",
         "src/core/modules.js",
         "src/core/war.js",
         "src/core/bounties.js",
@@ -79,6 +80,7 @@
         "src/modules/travel-safety.js",
         "src/modules/company.js",
         "src/modules/museums.js",
+        "src/modules/money-property.js",
         "src/modules/contribution.js",
         "src/content/content-script.js"
       ]

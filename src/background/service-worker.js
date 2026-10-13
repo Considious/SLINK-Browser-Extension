@@ -9,6 +9,7 @@ importScripts(
   '../core/travel-safety.js',
   '../core/company.js',
   '../core/museum.js',
+  '../core/money-property.js',
   'local-vault.js',
   '../core/permissions.js',
   '../core/adhd.js',
@@ -27,6 +28,7 @@ importScripts(
   'travel-safety-service.js',
   'company-service.js',
   'museum-service.js',
+  'money-property-service.js',
   'mugging-service.js',
   'adhd-service.js',
   'market-service.js',
@@ -400,6 +402,7 @@ const routes = {
   ...SLINK.services.travelSafety.routes,
   ...SLINK.services.company.routes,
   ...SLINK.services.museum.routes,
+  ...SLINK.services.moneyProperty.routes,
   ...SLINK.services.mugging.routes,
   ...SLINK.services.adhd.routes,
   ...SLINK.services.market.routes,
@@ -424,7 +427,10 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
   if (alarm.name === SLINK.services.adhd.ALARM) {
-    void SLINK.services.adhd.publicStatus(true)
+    void Promise.all([
+      SLINK.services.adhd.publicStatus(true),
+      SLINK.services.moneyProperty.publicStatus(true)
+    ])
       .then(() => SLINK.services.audio.flush())
       .catch(error => console.error('[SLINK] Efficiency alerts:', error));
     void SLINK.services.merits.publicStatus(true).catch(error => console.error('[SLINK] Merits:', error));
