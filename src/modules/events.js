@@ -4,6 +4,8 @@
   const SLINK = global.SLINK_EXTENSION;
   if (!SLINK) throw new Error('SLINK runtime must load before Events.');
   const CORE = SLINK.core.events;
+  const OVERLAY_ID = 'slink-halloween-upgrade-guide';
+  const OVERLAY_STYLE_ID = 'slink-halloween-upgrade-guide-style';
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[character]));
@@ -32,6 +34,38 @@
     return days ? `${days}d ${hours}h` : hours ? `${hours}h ${minutes}m` : `${minutes}m`;
   }
 
+  function readHalloweenBasketDom() {
+    const basketNameNode = [...document.querySelectorAll('span.name,.name')]
+      .find(node => /Halloween Basket/i.test(String(node.textContent || '')));
+    const wrapper = document.querySelector('.updates-grid-slides-wrapper');
+    if (!basketNameNode || !wrapper) return null;
+    const upgrades = [...wrapper.querySelectorAll('.basket-update[data-basket-action="upgrade"][data-upgradeid]')].map(button => ({
+      upgradeId:Number(button.dataset.upgradeid),
+      name:button.querySelector('.update-name')?.textContent || '',
+      unlocked:button.classList.contains('unlocked'),
+      disabled:Boolean(button.disabled || button.closest('.updates-grid-slide')?.classList.contains('disabled'))
+    }));
+    return { wrapper, rank:CORE.halloweenBasketRank(basketNameNode.textContent), upgrades };
+  }
+
+  function ensureOverlayStyle() {
+    if (document.getElementById(OVERLAY_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = OVERLAY_STYLE_ID;
+    style.textContent = `
+      #${OVERLAY_ID}{margin:10px 0;padding:11px;border:2px solid #ff8a00;border-radius:9px;background:#17120d;color:#f5f5f5;box-shadow:0 2px 10px #0008;font:12px/1.4 Arial,sans-serif}
+      #${OVERLAY_ID} .slink-halloween-head{display:flex;align-items:start;justify-content:space-between;gap:9px;flex-wrap:wrap}
+      #${OVERLAY_ID} h3{margin:0;color:#ffb347;font-size:14px}#${OVERLAY_ID} p{margin:4px 0 0;color:#ccc}
+      #${OVERLAY_ID} ol{display:grid;gap:6px;margin:9px 0 0;padding:0;list-style:none}
+      #${OVERLAY_ID} li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:7px;align-items:center;padding:7px;border:1px solid #555;border-radius:7px;background:#24201b}
+      #${OVERLAY_ID} li[data-current="true"]{border-color:#ff8a00;box-shadow:inset 3px 0 #ff8a00}
+      #${OVERLAY_ID} li[data-disabled="true"]{opacity:.8}#${OVERLAY_ID} .slink-step{font-weight:900;color:#ffb347}
+      #${OVERLAY_ID} small{display:block;color:#aaa}#${OVERLAY_ID} .slink-state{font-weight:700;color:#9ee493;text-align:right}
+      #${OVERLAY_ID} li[data-disabled="true"] .slink-state{color:#ffd166}
+    `;
+    (document.head || document.documentElement).append(style);
+  }
+
   SLINK.modules.register({
     id:'events',
     title:'Events',
@@ -47,6 +81,10 @@
       let data = null;
       let busy = false;
       let notice = '';
+      let stopped = false;
+      let basketObserver = null;
+      let basketScanTimer = null;
+      let basketSignature = '';
 
       ui.setModuleStyles(`
         .slink-events{display:grid;gap:9px}.slink-event-card{padding:10px;border:1px solid var(--slink-border-soft);border-radius:9px;background:var(--slink-bg-control)}
@@ -55,8 +93,19 @@
         .slink-event-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:9px}
         .slink-event-stat{padding:8px;border:1px solid var(--slink-border-soft);border-radius:7px}.slink-event-stat strong,.slink-event-stat small{display:block}.slink-event-stat small{color:var(--slink-muted)}
         .slink-event-status{text-transform:capitalize}.slink-event-progress{border-left:3px solid var(--slink-warning)}
-        @media(max-width:620px){.slink-event-stats{grid-template-columns:1fr}}
+        .slink-halloween-path{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin:8px 0}.slink-halloween-path div{padding:6px;border:1px solid var(--slink-border-soft);border-radius:6px}.slink-halloween-path b{color:var(--slink-accent)}
+        .slink-relic-list{display:grid;gap:5px;margin-top:7px}.slink-relic-list div{padding:6px;border-left:3px solid var(--slink-accent);background:var(--slink-bg)}.slink-relic-list strong,.slink-relic-list small{display:block}.slink-relic-list small{color:var(--slink-muted)}
+        @media(max-width:620px){.slink-event-stats,.slink-halloween-path{grid-template-columns:1fr}}
       `);
+
+      function halloweenGuideCard() {
+        return `<article class="slink-event-card slink-event-progress"><div class="slink-event-head"><div><strong>Halloween basket guide</strong><small>Exact tested progression from the linked community guide</small></div><a href="${CORE.HALLOWEEN_GUIDE_URL}">Open guide</a></div>
+          <div class="slink-halloween-path">${CORE.HALLOWEEN_UPGRADE_ORDER.map(upgrade => `<div><b>${upgrade.step}.</b> ${escapeHtml(upgrade.name)}${upgrade.optional ? ' <small>Optional</small>' : ''}</div>`).join('')}</div>
+          <p><strong>Normal path skips:</strong> ${CORE.HALLOWEEN_SKIPPED_UPGRADES.map(upgrade => escapeHtml(upgrade.name)).join(', ')}. Mortal Coil, Inflation, and Summon Him belong to the separate M'aol path.</p>
+          <p>On the basket page, SLINK reads Torn's actual unlocked classes and overlays the next three guide steps. A merely selected upgrade never counts as unlocked.</p>
+          <div class="slink-relic-list">${CORE.HALLOWEEN_RELICS.map(relic => `<div><strong>${escapeHtml(relic.name)}</strong><small>${escapeHtml(relic.effect)}</small></div>`).join('')}</div>
+        </article>`;
+      }
 
       function render() {
         const calendar = data?.calendar;
@@ -74,8 +123,39 @@
             <div class="slink-event-stats"><div class="slink-event-stat"><strong>${escapeHtml(dateTime(selected.startAt))}</strong><small>Starts${selected.startAt > Date.now() ? ' · ' + escapeHtml(countdown(selected.startAt)) : ''}</small></div><div class="slink-event-stat"><strong>${escapeHtml(dateTime(selected.endAt))}</strong><small>Ends</small></div><div class="slink-event-stat"><strong>${calendar.events.length}</strong><small>Events currently published</small></div></div>
             ${selected.description ? `<p>${escapeHtml(selected.description)}</p>` : ''}
           </article>
-          <article class="slink-event-card slink-event-progress"><strong>Event guide in progress</strong><p>Event-specific guides, preparation checklists, and SLINK best practices will be added here later. The framework is ready; this update does not guess at unfinished guidance.</p></article>
+          ${CORE.isHalloweenEvent(selected) ? halloweenGuideCard() : '<article class="slink-event-card slink-event-progress"><strong>Event guide in progress</strong><p>Event-specific preparation and SLINK best practices will be added here without guessing at unfinished guidance.</p></article>'}
         </div>`;
+      }
+
+      function renderBasketOverlay(snapshot) {
+        const guide = CORE.halloweenRecommendations(snapshot.upgrades, 3);
+        const signature = JSON.stringify([snapshot.rank, snapshot.upgrades.map(item => [item.upgradeId,item.unlocked,item.disabled])]);
+        if (signature === basketSignature && document.getElementById(OVERLAY_ID)) return;
+        basketSignature = signature;
+        ensureOverlayStyle();
+        let overlay = document.getElementById(OVERLAY_ID);
+        if (!overlay) {
+          overlay = document.createElement('section');
+          overlay.id = OVERLAY_ID;
+          snapshot.wrapper.parentElement?.insertBefore(overlay, snapshot.wrapper);
+        }
+        overlay.innerHTML = `<div class="slink-halloween-head"><div><h3>SLINK Halloween Upgrade Guide</h3><p>${escapeHtml(snapshot.rank || 'Halloween Basket')} · ${guide.completedCount}/${guide.total} guide steps complete</p></div><a href="${CORE.HALLOWEEN_GUIDE_URL}">Full guide</a></div>${guide.complete ? '<p><strong>Normal guide path complete.</strong></p>' : `<ol>${guide.recommendations.map(upgrade => `<li data-current="${String(upgrade.current)}" data-disabled="${String(upgrade.disabled)}"><span class="slink-step">#${upgrade.step}</span><span><strong>${escapeHtml(upgrade.name)}</strong><small>${upgrade.cost.toLocaleString()} treats${upgrade.note ? ' · ' + escapeHtml(upgrade.note) : ''}</small></span><span class="slink-state">${upgrade.disabled ? 'Locked—evolve basket' : upgrade.current ? 'Next' : 'Then'}</span></li>`).join('')}</ol>`}`;
+      }
+
+      function scanBasket() {
+        if (stopped) return;
+        const snapshot = readHalloweenBasketDom();
+        if (!snapshot) {
+          document.getElementById(OVERLAY_ID)?.remove();
+          basketSignature = '';
+          return;
+        }
+        renderBasketOverlay(snapshot);
+      }
+
+      function scheduleBasketScan(delay = 80) {
+        if (stopped || basketScanTimer) return;
+        basketScanTimer = global.setTimeout(() => { basketScanTimer = null; scanBasket(); }, delay);
       }
 
       async function load(force = false) {
@@ -105,8 +185,28 @@
         render();
       });
 
+      basketObserver = new MutationObserver(mutations => {
+        if (mutations.every(mutation => mutation.target?.closest?.(`#${OVERLAY_ID},#slink-extension-panel`))) return;
+        scheduleBasketScan();
+      });
+      basketObserver.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class','disabled'] });
+      global.addEventListener('hashchange', scheduleBasketScan);
+      global.addEventListener('popstate', scheduleBasketScan);
+      scheduleBasketScan(0);
+
       await load(false);
-      return { stop() {} };
+      return {
+        stop() {
+          stopped = true;
+          basketObserver?.disconnect();
+          if (basketScanTimer) global.clearTimeout(basketScanTimer);
+          global.removeEventListener('hashchange', scheduleBasketScan);
+          global.removeEventListener('popstate', scheduleBasketScan);
+          document.getElementById(OVERLAY_ID)?.remove();
+          document.getElementById(OVERLAY_STYLE_ID)?.remove();
+        }
+      };
     }
   });
 })(globalThis);
+
