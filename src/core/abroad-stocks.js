@@ -18,7 +18,7 @@
     ['uae','UAE',271], ['uni','United Kingdom',159]
   ].map(([code,name,minutes]) => Object.freeze({ code, name, minutes })));
 
-  const TRAVEL_MULTIPLIERS = Object.freeze({ standard:1, airstrip:0.7, private:0.5, business:0.3 });
+  const TRAVEL_MULTIPLIERS = Object.freeze({ standard:1, airstrip:0.7, business:0.5, private:0.3 });
   const countryByCode = new Map(COUNTRIES.map(country => [country.code, country]));
   const countryByName = new Map(COUNTRIES.map(country => [key(country.name), country]));
 
@@ -184,10 +184,10 @@
     return [...merged.values()].sort((left,right) => left.countryName.localeCompare(right.countryName) || left.itemName.localeCompare(right.itemName));
   }
 
-  function travelMinutes(countryCode, method = 'private', bufferMinutes = 0) {
+  function travelMinutes(countryCode, method = 'standard', bufferMinutes = 0) {
     const country = countryByCode.get(String(countryCode || '').toLowerCase());
     if (!country) return null;
-    const multiplier = TRAVEL_MULTIPLIERS[method] ?? TRAVEL_MULTIPLIERS.private;
+    const multiplier = TRAVEL_MULTIPLIERS[method] ?? TRAVEL_MULTIPLIERS.standard;
     return Math.ceil(country.minutes * multiplier) + Math.max(0, Number(bufferMinutes) || 0);
   }
 

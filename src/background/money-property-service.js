@@ -46,7 +46,7 @@
       && current.tornStocks && current.itemCatalog) return current;
     const [tornStocks, itemsBody] = await Promise.all([
       tornJson('https://api.torn.com/v2/torn/stocks?comment=SLINK%20money%20property%20stocks', key),
-      tornJson('https://api.torn.com/v2/torn/items?cat=All&sort=ASC&comment=SLINK%20money%20property%20items', key)
+      tornJson('https://api.torn.com/v2/torn/items?sort=ASC&comment=SLINK%20money%20property%20items', key)
     ]);
     const itemCatalog = SLINK.core.market.catalogItems(itemsBody);
     const next = { fetchedAt:Date.now(), tornStocks, itemCatalog };
@@ -65,10 +65,19 @@
       const key = await tornKey();
       if (!key) throw new Error('Save your Torn API key under API and feature access first.');
       try {
-        const [user, references] = await Promise.all([
-          tornJson('https://api.torn.com/v2/user?selections=money,properties,stocks,honors,medals,merits&comment=SLINK%20money%20property', key),
+        const [money, properties, stocks, achievementsResult, references] = await Promise.all([
+          tornJson('https://api.torn.com/v2/user/money?comment=SLINK%20money%20property', key),
+          tornJson('https://api.torn.com/v2/user/properties?limit=100&comment=SLINK%20money%20property', key),
+          tornJson('https://api.torn.com/v2/user/stocks?comment=SLINK%20money%20property', key),
+          tornJson('https://api.torn.com/v2/user?selections=honors,medals,merits&comment=SLINK%20money%20property', key).catch(() => ({})),
           catalog(cachedCatalog, key, false)
         ]);
+        const user = {
+          ...achievementsResult,
+          money:money?.money || {},
+          properties:properties?.properties || [],
+          stocks:stocks?.stocks || []
+        };
         const status = CORE.buildStatus({
           user,
           tornStocks:references.tornStocks,

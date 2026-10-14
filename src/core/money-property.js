@@ -80,7 +80,7 @@
     const raw = money.city_bank || money.cityBank || money.bank || {};
     const amount = integer(raw.amount ?? raw.invested ?? raw.balance);
     const timeLeft = firstFinite(raw.time_left, raw.timeLeft, raw.seconds_remaining, raw.remaining);
-    const maturedAt = timestampMs(raw.matures_at ?? raw.maturity ?? raw.end_time ?? raw.ends_at)
+    const maturedAt = timestampMs(raw.until ?? raw.matures_at ?? raw.maturity ?? raw.end_time ?? raw.ends_at)
       || (timeLeft !== null ? now + Math.max(0, timeLeft) * 1000 : 0);
     return {
       amount,
@@ -109,19 +109,28 @@
     return rows(source).map((entry, index) => {
       const rental = entry?.rental || entry?.rented || {};
       const lease = entry?.lease_extension ?? entry?.leaseExtension ?? null;
-      const daysLeft = firstFinite(rental?.days_left, rental?.daysLeft, entry?.days_left);
+      const daysLeft = firstFinite(rental?.days_left, rental?.daysLeft, entry?.days_left, entry?.rental_period_remaining);
       const rentalEndsAt = timestampMs(rental?.expires_at ?? rental?.end_date ?? rental?.until ?? entry?.rental_ends_at)
         || (daysLeft !== null ? now + Math.max(0, daysLeft) * 86_400_000 : 0);
       const leaseStatus = String(lease?.status || '').toLowerCase();
+      const status = String(entry?.status || '');
+      const upkeep = entry?.upkeep && typeof entry.upkeep === 'object' ? entry.upkeep : null;
+      const upkeepPerDay = upkeep
+        ? integer(upkeep.property) + integer(upkeep.staff)
+        : integer(entry?.upkeep ?? entry?.upkeep_per_day);
+      const upkeepOwedRaw = firstFinite(entry?.upkeep_owed, entry?.upkeep_due, entry?.owed?.upkeep);
+      const modifications = rows(entry?.modifications).map(value => String(value || '').trim()).filter(Boolean);
       return {
         id:integer(entry?.id ?? entry?.property_id) || index + 1,
         name:String(entry?.property?.name ?? entry?.name ?? entry?.property ?? 'Property'),
-        status:String(entry?.status || ''),
-        current:entry?.current === true || entry?.active === true || /rented|occupied/i.test(String(entry?.status || '')),
+        status,
+        current:entry?.current === true || entry?.active === true || /^(?:in_use|rented|occupied)$/i.test(status),
         rentalEndsAt,
         rentalDaysLeft:daysLeft,
-        upkeepPerDay:integer(entry?.upkeep ?? entry?.upkeep_per_day),
-        upkeepOwed:integer(entry?.upkeep_owed ?? entry?.upkeep_due ?? entry?.owed?.upkeep),
+        upkeepPerDay,
+        upkeepOwed:upkeepOwedRaw === null ? null : integer(upkeepOwedRaw),
+        modifications,
+        hasAirstrip:modifications.some(value => /airstrip/i.test(value)),
         leaseExtension:lease && typeof lease === 'object' ? {
           status:leaseStatus || 'pending',
           cost:integer(lease.cost),
@@ -158,16 +167,19 @@
       id:integer(entry?.id ?? entry?.stock_id),
       name:String(entry?.name || entry?.acronym || ''),
       acronym:String(entry?.acronym || ''),
-      price:Math.max(0, firstFinite(entry?.current_price, entry?.currentPrice, entry?.price) || 0)
+      price:Math.max(0, firstFinite(entry?.market?.price, entry?.current_price, entry?.currentPrice, entry?.price) || 0)
     })).filter(entry => entry.id > 0);
   }
 
   function ownedStocks(payload = {}) {
     const source = payload.stocks ?? payload;
-    return new Map(rows(source).map(entry => [
-      integer(entry?.id ?? entry?.stock_id),
-      integer(entry?.shares ?? entry?.total_shares ?? entry?.amount)
-    ]).filter(([id]) => id > 0));
+    return new Map(rows(source).map(entry => {
+      const id = integer(entry?.id ?? entry?.stock_id);
+      return [id, {
+        shares:integer(entry?.shares ?? entry?.total_shares ?? entry?.amount),
+        bonus:entry?.bonus && typeof entry.bonus === 'object' ? { ...entry.bonus } : {}
+      }];
+    }).filter(([id]) => id > 0));
   }
 
   function benefitDefinitions(stock = {}) {
@@ -188,9 +200,14 @@
     const itemName = String(item?.name ?? benefit.item_name ?? '');
     const quantity = Math.max(1, integer(item?.amount ?? benefit.quantity ?? benefit.amount) || 1);
     const catalog = rows(itemCatalog);
+    const lowerDescription = description.toLowerCase();
     const match = catalog.find(row => (itemId && integer(row?.id) === itemId)
-      || (itemName && String(row?.name || '').toLowerCase() === itemName.toLowerCase()));
-    return quantity * Math.max(0, firstFinite(match?.marketPrice, match?.market_value, match?.marketValue) || 0);
+      || (itemName && String(row?.name || '').toLowerCase() === itemName.toLowerCase()))
+      || catalog
+        .filter(row => String(row?.name || '').length >= 4 && lowerDescription.includes(String(row.name).toLowerCase()))
+        .sort((left, right) => String(right?.name || '').length - String(left?.name || '').length)[0];
+    const describedQuantity = Number(description.match(/(?:^|\s)(\d+)\s*(?:x|×)?\s+/i)?.[1]) || quantity;
+    return describedQuantity * Math.max(0, firstFinite(match?.marketPrice, match?.market_value, match?.marketValue) || 0);
   }
 
   function stockRows(userStocks, tornStocks, itemCatalog = [], availableCash = 0) {
@@ -198,7 +215,8 @@
     return catalogStocks(tornStocks).flatMap(stock => {
       const definitions = benefitDefinitions(stock);
       if (!definitions.length || !stock.price) return [];
-      const sharesOwned = owned.get(stock.id) || 0;
+      const holding = owned.get(stock.id) || { shares:0, bonus:{} };
+      const sharesOwned = holding.shares;
       const tiers = definitions.map((benefit, index) => {
         const requirement = integer(benefit.requirement ?? benefit.shares_required ?? benefit.shares ?? benefit.minimum_shares);
         return { benefit, requirement, index };
@@ -210,7 +228,8 @@
       else {
         const base = tiers[tiers.length - 1];
         if (!base.benefit.repeatable) return [];
-        threshold = base.requirement * (Math.floor(sharesOwned / base.requirement) + 1);
+        const nextIncrement = Math.max(1, integer(holding.bonus?.increment) + 1, Math.floor(sharesOwned / base.requirement) + 1);
+        threshold = base.requirement * nextIncrement;
         next = base;
       }
       const sharesNeeded = Math.max(0, threshold - sharesOwned);
@@ -244,7 +263,7 @@
   function buildStatus(input = {}, settingsInput = {}, now = Date.now()) {
     const user = input.user || {};
     const money = user.money || user;
-    const cashOnHand = integer(money.cash ?? money.money_onhand ?? money.moneyOnHand);
+    const cashOnHand = integer(money.wallet ?? money.cash ?? money.money_onhand ?? money.moneyOnHand);
     const factionCash = integer(money.faction?.money ?? money.faction_money ?? money.armory?.money);
     const vaultCash = integer(money.vault?.amount ?? money.vault);
     const availableCash = cashOnHand + factionCash;
@@ -257,7 +276,7 @@
       bank:normalizeBank(money, now),
       cashierChecks:normalizeChecks(money, now),
       properties,
-      currentProperty:properties.find(entry => entry.current) || properties[0] || null,
+      currentProperty:properties.find(entry => entry.current) || properties.find(entry => /^(?:in_use|rented)$/i.test(entry.status)) || properties[0] || null,
       loan:normalizeLoan(money),
       loanSharkEarned:achievementsKnown ? names.some(name => /loan shark/i.test(name)) : null,
       stocks:stockRows(user.stocks || {}, input.tornStocks || {}, input.itemCatalog || [], availableCash),
@@ -286,7 +305,7 @@
     if (property?.rentalEndsAt && property.rentalEndsAt - now <= settings.rentalLeadDays * 86_400_000) {
       push('rental', property.rentalEndsAt <= now ? 'Property rental expired' : 'Property rental expires soon', property.name, [['Property',PROPERTY_URL]]);
     }
-    if (property?.upkeepOwed >= settings.upkeepThreshold && settings.upkeepThreshold > 0) {
+    if (Number.isFinite(property?.upkeepOwed) && property.upkeepOwed >= settings.upkeepThreshold && settings.upkeepThreshold > 0) {
       push('upkeep', 'Property upkeep needs attention', `$ ${property.upkeepOwed.toLocaleString()} is currently owed.`.replace('$ ', '$'), [['Property',PROPERTY_URL]]);
     }
     if (property?.leaseExtension && !['accepted','declined'].includes(property.leaseExtension.status)) {

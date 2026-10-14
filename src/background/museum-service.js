@@ -45,7 +45,7 @@
 
   async function ensureCatalog(current, key, force = false) {
     if (!force && current.catalog?.items?.length && Date.now() - Number(current.catalog.fetchedAt || 0) < MUSEUM.CATALOG_MS) return current.catalog;
-    const body = await tornJson('https://api.torn.com/v2/torn/items?cat=All&sort=ASC&comment=SLINK%20museum%20catalog', key);
+    const body = await tornJson('https://api.torn.com/v2/torn/items?sort=ASC&comment=SLINK%20museum%20catalog', key);
     const items = SLINK.core.market.catalogItems(body);
     if (!items.length) throw new Error('Torn returned an empty item catalog.');
     return { fetchedAt:Date.now(), items };

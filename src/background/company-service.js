@@ -62,11 +62,18 @@
       const key = await tornKey();
       if (!key) throw new Error('Save your Torn API key under API and feature access first.');
       try {
-        const [user, company] = await Promise.all([
-          tornJson('https://api.torn.com/v2/user?selections=job%2Cjobpoints&comment=SLINK%20company%20assistant', key),
-          tornJson('https://api.torn.com/v2/company?selections=profile%2Cemployees&comment=SLINK%20company%20assistant', key)
+        const [job, jobpoints, profile, employees] = await Promise.all([
+          tornJson('https://api.torn.com/v2/user/job?comment=SLINK%20company%20assistant', key),
+          tornJson('https://api.torn.com/v2/user/jobpoints?comment=SLINK%20company%20assistant', key),
+          tornJson('https://api.torn.com/v2/company/profile?comment=SLINK%20company%20assistant', key),
+          tornJson('https://api.torn.com/v2/company/employees?comment=SLINK%20company%20assistant', key)
         ]);
-        const snapshot = COMPANY.normalizeSnapshot(user, company, permissionSession?.userId, Date.now());
+        const snapshot = COMPANY.normalizeSnapshot(
+          { ...job, ...jobpoints },
+          { ...profile, ...employees },
+          permissionSession?.userId,
+          Date.now()
+        );
         await SLINK.core.storage.set(KEYS.runtime, { fetchedAt:Date.now(), snapshot, lastError:'' });
       } catch (error) {
         await SLINK.core.storage.set(KEYS.runtime, { ...cached, lastError:SLINK.core.format.errorMessage(error) });

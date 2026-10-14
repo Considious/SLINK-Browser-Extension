@@ -69,10 +69,10 @@
 
       ui.setModuleStyles(`
         .slink-company{display:grid;gap:8px}
-        .slink-company-card{padding:9px;border:1px solid var(--slink-border-soft);border-radius:8px;background:var(--slink-bg-control)}
-        .slink-company-head,.slink-company-actions{display:flex;gap:7px;align-items:center;justify-content:space-between;flex-wrap:wrap}
-        .slink-company-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:7px}
-        .slink-company-grid span{display:block;color:var(--slink-muted);font-size:10px}.slink-company-grid strong{display:block;font-size:13px}
+        .slink-company-card{min-width:0;padding:10px;border:1px solid var(--slink-border-soft);border-radius:8px;background:var(--slink-bg-control)}
+        .slink-company-head,.slink-company-actions{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}.slink-company-head>div{min-width:0;flex:1}.slink-company-head strong,.slink-company-head small{display:block}.slink-company-head small{margin-top:3px;color:var(--slink-muted);line-height:1.35}
+        .slink-company-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;margin-top:8px}
+        .slink-company-grid>div{min-width:0;padding:7px;border:1px solid var(--slink-border-soft);border-radius:7px}.slink-company-grid span{display:block;margin-top:3px;color:var(--slink-muted);font-size:10px;line-height:1.3}.slink-company-grid strong{display:block;font-size:14px;overflow-wrap:anywhere}
         .slink-company-settings{display:flex;gap:8px;align-items:end;flex-wrap:wrap}.slink-company-settings label{display:grid;gap:3px;min-width:120px;flex:1}.slink-company-settings input{width:100%}
         .slink-company-list{display:grid;gap:6px}.slink-company-employee{display:grid;grid-template-columns:minmax(120px,1fr) auto;gap:7px;padding:8px;border:1px solid var(--slink-border-soft);border-radius:7px}
         .slink-company-employee small{display:block;color:var(--slink-muted)}.slink-company-actions{justify-content:flex-end}.slink-company-actions a,.slink-company-actions button{padding:4px 7px}

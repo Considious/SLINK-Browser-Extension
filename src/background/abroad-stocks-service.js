@@ -16,8 +16,12 @@
   let refreshing = null;
 
   function normalizeSettings(input = {}) {
+    const explicit = input?.travelMethodExplicit === true;
+    const detectedDefault = input?.travelDefault === 'airstrip' ? 'airstrip' : 'standard';
     return {
-      travelMethod:Object.hasOwn(ABROAD.TRAVEL_MULTIPLIERS, input?.travelMethod) ? input.travelMethod : 'private',
+      travelMethod:explicit && Object.hasOwn(ABROAD.TRAVEL_MULTIPLIERS, input?.travelMethod) ? input.travelMethod : detectedDefault,
+      travelMethodExplicit:explicit,
+      travelDefault:detectedDefault,
       arrivalBufferMinutes:Math.min(30, Math.max(0, Number(input?.arrivalBufferMinutes) || 3)),
       alertLeadMinutes:Math.min(180, Math.max(0, Number(input?.alertLeadMinutes) || 10)),
       alertsEnabled:input?.alertsEnabled !== false,
@@ -45,6 +49,43 @@
   async function watches() {
     const value = await SLINK.core.storage.get(KEYS.watches, []);
     return Array.isArray(value) ? value.filter(entry => entry && entry.key) : [];
+  }
+
+  async function tornKey() {
+    const [access, leveling, war] = await Promise.all([
+      SLINK.services.permissionAccess.settings(),
+      SLINK.core.storage.get('leveling.settings.v1', {}),
+      SLINK.core.storage.get('war.settings.v1', {})
+    ]);
+    return String(access?.tornKey || leveling?.tornKey || war?.tornKey || '').trim();
+  }
+
+  async function detectTravelDefault(currentRuntime, currentSettings) {
+    if (currentSettings.travelMethodExplicit) return currentSettings;
+    const checkedAt = Number(currentRuntime.travelDefaultCheckedAt) || 0;
+    if (checkedAt && Date.now() - checkedAt < 24 * 60 * 60_000) return currentSettings;
+    const key = await tornKey();
+    if (!key) return currentSettings;
+    try {
+      await SLINK.core.tornApiLimiter.reserve({ wait:true });
+      const response = await SLINK.core.http.requestJson('tornApi', 'https://api.torn.com/v2/user/property?comment=SLINK%20abroad%20travel%20default', {
+        headers:{ Authorization:`ApiKey ${key}` },
+        cache:'no-store'
+      });
+      if (response?.error) throw new Error(response.error.message || 'Torn property request failed.');
+      const property = response?.property || {};
+      const hasAirstrip = Array.isArray(property?.modifications)
+        && property.modifications.some(value => /airstrip/i.test(String(value || '')));
+      const next = normalizeSettings({ ...currentSettings, travelDefault:hasAirstrip ? 'airstrip' : 'standard' });
+      await SLINK.core.storage.set(KEYS.settings, next);
+      currentRuntime.travelDefaultCheckedAt = Date.now();
+      currentRuntime.hasAirstrip = hasAirstrip;
+      return next;
+    } catch {
+      currentRuntime.travelDefaultCheckedAt = Date.now();
+      currentRuntime.hasAirstrip = false;
+      return currentSettings;
+    }
   }
 
   async function requestProvider(providerId, currentSettings) {
@@ -100,10 +141,11 @@
     if (refreshing) return refreshing;
     refreshing = (async () => {
       const now = Date.now();
-      const [currentRuntime, currentSettings, currentWatches] = await Promise.all([runtime(), settings(), watches()]);
+      const [currentRuntime, storedSettings, currentWatches] = await Promise.all([runtime(), settings(), watches()]);
       if (!force && Number(currentRuntime.fetchedAt) + CACHE_MS > now) return publicStatus(false);
       if (!force && Number(currentRuntime.activeUntil) <= now && !currentWatches.length) return publicStatus(false);
 
+      const currentSettings = await detectTravelDefault(currentRuntime, storedSettings);
       const providerIds = ['yata','prometheus','tornIntel', ...(currentSettings.useDroqs ? ['droqs'] : [])];
       const settled = await Promise.allSettled(providerIds.map(providerId => requestProvider(providerId, currentSettings)));
       const snapshots = { ...(currentRuntime.snapshots || {}) };
@@ -153,7 +195,7 @@
   }
 
   async function saveSettings(input = {}) {
-    const next = normalizeSettings(input);
+    const next = normalizeSettings({ ...input, travelMethodExplicit:true });
     await SLINK.core.storage.set(KEYS.settings, next);
     return publicStatus(false);
   }

@@ -6,6 +6,12 @@
 
   const ABROAD = SLINK.core.abroadStocks;
   const PROVIDER_ORDER = ['yata','prometheus','tornIntel'];
+  const TRAVEL_LABELS = Object.freeze({
+    standard:'Standard',
+    airstrip:'Private Island airstrip',
+    business:'Business Class',
+    private:'Private Jet'
+  });
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[character]));
@@ -45,9 +51,9 @@
         '.slink-abroad-toolbar select,.slink-abroad-toolbar input,.slink-abroad-settings select,.slink-abroad-settings input{min-width:0;padding:6px;border:1px solid var(--slink-border);border-radius:6px;background:var(--slink-bg);color:var(--slink-text);font:inherit}' +
         '.slink-abroad-toolbar button,.slink-abroad-card button,.slink-abroad-settings button,.slink-provider-access a{display:inline-flex;align-items:center;justify-content:center;min-height:29px;padding:4px 8px;border:1px solid var(--slink-border);border-radius:6px;background:var(--slink-bg);color:var(--slink-text);font:inherit;text-decoration:none;cursor:pointer}' +
         '.slink-abroad-list{display:grid;gap:7px;max-height:480px;overflow:auto;padding-right:2px}.slink-abroad-card{padding:8px;border:1px solid var(--slink-border-soft);border-radius:8px;background:var(--slink-bg-control)}' +
-        '.slink-abroad-card header{display:flex;align-items:start;justify-content:space-between;gap:6px}.slink-abroad-card h3{margin:0;font-size:12px}.slink-abroad-card header span{color:var(--slink-muted);font-size:10px}' +
+        '.slink-abroad-card header{display:flex;align-items:start;justify-content:space-between;gap:7px}.slink-abroad-card header>div{min-width:0;flex:1}.slink-abroad-card h3,.slink-abroad-card header span{display:block}.slink-abroad-card h3{margin:0;font-size:12px}.slink-abroad-card header span{margin-top:3px;color:var(--slink-muted);font-size:10px}' +
         '.slink-abroad-sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:7px}.slink-abroad-source{padding:5px;border-radius:6px;background:var(--slink-bg)}.slink-abroad-source strong,.slink-abroad-source span,.slink-abroad-source small{display:block}.slink-abroad-source span{font-size:10px}.slink-abroad-source small{color:var(--slink-muted);font-size:9px}' +
-        '.slink-abroad-restock{display:grid;gap:2px;margin-top:7px;color:var(--slink-muted);font-size:10px}.slink-abroad-actions{display:flex;gap:5px;margin-top:7px}.slink-abroad-actions button[data-watched="true"]{border-color:var(--slink-ready);color:var(--slink-ready)}' +
+        '.slink-abroad-restock{display:grid;gap:4px;margin-top:8px;color:var(--slink-muted);font-size:10px}.slink-abroad-restock span{display:block;line-height:1.35}.slink-abroad-restock .slink-leave-time{padding:6px 7px;border-left:3px solid var(--slink-ready);border-radius:4px;background:var(--slink-bg);color:var(--slink-text);font-size:11px;font-weight:700}.slink-abroad-actions{display:flex;gap:5px;margin-top:7px}.slink-abroad-actions button[data-watched="true"]{border-color:var(--slink-ready);color:var(--slink-ready)}' +
         '.slink-abroad-empty{padding:16px;text-align:center;color:var(--slink-muted);background:var(--slink-bg-control);border-radius:7px}.slink-abroad-settings{margin-top:8px;padding:7px;border:1px solid var(--slink-border-soft);border-radius:7px}.slink-abroad-settings summary{cursor:pointer;font-weight:bold}.slink-abroad-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}.slink-abroad-grid label{display:grid;gap:3px;color:var(--slink-muted);font-size:10px}.slink-provider-access{grid-column:1/-1;display:grid;gap:5px;padding:6px;border-radius:6px;background:var(--slink-bg)}' +
         '.slink-provider-strip{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px;color:var(--slink-muted);font-size:10px}.slink-provider-strip span[data-ok="true"]{color:var(--slink-ready)}.slink-provider-strip span[data-ok="false"]{color:var(--slink-warning)}'
       );
@@ -81,7 +87,7 @@
           '<div class="slink-abroad-restock">' +
           (last ? '<span>Last observed restock: ' + escapeHtml(ABROAD.formatTct(last)) + '</span>' : '<span>Restock history is still learning.</span>') +
           (next ? '<span>Estimated next restock: ' + escapeHtml(ABROAD.formatTct(next)) + (row.predictionSource ? ' · ' + escapeHtml(row.predictionSource) : '') + '</span>' : '') +
-          (leaveAt ? '<span>Leave by: ' + escapeHtml(ABROAD.formatTct(leaveAt)) + '</span>' : '') +
+          (leaveAt ? '<span class="slink-leave-time">Leave at ' + escapeHtml(ABROAD.formatTct(leaveAt)) + '</span>' : '<span>Leave time will appear when a provider publishes a restock estimate.</span>') +
           '</div><div class="slink-abroad-actions"><button type="button" data-watch-key="' + escapeHtml(row.key) + '" data-watched="' + String(row.watched === true) + '">' +
           (row.watched ? 'Watching departure' : 'Alert me when to leave') + '</button></div></article>';
       }
@@ -103,7 +109,7 @@
           '<button type="button" data-refresh>Refresh</button></div>' +
           '<div class="slink-abroad-list">' + (rows.length ? rows.map(rowCard).join('') : '<div class="slink-abroad-empty">No matching abroad stock is currently available.</div>') + '</div>' +
           '<details class="slink-abroad-settings"><summary>Travel and alert settings</summary><div class="slink-abroad-grid">' +
-          '<label>Travel method<select data-setting="travelMethod"><option value="standard">Standard</option><option value="airstrip">Airstrip</option><option value="private">Private</option><option value="business">Business</option></select></label>' +
+          '<label>Travel method<select data-setting="travelMethod">' + Object.entries(TRAVEL_LABELS).map(([value,label]) => '<option value="' + value + '">' + escapeHtml(label) + '</option>').join('') + '</select><small>' + (status.settings.travelMethodExplicit ? 'Manually selected' : 'Automatically selected from your current property') + '</small></label>' +
           '<label>Arrival buffer (minutes)<input data-setting="arrivalBufferMinutes" type="number" min="0" max="30" value="' + Number(status.settings.arrivalBufferMinutes) + '"></label>' +
           '<label>Alert before leave time (minutes)<input data-setting="alertLeadMinutes" type="number" min="0" max="180" value="' + Number(status.settings.alertLeadMinutes) + '"></label>' +
           '<label><span>Departure reminders</span><input data-setting="alertsEnabled" type="checkbox"' + (status.settings.alertsEnabled ? ' checked' : '') + '></label>' +

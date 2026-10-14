@@ -71,9 +71,10 @@
     const directorId = Math.trunc(Number(profile?.director?.id ?? profile?.director_id) || 0);
     const currentUserId = Math.trunc(Number(userId) || 0);
     const self = employees.find(employee => employee.id === currentUserId) || null;
-    const companyId = Math.trunc(Number(job?.company_id ?? job?.company?.id ?? profile?.id) || 0);
+    const companyId = Math.trunc(Number(job?.id ?? job?.company_id ?? job?.company?.id ?? profile?.id) || 0);
+    const companyTypeId = Math.trunc(Number(job?.type_id ?? job?.company_type ?? job?.company?.type_id) || 0);
     const companyPoints = Array.isArray(jobpoints?.companies)
-      ? jobpoints.companies.find(entry => Number(entry?.company?.id ?? entry?.company_id) === companyId)
+      ? jobpoints.companies.find(entry => Number(entry?.company?.id ?? entry?.company_type_id) === companyTypeId)
       : null;
     return {
       fetchedAt:Number(fetchedAt) || Date.now(),
@@ -81,7 +82,7 @@
       company:{
         id:companyId,
         name:String(job?.company_name ?? job?.company?.name ?? profile?.name ?? ''),
-        typeId:Math.trunc(Number(job?.company_type ?? job?.type_id ?? job?.company?.type_id) || 0),
+        typeId:companyTypeId,
         rating:Math.trunc(Number(job?.company_rating ?? job?.rating ?? profile?.rating) || 0),
         position:String(job?.position ?? ''),
         daysInCompany:Math.max(0, Math.trunc(Number(job?.days_in_company) || 0)),

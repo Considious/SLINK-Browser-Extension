@@ -87,11 +87,11 @@
       let basketSignature = '';
 
       ui.setModuleStyles(`
-        .slink-events{display:grid;gap:9px}.slink-event-card{padding:10px;border:1px solid var(--slink-border-soft);border-radius:9px;background:var(--slink-bg-control)}
-        .slink-event-head,.slink-event-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+        .slink-events{display:grid;gap:10px}.slink-event-card{min-width:0;padding:11px;border:1px solid var(--slink-border-soft);border-radius:9px;background:var(--slink-bg-control)}
+        .slink-event-head,.slink-event-actions{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;flex-wrap:wrap}.slink-event-head>div{min-width:0;flex:1}.slink-event-head strong,.slink-event-head small{display:block}.slink-event-head small{margin-top:3px;color:var(--slink-muted);line-height:1.35}
         .slink-event-picker{display:grid;gap:5px;margin-top:9px}.slink-event-picker select{width:100%;min-height:42px}
-        .slink-event-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:9px}
-        .slink-event-stat{padding:8px;border:1px solid var(--slink-border-soft);border-radius:7px}.slink-event-stat strong,.slink-event-stat small{display:block}.slink-event-stat small{color:var(--slink-muted)}
+        .slink-event-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;margin-top:9px}
+        .slink-event-stat{min-width:0;padding:8px;border:1px solid var(--slink-border-soft);border-radius:7px}.slink-event-stat strong,.slink-event-stat small{display:block}.slink-event-stat strong{overflow-wrap:anywhere}.slink-event-stat small{margin-top:3px;color:var(--slink-muted);line-height:1.3}
         .slink-event-status{text-transform:capitalize}.slink-event-progress{border-left:3px solid var(--slink-warning)}
         .slink-halloween-path{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin:8px 0}.slink-halloween-path div{padding:6px;border:1px solid var(--slink-border-soft);border-radius:6px}.slink-halloween-path b{color:var(--slink-accent)}
         .slink-relic-list{display:grid;gap:5px;margin-top:7px}.slink-relic-list div{padding:6px;border-left:3px solid var(--slink-accent);background:var(--slink-bg)}.slink-relic-list strong,.slink-relic-list small{display:block}.slink-relic-list small{color:var(--slink-muted)}
@@ -117,7 +117,7 @@
         root.innerHTML = `<div class="slink-events">
           <article class="slink-event-card"><div class="slink-event-head"><div><strong>Torn Events</strong><small>Updated ${relativeTime(data.fetchedAt)} · one permission covers every event</small></div><button type="button" data-events-refresh>${busy ? 'Checking…' : 'Refresh'}</button></div>
             ${data.lastError ? `<p>${escapeHtml(data.lastError)}</p>` : ''}${notice ? `<p>${escapeHtml(notice)}</p>` : ''}
-            <label class="slink-event-picker">Choose event<select data-events-select>${calendar.events.map(event => `<option value="${escapeHtml(event.id)}" ${event.id === selected.id ? 'selected' : ''}>${escapeHtml(event.name)} · ${escapeHtml(event.state)}</option>`).join('')}</select></label>
+            <label class="slink-event-picker">Choose event<select data-events-select>${calendar.events.map(event => `<option value="${escapeHtml(event.id)}" ${event.id === selected.id ? 'selected' : ''}>${escapeHtml(event.name)} · ${escapeHtml(event.state === 'unscheduled' ? 'schedule not published' : event.state)}</option>`).join('')}</select></label>
           </article>
           <article class="slink-event-card"><div class="slink-event-head"><div><strong>${escapeHtml(selected.name)}</strong><small class="slink-event-status">${escapeHtml(selected.state)}${selected.personalized ? ' · personalized Torn start time' : ''}</small></div><a href="${CORE.CALENDAR_URL}">Open Torn calendar</a></div>
             <div class="slink-event-stats"><div class="slink-event-stat"><strong>${escapeHtml(dateTime(selected.startAt))}</strong><small>Starts${selected.startAt > Date.now() ? ' · ' + escapeHtml(countdown(selected.startAt)) : ''}</small></div><div class="slink-event-stat"><strong>${escapeHtml(dateTime(selected.endAt))}</strong><small>Ends</small></div><div class="slink-event-stat"><strong>${calendar.events.length}</strong><small>Events currently published</small></div></div>
