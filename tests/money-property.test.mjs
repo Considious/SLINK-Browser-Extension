@@ -11,17 +11,24 @@ const now = 1_800_000_000_000;
 const status = money.buildStatus({
   user:{
     money:{ cash:2_000_000, faction:{ money:4_000_000 }, city_bank:{ amount:1_000_000, time_left:0 }, loan:{ amount:0 } },
-    properties:[{ id:1, name:'Private Island', status:'rented', rented:{ days_left:2 }, upkeep_owed:1_500_000, lease_extension:{ status:'pending', period:30 } }],
+    properties:[{ id:2, name:'Ranch', status:'owned' }],
+    currentProperty:{ id:1, name:'Private Island', status:'rented', rented:{ days_left:2 }, upkeep_owed:1_500_000, lease_extension:{ status:'pending', period:30 } },
     honors:[{ name:'Another honor' }],
-    stocks:[{ id:1, shares:50 }]
+    stocks:[{ id:1, shares:50 }, { id:2, shares:0 }]
   },
-  tornStocks:{ stocks:[{ id:1, name:'Test Stock', acronym:'TST', current_price:1000, bonus:{ requirement:100, description:'$700,000 every 7 days', frequency:7 } }] }
+  tornStocks:{ stocks:[
+    { id:1, name:'Test Stock', acronym:'TST', current_price:1000, bonus:{ requirement:100, description:'$700,000 every 7 days', frequency:7 } },
+    { id:2, name:'No Income Stock', acronym:'NIX', current_price:1000, bonus:{ requirement:100, description:'Free advertising', frequency:7 } }
+  ] }
 }, { stockAlerts:{ '1:100':true } }, now);
 
 assert.equal(status.money.availableCash, 6_000_000);
 assert.equal(status.bank.matured, true);
 assert.equal(status.currentProperty.upkeepOwed, 1_500_000);
+assert.equal(status.stocks.length, 1);
 assert.equal(status.stocks[0].incrementalCost, 50_000);
+assert.equal(status.stocks[0].payoutValue, 700_000);
+assert.equal(status.stocks[0].cadenceLabel, 'Every week');
 assert.equal(status.stocks[0].affordable, true);
 assert.ok(status.stocks[0].weeklyRoi > 0);
 const alerts = money.buildAlerts(status, { stockAlerts:{ '1:100':true }, upkeepThreshold:1_000_000 }, now);

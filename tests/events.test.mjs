@@ -46,5 +46,9 @@ const selectedIsNotUnlocked = core.halloweenRecommendations([{ upgradeId:13, nam
 assert.equal(selectedIsNotUnlocked.recommendations.some(entry => entry.name === 'Cat in Hell'), true);
 assert.equal(core.isHalloweenEvent({ name:'Halloween' }), true);
 assert.equal(core.isHalloweenEvent({ name:'Christmas Town' }), false);
+const yearRound = core.mergeCalendars({ calendar:[{ id:'christmas', name:'Christmas Town', start:Math.floor((now + 30 * 86_400_000) / 1000) }] }, {}, now);
+assert.equal(yearRound.next.name, 'Christmas Town');
+assert.equal(yearRound.events.some(event => event.id === 'guide:halloween' && event.guideOnly), true);
+assert.equal(core.selectEvent(yearRound, 'guide:halloween').name, 'Halloween');
 console.log('SLINK Events tests passed.');
 

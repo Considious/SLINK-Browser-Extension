@@ -1,3 +1,10 @@
+## 0.18.68 - 2026-10-17
+
+- Restored desktop resizing for the in-Torn SLINK panel without affecting alert windows.
+- Rebuilt Money & Property stock benefits as compact, responsive income cards with actual payout value, cadence, weekly/monthly estimates, and positive ROI only.
+- Corrected current-property loading through Torn's dedicated property endpoint and forced manual refreshes to refresh financial reference catalogs.
+- Kept the Halloween guide selectable year-round while retaining the next live Torn event as the default.
+
 ## 0.18.63 - 2026-10-12
 
 - Made every valid `admin.*` or `*` grant override all feature gates, without a hard-coded user ID.

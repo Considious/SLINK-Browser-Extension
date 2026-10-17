@@ -62,6 +62,16 @@
     return 0;
   }
 
+  function cadenceLabel(days) {
+    const value = Number(days);
+    if (!Number.isFinite(value) || value <= 0) return 'Cadence unavailable';
+    if (Math.abs(value - 1) < 0.01) return 'Every day';
+    if (Math.abs(value - 7) < 0.01) return 'Every week';
+    if (Math.abs(value - 14) < 0.01) return 'Every 2 weeks';
+    if (Math.abs(value - 30.4375) < 0.1) return 'Every month';
+    return `Every ${Number(value.toFixed(1))} days`;
+  }
+
   function normalizeSettings(value = {}) {
     const stockAlerts = value.stockAlerts && typeof value.stockAlerts === 'object' ? { ...value.stockAlerts } : {};
     return {
@@ -237,8 +247,9 @@
       const blockCost = Math.ceil(threshold * stock.price);
       const benefitValue = benefitEstimate(next.benefit, itemCatalog);
       const periodDays = daysFromFrequency(next.benefit.frequency ?? next.benefit.interval, next.benefit.description);
-      const weeklyValue = benefitValue > 0 && periodDays > 0 ? benefitValue * 7 / periodDays : 0;
-      const monthlyValue = benefitValue > 0 && periodDays > 0 ? benefitValue * 30.4375 / periodDays : 0;
+      if (!(benefitValue > 0) || !(periodDays > 0)) return [];
+      const weeklyValue = benefitValue * 7 / periodDays;
+      const monthlyValue = benefitValue * 30.4375 / periodDays;
       return [{
         id:stock.id,
         name:stock.name,
@@ -250,7 +261,10 @@
         incrementalCost,
         blockCost,
         affordable:incrementalCost > 0 && availableCash >= incrementalCost,
-        benefitDescription:String(next.benefit.description || next.benefit.name || 'Benefit value unavailable'),
+        benefitDescription:String(next.benefit.description || next.benefit.name || 'Income benefit'),
+        payoutValue:benefitValue,
+        periodDays,
+        cadenceLabel:cadenceLabel(periodDays),
         weeklyValue,
         monthlyValue,
         weeklyRoi:blockCost > 0 ? weeklyValue / blockCost : 0,
@@ -270,13 +284,17 @@
     const names = achievementNames(user);
     const achievementsKnown = names.length > 0;
     const properties = normalizeProperties(user.properties || input.properties || {}, now);
+    const currentPropertyPayload = user.currentProperty || input.currentProperty || null;
+    const currentProperty = currentPropertyPayload
+      ? normalizeProperties([currentPropertyPayload.property || currentPropertyPayload], now)[0] || null
+      : null;
     return {
       at:now,
       money:{ cashOnHand, factionCash, vaultCash, availableCash },
       bank:normalizeBank(money, now),
       cashierChecks:normalizeChecks(money, now),
       properties,
-      currentProperty:properties.find(entry => entry.current) || properties.find(entry => /^(?:in_use|rented)$/i.test(entry.status)) || properties[0] || null,
+      currentProperty:currentProperty || properties.find(entry => entry.current) || properties.find(entry => /^(?:in_use|rented)$/i.test(entry.status)) || properties[0] || null,
       loan:normalizeLoan(money),
       loanSharkEarned:achievementsKnown ? names.some(name => /loan shark/i.test(name)) : null,
       stocks:stockRows(user.stocks || {}, input.tornStocks || {}, input.itemCatalog || [], availableCash),
@@ -333,6 +351,7 @@
     STOCKS_URL,
     buildAlerts,
     buildStatus,
+    cadenceLabel,
     catalogStocks,
     normalizeBank,
     normalizeChecks,

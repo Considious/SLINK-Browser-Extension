@@ -42,6 +42,20 @@
     return days ? `${days}d ${hours}h` : hours ? `${hours}h ${minutes}m` : `${minutes}m`;
   }
 
+  function stockCard(stock, settings) {
+    return `<article class="slink-stock-row">
+      <div class="slink-stock-title"><strong>${escapeHtml(stock.name)} ${escapeHtml(stock.acronym)}</strong><small>${escapeHtml(stock.benefitDescription)}</small></div>
+      <div class="slink-stock-payout"><strong title="${escapeHtml(exactMoney(stock.payoutValue))}">${money(stock.payoutValue)} per payout</strong><small>${escapeHtml(stock.cadenceLabel)}</small></div>
+      <div class="slink-stock-metrics">
+        <span><strong title="${escapeHtml(exactMoney(stock.incrementalCost))}">${money(stock.incrementalCost)}</strong><small>Cost to next block · ${stock.sharesNeeded.toLocaleString()} shares</small></span>
+        <span><strong>${money(stock.weeklyValue)}</strong><small>Estimated weekly value</small></span>
+        <span><strong>${money(stock.monthlyValue)}</strong><small>Estimated monthly value</small></span>
+        <span><strong>${percent(stock.monthlyRoi)}</strong><small>Estimated monthly ROI</small></span>
+      </div>
+      <label><input type="checkbox" data-stock-alert="${escapeHtml(stock.alertKey)}" ${settings.stockAlerts[stock.alertKey] ? 'checked' : ''}> Alert when affordable</label>
+    </article>`;
+  }
+
   SLINK.modules.register({
     id:'money-property',
     title:'Money & Property',
@@ -63,9 +77,9 @@
         .slink-finance-head,.slink-finance-actions{display:flex;gap:9px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}.slink-finance-head>div{min-width:0;flex:1}.slink-finance-head strong,.slink-finance-head small{display:block}.slink-finance-head small{margin-top:3px;color:var(--slink-muted);line-height:1.35}
         .slink-finance-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:7px;margin-top:9px}.slink-finance-stat{min-width:0;padding:8px;border:1px solid var(--slink-border-soft);border-radius:7px}.slink-finance-stat strong,.slink-finance-stat small{display:block}.slink-finance-stat strong{font-size:14px;overflow-wrap:anywhere}.slink-finance-stat small{margin-top:3px;color:var(--slink-muted);line-height:1.25}
         .slink-finance-settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:8px}.slink-finance-settings label{display:grid;gap:4px;color:var(--slink-muted)}.slink-finance-settings input:not([type="checkbox"]){width:100%;box-sizing:border-box;min-height:40px}
-        .slink-stock-list{display:grid;gap:8px;margin-top:9px}.slink-stock-row{display:grid;grid-template-columns:minmax(170px,1.35fr) repeat(3,minmax(105px,1fr));gap:9px;align-items:start;padding:9px;border:1px solid var(--slink-border-soft);border-radius:7px}.slink-stock-row>div{min-width:0}.slink-stock-row strong,.slink-stock-row small{display:block}.slink-stock-row small{margin-top:3px;color:var(--slink-muted);line-height:1.3}.slink-stock-row label{grid-column:1/-1;display:flex;gap:6px;align-items:center}
+        .slink-stock-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:8px;margin-top:9px}.slink-stock-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;padding:10px;border:1px solid var(--slink-border-soft);border-radius:8px;background:var(--slink-bg)}.slink-stock-row>div,.slink-stock-row span{min-width:0}.slink-stock-row strong,.slink-stock-row small{display:block}.slink-stock-row small{margin-top:3px;color:var(--slink-muted);line-height:1.3}.slink-stock-title{min-width:0}.slink-stock-payout{text-align:right}.slink-stock-metrics{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.slink-stock-metrics span{padding:7px;border:1px solid var(--slink-border-soft);border-radius:6px}.slink-stock-row label{grid-column:1/-1;display:flex;gap:6px;align-items:center}
         .slink-finance-alerts{display:grid;gap:6px;margin-top:8px}.slink-finance-alert{padding:8px;border-left:3px solid var(--slink-warning);background:var(--slink-bg)}.slink-finance-alert strong,.slink-finance-alert small{display:block}.slink-finance-alert small{margin-top:3px}
-        @media(max-width:760px){.slink-stock-row{grid-template-columns:repeat(2,minmax(0,1fr))}.slink-stock-row>div:first-child{grid-column:1/-1}}@media(max-width:420px){.slink-finance-stats,.slink-finance-settings,.slink-stock-row{grid-template-columns:1fr 1fr}}
+        @media(max-width:420px){.slink-finance-stats,.slink-finance-settings{grid-template-columns:1fr 1fr}.slink-stock-row{grid-template-columns:minmax(0,1fr)}.slink-stock-payout{text-align:left}.slink-stock-metrics,.slink-stock-row label{grid-column:1}.slink-stock-metrics{grid-template-columns:1fr 1fr}}
       `);
 
       function render() {
@@ -97,7 +111,7 @@
             <button type="button" data-money-save>Save reminder settings</button>
           </div></details></article>
           <article class="slink-finance-card"><div class="slink-finance-head"><div><strong>Stock benefit ROI</strong><small>Estimated from current share price and Torn benefit data.</small></div><a href="${CORE.STOCKS_URL}">Open stocks</a></div>
-            <div class="slink-stock-list">${status.stocks.length ? status.stocks.map(stock => `<div class="slink-stock-row"><div><strong>${escapeHtml(stock.name)} ${escapeHtml(stock.acronym)}</strong><small>${escapeHtml(stock.benefitDescription)}</small></div><div><strong title="${escapeHtml(exactMoney(stock.incrementalCost))}">${money(stock.incrementalCost)}</strong><small>Cost · ${stock.sharesNeeded.toLocaleString()} shares needed</small></div><div><strong>${money(stock.weeklyValue)}</strong><small>Weekly estimate · ROI ${percent(stock.weeklyRoi)}</small></div><div><strong>${money(stock.monthlyValue)}</strong><small>Monthly estimate · ROI ${percent(stock.monthlyRoi)}</small></div><label><input type="checkbox" data-stock-alert="${escapeHtml(stock.alertKey)}" ${settings.stockAlerts[stock.alertKey] ? 'checked' : ''}> Alert when affordable</label></div>`).join('') : '<p>No stock-benefit tiers were returned.</p>'}</div>
+            <div class="slink-stock-list">${status.stocks.length ? status.stocks.map(stock => stockCard(stock, settings)).join('') : '<p>No income-producing stock benefit could be valued from Torn’s current stock and item data.</p>'}</div>
           </article>
           <article class="slink-finance-card"><strong>Active reminders</strong><div class="slink-finance-alerts">${data.activeAlerts?.length ? data.activeAlerts.map(alert => `<div class="slink-finance-alert"><strong>${escapeHtml(alert.title)}</strong><small>${escapeHtml(alert.detail)}</small></div>`).join('') : '<p>Nothing needs your attention right now.</p>'}</div></article>
         </div>`;

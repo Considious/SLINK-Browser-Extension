@@ -8,6 +8,17 @@
   const CACHE_MS = 6 * 60 * 60_000;
   const CALENDAR_URL = 'https://www.torn.com/calendar.php';
   const HALLOWEEN_GUIDE_URL = 'https://www.torn.com/forums.php?p=threads&f=61&t=16192843&b=0&a=0';
+  const HALLOWEEN_GUIDE_EVENT = Object.freeze({
+    id:'guide:halloween',
+    name:'Halloween',
+    startAt:0,
+    endAt:0,
+    description:'Preparation guide available year-round.',
+    personalized:false,
+    state:'unscheduled',
+    guideId:'halloween',
+    guideOnly:true
+  });
   const HALLOWEEN_BASKET_RANKS = Object.freeze(['Spooky','Creepy','Freaky','Frightful','Haunting','Shocking','Terrifying','Horrifying','Petrifying','Nightmarish','Apocalyptic']);
   const HALLOWEEN_UPGRADE_ORDER = Object.freeze([
     { step:1, upgradeId:1, name:'I See Dead People', cost:3 },
@@ -121,7 +132,15 @@
         || (left.startAt || Number.MAX_SAFE_INTEGER) - (right.startAt || Number.MAX_SAFE_INTEGER)
         || left.name.localeCompare(right.name);
     });
-    const next = events.find(event => event.state === 'active') || events.find(event => event.state === 'upcoming') || events[0] || null;
+    if (!events.some(event => isHalloweenEvent(event))) events.push({ ...HALLOWEEN_GUIDE_EVENT });
+    for (const event of events) {
+      if (isHalloweenEvent(event)) event.guideId = 'halloween';
+    }
+    const next = events.find(event => !event.guideOnly && event.state === 'active')
+      || events.find(event => !event.guideOnly && event.state === 'upcoming')
+      || events.find(event => !event.guideOnly)
+      || events[0]
+      || null;
     return { at:now, events, nextId:next?.id || '', next };
   }
 
@@ -177,6 +196,7 @@
     CACHE_MS,
     CALENDAR_URL,
     HALLOWEEN_GUIDE_URL,
+    HALLOWEEN_GUIDE_EVENT,
     HALLOWEEN_BASKET_RANKS,
     HALLOWEEN_UPGRADE_ORDER,
     HALLOWEEN_SKIPPED_UPGRADES,
