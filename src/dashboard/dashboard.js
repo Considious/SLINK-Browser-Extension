@@ -1106,13 +1106,14 @@
     const admin = hasScope('admin.*');
     byId('admin-tab').hidden = !admin;
     byId('diagnostics-tab').hidden = !admin;
-    if (!admin && [...document.querySelectorAll('[data-dashboard-page]')].some(page => !page.hidden && page.dataset.dashboardPage !== 'workspace')) switchPage('workspace');
+    if (!admin && [...document.querySelectorAll('[data-dashboard-page]')].some(page => !page.hidden && page.dataset.dashboardPage !== 'workspace')) switchPage('workspace', false);
   }
 
-  function switchPage(name) {
+  function switchPage(name, persist = true) {
     if ((name === 'admin' || name === 'diagnostics') && !hasScope('admin.*')) name = 'workspace';
     for (const page of document.querySelectorAll('[data-dashboard-page]')) page.hidden = page.dataset.dashboardPage !== name;
     for (const button of document.querySelectorAll('[data-page-tab]')) button.classList.toggle('active', button.dataset.pageTab === name);
+    if (persist) void SLINK.core.storage.set('ui.dashboard.activePage', name);
   }
 
   function switchEfficiency(name) {
@@ -1608,8 +1609,7 @@
   try {
     await refresh();
     const requestedPage = await SLINK.core.storage.get('ui.dashboard.activePage', 'workspace');
-    await SLINK.core.storage.remove('ui.dashboard.activePage');
-    switchPage(['workspace', 'alerts', 'admin', 'diagnostics'].includes(requestedPage) ? requestedPage : 'workspace');
+    switchPage(['workspace', 'alerts', 'admin', 'diagnostics'].includes(requestedPage) ? requestedPage : 'workspace', false);
     switchEfficiency(await SLINK.core.storage.get('ui.efficiency.activeView', 'alerts'));
   }
   catch (error) {

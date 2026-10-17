@@ -106,10 +106,15 @@ const uiShellSource = read('src/content/ui-shell.js');
 assert(uiShellSource.includes('ACTIVE_NAVIGATION_MIRROR_KEY'), 'Torn-page navigation must have an immediate reload-safe mirror.');
 assert(uiShellSource.includes('await navigationPreferencesReady'), 'Saved navigation must load before module tabs are created.');
 assert(uiShellSource.includes('writeNavigationMirror();'), 'Navigation changes must be mirrored before asynchronous extension storage completes.');
+assert(uiShellSource.includes('NAVIGATION_FALLBACK_ORDER'), 'Torn-page navigation must use a deterministic fallback independent of module registration order.');
+assert(uiShellSource.includes('views.get(preferredActiveId)'), 'The exact saved Torn-page module must win when it becomes available.');
 
 const dashboardHtml = read('src/dashboard/dashboard.html');
 const dashboardSource = read('src/dashboard/dashboard.js');
 const dashboardIds = new Set([...dashboardHtml.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
+assert(dashboardSource.includes("storage.set('ui.dashboard.activePage'"), 'Dashboard page changes must persist the exact active page.');
+assert(!dashboardSource.includes("storage.remove('ui.dashboard.activePage')"), 'Dashboard startup must never erase the saved active page.');
+assert(dashboardSource.includes("switchPage('workspace', false)"), 'Temporary permission fallback must not overwrite the saved dashboard page.');
 for (const match of dashboardSource.matchAll(/byId\('([^']+)'\)/g)) {
   assert(dashboardIds.has(match[1]), `Dashboard script references missing element #${match[1]}.`);
 }

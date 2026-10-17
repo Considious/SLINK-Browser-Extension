@@ -8,6 +8,7 @@
   const ACTIVE_MODULE_STORAGE_KEY = 'ui.main.activeModule';
   const ACTIVE_MODULES_BY_GROUP_STORAGE_KEY = 'ui.main.activeModulesByGroup';
   const ACTIVE_NAVIGATION_MIRROR_KEY = 'slink-extension:ui:main:navigation:v1';
+  const NAVIGATION_FALLBACK_ORDER = Object.freeze(['leveling','bounties','mugging','target-list','war','player-stats','adhd','market','merits','dollar-bazaars','racing']);
   const STYLES = `
     :host { all: initial; ${SLINK.core.themes.cssVariables('slink-dark')} }
     * { box-sizing:border-box; }
@@ -308,7 +309,14 @@
 
     function refreshShell() {
       const docked = [...views.values()];
-      if (!docked.some(view => view.id === activeId)) activeId = docked[0]?.id || '';
+      if (!docked.some(view => view.id === activeId)) {
+        const preferred = views.get(preferredActiveId)
+          || docked.find(view => preferredActiveIdsByGroup.get(view.group) === view.id)
+          || NAVIGATION_FALLBACK_ORDER.map(id => views.get(id)).find(Boolean)
+          || docked[0]
+          || null;
+        activeId = preferred?.id || '';
+      }
       if (activeId) setActive(activeId, false);
       const activeViews = docked.filter(view => view.group === activeGroup);
       groups.hidden = groupButtons.size < 2;
@@ -488,7 +496,10 @@
       };
       api.ui = api;
       view.api = Object.freeze(api);
-      if (!activeId) activeId = module.id;
+      if (!activeId && !preferredActiveId && preferredActiveIdsByGroup.size === 0) {
+        const existingFallback = NAVIGATION_FALLBACK_ORDER.map(id => views.get(id)).find(Boolean);
+        activeId = existingFallback?.id || module.id;
+      }
       if (!preferredActiveIdsByGroup.has(group) && preferredActiveId === module.id) preferredActiveIdsByGroup.set(group, module.id);
       const groupPreference = preferredActiveIdsByGroup.get(group);
       if (groupPreference === module.id || (!groupPreference && preferredActiveId === module.id)) activeId = module.id;

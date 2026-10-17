@@ -1,3 +1,9 @@
+## 0.18.69 - 2026-10-17
+
+- Made last-page restoration a navigation invariant across the dedicated dashboard and in-Torn panel.
+- Preserved the exact saved module through asynchronous module registration instead of allowing newly added modules to become the default.
+- Added regression checks that reject clearing or bypassing saved navigation state.
+
 ## 0.18.68 - 2026-10-17
 
 - Restored desktop resizing for the in-Torn SLINK panel without affecting alert windows.
