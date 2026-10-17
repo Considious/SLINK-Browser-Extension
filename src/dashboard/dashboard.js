@@ -422,9 +422,11 @@
     byId('adhd-open-new-tab').checked = settings.openLinksInNewTab === true;
     byId('adhd-alert-toggles').replaceChildren(...SLINK.core.adhd.ALERT_DEFINITIONS.map(definition => {
       const row = document.createElement('div'); row.className = 'adhd-alert-toggle';
-      const label = document.createElement('span'); label.textContent = definition.label;
-      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.dataset.alertVisibleId = definition.id; visible.checked = settings.enabled[definition.id] !== false; visible.title = `Show ${definition.label}`;
-      const sound = document.createElement('input'); sound.type = 'checkbox'; sound.dataset.alertSoundId = definition.id; sound.checked = settings.soundEnabled[definition.id] === true; sound.title = `Sound for ${definition.label}`;
+      const progress = (adhd?.crimeUniques || []).find(entry => entry.id === definition.id);
+      const suffix = progress?.total ? ` · ${progress.completed}/${progress.total} · skill ${Math.floor(progress.skill || 0)}` : '';
+      const label = document.createElement('span'); label.textContent = `${definition.label}${suffix}`;
+      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.dataset.alertVisibleId = definition.id; visible.checked = settings.enabled[definition.id] !== false; visible.title = definition.mode === 'tracking' ? `Keep ${definition.label} progress updated` : `Show ${definition.label}`;
+      const sound = document.createElement('input'); sound.type = 'checkbox'; sound.dataset.alertSoundId = definition.id; sound.checked = definition.mode !== 'tracking' && settings.soundEnabled[definition.id] === true; sound.disabled = definition.mode === 'tracking'; sound.title = definition.mode === 'tracking' ? 'Progress-only tracker; no time-sensitive sound is generated.' : `Sound for ${definition.label}`;
       row.append(label, visible, sound); return row;
     }));
     byId('adhd-city-stock-toggles').replaceChildren(...SLINK.core.adhd.CITY_SHOP_TARGETS.map(target => {
@@ -467,6 +469,14 @@
             renderAdhd();
           });
           actions.append(claimed);
+        }
+        if (['disposalUnique', 'arsonUnique'].includes(alert.id)) {
+          const checked = document.createElement('button'); checked.type = 'button'; checked.className = 'small secondary'; checked.textContent = 'Checked today';
+          checked.addEventListener('click', async () => {
+            adhd = await SLINK.core.messaging.send('adhd.crime-unique.acknowledge', { id:alert.id });
+            renderAdhd();
+          });
+          actions.append(checked);
         }
         card.append(copy, actions); return card;
       }));

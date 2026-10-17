@@ -13,8 +13,10 @@
   const USER_SELECTIONS = 'bars,cooldowns,travel,education,organizedcrime,refills,missions,casino,profile,icons,races,enlistedcars,stocks,battlestats';
   const MOBILITY_SELECTIONS = 'travel,profile,icons,races';
   const MOBILITY_REFRESH_MS = 60_000;
+  const CRIME_LIVE_REFRESH_MS = 60_000;
   let refreshing = null;
   let mobilityRefreshing = null;
+  let crimeRefreshing = null;
 
   async function settings() {
     return ADHD.normalizeSettings(await SLINK.core.storage.get(KEYS.settings, {}));
@@ -25,6 +27,7 @@
       fetchedAt:0,
       nextRefreshAt:0,
       nextMobilityRefreshAt:0,
+      nextCrimeRefreshAt:0,
       lastError:'',
       snapshot:null,
       lastPurchase:null,
@@ -78,6 +81,11 @@
       || settingsValue.soundEnabled.landing === true;
   }
 
+  function crimeMonitoringEnabled(settingsValue) {
+    return ADHD.CRIME_UNIQUE_DEFINITIONS.some(definition =>
+      settingsValue.enabled[definition.id] !== false || settingsValue.soundEnabled[definition.id] === true);
+  }
+
   function cityCurrentUrl() {
     const url = new URL('https://api.torn.com/v2/user/personalstats');
     url.searchParams.set('stat', 'cityitemsbought');
@@ -111,11 +119,37 @@
     return url.href;
   }
 
-  async function clusterSnapshot(previous, key, settingsValue, now, force) {
+  async function crimeUniqueSnapshot(previous, key, settingsValue, now, force) {
+    if (!crimeMonitoringEnabled(settingsValue)) return previous || null;
+    const crimeUniques = previous && typeof previous === 'object'
+      ? { ...previous, user:{ ...(previous.user || {}) }, userFetchedAt:{ ...(previous.userFetchedAt || {}) } }
+      : { user:{}, userFetchedAt:{} };
+    if (force || !crimeUniques.catalog || Number(crimeUniques.catalogFetchedAt || 0) + 7 * ADHD.DAY_MS <= now) {
+      crimeUniques.catalog = await tornJson(apiUrl('torn/crimes', 'SLINK crime unique catalog'), key);
+      crimeUniques.catalogFetchedAt = now;
+    }
+    const requested = ADHD.CRIME_UNIQUE_DEFINITIONS.filter(definition =>
+      settingsValue.enabled[definition.id] !== false || settingsValue.soundEnabled[definition.id] === true);
+    await Promise.all(requested.map(async definition => {
+      if (!force && crimeUniques.user[definition.crimeId]
+        && Number(crimeUniques.userFetchedAt[definition.crimeId] || 0) + ADHD.DAY_MS > now) return;
+      crimeUniques.user[definition.crimeId] = await tornJson(
+        apiUrl(`user/${definition.crimeId}/crimes`, `SLINK ${definition.label} progress`),
+        key
+      );
+      crimeUniques.userFetchedAt[definition.crimeId] = now;
+    }));
+    return crimeUniques;
+  }
+
+  async function clusterSnapshot(previous, key, settingsValue, now, force, crimeUser) {
     const enabled = settingsValue.enabled.clusterRing !== false || settingsValue.soundEnabled.clusterRing === true;
     if (!enabled) return previous || null;
     let cluster = previous && typeof previous === 'object' ? { ...previous } : {};
-    if (!cluster.crimes || Number(cluster.crimesFetchedAt || 0) + ADHD.DAY_MS <= now) {
+    if (crimeUser) {
+      cluster.crimes = crimeUser;
+      cluster.crimesFetchedAt = now;
+    } else if (!cluster.crimes || Number(cluster.crimesFetchedAt || 0) + ADHD.DAY_MS <= now) {
       cluster.crimes = await tornJson(apiUrl('user/4/crimes', 'SLINK Cluster Ring progress'), key);
       cluster.crimesFetchedAt = now;
     }
@@ -203,16 +237,33 @@
             };
           }
         }
+        let crimeUniques = currentRuntime.snapshot?.crimeUniques || null;
+        try {
+          crimeUniques = await crimeUniqueSnapshot(crimeUniques, key, currentSettings, now, force);
+          if (crimeUniques?.lastError) crimeUniques = { ...crimeUniques, lastError:'' };
+        } catch (crimeError) {
+          crimeUniques = { ...(crimeUniques || {}), lastError:SLINK.core.format.errorMessage(crimeError), lastErrorAt:now };
+        }
         let cluster = currentRuntime.snapshot?.cluster || null;
         try {
-          cluster = await clusterSnapshot(cluster, key, currentSettings, now, force);
+          cluster = await clusterSnapshot(cluster, key, currentSettings, now, force, crimeUniques?.user?.[4]);
           if (cluster?.lastError) cluster = { ...cluster, lastError:'' };
         } catch (clusterError) {
           cluster = { ...(cluster || {}), lastError:SLINK.core.format.errorMessage(clusterError), lastErrorAt:now };
         }
-        const snapshot = { day, fetchedAt:now, mobilityFetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityBaselineVersion:CITY_BASELINE_VERSION, cityShops, stockCatalog, cluster };
+        const snapshot = { day, fetchedAt:now, mobilityFetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityBaselineVersion:CITY_BASELINE_VERSION, cityShops, stockCatalog, cluster, crimeUniques };
         // Only a new measured energy reading may end Stack mode; never infer a drop.
         const latestSettings = await settings();
+        let settingsChanged = false;
+        for (const progressRow of ADHD.crimeUniqueProgress(snapshot)) {
+          if (!progressRow.complete) continue;
+          if (latestSettings.enabled[progressRow.id] !== false || latestSettings.soundEnabled[progressRow.id] === true) {
+            latestSettings.enabled[progressRow.id] = false;
+            latestSettings.soundEnabled[progressRow.id] = false;
+            settingsChanged = true;
+          }
+        }
+        if (settingsChanged) await SLINK.core.storage.set(KEYS.settings, latestSettings);
         const energy = data?.bars?.energy?.current;
         if (latestSettings.stackModeSince > 0 && now > latestSettings.stackModeSince
           && energy !== null && energy !== undefined && energy !== ''
@@ -224,6 +275,7 @@
           fetchedAt:now,
           nextRefreshAt:ADHD.nextRefreshAt(snapshot, latestSettings, now),
           nextMobilityRefreshAt:now + MOBILITY_REFRESH_MS,
+          nextCrimeRefreshAt:0,
           lastError:'',
           snapshot,
           lastPurchase
@@ -279,6 +331,55 @@
     finally { mobilityRefreshing = null; }
   }
 
+  async function refreshCrimeWindows(force = false) {
+    if (refreshing) return refreshing;
+    if (crimeRefreshing) return crimeRefreshing;
+    crimeRefreshing = (async () => {
+      const currentRuntime = await runtime();
+      const currentSettings = await settings();
+      if (!currentRuntime.snapshot || !crimeMonitoringEnabled(currentSettings)) return publicStatus(false);
+      if (!force && Number(currentRuntime.nextCrimeRefreshAt || 0) > Date.now()) return publicStatus(false);
+      try {
+        await requireAccess();
+        const key = await accessKey();
+        if (!key) throw new Error('Enable Efficiency and save your Torn API key first.');
+        const now = Date.now();
+        const snapshot = { ...currentRuntime.snapshot };
+        const progress = ADHD.crimeUniqueProgress(snapshot);
+        const searchProgress = progress.find(row => row.id === 'searchCashUnique');
+        const clusterProgress = progress.find(row => row.id === 'clusterRing');
+        if (searchProgress && !searchProgress.complete
+          && (currentSettings.enabled.searchCashUnique !== false || currentSettings.soundEnabled.searchCashUnique === true)) {
+          const crimeUniques = { ...(snapshot.crimeUniques || {}) };
+          crimeUniques.searchForCashStatus = await tornJson(apiUrl('torn/searchforcash', 'SLINK Search for Cash unique windows'), key);
+          crimeUniques.searchForCashFetchedAt = now;
+          snapshot.crimeUniques = crimeUniques;
+        }
+        if (clusterProgress && !clusterProgress.complete
+          && (currentSettings.enabled.clusterRing !== false || currentSettings.soundEnabled.clusterRing === true)) {
+          const cluster = { ...(snapshot.cluster || {}) };
+          cluster.status = await tornJson(apiUrl('torn/shoplifting', 'SLINK Cluster Ring status'), key);
+          cluster.statusFetchedAt = now;
+          snapshot.cluster = cluster;
+        }
+        await saveRuntime({
+          snapshot,
+          nextCrimeRefreshAt:now + CRIME_LIVE_REFRESH_MS,
+          lastError:''
+        });
+        return publicStatus(false);
+      } catch (error) {
+        await saveRuntime({
+          lastError:SLINK.core.format.errorMessage(error),
+          nextCrimeRefreshAt:Date.now() + CRIME_LIVE_REFRESH_MS
+        });
+        throw error;
+      }
+    })();
+    try { return await crimeRefreshing; }
+    finally { crimeRefreshing = null; }
+  }
+
   async function saveSettings(input = {}) {
     const previous = await settings();
     const enabled = { ...previous.enabled };
@@ -316,7 +417,8 @@
     const currentRuntime = await runtime();
     if (currentRuntime.snapshot) await saveRuntime({
       nextRefreshAt:ADHD.nextRefreshAt(currentRuntime.snapshot, next),
-      nextMobilityRefreshAt:0
+      nextMobilityRefreshAt:0,
+      nextCrimeRefreshAt:0
     });
     return publicStatus(false);
   }
@@ -348,6 +450,17 @@
     });
     const current = await runtime();
     if (current.snapshot) await saveRuntime({ nextRefreshAt:ADHD.nextRefreshAt(current.snapshot, next) });
+    return publicStatus(false);
+  }
+
+  async function acknowledgeCrimeUnique(input = {}) {
+    const id = String(input.id || '');
+    const definition = ADHD.CRIME_UNIQUE_DEFINITIONS.find(row => row.id === id && row.mode === 'daily');
+    if (!definition) throw new Error('Unknown daily crime unique reminder.');
+    const next = await settings();
+    next.crimeUniqueDoneDay[id] = ADHD.utcDay();
+    delete next.snoozedUntil[id];
+    await SLINK.core.storage.set(KEYS.settings, next);
     return publicStatus(false);
   }
 
@@ -410,11 +523,13 @@
     const pendingIds = [...pendingSet].sort();
     const now = Date.now();
     const play = pendingIds.length > 0 && now - Number(previous?.claimedAt || 0) >= 5_000;
+    const uniqueIds = new Set(['searchCashUnique', 'clusterRing', 'disposalUnique', 'arsonUnique']);
+    const soundChoice = pendingIds.some(id => uniqueIds.has(id)) ? 'unique' : currentSettings.soundChoice;
     await SLINK.core.storage.set(KEYS.soundState, { activeIds:[...activeSet].sort(), pendingIds, claimedAt:play ? now : Number(previous?.claimedAt) || 0, updatedAt:now });
     return {
       play,
       alertIds:pendingIds,
-      soundChoice:currentSettings.soundChoice,
+      soundChoice,
       customSoundDataUrl:currentSettings.soundChoice === 'custom' ? currentSettings.customSoundDataUrl : ''
     };
   }
@@ -446,6 +561,12 @@
       try { return await refreshMobility(false); }
       catch {}
     }
+    if (refreshIfDue && access.configured && currentRuntime.snapshot
+      && crimeMonitoringEnabled(currentSettings)
+      && Number(currentRuntime.nextCrimeRefreshAt || 0) <= Date.now()) {
+      try { return await refreshCrimeWindows(false); }
+      catch {}
+    }
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, ADHD.ALERT_SCOPE);
     const snapshot = currentRuntime.snapshot;
     const [stakeoutAlerts, abroadAlerts, companyAlerts, moneyAlerts] = await Promise.all([
@@ -467,6 +588,7 @@
         ...moneyAlerts
       ],
       city:snapshot ? ADHD.cityProgress(snapshot, currentSettings) : { bought:null, remaining:null, complete:false, manuallyDone:false },
+      crimeUniques:snapshot ? ADHD.crimeUniqueProgress(snapshot) : [],
       lastPurchase:currentRuntime.lastPurchase,
       fetchedAt:Number(currentRuntime.fetchedAt) || 0,
       nextRefreshAt:Number(currentRuntime.nextRefreshAt) || 0,
@@ -487,12 +609,13 @@
     'adhd.settings.save':saveSettings,
     'adhd.city.acknowledge':acknowledgeCity,
     'adhd.google-play-points.acknowledge':acknowledgeGooglePlayPoints,
+    'adhd.crime-unique.acknowledge':acknowledgeCrimeUnique,
     'adhd.alert.snooze':snooze,
     'adhd.reminder.control':reminderControl,
     'adhd.sound.claim':claimSound,
     'adhd.sound.ack':acknowledgeSound
   });
 
-  SLINK.define('services', 'adhd', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, refreshMobility, routes }));
+  SLINK.define('services', 'adhd', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, refreshMobility, refreshCrimeWindows, routes }));
 })(globalThis);
 

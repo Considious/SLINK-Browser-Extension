@@ -82,7 +82,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.44', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.70', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.attackLink('https://www.torn.com/page.php?sid=attack&user2ID=1') === '<a href="https://www.torn.com/page.php?sid=attack&amp;user2ID=1">【ATTACK】</a>', 'Shared attack-link formatter did not preserve Torn HTML and the bracketed label.');
@@ -442,5 +442,29 @@ for (const energy of [150, 151, 1000, null, undefined]) {
 const normalSnapshot = { data:{ bars:{ energy:{ current:150, maximum:150 } }, refills:{ energy:{ available:true } } } };
 assert(SLINK.core.adhd.buildAlerts(normalSnapshot, {}).some(a => a.id === 'energyFull'), 'Normal max-energy reminder did not resume.');
 assert(!SLINK.core.adhd.buildAlerts(normalSnapshot, { timer24EndsAt:reminderNow + 1 }, reminderNow).some(a => a.id === 'timer24'), 'Countdown completed early.');
+const clusterSnapshotV1 = {
+  crimes:{ crimes:{ skill:100, uniques:[] } },
+  status:{ shoplifting:{ jewelry_store:[{ title:'Three cameras', disabled:true }, { title:'One guard', disabled:true }] } }
+};
+assert(SLINK.core.adhd.clusterRingReady(clusterSnapshotV1), 'Cluster Ring parser did not accept the keyed v1 shoplifting response.');
+
+const arsonCatalog = { crimes:[{ id:13, name:'Arson', unique_outcomes_count:16, unique_outcomes_ids:Array.from({ length:16 }, (_, index) => 20000 + index) }] };
+const arsonUser = { crimes:{ skill:4, uniques:[] } };
+const arsonProgress = SLINK.core.adhd.crimeUniqueProgress({ crimeUniques:{ catalog:arsonCatalog, user:{ 13:arsonUser } } })
+  .find(row => row.id === 'arsonUnique');
+assert(arsonProgress.eligibleTotal === 1 && arsonProgress.canSpawnMissing, 'Arson progress ignored its first skill-gated unique.');
+const beforeDaily = Date.UTC(2026, 9, 18, 0, 4);
+const afterDaily = Date.UTC(2026, 9, 18, 0, 5);
+assert(!SLINK.core.adhd.dailyCrimeUniqueDue(arsonProgress, { crimeUniqueDoneDay:{} }, beforeDaily), 'Daily unique reminder fired before 00:05 TCT.');
+assert(SLINK.core.adhd.dailyCrimeUniqueDue(arsonProgress, { crimeUniqueDoneDay:{} }, afterDaily), 'Daily unique reminder did not fire at 00:05 TCT.');
+assert(!SLINK.core.adhd.dailyCrimeUniqueDue(arsonProgress, { crimeUniqueDoneDay:{ arsonUnique:SLINK.core.adhd.utcDay(afterDaily) } }, afterDaily), 'Acknowledged daily unique reminder did not stay hidden.');
+
+const searchWindows = SLINK.core.adhd.searchForCashOpportunities(
+  { searchforcash:[{ id:2, title:'Status: Standard', percentage:20 }, { id:3, title:'Crushing', percentage:20 }, { id:4, title:'Tide', percentage:10 }] },
+  30,
+  Date.UTC(2026, 9, 19, 12, 0)
+);
+assert(searchWindows.includes('Low subway ridership') && searchWindows.includes('Very low crushing rating') && searchWindows.includes('Extreme tide'), 'Search for Cash live conditions were not recognized.');
+
 console.log('Core storage, hosts, scopes, modules, HTTP, limiter, messaging and reminder checks passed.');
 

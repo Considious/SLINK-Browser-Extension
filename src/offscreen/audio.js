@@ -11,7 +11,8 @@
     const patterns = {
       chime:[[0, 660, 0.16], [0.13, 880, 0.24]],
       bell:[[0, 880, 0.15], [0.18, 660, 0.18], [0.38, 880, 0.25]],
-      urgent:[[0, 440, 0.17], [0.21, 440, 0.17], [0.42, 660, 0.28]]
+      urgent:[[0, 440, 0.17], [0.21, 440, 0.17], [0.42, 660, 0.28]],
+      unique:[[0, 760, 0.13], [0.15, 520, 0.18], [0.45, 760, 0.13], [0.60, 520, 0.18]]
     };
     const notes = patterns[choice] || patterns.chime;
     const sampleRate = 44_100;
@@ -25,10 +26,11 @@
         const elapsed = index / sampleRate;
         const attack = Math.min(1, elapsed / 0.012);
         const release = Math.min(1, Math.max(0, (length - elapsed) / 0.055));
-        const wave = choice === 'urgent'
+        const square = ['urgent', 'unique'].includes(choice);
+        const wave = square
           ? Math.sign(Math.sin(2 * Math.PI * frequency * elapsed))
           : Math.sin(2 * Math.PI * frequency * elapsed);
-        samples[first + index] += wave * attack * release * (choice === 'urgent' ? 0.38 : 0.52);
+        samples[first + index] += wave * attack * release * (square ? 0.38 : 0.52);
       }
     }
     const buffer = new ArrayBuffer(44 + sampleCount * 2);

@@ -20,6 +20,18 @@
     Object.freeze({ id:310, label:'Lollipops', shop:"Sally's Sweet Shop", href:'https://www.torn.com/shops.php?step=candy' }),
     Object.freeze({ id:956, label:'Blank DVDs', shop:'Cyber Force', href:'https://www.torn.com/shops.php?step=cyberforce' })
   ]);
+  const CRIME_UNIQUE_DEFINITIONS = Object.freeze([
+    Object.freeze({ id:'searchCashUnique', crimeId:1, label:'Search for Cash unique windows', mode:'live' }),
+    Object.freeze({ id:'bootleggingUniques', crimeId:2, label:'Bootlegging unique progress', mode:'tracking' }),
+    Object.freeze({ id:'graffitiUniques', crimeId:3, label:'Graffiti unique progress', mode:'tracking' }),
+    Object.freeze({ id:'clusterRing', crimeId:4, label:'Cluster Ring window', mode:'live' }),
+    Object.freeze({ id:'pickpocketingUniques', crimeId:5, label:'Pickpocketing unique progress', mode:'tracking' }),
+    Object.freeze({ id:'burglaryUniques', crimeId:7, label:'Burglary unique progress', mode:'tracking' }),
+    Object.freeze({ id:'disposalUnique', crimeId:9, label:'Disposal daily unique check', mode:'daily' }),
+    Object.freeze({ id:'arsonUnique', crimeId:13, label:'Arson daily unique check', mode:'daily' })
+  ]);
+  const ARSON_UNIQUE_SKILL_THRESHOLDS = Object.freeze([4, 5, 48, 51, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90]);
+
   const ALERT_DEFINITIONS = Object.freeze([
     Object.freeze({ id:'timer24', label:'24-hour timer' }),
     Object.freeze({ id:'energyRefill', label:'Energy refill' }),
@@ -39,7 +51,7 @@
     Object.freeze({ id:'casinoTokens', label:'Spend casino tokens' }),
     Object.freeze({ id:'stockBenefits', label:'Stock benefits ready' }),
     Object.freeze({ id:'googlePlayPoints', label:'Google Play Points weekly prize' }),
-    Object.freeze({ id:'clusterRing', label:'Cluster Ring window' })
+    ...CRIME_UNIQUE_DEFINITIONS
   ]);
   const ALL_ALERT_IDS = Object.freeze([
     ...ALERT_DEFINITIONS.map(definition => definition.id),
@@ -83,6 +95,7 @@
       cityStockAlerts:Object.fromEntries(CITY_SHOP_TARGETS.map(target => [target.id, false])),
       snoozedUntil:{},
       cityDoneDay:null,
+      crimeUniqueDoneDay:{},
       googlePlayPointsClaimedAt:0
     };
   }
@@ -106,6 +119,7 @@
       cityStockAlerts:{ ...defaults.cityStockAlerts, ...(input?.cityStockAlerts && typeof input.cityStockAlerts === 'object' ? input.cityStockAlerts : {}) },
       snoozedUntil:{ ...(input?.snoozedUntil && typeof input.snoozedUntil === 'object' ? input.snoozedUntil : {}) },
       cityDoneDay:Number.isInteger(Number(input?.cityDoneDay)) ? Number(input.cityDoneDay) : null,
+      crimeUniqueDoneDay:{ ...(input?.crimeUniqueDoneDay && typeof input.crimeUniqueDoneDay === 'object' ? input.crimeUniqueDoneDay : {}) },
       googlePlayPointsClaimedAt:Math.max(0, Number(input?.googlePlayPointsClaimedAt) || 0)
     };
   }
@@ -285,19 +299,108 @@
       (unique?.rewards?.items || []).some(item => Number(item?.id ?? item?.item_id) === 1465));
   }
 
+  function crimeUniqueRows(payload) {
+    return Array.isArray(payload?.crimes?.uniques) ? payload.crimes.uniques : [];
+  }
+
+  function crimeUniqueProgress(snapshot = {}) {
+    const catalogRows = Array.isArray(snapshot?.crimeUniques?.catalog?.crimes) ? snapshot.crimeUniques.catalog.crimes : [];
+    const users = snapshot?.crimeUniques?.user && typeof snapshot.crimeUniques.user === 'object' ? snapshot.crimeUniques.user : {};
+    return CRIME_UNIQUE_DEFINITIONS.map(definition => {
+      const catalog = catalogRows.find(row => Number(row?.id) === definition.crimeId) || {};
+      const user = users[definition.crimeId] || (definition.crimeId === 4 ? snapshot?.cluster?.crimes : null) || {};
+      const uniqueRows = crimeUniqueRows(user);
+      const completedIds = [...new Set(uniqueRows.map(row => Number(row?.id)).filter(Number.isFinite))];
+      const expectedIds = [...new Set((Array.isArray(catalog?.unique_outcomes_ids) ? catalog.unique_outcomes_ids : []).map(Number).filter(Number.isFinite))];
+      let total = Math.max(0, Number(catalog?.unique_outcomes_count) || expectedIds.length || 0);
+      let completed = total ? Math.min(total, completedIds.length) : completedIds.length;
+      const skill = Math.max(0, finite(user?.crimes?.skill) || 0);
+      let eligibleTotal = skill > 0 ? total : 0;
+      if (definition.crimeId === 13) eligibleTotal = ARSON_UNIQUE_SKILL_THRESHOLDS.filter(threshold => skill >= threshold).length;
+      if (definition.crimeId === 4) {
+        total = 1;
+        completed = clusterRingAchieved(user) ? 1 : 0;
+        eligibleTotal = skill >= 100 ? 1 : 0;
+      }
+      return {
+        ...definition,
+        name:String(catalog?.name || definition.label.replace(/ unique.*$/i, '')),
+        skill,
+        completed,
+        total,
+        eligibleTotal,
+        complete:total > 0 && completed >= total,
+        canSpawnMissing:total > 0 && completed < total && eligibleTotal > completed,
+        completedIds,
+        missingIds:expectedIds.filter(id => !completedIds.includes(id))
+      };
+    });
+  }
+
+  function shopliftingStatusRows(payload) {
+    const raw = payload?.shoplifting;
+    if (Array.isArray(raw)) return raw;
+    if (!raw || typeof raw !== 'object') return [];
+    return Object.entries(raw).map(([name, status]) => ({ name, status:Array.isArray(status) ? status : [] }));
+  }
+
   function clusterRingReady(cluster) {
     if (!cluster || clusterRingAchieved(cluster.crimes)) return false;
     const skill = finite(cluster?.crimes?.crimes?.skill);
     if (skill !== null && skill < 100) return false;
-    const subcrimes = cluster?.subcrimes?.subcrimes;
-    const states = cluster?.status?.shoplifting;
-    if (!Array.isArray(subcrimes) || !Array.isArray(states)) return false;
+    const states = shopliftingStatusRows(cluster?.status);
+    if (!states.length) return false;
+    const subcrimes = Array.isArray(cluster?.subcrimes?.subcrimes) ? cluster.subcrimes.subcrimes : [];
     const jewelry = subcrimes.find(row => /jewelry\s+store/i.test(String(row?.name || '')));
-    const status = states.find(row => Number(row?.id) === Number(jewelry?.id))?.status;
+    const row = states.find(entry =>
+      (jewelry && Number(entry?.id) === Number(jewelry.id))
+      || /jewelry[\s_]+store/i.test(String(entry?.name || '')));
+    const status = row?.status;
     if (!Array.isArray(status)) return false;
-    const camera = status.find(row => /camera/i.test(String(row?.title || '')));
-    const guard = status.find(row => /guard/i.test(String(row?.title || '')));
+    const camera = status.find(entry => /camera/i.test(String(entry?.title || '')));
+    const guard = status.find(entry => /guard/i.test(String(entry?.title || '')));
     return camera?.disabled === true && guard?.disabled === true;
+  }
+
+  function searchForCashOpportunities(payload, skillValue, now = Date.now()) {
+    const skill = Math.max(0, finite(skillValue) || 0);
+    if (skill < 1) return [];
+    const raw = payload?.searchforcash;
+    const rows = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === 'object'
+        ? Object.entries(raw).map(([name, value]) => ({ name, ...(value && typeof value === 'object' ? value : {}) }))
+        : [];
+    const byId = id => rows.find(row => Number(row?.id) === id);
+    const opportunities = [];
+    const date = new Date(now);
+    const day = date.getUTCDay();
+    const hour = date.getUTCHours();
+    const minute = date.getUTCMinutes();
+    const time = hour * 60 + minute;
+    const within = (start, end) => time >= start && time < end;
+    const add = (label, minimumSkill = 1) => { if (skill >= minimumSkill) opportunities.push(label); };
+    if (day === 1 && within(6 * 60, 18 * 60)) add('Trash collection window');
+    if (day >= 1 && day <= 5 && within(9 * 60, 16 * 60)) add('Junkyard crushing window', 5);
+    if (day >= 1 && day <= 5 && within(9 * 60, 17 * 60)) add('Cemetery groundskeeping window');
+    if (date.getUTCDate() === 1 && within(13 * 60, 16 * 60)) add('Fountain collection window', 75);
+    const subway = byId(2);
+    const subwayTitle = String(subway?.title || '');
+    const subwayPercentage = finite(subway?.percentage);
+    if (/rush|on[- ]?peak/i.test(subwayTitle)) add('Subway rush-hour window');
+    if (subwayPercentage !== null && subwayPercentage <= 23) add('Low subway ridership');
+    const junkyardPercentage = finite(byId(3)?.percentage);
+    if (junkyardPercentage !== null && junkyardPercentage <= 23) add('Very low crushing rating', 5);
+    const tidePercentage = finite(byId(4)?.percentage);
+    if (tidePercentage !== null && (tidePercentage <= 20 || tidePercentage >= 80)) add('Extreme tide');
+    return [...new Set(opportunities)];
+  }
+
+  function dailyCrimeUniqueDue(progress, settings, now = Date.now()) {
+    if (!progress?.canSpawnMissing) return false;
+    const date = new Date(now);
+    if (date.getUTCHours() === 0 && date.getUTCMinutes() < 5) return false;
+    return Number(settings?.crimeUniqueDoneDay?.[progress.id]) !== utcDay(now);
   }
 
   function googlePlayPointsAccess(options = {}) {
@@ -338,6 +441,13 @@
     const readyStocks = stockBenefitsReady(body.stocks, snapshot.stockCatalog);
     const playPoints = googlePlayPointsAccess(options);
     const playerAddiction = addictionPercentFromBattleStats(body);
+    const crimeProgress = crimeUniqueProgress(snapshot);
+    const crimeById = Object.fromEntries(crimeProgress.map(progress => [progress.id, progress]));
+    const searchOpportunities = searchForCashOpportunities(
+      snapshot?.crimeUniques?.searchForCashStatus,
+      crimeById.searchCashUnique?.skill,
+      now
+    );
     const travelSeconds = Number(travel?.arrival_at) * 1000 > now
       ? Math.ceil((Number(travel.arrival_at) * 1000 - now) / 1000)
       : countdown(travel?.time_left, mobilityFetchedAt, now);
@@ -378,7 +488,10 @@
       { id:'stockBenefits', active:readyStocks.length > 0, title:readyStocks.length === 1 ? 'A stock benefit is ready' : `${readyStocks.length} stock benefits are ready`, detail:readyStocks.map(stock => stock.name ? `${stock.name}${stock.acronym ? ` (${stock.acronym})` : ''}` : stock.acronym || `Stock ${stock.id}`).join(', '), tone:'ready', links:[['Stock market','https://www.torn.com/page.php?sid=stocks']] },
       { id:'googlePlayPoints', active:Number(settings.googlePlayPointsClaimedAt || 0) + WEEK_MS <= now, title:'Claim your weekly Google Play Points prize', detail:`${playPoints.detail} This reminder returns seven days after confirmation.`, tone:'daily', links:playPoints.links },
       { id:'playerAddiction', active:playerAddiction !== null && playerAddiction >= settings.playerAddictionThreshold, title:'Player addiction needs attention', detail:`${playerAddiction ?? 0}% battle-stat penalty — alert threshold ${settings.playerAddictionThreshold}%`, tone:'urgent', links:[['Travel','https://www.torn.com/travelagency.php']] },
-      { id:'clusterRing', active:clusterRingReady(snapshot.cluster), title:'Cluster Ring security window is open', detail:'Torn reports the Jewelry Store cameras and guard are disabled. Shoplifting skill 100 and 0% Jewelry Store notoriety are still required.', tone:'urgent', links:[['Shoplift','https://www.torn.com/page.php?sid=crimes#/shoplifting']] },
+      { id:'searchCashUnique', active:crimeById.searchCashUnique?.canSpawnMissing && searchOpportunities.length > 0, title:'Search for Cash unique window may be active', detail:`${searchOpportunities.join(', ')}. ${crimeById.searchCashUnique?.completed || 0}/${crimeById.searchCashUnique?.total || 0} unique outcomes completed; Torn does not expose a direct condition-to-missing-outcome map, so check the starred options.`, tone:'unique', links:[['Check Search for Cash','https://www.torn.com/page.php?sid=crimes#/search-for-cash']] },
+      { id:'clusterRing', active:crimeById.clusterRing?.canSpawnMissing && clusterRingReady(snapshot.cluster), title:'Cluster Ring security window is open', detail:'Torn reports the Jewelry Store cameras and guard are disabled. Shoplifting skill 100 and 0% Jewelry Store notoriety are still required.', tone:'unique', links:[['Shoplift','https://www.torn.com/page.php?sid=crimes#/shoplifting']] },
+      { id:'disposalUnique', active:dailyCrimeUniqueDue(crimeById.disposalUnique, settings, now), title:'Check today’s Disposal jobs for missing uniques', detail:`${crimeById.disposalUnique?.completed || 0}/${crimeById.disposalUnique?.total || 0} unique outcomes completed. Jobs refresh daily; check for starred options before using today’s jobs.`, tone:'unique', links:[['Check Disposal','https://www.torn.com/page.php?sid=crimes#/disposal']] },
+      { id:'arsonUnique', active:dailyCrimeUniqueDue(crimeById.arsonUnique, settings, now), title:'Check today’s Arson targets for missing uniques', detail:`${crimeById.arsonUnique?.completed || 0}/${crimeById.arsonUnique?.total || 0} unique outcomes completed at skill ${Math.floor(crimeById.arsonUnique?.skill || 0)}. Only skill-eligible missing targets trigger this reminder.`, tone:'unique', links:[['Check Arson','https://www.torn.com/page.php?sid=crimes#/arson']] },
       ...cityStockAlerts
     ];
     return alerts.filter(alert => alert.active
@@ -398,8 +511,13 @@
       && Number(settings.googlePlayPointsClaimedAt) > 0) candidates.push(Number(settings.googlePlayPointsClaimedAt) + WEEK_MS + 1_000);
     const progress = cityProgress(snapshot, settings, now);
     if (!progress.complete) candidates.push(now + 5 * 60_000);
-    if ((settings.enabled.clusterRing !== false || settings.soundEnabled.clusterRing === true)
-      && !clusterRingAchieved(snapshot?.cluster?.crimes)) candidates.push(now + 5 * 60_000);
+    const crimeProgress = crimeUniqueProgress(snapshot);
+    if (CRIME_UNIQUE_DEFINITIONS.some(definition => definition.mode === 'daily'
+      && settings.enabled[definition.id] !== false
+      && !crimeProgress.find(progress => progress.id === definition.id)?.complete)) {
+      const todayAtFive = utcDay(now) * DAY_MS + 5 * 60_000;
+      candidates.push(todayAtFive > now ? todayAtFive : todayAtFive + DAY_MS);
+    }
     for (const [type, threshold] of [['drug', 0], ['medical', settings.medicalThresholdHours * 3600], ['booster', settings.boosterThresholdHours * 3600]]) {
       const remaining = countdown(body?.cooldowns?.[type], fetchedAt, now);
       if (remaining === null) candidates.push(now + 10 * 60_000);
@@ -489,14 +607,15 @@
     const patterns = {
       chime:[[0, 660, 0.13], [0.12, 880, 0.2]],
       bell:[[0, 880, 0.12], [0.17, 660, 0.15], [0.34, 880, 0.2]],
-      urgent:[[0, 440, 0.14], [0.18, 440, 0.14], [0.36, 660, 0.22]]
+      urgent:[[0, 440, 0.14], [0.18, 440, 0.14], [0.36, 660, 0.22]],
+      unique:[[0, 760, 0.11], [0.14, 520, 0.16], [0.42, 760, 0.11], [0.56, 520, 0.16]]
     };
     const notes = patterns[choice] || patterns.chime;
     const start = context.currentTime + 0.02;
     for (const [offset, frequency, duration] of notes) {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
-      oscillator.type = choice === 'urgent' ? 'square' : 'sine';
+      oscillator.type = ['urgent', 'unique'].includes(choice) ? 'square' : 'sine';
       oscillator.frequency.value = frequency;
       gain.gain.setValueAtTime(0.0001, start + offset);
       gain.gain.exponentialRampToValueAtTime(0.16, start + offset + 0.015);
@@ -511,6 +630,7 @@
     ALL_ALERT_IDS,
     ALERT_SCOPE,
     CITY_SHOP_TARGETS,
+    CRIME_UNIQUE_DEFINITIONS,
     DAY_MS,
     GOOGLE_PLAY_POINTS_ANDROID_INTENT,
     GOOGLE_PLAY_POINTS_HELP_URL,
@@ -520,6 +640,9 @@
     addictionPercentFromBattleStats,
     clusterRingAchieved,
     clusterRingReady,
+    crimeUniqueProgress,
+    dailyCrimeUniqueDue,
+    searchForCashOpportunities,
     cityShopTargetStock,
     normalizeSettings,
     cityProgress,

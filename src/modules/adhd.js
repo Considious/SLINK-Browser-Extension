@@ -102,7 +102,8 @@
         soundInput.addEventListener('change', async () => {
           soundInput.disabled = true;
           try {
-            const soundEnabled = Object.fromEntries(Object.keys(normalizedSettings.soundEnabled).map(id => [id, soundInput.checked]));
+            const trackingIds = new Set(SLINK.core.adhd.CRIME_UNIQUE_DEFINITIONS.filter(definition => definition.mode === 'tracking').map(definition => definition.id));
+            const soundEnabled = Object.fromEntries(Object.keys(normalizedSettings.soundEnabled).map(id => [id, soundInput.checked && !trackingIds.has(id)]));
             render(await SLINK.core.messaging.send('adhd.settings.save', { soundEnabled }));
           } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); soundInput.disabled = false; }
         });
@@ -162,6 +163,11 @@
             const done = document.createElement('button'); done.type = 'button'; done.textContent = 'Claimed — remind in 7 days';
             done.addEventListener('click', async () => render(await SLINK.core.messaging.send('adhd.google-play-points.acknowledge')));
             links.append(done);
+          }
+          if (['disposalUnique', 'arsonUnique'].includes(alert.id)) {
+            const checked = document.createElement('button'); checked.type = 'button'; checked.textContent = 'Checked today';
+            checked.addEventListener('click', async () => render(await SLINK.core.messaging.send('adhd.crime-unique.acknowledge', { id:alert.id })));
+            links.append(checked);
           }
           card.append(title, detail, links); list.append(card);
         }
