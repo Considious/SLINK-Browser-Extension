@@ -4,9 +4,26 @@
   const SLINK = global.SLINK_EXTENSION;
   if (!SLINK) throw new Error('SLINK runtime missing');
 
-  const CONTROL_SELECTOR = 'input, textarea, select, [contenteditable="true"]';
+  const CONTROL_SELECTOR = 'input, textarea, select, [contenteditable="true"], details';
+  const PANEL_STATE_KEY = 'ui.interaction.panels.v1';
   const COMMIT_ACTION = /(?:^|[-_\s])(save|submit|apply|update|confirm|cancel|reset|clear|remove|delete)(?:$|[-_\s])/i;
   const protectedRoots = new WeakMap();
+  const panelStates = new Map();
+  let panelStatesLoaded = false;
+
+  async function loadPanelStates() {
+    if (panelStatesLoaded) return;
+    panelStatesLoaded = true;
+    try {
+      const saved = await SLINK.core.storage?.get(PANEL_STATE_KEY, {});
+      for (const [key, open] of Object.entries(saved && typeof saved === 'object' ? saved : {})) panelStates.set(key, Boolean(open));
+    } catch {}
+  }
+
+  function persistPanelStates() {
+    const saved = Object.fromEntries(panelStates);
+    void SLINK.core.storage?.set(PANEL_STATE_KEY, saved).catch?.(() => {});
+  }
 
   function cssEscape(value) {
     if (global.CSS?.escape) return global.CSS.escape(String(value));
@@ -24,7 +41,7 @@
 
   function stableDataIdentity(control) {
     const preferred = [
-      'field', 'setting', 'key', 'scope', 'targetListTag', 'targetId',
+      'uiKey', 'field', 'setting', 'key', 'scope', 'targetListTag', 'targetId',
       'watchId', 'marketWatchId', 'alertType', 'action'
     ];
     for (const name of preferred) {
@@ -50,6 +67,7 @@
   }
 
   function snapshot(control) {
+    if (control.tagName === 'DETAILS') return { kind:'open', open:control.open };
     if (control.matches('[contenteditable="true"]')) return { kind:'html', value:control.innerHTML };
     if (control instanceof HTMLInputElement && (control.type === 'checkbox' || control.type === 'radio')) {
       return { kind:'checked', checked:control.checked };
@@ -68,7 +86,8 @@
 
   function applySnapshot(control, state) {
     if (!control || !state) return;
-    if (state.kind === 'html') control.innerHTML = state.value;
+    if (state.kind === 'open') control.open = Boolean(state.open);
+    else if (state.kind === 'html') control.innerHTML = state.value;
     else if (state.kind === 'checked') control.checked = Boolean(state.checked);
     else if (state.kind === 'multiple') {
       const selected = new Set(state.values || []);
@@ -108,11 +127,15 @@
 
     function restore() {
       scheduled = false;
-      if (restoring || !dirty.size) return;
+      if (restoring || (!dirty.size && !panelStates.size)) return;
       restoring = true;
       const scrollX = Number(global.scrollX) || 0;
       const scrollY = Number(global.scrollY) || 0;
       let focusTarget = null;
+      for (const panel of root.querySelectorAll('details[data-ui-key]')) {
+        const key = String(panel.dataset.uiKey || '');
+        if (key && panelStates.has(key)) panel.open = panelStates.get(key);
+      }
       for (const control of root.querySelectorAll(CONTROL_SELECTOR)) {
         const key = controlIdentity(control, root);
         const state = dirty.get(key);
@@ -134,7 +157,7 @@
     }
 
     function scheduleRestore() {
-      if (scheduled || !dirty.size) return;
+      if (scheduled || (!dirty.size && !panelStates.size)) return;
       scheduled = true;
       queueMicrotask(restore);
     }
@@ -167,8 +190,19 @@
       global.setTimeout(() => clearScope(action), 0);
     }
 
+    function onToggle(event) {
+      if (restoring || event.target?.tagName !== 'DETAILS') return;
+      remember(event.target);
+      const key = String(event.target.dataset?.uiKey || '');
+      if (key) {
+        panelStates.set(key, event.target.open);
+        persistPanelStates();
+      }
+    }
+
     root.addEventListener('input', onEdit, true);
     root.addEventListener('change', onEdit, true);
+    root.addEventListener('toggle', onToggle, true);
     root.addEventListener('focusin', onFocusIn, true);
     root.addEventListener('focusout', onFocusOut, true);
     root.addEventListener('click', onClick, true);
@@ -182,6 +216,7 @@
         observer.disconnect();
         root.removeEventListener('input', onEdit, true);
         root.removeEventListener('change', onEdit, true);
+        root.removeEventListener('toggle', onToggle, true);
         root.removeEventListener('focusin', onFocusIn, true);
         root.removeEventListener('focusout', onFocusOut, true);
         root.removeEventListener('click', onClick, true);
@@ -189,6 +224,7 @@
       }
     });
     protectedRoots.set(root, api);
+    void loadPanelStates().then(scheduleRestore);
     return api;
   }
 

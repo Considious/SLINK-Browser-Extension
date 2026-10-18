@@ -388,32 +388,36 @@
     function showAlert(definition = {}) {
       const id = String(definition.id || '').trim();
       if (!id) throw new Error('A SLINK alert ID is required.');
-      dismissAlert(id);
-      const alert = createWindow(`alert-${id}`, definition.title || 'SLINK alert', definition.subtitle || '');
-      alert.element.classList.add('popup', 'slink-alert');
-      const content = document.createElement('div');
-      content.className = 'content slink-alert-body';
-      content.innerHTML = String(definition.contentHtml || '');
-      const actions = document.createElement('div');
-      actions.className = 'actions';
+      let alert = alerts.get(id);
+      if (!alert) {
+        alert = createWindow(`alert-${id}`, definition.title || 'SLINK alert', definition.subtitle || '');
+        alert.element.classList.add('popup', 'slink-alert');
+        alert.content = document.createElement('div');
+        alert.content.className = 'content slink-alert-body';
+        alert.actions = document.createElement('div');
+        alert.actions.className = 'actions';
+        alert.element.append(alert.content, alert.actions);
+        alert.element.querySelector('.hide').addEventListener('click', () => {
+          if (typeof alert.onDismiss === 'function') void alert.onDismiss();
+          dismissAlert(id);
+        });
+        alerts.set(id, alert);
+        shadow.append(alert.element);
+      }
+      alert.onDismiss = definition.onDismiss;
+      alert.element.querySelector('.title').textContent = String(definition.title || 'SLINK alert');
+      alert.element.querySelector('.subtitle').textContent = String(definition.subtitle || '');
+      alert.content.innerHTML = String(definition.contentHtml || '');
+      const buttons = [];
       for (const action of definition.actions || []) {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = String(action.label || 'Action');
-        if (action.href) {
-          button.addEventListener('click', () => global.open(String(action.href), '_blank', 'noopener'));
-        } else if (typeof action.onClick === 'function') {
-          button.addEventListener('click', event => void action.onClick(event));
-        }
-        actions.append(button);
+        if (action.href) button.addEventListener('click', () => global.open(String(action.href), '_blank', 'noopener'));
+        else if (typeof action.onClick === 'function') button.addEventListener('click', event => void action.onClick(event));
+        buttons.push(button);
       }
-      alert.element.append(content, actions);
-      alert.element.querySelector('.hide').addEventListener('click', () => {
-        if (typeof definition.onDismiss === 'function') void definition.onDismiss();
-        dismissAlert(id);
-      });
-      alerts.set(id, alert);
-      shadow.append(alert.element);
+      alert.actions.replaceChildren(...buttons);
       refreshShell();
       return Object.freeze({ dismiss:() => dismissAlert(id), element:alert.element });
     }

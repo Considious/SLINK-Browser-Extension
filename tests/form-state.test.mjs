@@ -6,8 +6,12 @@ const shell = fs.readFileSync(new URL('../src/content/ui-shell.js', import.meta.
 const dashboard = fs.readFileSync(new URL('../src/dashboard/dashboard.js', import.meta.url), 'utf8');
 const manifest = JSON.parse(fs.readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
 
-assert(formState.includes("'input, textarea, select, [contenteditable=\"true\"]'"), 'All editable controls must be guarded.');
+assert(formState.includes("'input, textarea, select, [contenteditable=\"true\"], details'"), 'All editable controls and expandable sections must be guarded.');
 assert(formState.includes("new MutationObserver(scheduleRestore)"), 'Background DOM replacements must restore dirty controls.');
+assert(formState.includes("PANEL_STATE_KEY = 'ui.interaction.panels.v1'"), 'Expandable panel state must be persisted separately from feature settings.');
+assert(formState.includes("details[data-ui-key]"), 'Stable keyed panels must be restored after background rendering.');
+assert(!shell.includes("dismissAlert(id);\n      const alert = createWindow"), 'Updating an existing alert must not destroy and recreate its window.');
+assert(shell.includes("let alert = alerts.get(id)"), 'Alert updates must reuse the existing movable window.');
 assert(formState.includes("focusTarget.focus({ preventScroll:true })"), 'Focused controls must be restored without jumping the page.');
 assert(formState.includes("'save|submit|apply|update|confirm|cancel|reset|clear|remove|delete'".replaceAll("'", "")) || formState.includes("(save|submit|apply|update|confirm|cancel|reset|clear|remove|delete)"), 'Explicit save/cancel/reset actions must release guarded state.');
 assert(shell.includes("element.dataset.slinkModuleId = module.id"), 'Each Torn module must have a stable form-state scope.');
