@@ -24,13 +24,16 @@
     Object.freeze({ id:'searchCashUnique', crimeId:1, label:'Search for Cash unique windows', mode:'live' }),
     Object.freeze({ id:'bootleggingUniques', crimeId:2, label:'Bootlegging unique progress', mode:'tracking' }),
     Object.freeze({ id:'graffitiUniques', crimeId:3, label:'Graffiti unique progress', mode:'tracking' }),
-    Object.freeze({ id:'clusterRing', crimeId:4, label:'Cluster Ring window', mode:'live' }),
+    Object.freeze({ id:'clusterRing', crimeId:4, label:'Shoplifting unique windows', mode:'live' }),
     Object.freeze({ id:'pickpocketingUniques', crimeId:5, label:'Pickpocketing unique progress', mode:'tracking' }),
     Object.freeze({ id:'burglaryUniques', crimeId:7, label:'Burglary unique progress', mode:'tracking' }),
     Object.freeze({ id:'disposalUnique', crimeId:9, label:'Disposal daily unique check', mode:'daily' }),
     Object.freeze({ id:'arsonUnique', crimeId:13, label:'Arson daily unique check', mode:'daily' })
   ]);
   const ARSON_UNIQUE_SKILL_THRESHOLDS = Object.freeze([4, 5, 48, 51, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90]);
+  // Ordered to match Torn's crime 4 unique_outcomes_ids catalog.
+  const SHOPLIFTING_UNIQUE_WINDOWS = Object.freeze([{"shop":"sallys_sweet_shop","shopLabel":"Sally's Sweet Shop","label":"Jawbreaker","skill":20,"cameras":"off"},{"shop":"sallys_sweet_shop","shopLabel":"Sally's Sweet Shop","label":"Chocolate Truffles bundle","skill":40,"cameras":"on"},{"shop":"sallys_sweet_shop","shopLabel":"Sally's Sweet Shop","label":"Pixie Sticks","skill":60,"cameras":"off"},{"shop":"sallys_sweet_shop","shopLabel":"Sally's Sweet Shop","label":"Bags of Sherbet","skill":70,"cameras":"on"},{"shop":"sallys_sweet_shop","shopLabel":"Sally's Sweet Shop","label":"Tin of Treats","skill":80,"cameras":"off"},{"shop":"bits_n_bobs","shopLabel":"Bits 'n' Bobs","label":"Bottles of Champagne","skill":1,"cameras":"off"},{"shop":"bits_n_bobs","shopLabel":"Bits 'n' Bobs","label":"Cut-Throat Razor + Shaving Foam","skill":1,"cameras":"on"},{"shop":"bits_n_bobs","shopLabel":"Bits 'n' Bobs","label":"Flashlight","skill":1,"cameras":"off"},{"shop":"bits_n_bobs","shopLabel":"Bits 'n' Bobs","label":"Duct Tape","skill":30,"cameras":"off"},{"shop":"bits_n_bobs","shopLabel":"Bits 'n' Bobs","label":"Bottles of Beer","skill":60,"cameras":"on"},{"shop":"bits_n_bobs","shopLabel":"Bits 'n' Bobs","label":"Cash unique","skill":80,"cameras":"off"},{"shop":"bits_n_bobs","shopLabel":"Bits 'n' Bobs","label":"Mountain Bike","skill":90,"cameras":"on"},{"shop":"tc_clothing","shopLabel":"TC Clothing","label":"Raincoat","skill":20,"cameras":"on","checkpoint":"off"},{"shop":"tc_clothing","shopLabel":"TC Clothing","label":"Fisherman Hat + Fishing Rod","skill":30,"cameras":"on","checkpoint":"on"},{"shop":"tc_clothing","shopLabel":"TC Clothing","label":"Tailor's Dummy + Scissors","skill":40,"cameras":"off","checkpoint":"on"},{"shop":"tc_clothing","shopLabel":"TC Clothing","label":"Trench Coat","skill":50,"cameras":"on","checkpoint":"on"},{"shop":"tc_clothing","shopLabel":"TC Clothing","label":"Mackintosh","skill":60,"cameras":"on","checkpoint":"off"},{"shop":"tc_clothing","shopLabel":"TC Clothing","label":"Coat Hanger","skill":70,"cameras":"on","checkpoint":"on","notoriety":"100%"},{"shop":"tc_clothing","shopLabel":"TC Clothing","label":"Bush Hat","skill":80,"cameras":"off","checkpoint":"on"},{"shop":"tc_clothing","shopLabel":"TC Clothing","label":"Crop Top + Coin Purse + Lipstick","skill":90,"cameras":"on","checkpoint":"on"},{"shop":"tc_clothing","shopLabel":"TC Clothing","label":"Poncho","skill":100,"checkpoint":"off"},{"shop":"tc_clothing","shopLabel":"TC Clothing","label":"Cassock","skill":100,"cameras":"off","checkpoint":"on"},{"shop":"super_store","shopLabel":"Super Store","label":"DVD Player + Erotic DVD","skill":1,"cameras":"off","checkpoint":"off"},{"shop":"super_store","shopLabel":"Super Store","label":"DSLR Camera","skill":1,"cameras":"on","checkpoint":"off"},{"shop":"super_store","shopLabel":"Super Store","label":"Tracking Device","skill":20,"cameras":"off","checkpoint":"on"},{"shop":"super_store","shopLabel":"Super Store","label":"Wireless Dongle","skill":40,"cameras":"off","checkpoint":"on"},{"shop":"super_store","shopLabel":"Super Store","label":"Ergonomic Keyboard","skill":60,"cameras":"on","checkpoint":"off"},{"shop":"super_store","shopLabel":"Super Store","label":"High-Speed Drive","skill":80,"cameras":"on","checkpoint":"on"},{"shop":"super_store","shopLabel":"Super Store","label":"Laptop","skill":100,"cameras":"on","checkpoint":"on"},{"shop":"super_store","shopLabel":"Super Store","label":"Receipt + Voice Recorder","skill":100,"cameras":"off","checkpoint":"on"},{"shop":"pharmacy","shopLabel":"Pharmacy","label":"Epinephrine","skill":100,"cameras":"on","checkpoint":"off"},{"shop":"pharmacy","shopLabel":"Pharmacy","label":"Serotonin + Syringes","skill":1,"cameras":"off","checkpoint":"off"},{"shop":"pharmacy","shopLabel":"Pharmacy","label":"Melatonin","skill":5,"cameras":"on"},{"shop":"pharmacy","shopLabel":"Pharmacy","label":"Tyrosine","skill":10,"cameras":"off","checkpoint":"on"},{"shop":"pharmacy","shopLabel":"Pharmacy","label":"Box of Medical Supplies","skill":100,"checkpoint":"on"},{"shop":"cyber_force","shopLabel":"Cyber Force","label":"HPCPUs","skill":5,"cameras":"off","guards":"on"},{"shop":"cyber_force","shopLabel":"Cyber Force","label":"Office Chair","skill":60,"cameras":"on","guards":"off"},{"shop":"cyber_force","shopLabel":"Cyber Force","label":"Cash unique","skill":1,"cameras":"on","guards":"on"},{"shop":"cyber_force","shopLabel":"Cyber Force","label":"Points unique","skill":1,"cameras":"on","guards":"off"},{"shop":"cyber_force","shopLabel":"Cyber Force","label":"Computer-parts bundle","skill":15,"cameras":"off","guards":"off"},{"shop":"cyber_force","shopLabel":"Cyber Force","label":"RF Detector","skill":1,"cameras":"off"},{"shop":"jewelry_store","shopLabel":"Jewelry Store","label":"Magnifying Glass","skill":1,"cameras":"on","guards":"on"},{"shop":"jewelry_store","shopLabel":"Jewelry Store","label":"Drill + Polishing Pad + Gold Rings","skill":1,"cameras":"off","guards":"on"},{"shop":"jewelry_store","shopLabel":"Jewelry Store","label":"Grinding Stone + Diamond Ring","skill":1,"cameras":"off","guards":"on"},{"shop":"jewelry_store","shopLabel":"Jewelry Store","label":"Gold Ring + Graver","skill":1,"cameras":"on","guards":"on"},{"shop":"jewelry_store","shopLabel":"Jewelry Store","label":"Vanity Hand Mirror","skill":10,"cameras":"off","guards":"off"},{"shop":"jewelry_store","shopLabel":"Jewelry Store","label":"Gold Teeth","skill":20,"cameras":"on","guards":"on"},{"shop":"jewelry_store","shopLabel":"Jewelry Store","label":"Raw Ivory","skill":40,"cameras":"on","guards":"on"},{"shop":"jewelry_store","shopLabel":"Jewelry Store","label":"Diamond Ring + Latex Gloves","skill":40,"cameras":"off","guards":"on"},{"shop":"jewelry_store","shopLabel":"Jewelry Store","label":"Diamond Bladed Knife","skill":60,"cameras":"on","guards":"off"},{"shop":"jewelry_store","shopLabel":"Jewelry Store","label":"Cluster Ring","skill":100,"cameras":"off","guards":"off","notoriety":"0%"},{"shop":"big_als","shopLabel":"Big Al's Gun Shop","label":"Full Body Armor","skill":1,"cameras":"off","guards":"off"},{"shop":"big_als","shopLabel":"Big Al's Gun Shop","label":"Special Ammo","skill":1,"cameras":"off","guards":"off"},{"shop":"big_als","shopLabel":"Big Al's Gun Shop","label":"Ninja Stars","skill":30,"cameras":"off","guards":"on"},{"shop":"big_als","shopLabel":"Big Al's Gun Shop","label":"Desert Eagle","skill":40,"cameras":"on","guards":"on"},{"shop":"big_als","shopLabel":"Big Al's Gun Shop","label":"Stick Grenades","skill":50,"cameras":"on","guards":"off"},{"shop":"big_als","shopLabel":"Big Al's Gun Shop","label":"Steyr AUG","skill":60,"guards":"off"},{"shop":"big_als","shopLabel":"Big Al's Gun Shop","label":"Throwing Knives","skill":70,"cameras":"off","guards":"on"},{"shop":"big_als","shopLabel":"Big Al's Gun Shop","label":"HEGs","skill":80,"cameras":"on","guards":"on"},{"shop":"big_als","shopLabel":"Big Al's Gun Shop","label":"Box of Grenades","skill":100,"cameras":"on","guards":"on"}].map(entry => Object.freeze(entry)));
+
 
   const ALERT_DEFINITIONS = Object.freeze([
     Object.freeze({ id:'timer24', label:'24-hour timer' }),
@@ -312,16 +315,16 @@
       const uniqueRows = crimeUniqueRows(user);
       const completedIds = [...new Set(uniqueRows.map(row => Number(row?.id)).filter(Number.isFinite))];
       const expectedIds = [...new Set((Array.isArray(catalog?.unique_outcomes_ids) ? catalog.unique_outcomes_ids : []).map(Number).filter(Number.isFinite))];
-      let total = Math.max(0, Number(catalog?.unique_outcomes_count) || expectedIds.length || 0);
-      let completed = total ? Math.min(total, completedIds.length) : completedIds.length;
+      const total = Math.max(0, Number(catalog?.unique_outcomes_count) || expectedIds.length || 0);
+      const completed = total ? Math.min(total, completedIds.length) : completedIds.length;
       const skill = Math.max(0, finite(user?.crimes?.skill) || 0);
       let eligibleTotal = skill > 0 ? total : 0;
       if (definition.crimeId === 13) eligibleTotal = ARSON_UNIQUE_SKILL_THRESHOLDS.filter(threshold => skill >= threshold).length;
-      if (definition.crimeId === 4) {
-        total = 1;
-        completed = clusterRingAchieved(user) ? 1 : 0;
-        eligibleTotal = skill >= 100 ? 1 : 0;
-      }
+      if (definition.crimeId === 4) eligibleTotal = SHOPLIFTING_UNIQUE_WINDOWS.filter(outcome => skill >= outcome.skill).length;
+      const missingIds = expectedIds.filter(id => !completedIds.includes(id));
+      const canSpawnMissing = definition.crimeId === 4 && expectedIds.length >= SHOPLIFTING_UNIQUE_WINDOWS.length
+        ? SHOPLIFTING_UNIQUE_WINDOWS.some((outcome, index) => skill >= outcome.skill && !completedIds.includes(expectedIds[index]))
+        : total > 0 && completed < total && eligibleTotal > completed;
       return {
         ...definition,
         name:String(catalog?.name || definition.label.replace(/ unique.*$/i, '')),
@@ -330,9 +333,10 @@
         total,
         eligibleTotal,
         complete:total > 0 && completed >= total,
-        canSpawnMissing:total > 0 && completed < total && eligibleTotal > completed,
+        canSpawnMissing,
         completedIds,
-        missingIds:expectedIds.filter(id => !completedIds.includes(id))
+        expectedIds,
+        missingIds
       };
     });
   }
@@ -342,6 +346,55 @@
     if (Array.isArray(raw)) return raw;
     if (!raw || typeof raw !== 'object') return [];
     return Object.entries(raw).map(([name, status]) => ({ name, status:Array.isArray(status) ? status : [] }));
+  }
+
+  function shopliftingShopKey(value) {
+    const normalized = String(value || '').normalize('NFKD').replace(/[’']/g, '').replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '').toLowerCase();
+    if (/sally/.test(normalized)) return 'sallys_sweet_shop';
+    if (/bits.*bobs/.test(normalized)) return 'bits_n_bobs';
+    if (/tc.*clothing/.test(normalized)) return 'tc_clothing';
+    if (/super.*store/.test(normalized)) return 'super_store';
+    if (/pharmacy/.test(normalized)) return 'pharmacy';
+    if (/cyber.*force/.test(normalized)) return 'cyber_force';
+    if (/jewelry/.test(normalized)) return 'jewelry_store';
+    if (/big.*al/.test(normalized)) return 'big_als';
+    return normalized;
+  }
+
+  function shopliftingSecurityMap(cluster = {}) {
+    const subcrimes = Array.isArray(cluster?.subcrimes?.subcrimes) ? cluster.subcrimes.subcrimes : [];
+    const namesById = new Map(subcrimes.map(row => [Number(row?.id), row?.name]));
+    return Object.fromEntries(shopliftingStatusRows(cluster?.status).map(row => {
+      const key = shopliftingShopKey(row?.name || namesById.get(Number(row?.id)));
+      const status = Array.isArray(row?.status) ? row.status : [];
+      const disabled = pattern => {
+        const found = status.find(entry => pattern.test(String(entry?.title || '')));
+        return found ? found.disabled === true : null;
+      };
+      return [key, { camerasOff:disabled(/camera/i), checkpointOff:disabled(/checkpoint/i), guardsOff:disabled(/guard/i) }];
+    }).filter(([key]) => key));
+  }
+
+  function shopliftingConditionMatches(outcome, state) {
+    if (!state) return false;
+    if (outcome.cameras && state.camerasOff !== (outcome.cameras === 'off')) return false;
+    if (outcome.checkpoint && state.checkpointOff !== (outcome.checkpoint === 'off')) return false;
+    if (outcome.guards && state.guardsOff !== (outcome.guards === 'off')) return false;
+    return true;
+  }
+
+  function shopliftingUniqueOpportunities(cluster = {}, progress = {}) {
+    const expectedIds = Array.isArray(progress?.expectedIds) ? progress.expectedIds : [];
+    if (expectedIds.length < SHOPLIFTING_UNIQUE_WINDOWS.length) return [];
+    const completed = new Set(Array.isArray(progress?.completedIds) ? progress.completedIds.map(Number) : []);
+    const skill = Math.max(0, finite(progress?.skill) || 0);
+    const security = shopliftingSecurityMap(cluster);
+    return SHOPLIFTING_UNIQUE_WINDOWS.flatMap((outcome, index) => {
+      const id = Number(expectedIds[index]);
+      if (!Number.isFinite(id) || completed.has(id) || skill < outcome.skill || !shopliftingConditionMatches(outcome, security[outcome.shop])) return [];
+      const extra = outcome.notoriety ? ` · requires ${outcome.notoriety} notoriety` : '';
+      return [{ ...outcome, id, detail:`${outcome.shopLabel}: ${outcome.label} (skill ${outcome.skill})${extra}` }];
+    });
   }
 
   function clusterRingReady(cluster) {
@@ -448,6 +501,9 @@
       crimeById.searchCashUnique?.skill,
       now
     );
+    const shopliftingOpportunities = shopliftingUniqueOpportunities(snapshot.cluster, crimeById.clusterRing);
+    const shopliftingSummary = shopliftingOpportunities.slice(0, 6).map(row => row.detail).join('; ');
+    const shopliftingExtra = shopliftingOpportunities.length > 6 ? `; +${shopliftingOpportunities.length - 6} more` : '';
     const travelSeconds = Number(travel?.arrival_at) * 1000 > now
       ? Math.ceil((Number(travel.arrival_at) * 1000 - now) / 1000)
       : countdown(travel?.time_left, mobilityFetchedAt, now);
@@ -489,7 +545,7 @@
       { id:'googlePlayPoints', active:Number(settings.googlePlayPointsClaimedAt || 0) + WEEK_MS <= now, title:'Claim your weekly Google Play Points prize', detail:`${playPoints.detail} This reminder returns seven days after confirmation.`, tone:'daily', links:playPoints.links },
       { id:'playerAddiction', active:playerAddiction !== null && playerAddiction >= settings.playerAddictionThreshold, title:'Player addiction needs attention', detail:`${playerAddiction ?? 0}% battle-stat penalty — alert threshold ${settings.playerAddictionThreshold}%`, tone:'urgent', links:[['Travel','https://www.torn.com/travelagency.php']] },
       { id:'searchCashUnique', active:crimeById.searchCashUnique?.canSpawnMissing && searchOpportunities.length > 0, title:'Search for Cash unique window may be active', detail:`${searchOpportunities.join(', ')}. ${crimeById.searchCashUnique?.completed || 0}/${crimeById.searchCashUnique?.total || 0} unique outcomes completed; Torn does not expose a direct condition-to-missing-outcome map, so check the starred options.`, tone:'unique', links:[['Check Search for Cash','https://www.torn.com/page.php?sid=crimes#/search-for-cash']] },
-      { id:'clusterRing', active:crimeById.clusterRing?.canSpawnMissing && clusterRingReady(snapshot.cluster), title:'Cluster Ring security window is open', detail:'Torn reports the Jewelry Store cameras and guard are disabled. Shoplifting skill 100 and 0% Jewelry Store notoriety are still required.', tone:'unique', links:[['Shoplift','https://www.torn.com/page.php?sid=crimes#/shoplifting']] },
+      { id:'clusterRing', soundId:`clusterRing:${shopliftingOpportunities.map(row => row.id).join('-')}`, active:crimeById.clusterRing?.canSpawnMissing && shopliftingOpportunities.length > 0, title:`${shopliftingOpportunities.length} missing Shoplifting unique${shopliftingOpportunities.length === 1 ? '' : 's'} match current security`, detail:`${shopliftingSummary}${shopliftingExtra}. ${crimeById.clusterRing?.completed || 0}/${crimeById.clusterRing?.total || 0} completed.`, tone:'unique', links:[['Shoplift','https://www.torn.com/page.php?sid=crimes#/shoplifting']] },
       { id:'disposalUnique', active:dailyCrimeUniqueDue(crimeById.disposalUnique, settings, now), title:'Check today’s Disposal jobs for missing uniques', detail:`${crimeById.disposalUnique?.completed || 0}/${crimeById.disposalUnique?.total || 0} unique outcomes completed. Jobs refresh daily; check for starred options before using today’s jobs.`, tone:'unique', links:[['Check Disposal','https://www.torn.com/page.php?sid=crimes#/disposal']] },
       { id:'arsonUnique', active:dailyCrimeUniqueDue(crimeById.arsonUnique, settings, now), title:'Check today’s Arson targets for missing uniques', detail:`${crimeById.arsonUnique?.completed || 0}/${crimeById.arsonUnique?.total || 0} unique outcomes completed at skill ${Math.floor(crimeById.arsonUnique?.skill || 0)}. Only skill-eligible missing targets trigger this reminder.`, tone:'unique', links:[['Check Arson','https://www.torn.com/page.php?sid=crimes#/arson']] },
       ...cityStockAlerts
@@ -631,6 +687,7 @@
     ALERT_SCOPE,
     CITY_SHOP_TARGETS,
     CRIME_UNIQUE_DEFINITIONS,
+    SHOPLIFTING_UNIQUE_WINDOWS,
     DAY_MS,
     GOOGLE_PLAY_POINTS_ANDROID_INTENT,
     GOOGLE_PLAY_POINTS_HELP_URL,
@@ -640,6 +697,7 @@
     addictionPercentFromBattleStats,
     clusterRingAchieved,
     clusterRingReady,
+    shopliftingUniqueOpportunities,
     crimeUniqueProgress,
     dailyCrimeUniqueDue,
     searchForCashOpportunities,

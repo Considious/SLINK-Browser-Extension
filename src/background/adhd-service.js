@@ -155,11 +155,11 @@
     }
     if (ADHD.clusterRingAchieved(cluster.crimes)) return cluster;
     if (!cluster.subcrimes || Number(cluster.subcrimesFetchedAt || 0) + 7 * ADHD.DAY_MS <= now) {
-      cluster.subcrimes = await tornJson(apiUrl('torn/4/subcrimes', 'SLINK Cluster Ring map'), key);
+      cluster.subcrimes = await tornJson(apiUrl('torn/4/subcrimes', 'SLINK Shoplifting unique map'), key);
       cluster.subcrimesFetchedAt = now;
     }
     if (force || !cluster.status || Number(cluster.statusFetchedAt || 0) + 5 * 60_000 <= now) {
-      cluster.status = await tornJson(apiUrl('torn/shoplifting', 'SLINK Cluster Ring status'), key);
+      cluster.status = await tornJson(apiUrl('torn/shoplifting', 'SLINK Shoplifting unique status'), key);
       cluster.statusFetchedAt = now;
     }
     return cluster;
@@ -358,7 +358,7 @@
         if (clusterProgress && !clusterProgress.complete
           && (currentSettings.enabled.clusterRing !== false || currentSettings.soundEnabled.clusterRing === true)) {
           const cluster = { ...(snapshot.cluster || {}) };
-          cluster.status = await tornJson(apiUrl('torn/shoplifting', 'SLINK Cluster Ring status'), key);
+          cluster.status = await tornJson(apiUrl('torn/shoplifting', 'SLINK Shoplifting unique status'), key);
           cluster.statusFetchedAt = now;
           snapshot.cluster = cluster;
         }
@@ -500,7 +500,8 @@
       settings(), runtime(), SLINK.core.storage.get(KEYS.soundState, { activeIds:[], pendingIds:[] })
     ]);
     const efficiencyAlerts = ADHD.buildAlerts(currentRuntime.snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
-      .filter(alert => (currentRuntime.snapshot || alert.id === 'timer24') && currentSettings.soundEnabled[alert.id] === true);
+      .filter(alert => (currentRuntime.snapshot || alert.id === 'timer24') && currentSettings.soundEnabled[alert.id] === true)
+      .map(alert => alert.soundId ? { ...alert, id:alert.soundId, sourceId:alert.id } : alert);
     const [stakeoutAlerts, abroadAlerts, companyAlerts, moneyAlerts, abroadSettings, moneyStatus] = await Promise.all([
       SLINK.services.targetList.activeAlerts(),
       SLINK.services.abroadStocks.activeAlerts(),
@@ -524,7 +525,7 @@
     const now = Date.now();
     const play = pendingIds.length > 0 && now - Number(previous?.claimedAt || 0) >= 5_000;
     const uniqueIds = new Set(['searchCashUnique', 'clusterRing', 'disposalUnique', 'arsonUnique']);
-    const soundChoice = pendingIds.some(id => uniqueIds.has(id)) ? 'unique' : currentSettings.soundChoice;
+    const soundChoice = pendingIds.some(id => uniqueIds.has(id) || id.startsWith('clusterRing:')) ? 'unique' : currentSettings.soundChoice;
     await SLINK.core.storage.set(KEYS.soundState, { activeIds:[...activeSet].sort(), pendingIds, claimedAt:play ? now : Number(previous?.claimedAt) || 0, updatedAt:now });
     return {
       play,

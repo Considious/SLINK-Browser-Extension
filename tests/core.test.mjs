@@ -82,7 +82,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.70', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.71', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.attackLink('https://www.torn.com/page.php?sid=attack&user2ID=1') === '<a href="https://www.torn.com/page.php?sid=attack&amp;user2ID=1">【ATTACK】</a>', 'Shared attack-link formatter did not preserve Torn HTML and the bracketed label.');
@@ -447,6 +447,19 @@ const clusterSnapshotV1 = {
   status:{ shoplifting:{ jewelry_store:[{ title:'Three cameras', disabled:true }, { title:'One guard', disabled:true }] } }
 };
 assert(SLINK.core.adhd.clusterRingReady(clusterSnapshotV1), 'Cluster Ring parser did not accept the keyed v1 shoplifting response.');
+const shopliftingIds = Array.from({ length:60 }, (_, index) => 4000 + index);
+const shopliftingProgress = SLINK.core.adhd.crimeUniqueProgress({
+  crimeUniques:{
+    catalog:{ crimes:[{ id:4, name:'Shoplifting', unique_outcomes_count:60, unique_outcomes_ids:shopliftingIds }] },
+    user:{ 4:{ crimes:{ skill:100, uniques:shopliftingIds.slice(1).map(id => ({ id, rewards:{} })) } } }
+  }
+}).find(row => row.id === 'clusterRing');
+const shopliftingMatches = SLINK.core.adhd.shopliftingUniqueOpportunities({
+  status:{ shoplifting:{ sallys_sweet_shop:[{ title:'One camera', disabled:true }] } }
+}, shopliftingProgress);
+assert(shopliftingProgress.total === 60 && shopliftingProgress.completed === 59, 'Shoplifting progress was incorrectly reduced to Cluster Ring only.');
+assert(shopliftingMatches.length === 1 && shopliftingMatches[0].label === 'Jawbreaker', 'Missing Shoplifting unique was not matched to the live security state.');
+
 
 const arsonCatalog = { crimes:[{ id:13, name:'Arson', unique_outcomes_count:16, unique_outcomes_ids:Array.from({ length:16 }, (_, index) => 20000 + index) }] };
 const arsonUser = { crimes:{ skill:4, uniques:[] } };
