@@ -519,6 +519,26 @@
     return candidate.weaverPricelistEnabled ? refresh(false) : buildStatus(candidate, current, access);
   }
 
+  async function toggleWeaverSelection(input = {}) {
+    const access = await accessState({ authenticate:true });
+    if (!access.permitted) throw new Error('A signed SLINK Market Watch permission is required.');
+    const itemId = Math.trunc(Number(input?.itemId) || 0);
+    if (!(itemId > 0)) throw new Error('Choose a Weaver price-list item.');
+    const current = await runtime();
+    const available = new Set(MARKET.weaverPricelistItems(current.weaverPricelist?.items || []).map(item => item.itemId));
+    if (!available.has(itemId)) throw new Error('That Weaver item is no longer in the current price list.');
+    const previous = await settings();
+    const selected = new Set(previous.weaverActiveItemIds);
+    if (input?.checked === true) selected.add(itemId);
+    else selected.delete(itemId);
+    const candidate = MARKET.normalizeSettings({ ...previous, weaverActiveItemIds:[...selected] });
+    assertActiveSlotLimit({ ...candidate, weaverPricelistEnabled:true }, access);
+    await SLINK.core.storage.set(KEYS.settings, candidate);
+    if (!selected.has(itemId)) delete current.pricelistResults[itemId];
+    await saveRuntime(current);
+    return candidate.weaverPricelistEnabled ? refresh(false) : buildStatus(candidate, current, access);
+  }
+
   async function dollarRecord() {
     const stored = await SLINK.core.storage.get(KEYS.dollarBazaars, {});
     return stored && typeof stored === 'object' ? stored : {};
@@ -591,6 +611,7 @@
     'market.permissions.refresh':() => withActivity(refreshPermissions),
     'market.weaver.pricelist.sync':payload => withActivity(syncPricelist, payload),
     'market.weaver.selection.save':payload => withActivity(saveWeaverSelection, payload),
+    'market.weaver.selection.toggle':payload => withActivity(toggleWeaverSelection, payload),
     'market.dollar.status':payload => dollarStatus(payload?.refreshIfDue !== false),
     'market.dollar.refresh':() => refreshDollarBazaars(true),
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },

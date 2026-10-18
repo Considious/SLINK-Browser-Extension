@@ -1506,11 +1506,13 @@
   });
   byId('market-weaver-item-list').addEventListener('change', async event => {
     const input = event.target.closest('[data-market-weaver-item]'); if (!input) return;
-    const itemIds = [...byId('market-weaver-item-list').querySelectorAll('[data-market-weaver-item]:checked')].map(node => Number(node.dataset.marketWeaverItem));
+    const itemId = Math.trunc(Number(input.dataset.marketWeaverItem) || 0);
+    const checked = input.checked;
+    if (!(itemId > 0)) { renderMarket(); return; }
     input.disabled = true; byId('market-message').textContent = '';
     try {
-      market = await SLINK.core.messaging.send('market.weaver.selection.save', { itemIds });
-      byId('market-message').textContent = `Saved ${market.settings?.weaverActiveItemIds?.length || 0} selected Weaver price${market.settings?.weaverActiveItemIds?.length === 1 ? '' : 's'}.`;
+      market = await SLINK.core.messaging.send('market.weaver.selection.toggle', { itemId, checked });
+      byId('market-message').textContent = `${checked ? 'Activated' : 'Paused'} this Weaver item · ${market.settings?.weaverActiveItemIds?.length || 0} selected.`;
       renderMarket();
     } catch (error) { byId('market-message').textContent = errorText(error); renderMarket(); }
   });

@@ -502,7 +502,10 @@ context = vm.createContext({
         ] };
       } else if (/^\/api\/pricelist\//.test(url.pathname)) {
         weaverPricelistRequests += 1;
-        body = [{ itemId:2, name:'Legacy Shop', buyPrice:90, bulkThreshold:3, bulkBuyPrice:95 }];
+        body = [
+          { itemId:1, name:'Current Shops', buyPrice:80, bulkThreshold:0, bulkBuyPrice:0 },
+          { itemId:2, name:'Legacy Shop', buyPrice:90, bulkThreshold:3, bulkBuyPrice:95 }
+        ];
       } else if (url.pathname === '/api/marketplace') {
         weaverSummaryRequests += 1;
         body = { items:[
@@ -679,9 +682,13 @@ assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverSummaryR
 const enabledWeaverPricelist = await send('market.settings.save', { weaverPricelistEnabled:true, listedItemsEnabled:false, weaverSourceOrder:'pricelist-first' });
 assert(enabledWeaverPricelist.ok, 'Weaver price-list settings could not be enabled.');
 const syncedWeaverPricelist = await send('market.weaver.pricelist.sync');
-assert(syncedWeaverPricelist.ok && syncedWeaverPricelist.data.weaverPricelist.itemCount === 1 && !syncedWeaverPricelist.data.opportunities.some(row => row.source === 'Weaver Pricelist'), 'An imported Weaver price consumed a free monitoring slot before being selected.');
+assert(syncedWeaverPricelist.ok && syncedWeaverPricelist.data.weaverPricelist.itemCount === 2 && !syncedWeaverPricelist.data.opportunities.some(row => row.source === 'Weaver Pricelist'), 'An imported Weaver price consumed a free monitoring slot before being selected.');
 const selectedWeaverPricelist = await send('market.weaver.selection.save', { itemIds:[2] });
 assert(selectedWeaverPricelist.ok && selectedWeaverPricelist.data.activeWatchCount === 1 && selectedWeaverPricelist.data.opportunities.some(row => row.source === 'Weaver Pricelist'), 'A selected Weaver price did not consume one active slot and create a locally screened opportunity.');
+const addedIndividualWeaverItem = await send('market.weaver.selection.toggle', { itemId:1, checked:true });
+assert(addedIndividualWeaverItem.ok && addedIndividualWeaverItem.data.settings.weaverActiveItemIds.includes(1) && addedIndividualWeaverItem.data.settings.weaverActiveItemIds.includes(2), 'Selecting one Weaver item replaced another item instead of changing only that item.');
+const removedIndividualWeaverItem = await send('market.weaver.selection.toggle', { itemId:1, checked:false });
+assert(removedIndividualWeaverItem.ok && !removedIndividualWeaverItem.data.settings.weaverActiveItemIds.includes(1) && removedIndividualWeaverItem.data.settings.weaverActiveItemIds.includes(2), 'Clearing one Weaver item cleared the full selection instead of changing only that item.');
 assert(weaverPricelistRequests === 1 && weaverSummaryRequests >= 1 && weaverDetailRequests < weaverMarketRequests, 'Weaver did not use one summary screen before item-detail requests.');
 await send('market.settings.save', { listedItemsEnabled:true });
 const pointsMarketWatch = await send('market.watch.save', { marketType:'points', maxPrice:45_000, priority:'low' });
