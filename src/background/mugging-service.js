@@ -53,7 +53,7 @@
 
   async function ownBattleStats(force = false) {
     const cached = await SLINK.core.storage.get(OWN_STATS_KEY, null);
-    if (!force && Number(cached?.total) > 0 && Date.now() - Number(cached?.checkedAt || 0) < OWN_STATS_TTL_MS) return Number(cached.total);
+    if (!force && Number(cached?.total) > 0 && Number(cached?.level) > 0 && Date.now() - Number(cached?.checkedAt || 0) < OWN_STATS_TTL_MS) return Number(cached.total);
     const key = await tornKey();
     if (!key) throw new Error('Save your Torn API key under API and feature access first.');
     const endpoint = '/v2/user?selections=battlestats,basic';
