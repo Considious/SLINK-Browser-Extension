@@ -56,15 +56,17 @@
     if (!force && Number(cached?.total) > 0 && Date.now() - Number(cached?.checkedAt || 0) < OWN_STATS_TTL_MS) return Number(cached.total);
     const key = await tornKey();
     if (!key) throw new Error('Save your Torn API key under API and feature access first.');
-    await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Mugging', priority:'high', endpoint:'/v2/user/battlestats' });
+    const endpoint = '/v2/user?selections=battlestats,basic';
+    await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Mugging', priority:'high', endpoint });
     const response = await SLINK.core.http.requestJson(
       'tornApi',
-      'https://api.torn.com/v2/user/battlestats?comment=SLINK%20Mugging%20rough%20assignment',
+      'https://api.torn.com/v2/user?selections=battlestats%2Cbasic&comment=SLINK%20Mugging%20rough%20assignment',
       { headers:{ Authorization:`ApiKey ${key}` }, cache:'no-store' }
     );
     if (response?.error) throw new Error(response.error?.message || response.error?.error || 'Torn rejected the battle-stat request.');
     const total = battleStatsTotal(response);
-    await SLINK.core.storage.set(OWN_STATS_KEY, { total, checkedAt:Date.now() });
+    const level = Math.max(0, Math.trunc(Number(response?.level ?? response?.basic?.level) || 0));
+    await SLINK.core.storage.set(OWN_STATS_KEY, { total, level, checkedAt:Date.now() });
     return total;
   }
 
@@ -288,6 +290,7 @@
       estimateKind:String((value.estimateKind ?? value.estimate_kind) || 'rough'),
       estimateSource:String((value.estimateSource ?? value.estimate_source) || 'cached battle-stat estimate'),
       userBattleStats:Math.max(0, Number(value.userBattleStats ?? value.user_battle_stats) || 0),
+      userLevel:Math.max(0, Math.trunc(Number(value.userLevel ?? value.user_level) || 0)),
       pool:{
         total:Math.max(0, Number(value.pool?.total) || 0),
         estimable:Math.max(0, Number(value.pool?.estimable) || 0),
@@ -296,10 +299,7 @@
       targets:(Array.isArray(value.targets) ? value.targets : []).map(target => ({
         id:Math.max(0, Math.trunc(Number(target?.id ?? target?.playerId) || 0)),
         name:String(target?.name || '').trim(),
-        companyName:String((target?.companyName ?? target?.company_name) || ''),
-        companyType:String((target?.companyType ?? target?.company_type) || ''),
-        companyRating:Math.max(0, Number(target?.companyRating ?? target?.company_rating) || 0),
-        position:String(target?.position || ''),
+        level:Math.max(0, Math.trunc(Number(target?.level) || 0)),
         status:target?.status && typeof target.status === 'object' ? target.status : null,
         fairFight:Number.isFinite(Number(target?.fairFight ?? target?.fair_fight)) ? Number(target?.fairFight ?? target?.fair_fight) : null,
         roughFairFight:Number.isFinite(Number(target?.roughFairFight ?? target?.rough_fair_fight)) ? Number(target?.roughFairFight ?? target?.rough_fair_fight) : null,
@@ -345,7 +345,8 @@
           limit:Math.max(1, Math.min(100, Math.trunc(Number(settings.limit) || 50)))
         })
       });
-      const cache = normalizeCache(response);
+      const ownProfile = await SLINK.core.storage.get(OWN_STATS_KEY, {});
+      const cache = normalizeCache({ ...response, userLevel:Math.max(0, Math.trunc(Number(ownProfile?.level) || 0)) });
       await SLINK.core.storage.set(CACHE_KEY, cache);
       return { ...cache, contribution:await SLINK.core.storage.get(CONTRIBUTION_KEY, { enabled:false, mode:'disabled', fetched:0, skipped:0, errors:0, pendingSync:0 }) };
     })();

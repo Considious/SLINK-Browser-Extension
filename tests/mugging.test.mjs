@@ -17,18 +17,20 @@ for (const [label, source] of [['Mugging service', serviceSource], ['Mugging mod
   catch (error) { throw new Error(`${label} has a parse-time syntax error: ${error.message}`); }
 }
 
-assert(manifest.version === '0.18.49', 'Unexpected attack-frame safety extension version.');
+assert(manifest.version === '0.18.74', 'Unexpected attack-frame safety extension version.');
 assert(manifest.host_permissions.includes('https://slinkmuggingworker.richard-johnson554.workers.dev/*'), 'Mugging Worker host permission is missing.');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/modules/mugging.js')), 'Mugging module is not loaded by the Torn content script.');
 assert(moduleSource.includes("requiredScopes:[REQUIRED_SCOPE]") && moduleSource.includes("const REQUIRED_SCOPE = 'slink.mugging'"), 'Mugging is not gated exclusively by the backend-managed scope.');
 assert(!/3853023|factionId|faction_id/.test(moduleSource), 'Mugging contains a hard-coded tester, owner, or faction override.');
 assert(moduleSource.includes("SLINK.core.messaging.send('mugging.assignments.refresh'"), 'Mugging content UI bypasses the background assignment service.');
+assert(moduleSource.includes('mugging-level') && moduleSource.includes('levelBadge(target.level, cache.userLevel)'), 'Mugging does not show the target level with the own-level gradient.');
+assert(serviceSource.includes('userLevel') && serviceSource.includes('response?.basic?.level'), 'Mugging does not cache the logged-in player level.');
 assert(moduleSource.includes('Rough FF') && moduleSource.includes("estimateKind"), 'Mugging does not label estimates as rough.');
 assert(moduleSource.includes("SLINK.core.messaging.send('targetList.add'") && moduleSource.includes("tags:['Mug']"), 'Mugging does not use the shared explicit Target List handoff.');
 assert(!/fetch\s*\(|requestJson|ffscouter/i.test(moduleSource), 'Mugging content UI performs direct network or FFScouter work.');
 assert(serviceSource.includes("SLINK.services.permissionAccess.ensureSession(false, REQUIRED_SCOPE)"), 'Assignment requests do not use the shared permission session.');
 assert(serviceSource.includes("SLINK.core.tornApiLimiter.reserve"), 'Own battle stats bypass the shared Torn API limiter.');
-assert(serviceSource.includes('/v2/user/battlestats') && serviceSource.includes('/api/assignments/rough'), 'Phase 8 battle-stat or assignment endpoint is missing.');
+assert(serviceSource.includes('selections=battlestats%2Cbasic') && serviceSource.includes('/api/assignments/rough'), 'Phase 8 battle-stat or assignment endpoint is missing.');
 assert(serviceSource.includes("['strength', 'defense', 'speed', 'dexterity']"), 'Own battle-stat total does not include all four battle stats.');
 assert(serviceSource.includes("const ACTIVE_BUDGET = 10") && serviceSource.includes("const INACTIVE_BUDGET = 5"), 'Active/inactive Mugging contribution budgets are incorrect.');
 assert(serviceSource.includes("const INACTIVE_AFTER_MS = 5 * 60_000"), 'Mugging does not switch to inactive contribution after five minutes.');

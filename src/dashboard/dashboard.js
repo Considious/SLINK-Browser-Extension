@@ -1112,18 +1112,101 @@
     }));
   }
 
+  const qualityInstances = new Map();
+  const qualityModuleIds = Object.freeze(['racing', 'abroad-stocks', 'company', 'museums', 'money-property', 'events']);
+  let qualityActive = 'racing';
+
+  function qualityDefinition(id) {
+    return SLINK.modules.list().find(definition => definition.id === id && definition.group === 'quality-of-life') || null;
+  }
+
+  function qualityUi(id) {
+    const panel = document.querySelector(`[data-quality-panel="${CSS.escape(id)}"]`);
+    const content = panel?.querySelector(`[data-quality-content="${CSS.escape(id)}"]`);
+    const status = panel?.querySelector(`[data-quality-status="${CSS.escape(id)}"]`);
+    return {
+      getContentElement:() => content,
+      setModuleStyles(css) {
+        const styleId = `slink-dashboard-quality-style-${id}`;
+        let style = document.getElementById(styleId);
+        if (!style) {
+          style = document.createElement('style');
+          style.id = styleId;
+          document.head.append(style);
+        }
+        style.textContent = String(css || '');
+      },
+      setStatus(message, tone = 'normal') {
+        if (!status) return;
+        status.textContent = String(message || '');
+        status.hidden = !message;
+        status.className = `quality-status ${tone === 'error' ? 'error' : tone === 'ready' ? 'ready' : 'muted'}`;
+      },
+      setAlertCount(count) {
+        const badge = document.querySelector('[data-alert-count="quality"]');
+        if (!badge) return;
+        badge.textContent = String(Math.max(0, Number(count) || 0));
+        badge.hidden = !(Number(count) > 0);
+      }
+    };
+  }
+
+  async function startQualityModule(id) {
+    if (qualityInstances.has(id)) return qualityInstances.get(id);
+    const definition = qualityDefinition(id);
+    if (!definition) throw new Error(`Quality of Life module "${id}" is unavailable.`);
+    const required = Array.isArray(definition.requiredScopes) ? definition.requiredScopes : [];
+    if (!required.every(hasScope)) {
+      qualityUi(id).setStatus(`Permission required: ${required.join(', ') || 'feature access'}`, 'error');
+      return null;
+    }
+    const instance = await definition.start({
+      url:new URL('https://www.torn.com/'),
+      permissions:system?.permissions || {},
+      ui:qualityUi(id),
+      module:definition,
+      presentation:'dashboard'
+    });
+    qualityInstances.set(id, instance || {});
+    return instance;
+  }
+
+  async function switchQuality(name, persist = true) {
+    const allowed = qualityModuleIds.filter(id => {
+      const button = document.querySelector(`[data-quality-view="${CSS.escape(id)}"]`);
+      return button && !button.hidden;
+    });
+    const selected = allowed.includes(name) ? name : (allowed[0] || 'racing');
+    qualityActive = selected;
+    for (const panel of document.querySelectorAll('[data-quality-panel]')) panel.hidden = panel.dataset.qualityPanel !== selected;
+    for (const button of document.querySelectorAll('[data-quality-view]')) button.classList.toggle('active', button.dataset.qualityView === selected);
+    if (persist) void SLINK.core.storage.set('ui.quality.activeView', selected);
+    try { await startQualityModule(selected); }
+    catch (error) { qualityUi(selected).setStatus(errorText(error), 'error'); }
+  }
+
   function renderAccessTabs() {
     const admin = hasScope('admin.*');
     byId('admin-tab').hidden = !admin;
     byId('diagnostics-tab').hidden = !admin;
-    if (!admin && [...document.querySelectorAll('[data-dashboard-page]')].some(page => !page.hidden && page.dataset.dashboardPage !== 'workspace')) switchPage('workspace', false);
+    let qualityCount = 0;
+    for (const button of document.querySelectorAll('[data-quality-scope]')) {
+      button.hidden = !hasScope(button.dataset.qualityScope);
+      if (!button.hidden) qualityCount++;
+    }
+    byId('quality-tab').hidden = qualityCount === 0;
+    const activePage = document.querySelector('[data-dashboard-page]:not([hidden])')?.dataset.dashboardPage;
+    if ((!admin && (activePage === 'admin' || activePage === 'diagnostics')) || (activePage === 'quality' && qualityCount === 0)) switchPage('workspace', false);
+    if (qualityCount > 0 && ![...document.querySelectorAll('[data-quality-view]')].some(button => !button.hidden && button.dataset.qualityView === qualityActive)) void switchQuality(qualityActive, false);
   }
 
   function switchPage(name, persist = true) {
     if ((name === 'admin' || name === 'diagnostics') && !hasScope('admin.*')) name = 'workspace';
+    if (name === 'quality' && byId('quality-tab')?.hidden) name = 'workspace';
     for (const page of document.querySelectorAll('[data-dashboard-page]')) page.hidden = page.dataset.dashboardPage !== name;
     for (const button of document.querySelectorAll('[data-page-tab]')) button.classList.toggle('active', button.dataset.pageTab === name);
     if (persist) void SLINK.core.storage.set('ui.dashboard.activePage', name);
+    if (name === 'quality') void switchQuality(qualityActive, false);
   }
 
   function switchEfficiency(name) {
@@ -1610,6 +1693,7 @@
   });
   for (const button of document.querySelectorAll('[data-page-tab]')) button.addEventListener('click', () => switchPage(button.dataset.pageTab));
   for (const button of document.querySelectorAll('[data-efficiency-view]')) button.addEventListener('click', () => switchEfficiency(button.dataset.efficiencyView));
+  for (const button of document.querySelectorAll('[data-quality-view]')) button.addEventListener('click', () => void switchQuality(button.dataset.qualityView));
   byId('donation-form').addEventListener('submit', async event => { event.preventDefault(); const submit = byId('donation-submit'); setBusy(submit,true); byId('donation-message').textContent=''; try { contribution=await SLINK.core.messaging.send('contribution.donate',{apiKey:byId('donation-key').value,acceptTerms:byId('donation-accept').checked}); byId('donation-key').value=''; byId('donation-accept').checked=false; byId('donation-message').textContent='Public Only key validated and saved on SLINK servers in encrypted form.'; renderContribution(); } catch(error){ byId('donation-message').textContent=errorText(error); } finally{ setBusy(submit,false); } });
   byId('donation-revoke').addEventListener('click', async () => { if (!confirm('Revoke this saved donation and erase its encrypted key material?')) return; try { contribution=await SLINK.core.messaging.send('contribution.revoke'); byId('donation-message').textContent='Donation revoked and encrypted key material erased.'; renderContribution(); } catch(error) { byId('donation-message').textContent=errorText(error); } });
   byId('run-diagnostic').addEventListener('click', async event => { const button=event.currentTarget; setBusy(button,true); try { byId('diagnostic').textContent=formatDiagnostic(await SLINK.core.messaging.send('diagnostics.run')); } catch(error){ byId('diagnostic').textContent=errorText(error); } finally{ setBusy(button,false); } });
@@ -1621,8 +1705,10 @@
   try {
     await refresh();
     const requestedPage = await SLINK.core.storage.get('ui.dashboard.activePage', 'workspace');
-    switchPage(['workspace', 'alerts', 'admin', 'diagnostics'].includes(requestedPage) ? requestedPage : 'workspace', false);
+    qualityActive = await SLINK.core.storage.get('ui.quality.activeView', 'racing');
     switchEfficiency(await SLINK.core.storage.get('ui.efficiency.activeView', 'alerts'));
+    await switchQuality(qualityActive, false);
+    switchPage(['workspace', 'alerts', 'quality', 'admin', 'diagnostics'].includes(requestedPage) ? requestedPage : 'workspace', false);
   }
   catch (error) {
     byId('connection').textContent = 'Extension background unavailable';

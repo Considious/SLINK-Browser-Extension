@@ -101,7 +101,6 @@
             (provider.ok ? relativeTime(provider.fetchedAt) : provider.rows ? 'cached' : 'unavailable') + '</span>';
         }).join('');
         const rows = filteredRows();
-        const needsTornIntelKey = status.providers?.tornIntel?.needsKey === true || Boolean(status.settings?.tornIntelKey);
         root.innerHTML =
           '<div class="slink-provider-strip">' + providerStrip + '</div>' +
           '<div class="slink-abroad-toolbar"><select data-search-mode><option value="item">Item</option><option value="country">Country</option></select>' +
@@ -114,7 +113,6 @@
           '<label>Alert before leave time (minutes)<input data-setting="alertLeadMinutes" type="number" min="0" max="180" value="' + Number(status.settings.alertLeadMinutes) + '"></label>' +
           '<label><span>Departure reminders</span><input data-setting="alertsEnabled" type="checkbox"' + (status.settings.alertsEnabled ? ' checked' : '') + '></label>' +
           '<label><span>Reminder sound</span><input data-setting="soundEnabled" type="checkbox"' + (status.settings.soundEnabled ? ' checked' : '') + '></label>' +
-          (needsTornIntelKey ? '<div class="slink-provider-access"><strong>Torn Intel provider access</strong><span>A free approved client key may be required on this device. The other feeds continue without it.</span><a href="https://torn-intel.com/contact" target="_blank" rel="noopener">Request a free key</a><input data-setting="tornIntelKey" type="password" placeholder="Torn Intel client key" value="' + escapeHtml(status.settings.tornIntelKey || '') + '"></div>' : '') +
           '<button type="button" data-save-settings>Save settings</button></div></details>';
 
         root.querySelector('[data-search-mode]').value = mode;
@@ -146,8 +144,7 @@
             arrivalBufferMinutes:Number(root.querySelector('[data-setting="arrivalBufferMinutes"]').value),
             alertLeadMinutes:Number(root.querySelector('[data-setting="alertLeadMinutes"]').value),
             alertsEnabled:root.querySelector('[data-setting="alertsEnabled"]').checked,
-            soundEnabled:root.querySelector('[data-setting="soundEnabled"]').checked,
-            tornIntelKey:root.querySelector('[data-setting="tornIntelKey"]')?.value || ''
+            soundEnabled:root.querySelector('[data-setting="soundEnabled"]').checked
           };
           event.currentTarget.disabled = true;
           try { status = await SLINK.core.messaging.send('abroadStocks.settings.save', { settings:next }); render(); updateStatus(); }

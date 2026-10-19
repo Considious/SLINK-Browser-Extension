@@ -250,3 +250,11 @@ assert(serviceWorkerSource.includes('chrome.alarms.clear(WAR_CYCLE_ALARM)') && !
 assert(dashboardHtml.includes('id="war-open-armory"') && dashboardSource.includes("ui.war.requestedTab"), 'The extension dashboard is missing its Torn-only Armory launcher.');
 
 console.log(`Validated Manifest V3 extension ${manifest.version} (${listFiles(path.join(root, 'src')).length} source files).`);
+
+const dashboardQualityHtml = read('src/dashboard/dashboard.html');
+const dashboardQualityJs = read('src/dashboard/dashboard.js');
+const abroadQualityModule = read('src/modules/abroad-stocks.js');
+assert(dashboardQualityHtml.includes('data-page-tab="quality"') && dashboardQualityHtml.includes('data-quality-view="abroad-stocks"'), 'Dashboard Quality of Life navigation is missing.');
+assert(dashboardQualityHtml.includes('../modules/racing.js') && dashboardQualityHtml.includes('../modules/events.js'), 'Dashboard does not load the shared Quality of Life modules.');
+assert(dashboardQualityJs.includes('ui.quality.activeView') && dashboardQualityJs.includes('definition.start'), 'Dashboard does not preserve or start shared Quality of Life modules.');
+assert(!abroadQualityModule.includes('data-setting="tornIntelKey"'), 'The unsupported Torn Intel client-key entry is still visible.');

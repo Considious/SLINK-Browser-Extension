@@ -22,6 +22,7 @@
     .mugging-head a { min-width:0; flex:1; overflow:hidden; color:#fff; font-weight:700; text-decoration:none; text-overflow:ellipsis; white-space:nowrap; }
     .mugging-meta { margin-top:4px; color:#9eb0c2; }
     .mugging-badge { padding:1px 5px; border-radius:8px; background:#303e4d; color:#e3edf6; }
+    .mugging-level { border:1px solid rgba(255,255,255,.22); color:#fff; font-weight:800; text-shadow:0 1px 1px rgba(0,0,0,.55); }
     .mugging-actions { margin-top:6px; }
     .mugging-actions a,.mugging-actions button,.mugging-controls button { min-height:28px; padding:4px 7px; border:1px solid rgba(255,255,255,.15); border-radius:5px; background:#2b3745; color:#fff; text-decoration:none; }
     .mugging-empty { padding:14px 3px; color:#9eb0c2; text-align:center; }
@@ -40,12 +41,26 @@
       limit:Math.trunc(clamp(value.limit, 1, 100, 50))
     };
   }
+  function levelBadge(targetLevel, userLevel) {
+    const target = Math.max(0, Math.trunc(Number(targetLevel) || 0));
+    const own = Math.max(0, Math.trunc(Number(userLevel) || 0));
+    if (!target) return '<span class="mugging-badge">Level unknown</span>';
+    if (!own) return `<span class="mugging-badge">Level ${target}</span>`;
+    const difference = target - own;
+    const intensity = Math.min(1, Math.abs(difference) / 50);
+    const hue = difference === 0 ? 48 : difference < 0 ? 128 : 0;
+    const saturation = Math.round(72 + intensity * 22);
+    const lightness = Math.round(48 - intensity * 23);
+    const relation = difference === 0 ? 'same as you' : difference < 0 ? `${Math.abs(difference)} below you` : `${difference} above you`;
+    return `<span class="mugging-badge mugging-level" style="background:hsl(${hue} ${saturation}% ${lightness}%)" title="${escape(`Level ${target} · ${relation}`)}">Level ${target}</span>`;
+  }
   function normalizeCache(value = {}) {
     return {
       updatedAt:Math.max(0, Number(value.updatedAt ?? value.generated_at) || 0),
       estimateKind:String((value.estimateKind ?? value.estimate_kind) || 'rough'),
       estimateSource:String((value.estimateSource ?? value.estimate_source) || 'cached battle-stat estimate'),
       userBattleStats:Math.max(0, Number(value.userBattleStats ?? value.user_battle_stats) || 0),
+      userLevel:Math.max(0, Math.trunc(Number(value.userLevel ?? value.user_level) || 0)),
       pool:{
         total:Math.max(0, Number(value.pool?.total) || 0),
         estimable:Math.max(0, Number(value.pool?.estimable) || 0),
@@ -67,10 +82,7 @@
       targets:(Array.isArray(value.targets) ? value.targets : []).map(target => ({
         id:Math.max(0, Math.trunc(Number(target?.id ?? target?.playerId) || 0)),
         name:String(target?.name || '').trim(),
-        companyName:String((target?.companyName ?? target?.company_name) || ''),
-        companyType:String((target?.companyType ?? target?.company_type) || ''),
-        companyRating:Math.max(0, Number(target?.companyRating ?? target?.company_rating) || 0),
-        position:String(target?.position || ''),
+        level:Math.max(0, Math.trunc(Number(target?.level) || 0)),
         status:target?.status && typeof target.status === 'object' ? target.status : null,
         fairFight:Number.isFinite(Number(target?.fairFight ?? target?.fair_fight)) ? Number(target?.fairFight ?? target?.fair_fight) : null,
         battleStatsEstimate:Number.isFinite(Number(target?.battleStatsEstimate ?? target?.battle_stats_estimate)) ? Number(target?.battleStatsEstimate ?? target?.battle_stats_estimate) : null,
@@ -168,14 +180,13 @@
         return cache.targets.map(target => {
           const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(target.id)}`;
           const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(target.id)}`;
-          const company = [target.companyName, target.companyRating ? `${target.companyRating}★` : '', target.position].filter(Boolean).join(' · ');
           return `<article class="mugging-target">
             <div class="mugging-head"><a href="${profile}">${escape(target.name || `Player ${target.id}`)} [${target.id}]</a></div>
             <div class="mugging-meta">
               <span class="mugging-badge">${escape(statusLabel(target))}</span>
+              ${levelBadge(target.level, cache.userLevel)}
               <span class="mugging-badge">Rough FF ${target.fairFight === null ? '?' : target.fairFight.toFixed(2)}</span>
               <span class="mugging-badge">Estimated BS ${target.battleStatsEstimate === null ? '?' : escape(SLINK.core.format.shortNumber(target.battleStatsEstimate))}</span>
-              ${company ? `<span class="mugging-badge">${escape(company)}</span>` : ''}
               ${target.confidence ? `<span class="mugging-badge">${escape(target.confidence)}</span>` : ''}
             </div>
             <div class="mugging-actions"><a href="${profile}">Profile</a><a href="${attack}">Attack</a><button type="button" data-mugging-save="${target.id}">Save Target</button></div>
