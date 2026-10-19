@@ -108,6 +108,10 @@ assert(uiShellSource.includes('await navigationPreferencesReady'), 'Saved naviga
 assert(uiShellSource.includes('writeNavigationMirror();'), 'Navigation changes must be mirrored before asynchronous extension storage completes.');
 assert(uiShellSource.includes('NAVIGATION_FALLBACK_ORDER'), 'Torn-page navigation must use a deterministic fallback independent of module registration order.');
 assert(uiShellSource.includes('views.get(preferredActiveId)'), 'The exact saved Torn-page module must win when it becomes available.');
+assert(uiShellSource.includes('.window.main > .head, .window.main > .groups, .window.main > .tabs { flex:0 0 auto; }'), 'Resizable Torn navigation must keep its full height instead of collapsing into the module body.');
+assert(uiShellSource.includes('.window.main > .module-view { display:flex; flex:1 1 auto; flex-direction:column; min-height:0; overflow:hidden; }'), 'The active Torn module must be a bounded flex region inside the resizable panel.');
+assert(uiShellSource.includes('.window.main > .module-view > .content { flex:1 1 auto; min-height:0; max-height:none; overflow:auto; overscroll-behavior:contain; }'), 'The Torn module body must retain its own vertical scrolling.');
+
 
 const dashboardHtml = read('src/dashboard/dashboard.html');
 const dashboardSource = read('src/dashboard/dashboard.js');
