@@ -1142,7 +1142,8 @@
         status.hidden = !message;
         status.className = `quality-status ${tone === 'error' ? 'error' : tone === 'ready' ? 'ready' : 'muted'}`;
       },
-      setAlertCount(count) {
+      setAlertCount(moduleOrCount, maybeCount) {
+        const count = maybeCount === undefined ? moduleOrCount : maybeCount;
         const badge = document.querySelector('[data-alert-count="quality"]');
         if (!badge) return;
         badge.textContent = String(Math.max(0, Number(count) || 0));
