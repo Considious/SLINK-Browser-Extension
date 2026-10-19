@@ -82,7 +82,7 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.71', 'Unexpected runtime version.');
+assert(SLINK.VERSION === '0.18.77', 'Unexpected runtime version.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.attackLink('https://www.torn.com/page.php?sid=attack&user2ID=1') === '<a href="https://www.torn.com/page.php?sid=attack&amp;user2ID=1">【ATTACK】</a>', 'Shared attack-link formatter did not preserve Torn HTML and the bracketed label.');
@@ -447,18 +447,38 @@ const clusterSnapshotV1 = {
   status:{ shoplifting:{ jewelry_store:[{ title:'Three cameras', disabled:true }, { title:'One guard', disabled:true }] } }
 };
 assert(SLINK.core.adhd.clusterRingReady(clusterSnapshotV1), 'Cluster Ring parser did not accept the keyed v1 shoplifting response.');
-const shopliftingIds = Array.from({ length:60 }, (_, index) => 4000 + index);
+const shopliftingIds = [12529,12530,12531,13023,13024,12614,12615,12616,12617,13036,13316,13356,12798,12799,12800,12801,12802,13037,18851,24518,12704,12705,12706,12707,12708,12709,12710,12711,12712,24520,13015,13016,13017,13018,13019,13020,13021,13022,13038,12890,12891,12892,12893,12894,16128,16130,16131,16132,20765,15215,15245,15246,15247,15248,18828,15307,15330,15346,15358,15393];
+const mappedShopliftingIds = SLINK.core.adhd.SHOPLIFTING_UNIQUE_WINDOWS.map(outcome => outcome.id);
+assert(SLINK.core.adhd.SHOPLIFTING_UNIQUE_WINDOWS.length === 60, 'Shoplifting guide does not contain all 60 unique outcomes.');
+assert(new Set(mappedShopliftingIds).size === 60, 'Shoplifting guide contains duplicate Torn outcome IDs.');
+assert(
+  JSON.stringify([...mappedShopliftingIds].sort((a, b) => a - b)) === JSON.stringify([...shopliftingIds].sort((a, b) => a - b)),
+  'Shoplifting guide IDs do not exactly match Torn\'s 60-outcome catalog.'
+);
+const genuinelyMissingShopliftingIds = [12711,13022,13038,20765];
+const completedShopliftingIds = shopliftingIds.filter(id => !genuinelyMissingShopliftingIds.includes(id));
 const shopliftingProgress = SLINK.core.adhd.crimeUniqueProgress({
   crimeUniques:{
     catalog:{ crimes:[{ id:4, name:'Shoplifting', unique_outcomes_count:60, unique_outcomes_ids:shopliftingIds }] },
-    user:{ 4:{ crimes:{ skill:100, uniques:shopliftingIds.slice(1).map(id => ({ id, rewards:{} })) } } }
+    user:{ 4:{ crimes:{ skill:100, uniques:completedShopliftingIds.map(id => ({ id, rewards:{} })) } } }
   }
 }).find(row => row.id === 'clusterRing');
-const shopliftingMatches = SLINK.core.adhd.shopliftingUniqueOpportunities({
-  status:{ shoplifting:{ sallys_sweet_shop:[{ title:'One camera', disabled:true }] } }
+const completedStoreMatches = SLINK.core.adhd.shopliftingUniqueOpportunities({
+  status:{ shoplifting:{
+    super_store:[{ title:'Two cameras', disabled:false }, { title:'Checkpoint', disabled:false }],
+    cyber_force:[{ title:'Two cameras', disabled:false }, { title:'One guard', disabled:false }]
+  } }
 }, shopliftingProgress);
-assert(shopliftingProgress.total === 60 && shopliftingProgress.completed === 59, 'Shoplifting progress was incorrectly reduced to Cluster Ring only.');
-assert(shopliftingMatches.length === 1 && shopliftingMatches[0].label === 'Jawbreaker', 'Missing Shoplifting unique was not matched to the live security state.');
+assert(shopliftingProgress.total === 60 && shopliftingProgress.completed === 56, 'Shoplifting completion count did not preserve all 60 outcomes.');
+assert(completedStoreMatches.length === 0, 'Completed Super Store or Cyber Force uniques were incorrectly reported missing.');
+const highSpeedProgress = { ...shopliftingProgress, completedIds:shopliftingProgress.completedIds.filter(id => id !== 12802) };
+const highSpeedMatches = SLINK.core.adhd.shopliftingUniqueOpportunities({
+  status:{ shoplifting:{ super_store:[{ title:'Two cameras', disabled:false }, { title:'Checkpoint', disabled:false }] } }
+}, highSpeedProgress);
+assert(
+  highSpeedMatches.length === 1 && highSpeedMatches[0].id === 12802 && highSpeedMatches[0].label === 'High-Speed Drive',
+  'High-Speed Drive was not matched by its real Torn outcome ID.'
+);
 
 
 const arsonCatalog = { crimes:[{ id:13, name:'Arson', unique_outcomes_count:16, unique_outcomes_ids:Array.from({ length:16 }, (_, index) => 20000 + index) }] };
