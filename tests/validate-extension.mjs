@@ -108,9 +108,21 @@ assert(uiShellSource.includes('await navigationPreferencesReady'), 'Saved naviga
 assert(uiShellSource.includes('writeNavigationMirror();'), 'Navigation changes must be mirrored before asynchronous extension storage completes.');
 assert(uiShellSource.includes('NAVIGATION_FALLBACK_ORDER'), 'Torn-page navigation must use a deterministic fallback independent of module registration order.');
 assert(uiShellSource.includes('views.get(preferredActiveId)'), 'The exact saved Torn-page module must win when it becomes available.');
+assert(uiShellSource.includes('NAVIGATION_STATE_STORAGE_KEY') && uiShellSource.includes("'ui.main.navigation.v2'"), 'Torn-page navigation must persist one atomic versioned state record.');
+assert(uiShellSource.includes('preferredActiveGroup = activeGroup') && uiShellSource.includes('activeModulesByGroup:Object.fromEntries(preferredActiveIdsByGroup)'), 'Torn-page navigation must save the exact top-level section and sub-tab together.');
+assert(uiShellSource.includes('navigationWriteQueue = navigationWriteQueue.then'), 'Rapid tab changes must be serialized so an older asynchronous write cannot replace the newest selection.');
+assert(uiShellSource.includes('Math.max(Date.now(), navigationUpdatedAt + 1)'), 'Navigation revisions must remain strictly ordered.');
+assert(uiShellSource.includes('!navigationSelectionChanged && !hasRestoredNavigationSelection && firstRunFallback'), 'Module registration order must not make the newest feature the default page.');
+assert(!uiShellSource.includes('docked.find(view => preferredActiveIdsByGroup.get(view.group) === view.id)'), 'Navigation restore must not select an arbitrary saved group instead of the exact last section.');
+
 assert(uiShellSource.includes('.window.main > .head, .window.main > .groups, .window.main > .tabs { flex:0 0 auto; }'), 'Resizable Torn navigation must keep its full height instead of collapsing into the module body.');
 assert(uiShellSource.includes('.window.main > .module-view { display:flex; flex:1 1 auto; flex-direction:column; min-height:0; overflow:hidden; }'), 'The active Torn module must be a bounded flex region inside the resizable panel.');
 assert(uiShellSource.includes('.window.main > .module-view > .content { flex:1 1 auto; min-height:0; max-height:none; overflow:auto; overscroll-behavior:contain; }'), 'The Torn module body must retain its own vertical scrolling.');
+assert(uiShellSource.includes("MAIN_SIZE_STORAGE_KEY = 'ui.main.size'") && uiShellSource.includes('MAIN_SIZE_MIRROR_KEY'), 'The resizable Torn panel must keep an exact persistent size record.');
+assert(uiShellSource.includes('function rememberMainSize') && uiShellSource.includes('persistSize()'), 'The Torn panel must restore and save user resizing.');
+assert(uiShellSource.includes("element.addEventListener('pointerdown'") && uiShellSource.includes("global.addEventListener('pointerup', finishResize)"), 'Panel size must only be saved after an intentional resize interaction.');
+assert(uiShellSource.includes('if (preferredSize) applySize(preferredSize)') && uiShellSource.includes('mover.clamp(true)'), 'Saved panel size and position must be clamped to the current viewport.');
+
 
 
 const dashboardHtml = read('src/dashboard/dashboard.html');

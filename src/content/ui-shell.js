@@ -7,7 +7,11 @@
   const HOST_ID = 'slink-extension-panel';
   const ACTIVE_MODULE_STORAGE_KEY = 'ui.main.activeModule';
   const ACTIVE_MODULES_BY_GROUP_STORAGE_KEY = 'ui.main.activeModulesByGroup';
-  const ACTIVE_NAVIGATION_MIRROR_KEY = 'slink-extension:ui:main:navigation:v1';
+  const NAVIGATION_STATE_STORAGE_KEY = 'ui.main.navigation.v2';
+  const ACTIVE_NAVIGATION_MIRROR_KEY = 'slink-extension:ui:main:navigation:v2';
+  const LEGACY_NAVIGATION_MIRROR_KEY = 'slink-extension:ui:main:navigation:v1';
+  const MAIN_SIZE_STORAGE_KEY = 'ui.main.size';
+  const MAIN_SIZE_MIRROR_KEY = 'slink-extension:ui:main:size:v1';
   const NAVIGATION_FALLBACK_ORDER = Object.freeze(['leveling','bounties','mugging','target-list','war','player-stats','adhd','market','merits','dollar-bazaars','racing']);
   const STYLES = `
     :host { all: initial; ${SLINK.core.themes.cssVariables('slink-dark')} }
@@ -108,6 +112,7 @@
     setTheme(options.themeId || SLINK.core.themes.DEFAULT_THEME_ID, options.permissions || {});
 
     const main = createWindow('main', options.title || 'SLINK', options.subtitle || 'Extension systems');
+    const mainSizeMemory = rememberMainSize(main.element, main.mover);
     main.element.querySelector('.hide').textContent = '−';
     main.element.querySelector('.hide').title = 'Collapse SLINK to a movable bubble';
     const groups = document.createElement('nav');
@@ -133,46 +138,105 @@
     let activeId = '';
     let activeGroup = '';
     let preferredActiveId = '';
+    let preferredActiveGroup = '';
     const preferredActiveIdsByGroup = new Map();
     let navigationSelectionChanged = false;
+    let hasRestoredNavigationSelection = false;
+    let navigationUpdatedAt = 0;
+    let navigationWriteQueue = Promise.resolve();
     const bubbleAlertSources = new Map();
+
+    function normalizeNavigationState(value) {
+      const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+      const activeModulesByGroup = {};
+      if (source.activeModulesByGroup && typeof source.activeModulesByGroup === 'object' && !Array.isArray(source.activeModulesByGroup)) {
+        for (const [groupId, moduleId] of Object.entries(source.activeModulesByGroup)) {
+          const group = String(groupId || '').trim();
+          const module = typeof moduleId === 'string' ? moduleId.trim() : '';
+          if (group && module) activeModulesByGroup[group] = module;
+        }
+      }
+      return {
+        activeModule:typeof source.activeModule === 'string' ? source.activeModule.trim() : '',
+        activeGroup:typeof source.activeGroup === 'string' ? source.activeGroup.trim() : '',
+        activeModulesByGroup,
+        updatedAt:Number.isFinite(Number(source.updatedAt)) ? Number(source.updatedAt) : 0
+      };
+    }
+
+    function hasNavigationSelection(state) {
+      return Boolean(state.activeModule || Object.keys(state.activeModulesByGroup).length);
+    }
+
+    function applyNavigationState(state) {
+      const normalized = normalizeNavigationState(state);
+      preferredActiveId = normalized.activeModule;
+      preferredActiveGroup = normalized.activeGroup;
+      preferredActiveIdsByGroup.clear();
+      for (const [groupId, moduleId] of Object.entries(normalized.activeModulesByGroup)) preferredActiveIdsByGroup.set(groupId, moduleId);
+      navigationUpdatedAt = Math.max(navigationUpdatedAt, normalized.updatedAt);
+      hasRestoredNavigationSelection = hasNavigationSelection(normalized);
+    }
+
+    function currentNavigationState() {
+      return {
+        activeModule:preferredActiveId,
+        activeGroup:preferredActiveGroup || activeGroup,
+        activeModulesByGroup:Object.fromEntries(preferredActiveIdsByGroup),
+        updatedAt:navigationUpdatedAt
+      };
+    }
 
     function readNavigationMirror() {
       try {
-        const value = JSON.parse(global.localStorage.getItem(ACTIVE_NAVIGATION_MIRROR_KEY) || 'null');
-        return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+        const current = normalizeNavigationState(JSON.parse(global.localStorage.getItem(ACTIVE_NAVIGATION_MIRROR_KEY) || 'null'));
+        if (hasNavigationSelection(current)) return current;
+        return normalizeNavigationState(JSON.parse(global.localStorage.getItem(LEGACY_NAVIGATION_MIRROR_KEY) || 'null'));
       } catch {
-        return {};
+        return normalizeNavigationState(null);
       }
     }
 
-    function writeNavigationMirror() {
+    function writeNavigationMirror(state = currentNavigationState()) {
       try {
-        global.localStorage.setItem(ACTIVE_NAVIGATION_MIRROR_KEY, JSON.stringify({
-          activeModule:preferredActiveId,
-          activeModulesByGroup:Object.fromEntries(preferredActiveIdsByGroup),
-          updatedAt:Date.now()
-        }));
+        global.localStorage.setItem(ACTIVE_NAVIGATION_MIRROR_KEY, JSON.stringify(state));
       } catch {}
     }
 
-    const mirroredNavigation = readNavigationMirror();
-    preferredActiveId = String(mirroredNavigation.activeModule || '');
-    if (mirroredNavigation.activeModulesByGroup && typeof mirroredNavigation.activeModulesByGroup === 'object' && !Array.isArray(mirroredNavigation.activeModulesByGroup)) {
-      for (const [groupId, moduleId] of Object.entries(mirroredNavigation.activeModulesByGroup)) {
-        if (typeof moduleId === 'string' && moduleId) preferredActiveIdsByGroup.set(groupId, moduleId);
-      }
+    function persistNavigationState() {
+      navigationUpdatedAt = Math.max(Date.now(), navigationUpdatedAt + 1);
+      const snapshot = currentNavigationState();
+      writeNavigationMirror(snapshot);
+      navigationWriteQueue = navigationWriteQueue.then(async () => {
+        await SLINK.core.storage.set(NAVIGATION_STATE_STORAGE_KEY, snapshot);
+        await Promise.all([
+          SLINK.core.storage.set(ACTIVE_MODULE_STORAGE_KEY, snapshot.activeModule),
+          SLINK.core.storage.set(ACTIVE_MODULES_BY_GROUP_STORAGE_KEY, snapshot.activeModulesByGroup)
+        ]);
+      }).catch(() => {});
     }
+
+    const mirroredNavigation = readNavigationMirror();
     const navigationPreferencesReady = Promise.all([
+      SLINK.core.storage.get(NAVIGATION_STATE_STORAGE_KEY, null),
       SLINK.core.storage.get(ACTIVE_MODULE_STORAGE_KEY, ''),
       SLINK.core.storage.get(ACTIVE_MODULES_BY_GROUP_STORAGE_KEY, {})
-    ]).then(([legacyActiveId, storedByGroup]) => {
-      if (!preferredActiveId) preferredActiveId = String(legacyActiveId || '');
-      if (storedByGroup && typeof storedByGroup === 'object' && !Array.isArray(storedByGroup)) {
-        for (const [groupId, moduleId] of Object.entries(storedByGroup)) {
-          if (!preferredActiveIdsByGroup.has(groupId) && typeof moduleId === 'string' && moduleId) preferredActiveIdsByGroup.set(groupId, moduleId);
-        }
+    ]).then(([storedNavigation, legacyActiveId, legacyByGroup]) => {
+      if (navigationSelectionChanged) return;
+      const stored = normalizeNavigationState(storedNavigation);
+      const legacy = normalizeNavigationState({
+        activeModule:legacyActiveId,
+        activeModulesByGroup:legacyByGroup
+      });
+      let selected = legacy;
+      if (hasNavigationSelection(stored)) {
+        selected = hasNavigationSelection(mirroredNavigation) && mirroredNavigation.updatedAt > stored.updatedAt
+          ? mirroredNavigation
+          : stored;
+      } else if (!hasNavigationSelection(legacy) && hasNavigationSelection(mirroredNavigation)) {
+        selected = mirroredNavigation;
       }
+      applyNavigationState(selected);
     });
 
     function displayAlertCount(count) {
@@ -272,10 +336,104 @@
       head.addEventListener('pointerup', finish); head.addEventListener('pointercancel', finish);
       void SLINK.core.storage.get(storageKey, null).then(position => { if (position) setPosition(position); });
       return Object.freeze({
+        clamp(persist = false) {
+          const box = element.getBoundingClientRect();
+          setPosition({ left:box.left, top:box.top }, persist);
+        },
         reset() {
           element.style.removeProperty('left');
           element.style.removeProperty('top');
           element.style.removeProperty('right');
+        }
+      });
+    }
+
+    function rememberMainSize(element, mover) {
+      let preferredSize = null;
+      let resizing = false;
+
+      function normalizeSize(value) {
+        const width = Number(value?.width);
+        const height = Number(value?.height);
+        if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+        return {
+          width:Math.round(width),
+          height:Math.round(height),
+          updatedAt:Number.isFinite(Number(value?.updatedAt)) ? Number(value.updatedAt) : 0
+        };
+      }
+
+      function clampedSize(value) {
+        const normalized = normalizeSize(value);
+        if (!normalized) return null;
+        const maxWidth = Math.max(120, global.innerWidth - 8);
+        const maxHeight = Math.max(120, global.innerHeight - 8);
+        const minWidth = Math.min(300, maxWidth);
+        const minHeight = Math.min(220, maxHeight);
+        return {
+          width:Math.round(Math.min(Math.max(normalized.width, minWidth), maxWidth)),
+          height:Math.round(Math.min(Math.max(normalized.height, minHeight), maxHeight))
+        };
+      }
+
+      function applySize(value) {
+        const normalized = normalizeSize(value);
+        const bounded = clampedSize(normalized);
+        if (!normalized || !bounded) return;
+        preferredSize = normalized;
+        element.style.width = `${bounded.width}px`;
+        element.style.height = `${bounded.height}px`;
+        global.requestAnimationFrame(() => mover.clamp());
+      }
+
+      function readSizeMirror() {
+        try {
+          return normalizeSize(JSON.parse(global.localStorage.getItem(MAIN_SIZE_MIRROR_KEY) || 'null'));
+        } catch {
+          return null;
+        }
+      }
+
+      function persistSize() {
+        const box = element.getBoundingClientRect();
+        const next = normalizeSize({ width:box.width, height:box.height, updatedAt:Date.now() });
+        if (!next) return;
+        preferredSize = next;
+        try { global.localStorage.setItem(MAIN_SIZE_MIRROR_KEY, JSON.stringify(next)); } catch {}
+        void SLINK.core.storage.set(MAIN_SIZE_STORAGE_KEY, next);
+        mover.clamp(true);
+      }
+
+      const mirroredSize = readSizeMirror();
+      if (mirroredSize) applySize(mirroredSize);
+      void SLINK.core.storage.get(MAIN_SIZE_STORAGE_KEY, null).then(storedValue => {
+        const storedSize = normalizeSize(storedValue);
+        const selected = storedSize && (!mirroredSize || storedSize.updatedAt >= mirroredSize.updatedAt) ? storedSize : mirroredSize;
+        if (selected) applySize(selected);
+      });
+
+      element.addEventListener('pointerdown', event => {
+        const box = element.getBoundingClientRect();
+        resizing = event.clientX >= box.right - 24 && event.clientY >= box.bottom - 24;
+      });
+      const finishResize = () => {
+        if (!resizing) return;
+        resizing = false;
+        persistSize();
+      };
+      global.addEventListener('pointerup', finishResize);
+      global.addEventListener('pointercancel', finishResize);
+      global.addEventListener('resize', () => {
+        if (preferredSize) applySize(preferredSize);
+        else mover.clamp();
+      });
+
+      return Object.freeze({
+        reset() {
+          preferredSize = null;
+          element.style.removeProperty('width');
+          element.style.removeProperty('height');
+          try { global.localStorage.removeItem(MAIN_SIZE_MIRROR_KEY); } catch {}
         }
       });
     }
@@ -287,12 +445,9 @@
       if (persist) {
         navigationSelectionChanged = true;
         preferredActiveId = id;
+        preferredActiveGroup = activeGroup;
         preferredActiveIdsByGroup.set(activeGroup, id);
-        writeNavigationMirror();
-        void Promise.all([
-          SLINK.core.storage.set(ACTIVE_MODULE_STORAGE_KEY, id),
-          SLINK.core.storage.set(ACTIVE_MODULES_BY_GROUP_STORAGE_KEY, Object.fromEntries(preferredActiveIdsByGroup))
-        ]);
+        persistNavigationState();
       }
       for (const [moduleId, view] of views) {
         view.element.hidden = moduleId !== id;
@@ -312,12 +467,14 @@
 
     function refreshShell() {
       const docked = [...views.values()];
-      if (!docked.some(view => view.id === activeId)) {
+      const firstRunFallback = NAVIGATION_FALLBACK_ORDER.map(id => views.get(id)).find(Boolean) || docked[0] || null;
+      if (!navigationSelectionChanged && !hasRestoredNavigationSelection && firstRunFallback) {
+        activeId = firstRunFallback.id;
+      } else if (!docked.some(view => view.id === activeId)) {
+        const preferredForSavedGroup = preferredActiveIdsByGroup.get(preferredActiveGroup);
         const preferred = views.get(preferredActiveId)
-          || docked.find(view => preferredActiveIdsByGroup.get(view.group) === view.id)
-          || NAVIGATION_FALLBACK_ORDER.map(id => views.get(id)).find(Boolean)
-          || docked[0]
-          || null;
+          || views.get(preferredForSavedGroup)
+          || firstRunFallback;
         activeId = preferred?.id || '';
       }
       if (activeId) setActive(activeId, false);
@@ -519,8 +676,8 @@
     main.element.querySelector('.hide').addEventListener('click', () => void setCollapsed(true));
     void navigationPreferencesReady.then(() => {
       if (navigationSelectionChanged) return;
-      const preferredForCurrentGroup = preferredActiveIdsByGroup.get(activeGroup);
-      const selection = views.has(preferredActiveId) ? preferredActiveId : views.has(preferredForCurrentGroup) ? preferredForCurrentGroup : '';
+      const preferredForSavedGroup = preferredActiveIdsByGroup.get(preferredActiveGroup);
+      const selection = views.has(preferredActiveId) ? preferredActiveId : views.has(preferredForSavedGroup) ? preferredForSavedGroup : '';
       if (selection) setActive(selection, false);
     });
     void SLINK.core.storage.get('ui.main.collapsed', false).then(value => setCollapsed(Boolean(value), false));
@@ -529,11 +686,13 @@
         SLINK.core.storage.remove('ui.main.position'),
         SLINK.core.storage.remove('ui.bubble.position'),
         SLINK.core.storage.remove('ui.main.collapsed'),
+        SLINK.core.storage.remove(MAIN_SIZE_STORAGE_KEY),
         SLINK.core.storage.set('ui.pagePanelHidden', false)
       ]);
       hidden = false;
       collapsed = false;
       main.mover.reset();
+      mainSizeMemory.reset();
       bubbleMover.reset();
       refreshShell();
       return { restored:true, modules:views.size };
