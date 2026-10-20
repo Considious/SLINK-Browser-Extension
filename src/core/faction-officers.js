@@ -10,7 +10,7 @@
   const ARMORY_URL = 'https://www.torn.com/factions.php?step=your#/tab=armoury';
   const CRIMES_URL = 'https://www.torn.com/factions.php?step=your#/tab=crimes';
   const INVENTORY_CATEGORIES = Object.freeze([
-    'temporary','medical','consumables','drugs','boosters','utilities'
+    'weapons','temporary','medical','consumables','drugs','boosters','utilities'
   ]);
 
   function item(key, name, category, aliases = []) {

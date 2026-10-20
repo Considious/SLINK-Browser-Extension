@@ -67,7 +67,7 @@
   async function stockSettings(){
     const value=await SLINK.core.storage.get(KEYS.settings,{});
     return {
-      armory:{checksPerDay:Math.min(24,Math.max(0,Math.trunc(Number(value?.armory?.checksPerDay)??4))),soundEnabled:value?.armory?.soundEnabled!==false,thresholds:CORE.normalizeThresholds(value?.armory?.thresholds,CORE.ARMORY_ITEMS)},
+      armory:{checksPerDay:Math.min(24,Math.max(0,Math.trunc(Number.isFinite(Number(value?.armory?.checksPerDay))?Number(value.armory.checksPerDay):4))),soundEnabled:value?.armory?.soundEnabled!==false,thresholds:CORE.normalizeThresholds(value?.armory?.thresholds,CORE.ARMORY_ITEMS)},
       oc:{checksPerDay:Math.min(24,Math.max(0,Math.trunc(Number(value?.oc?.checksPerDay)||0))),soundEnabled:value?.oc?.soundEnabled!==false,thresholds:CORE.normalizeThresholds(value?.oc?.thresholds,CORE.OC_ITEMS)},
       snoozedUntil:value?.snoozedUntil&&typeof value.snoozedUntil==='object'?value.snoozedUntil:{}
     };
