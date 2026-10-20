@@ -35,9 +35,8 @@
       function accessCard(){
         if(!current?.access?.admin||!access)return '';
         const headers=SCOPES.map(scope=>`<th>${LABELS[scope]}</th>`).join('');
-        const roleRows=(access.roles||[]).map(role=>`<tr><td><strong>${SLINK.core.format.escapeHtml(role.name)}</strong><br><small>${role.memberCount} members</small></td>${SCOPES.map(scope=>`<td><input type="checkbox" data-fo-grant="role" data-fo-id="${SLINK.core.format.escapeHtml(role.name)}" data-fo-scope="${scope}" ${role.scopes[scope]?'checked':''}></td>`).join('')}</tr>`).join('');
-        const userRows=(access.users||[]).map(user=>`<tr><td>${SLINK.core.format.escapeHtml(user.name)} [${user.id}]<br><small>${SLINK.core.format.escapeHtml(user.position)}</small></td>${SCOPES.map(scope=>`<td><input type="checkbox" data-fo-grant="user" data-fo-id="${user.id}" data-fo-name="${SLINK.core.format.escapeHtml(user.name)}" data-fo-scope="${scope}" ${user.scopes[scope]?'checked':''}></td>`).join('')}</tr>`).join('');
-        return `<section class="slink-fo-card"><div class="slink-fo-head"><div><h3>Officer access assignments</h3><p>Grant each officer feature by Torn role or by named faction member.</p></div></div><div class="slink-fo-access"><table><thead><tr><th>Faction role</th>${headers}</tr></thead><tbody>${roleRows}</tbody></table><table><thead><tr><th>Named member</th>${headers}</tr></thead><tbody>${userRows}</tbody></table></div><div class="slink-fo-controls"><button type="button" data-fo-action="save-access">Save access assignments</button></div></section>`;
+        const roleRows=(access.roles||[]).map((role,roleIndex)=>`<tr><td><strong>${SLINK.core.format.escapeHtml(role.name)}</strong><br><small>${role.memberCount} members</small></td>${SCOPES.map((scope,scopeIndex)=>{const controlId=`slink-fo-role-${roleIndex}-${scopeIndex}`;return `<td><input id="${controlId}" name="${controlId}" type="checkbox" data-fo-grant="role" data-fo-id="${SLINK.core.format.escapeHtml(role.name)}" data-fo-scope="${scope}" ${role.scopes[scope]?'checked':''} aria-label="${SLINK.core.format.escapeHtml(role.name)}: ${LABELS[scope]}"></td>`;}).join('')}</tr>`).join('');
+        return `<section class="slink-fo-card"><div class="slink-fo-head"><div><h3>Officer role access</h3><p>Each checkbox controls only the permission in its own column. Individual member grants remain managed on the extension permissions page.</p></div></div><div class="slink-fo-access"><table><thead><tr><th>Faction role</th>${headers}</tr></thead><tbody>${roleRows}</tbody></table></div><div class="slink-fo-controls"><button type="button" data-fo-action="save-access">Save role assignments</button></div></section>`;
       }
       function render(){
         const root=ui.getContentElement();if(!current){root.innerHTML='<p>Loading officer controls…</p>';return;}
@@ -45,7 +44,7 @@
         root.onclick=async event=>{const button=event.target.closest('[data-fo-action]');if(!button)return;const action=button.dataset.foAction;
           if(action==='open-recaller'){await SLINK.core.storage.set('ui.war.requestedTab','armory');global.dispatchEvent(new CustomEvent('slink:open-armory-recaller'));ui.navigateTo?.('war');return;}
           try{busy=true;button.disabled=true;
-            if(action==='save-access'){const assignments=Object.fromEntries(SCOPES.map(scope=>[scope,{roles:[],users:[]}]));
+            if(action==='save-access'){const assignments=Object.fromEntries(SCOPES.map(scope=>[scope,{roles:[],users:(access.users||[]).filter(user=>user.scopes?.[scope]).map(user=>({id:Number(user.id),name:user.name}))}]));
               root.querySelectorAll('[data-fo-grant]:checked').forEach(input=>{const row=assignments[input.dataset.foScope];if(input.dataset.foGrant==='role')row.roles.push(input.dataset.foId);else row.users.push({id:Number(input.dataset.foId),name:input.dataset.foName});});
               access=await SLINK.core.messaging.send('faction.officer-access.save',{assignments});ui.setStatus('Officer access assignments saved.','ready');
             }else{const kind=action.endsWith('oc')?'oc':'armory';

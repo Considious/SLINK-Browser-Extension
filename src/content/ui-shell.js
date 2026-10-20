@@ -67,9 +67,10 @@
     .status { padding:7px 10px; border-bottom:1px solid var(--slink-border-soft); color:var(--slink-accent); }
     .status[data-tone="ready"] { color:var(--slink-ready); }
     .status[data-tone="error"] { max-height:72px; overflow:auto; overscroll-behavior:contain; overflow-wrap:anywhere; white-space:normal; color:var(--slink-error); }
-    .content { display:grid; gap:7px; max-height:min(420px,calc(100dvh - 210px)); overflow:auto; padding:9px 10px; }
+    .content { display:grid; align-content:start; grid-auto-rows:max-content; gap:7px; width:100%; min-width:0; max-height:min(420px,calc(100dvh - 210px)); overflow:auto; padding:9px 10px; }
+    .content > * { min-width:0; max-width:100%; }
     .window.main > .module-view > .module-head, .window.main > .module-view > .status, .window.main > .module-view > .actions { flex:0 0 auto; }
-    .window.main > .module-view > .content { flex:1 1 auto; min-height:0; max-height:none; overflow:auto; overscroll-behavior:contain; }
+    .window.main > .module-view > .content { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
     .row { display:grid; grid-template-columns:105px minmax(0,1fr); gap:8px; }
     .label { color:var(--slink-muted); }
     .value { overflow-wrap:anywhere; color:var(--slink-text); }
