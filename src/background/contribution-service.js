@@ -30,7 +30,7 @@
   async function donate(payload) {
     const currentTerms = await terms();
     if (payload?.acceptTerms !== true) {
-      const error = new Error('Accept the current API Key Donation Terms first.');
+      const error = new Error('Accept the current SLINK Terms first.');
       error.code = 'SLINK_DONATION_TERMS_REQUIRED';
       throw error;
     }

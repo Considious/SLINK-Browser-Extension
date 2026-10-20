@@ -198,21 +198,34 @@
         throw error;
       }
       await SLINK.core.tornApiLimiter.reserve({ wait: true });
-      const response = await workerRequest('/api/auth', {
-        method: 'POST',
-        auth: false,
-        body: {
-          api_key: currentSettings.tornKey,
-          terms_accepted: true,
-          terms_version: terms.version,
-          terms_sha256: terms.documentSha256,
-          disclosure_version: terms.disclosureVersion,
-          disclosure_sha256: terms.disclosureSha256,
-          client_name: CLIENT_NAME,
-          client_version: CLIENT_VERSION,
-          contributor_only: contributorOnly
+      let response;
+      try {
+        response = await workerRequest('/api/auth', {
+          method: 'POST',
+          auth: false,
+          body: {
+            api_key: currentSettings.tornKey,
+            terms_accepted: true,
+            terms_version: terms.version,
+            terms_sha256: terms.documentSha256,
+            disclosure_version: terms.disclosureVersion,
+            disclosure_sha256: terms.disclosureSha256,
+            client_name: CLIENT_NAME,
+            client_version: CLIENT_VERSION,
+            contributor_only: contributorOnly
+          }
+        });
+      } catch (error) {
+        if (error?.status === 428) {
+          await clearSession();
+          const refreshedTerms = await fetchTerms(true);
+          const termsError = new Error('Review and accept the updated SLINK Terms before continuing.');
+          termsError.code = 'SLINK_TERMS_REQUIRED';
+          termsError.terms = refreshedTerms;
+          throw termsError;
         }
-      });
+        throw error;
+      }
       if (!response?.session_token) throw new Error('SLINK did not return a session token.');
       const session = {
         token: response.session_token,

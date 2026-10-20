@@ -24,13 +24,20 @@
 
   async function fetchTerms(force = false) {
     const cached = await SLINK.core.storage.get(KEYS.terms, null);
-    if (!force && cached?.version && cached?.sha256) return cached;
+    if (
+      !force &&
+      cached?.version &&
+      cached?.sha256 &&
+      Number(cached.fetchedAt) > 0 &&
+      Date.now() - Number(cached.fetchedAt) < 60 * 60 * 1000
+    ) return cached;
     const response = await SLINK.core.http.requestJson('contributionWorker', `${BASE_URL}/api/permissions/terms`, { cache:'no-store' });
     const terms = {
       version:String(response?.terms?.version || ''),
       sha256:String(response?.terms?.sha256 || ''),
       documentUrl:String(response?.terms?.url || ''),
-      summary:String(response?.terms?.summary || '')
+      summary:String(response?.terms?.summary || ''),
+      fetchedAt:Date.now()
     };
     if (!terms.version || !terms.sha256) throw new Error('The SLINK permission service returned incomplete terms.');
     await SLINK.core.storage.set(KEYS.terms, terms);
@@ -91,19 +98,32 @@
         Number(existing.expiresAt) > Date.now() + 60_000
       ) return existing;
       await SLINK.core.tornApiLimiter.reserve({ wait:true });
-      const response = await SLINK.core.http.requestJson('contributionWorker', `${BASE_URL}/api/permissions/auth`, {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        cache:'no-store',
-        body:JSON.stringify({
-          api_key:tornKey,
-          terms_accepted:true,
-          terms_version:terms.version,
-          terms_sha256:terms.sha256,
-          client_name:'SLINK Browser Extension',
-          client_version:SLINK.VERSION
-        })
-      });
+      let response;
+      try {
+        response = await SLINK.core.http.requestJson('contributionWorker', `${BASE_URL}/api/permissions/auth`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          cache:'no-store',
+          body:JSON.stringify({
+            api_key:tornKey,
+            terms_accepted:true,
+            terms_version:terms.version,
+            terms_sha256:terms.sha256,
+            client_name:'SLINK Browser Extension',
+            client_version:SLINK.VERSION
+          })
+        });
+      } catch (error) {
+        if (error?.status === 428) {
+          await clearSession();
+          const refreshedTerms = await fetchTerms(true);
+          const termsError = new Error('Review and accept the updated SLINK Terms before continuing.');
+          termsError.code = 'SLINK_ADHD_TERMS_REQUIRED';
+          termsError.terms = refreshedTerms;
+          throw termsError;
+        }
+        throw error;
+      }
       if (!response?.session_token) throw new Error('SLINK did not return a permission session.');
       const session = {
         token:String(response.session_token),

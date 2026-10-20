@@ -256,7 +256,7 @@ context = vm.createContext({
         ok:true, version:'2026-08-23', document_url:'https://example.test/donation-terms', document_sha256:'terms-hash',
         disclosure_version:'2026-08-23', disclosure_sha256:'summary-hash', summary:'Encrypted offline donation test.'
       };
-      if (url.pathname === '/api/permissions/terms') body = { ok:true, terms:{ version:'2026-08-24', sha256:'72a933d69ec99cabeb92b426208e9d0c47e90acaf960818e0b4da38f3f2f5b0a', url:'https://example.test/terms', summary:'Permission disclosure.' } };
+      if (url.pathname === '/api/permissions/terms') body = { ok:true, terms:{ version:'2026-10-20', sha256:'4386e2c662f273d7e89fbe803cc4e7038496d5b3f8eeab95eb44da137746f3a0', url:'https://example.test/terms', summary:'Permission disclosure.' } };
       if (url.pathname === '/api/permissions/auth') {
         permissionAuthKeys.push(JSON.parse(options.body || '{}').api_key || '');
         body = { ok:true, session_token:'signed-access-session', expires_at:new Date(Date.now() + 3_600_000).toISOString(), user_id:3853023, user_name:'Considious', faction_id:46978, roles:['admin'], scopes:permissionAuthScopes, scope_sources:Object.fromEntries(permissionAuthScopes.map(scope => [scope, 'faction'])) };
@@ -300,7 +300,7 @@ context = vm.createContext({
       }
     } else if (url.hostname === 'slinkwarworker.richard-johnson554.workers.dev') {
       if (url.pathname === '/api/health') body = { ok:true, version:'test-war', database:'connected', coordinator:'configured', session_secret:'configured' };
-      if (url.pathname === '/api/terms') body = { ok:true, terms:{ version:'2026-08-24', sha256:'72a933d69ec99cabeb92b426208e9d0c47e90acaf960818e0b4da38f3f2f5b0a', url:'https://example.test/terms', summary:'War disclosure.' } };
+      if (url.pathname === '/api/terms') body = { ok:true, terms:{ version:'2026-10-20', sha256:'4386e2c662f273d7e89fbe803cc4e7038496d5b3f8eeab95eb44da137746f3a0', url:'https://example.test/terms', summary:'War disclosure.' } };
       if (url.pathname === '/api/themes') body = { ok:true, source:'test-worker', catalog:{ schemaVersion:1, revision:'test.remote.1', themes:[
         { id:'slink-dark', label:'SLINK Dark', description:'Free fallback.', scope:null, ornament:'none', swatch:['#112233','#224466','#336699'], tokens:{ '--slink-bg':'#112233' } },
         { id:'slinky-pursuit', label:'Slinky Pursuit', description:'Pursuit.', scope:'slink.theme.pursuit', ornament:'coil', swatch:['#111111','#ff0000','#0000ff'], tokens:{ '--slink-accent':'#ff0000' } },

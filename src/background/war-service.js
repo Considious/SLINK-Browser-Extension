@@ -110,13 +110,20 @@
 
   async function fetchTerms(force = false) {
     const cached = await SLINK.core.storage.get(KEYS.terms, null);
-    if (!force && cached?.version && cached?.sha256) return cached;
+    if (
+      !force &&
+      cached?.version &&
+      cached?.sha256 &&
+      Number(cached.fetchedAt) > 0 &&
+      Date.now() - Number(cached.fetchedAt) < 60 * 60 * 1000
+    ) return cached;
     const response = await SLINK.core.http.requestJson('warWorker', `${WAR.WORKER_BASE}/api/terms`, { cache:'no-store' });
     const terms = {
       version:String(response?.terms?.version || WAR.TERMS_VERSION),
       sha256:String(response?.terms?.sha256 || WAR.TERMS_SHA256),
       documentUrl:String(response?.terms?.url || ''),
-      summary:String(response?.terms?.summary || '')
+      summary:String(response?.terms?.summary || ''),
+      fetchedAt:Date.now()
     };
     await SLINK.core.storage.set(KEYS.terms, terms);
     return terms;
@@ -196,18 +203,31 @@
         throw error;
       }
       await SLINK.core.tornApiLimiter.reserve({ wait:true });
-      const response = await workerRequest('/api/auth', {
-        method:'POST',
-        auth:false,
-        body:{
-          api_key:currentSettings.tornKey,
-          terms_accepted:true,
-          terms_version:currentTerms.version,
-          terms_sha256:currentTerms.sha256,
-          client_name:'SLINK Browser Extension',
-          client_version:SLINK.VERSION
+      let response;
+      try {
+        response = await workerRequest('/api/auth', {
+          method:'POST',
+          auth:false,
+          body:{
+            api_key:currentSettings.tornKey,
+            terms_accepted:true,
+            terms_version:currentTerms.version,
+            terms_sha256:currentTerms.sha256,
+            client_name:'SLINK Browser Extension',
+            client_version:SLINK.VERSION
+          }
+        });
+      } catch (error) {
+        if (error?.status === 428) {
+          await clearSession();
+          const refreshedTerms = await fetchTerms(true);
+          const termsError = new Error('Review and accept the updated SLINK Terms before continuing.');
+          termsError.code = 'SLINK_WAR_TERMS_REQUIRED';
+          termsError.terms = refreshedTerms;
+          throw termsError;
         }
-      });
+        throw error;
+      }
       if (!response?.session_token) throw new Error('SLINK War did not return a session token.');
       const session = {
         token:String(response.session_token),
