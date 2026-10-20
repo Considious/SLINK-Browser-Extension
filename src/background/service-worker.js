@@ -11,6 +11,7 @@ importScripts(
   '../core/museum.js',
   '../core/money-property.js',
   '../core/events.js',
+  '../core/faction-officers.js',
   'local-vault.js',
   '../core/permissions.js',
   '../core/adhd.js',

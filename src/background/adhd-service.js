@@ -487,6 +487,10 @@
       await SLINK.services.moneyProperty.snooze(input);
       return publicStatus(false);
     }
+    if (['factionArmory', 'factionOcStock', 'factionOcMissing'].includes(id)) {
+      await SLINK.services.factionOfficer.routes['faction.officer.alert.snooze'](input);
+      return publicStatus(false);
+    }
     if (!ADHD.ALERT_DEFINITIONS.some(definition => definition.id === id) && !/^cityStock:\d+$/.test(id)) throw new Error('Unknown Efficiency alert.');
     const durationMs = Math.min(ADHD.DAY_MS, Math.max(60_000, Number(input.durationMs) || 60 * 60_000));
     const next = await settings();
@@ -515,7 +519,7 @@
       ...efficiencyAlerts,
       ...stakeoutAlerts,
       ...companyAlerts,
-      ...(currentSettings.soundEnabled.factionOnboarding === true ? onboardingAlerts : []),
+      ...onboardingAlerts.filter(alert => alert.kind === 'faction-onboarding' ? currentSettings.soundEnabled.factionOnboarding === true : alert.soundEnabled !== false),
       ...(abroadSettings.settings.soundEnabled ? abroadAlerts : []),
       ...(moneyStatus.settings.soundEnabled ? moneyAlerts : [])
     ];
