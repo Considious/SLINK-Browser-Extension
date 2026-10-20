@@ -113,6 +113,7 @@
           '<label>Alert before leave time (minutes)<input data-setting="alertLeadMinutes" type="number" min="0" max="180" value="' + Number(status.settings.alertLeadMinutes) + '"></label>' +
           '<label><span>Departure reminders</span><input data-setting="alertsEnabled" type="checkbox"' + (status.settings.alertsEnabled ? ' checked' : '') + '></label>' +
           '<label><span>Reminder sound</span><input data-setting="soundEnabled" type="checkbox"' + (status.settings.soundEnabled ? ' checked' : '') + '></label>' +
+          '<label style="grid-column:1/-1"><span>Two-minute landing purchase recommendation</span><input data-setting="landingRecommendationEnabled" type="checkbox"' + (status.settings.landingRecommendationEnabled ? ' checked' : '') + '><small>Checks YATA, Prometheus, and Torn Intel, then recommends the in-stock item with the best return against Torn market value.</small></label>' +
           '<button type="button" data-save-settings>Save settings</button></div></details>';
 
         root.querySelector('[data-search-mode]').value = mode;
@@ -144,7 +145,8 @@
             arrivalBufferMinutes:Number(root.querySelector('[data-setting="arrivalBufferMinutes"]').value),
             alertLeadMinutes:Number(root.querySelector('[data-setting="alertLeadMinutes"]').value),
             alertsEnabled:root.querySelector('[data-setting="alertsEnabled"]').checked,
-            soundEnabled:root.querySelector('[data-setting="soundEnabled"]').checked
+            soundEnabled:root.querySelector('[data-setting="soundEnabled"]').checked,
+            landingRecommendationEnabled:root.querySelector('[data-setting="landingRecommendationEnabled"]').checked
           };
           event.currentTarget.disabled = true;
           try { status = await SLINK.core.messaging.send('abroadStocks.settings.save', { settings:next }); render(); updateStatus(); }

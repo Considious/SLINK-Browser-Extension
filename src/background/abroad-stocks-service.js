@@ -5,6 +5,9 @@
   const ABROAD = SLINK.core.abroadStocks;
   const ALARM = 'slink.abroad-stocks';
   const CACHE_MS = 60_000;
+  const MARKET_CACHE_MS = 60 * 60_000;
+  const LANDING_LEAD_MS = 2 * 60_000;
+  const LANDING_ALERT_GRACE_MS = 10 * 60_000;
   const ACTIVITY_MS = 5 * 60_000;
   const KEYS = Object.freeze({
     settings:'abroadStocks.settings.v1',
@@ -26,6 +29,7 @@
       alertLeadMinutes:Math.min(180, Math.max(0, Number(input?.alertLeadMinutes) || 10)),
       alertsEnabled:input?.alertsEnabled !== false,
       soundEnabled:input?.soundEnabled === true,
+      landingRecommendationEnabled:input?.landingRecommendationEnabled !== false,
       tornIntelKey:String(input?.tornIntelKey || '').trim().slice(0, 256),
       useDroqs:input?.useDroqs !== false
     };
@@ -42,6 +46,10 @@
       snapshots:{},
       rows:[],
       providers:{},
+      marketPrices:{},
+      marketPricesFetchedAt:0,
+      landingCheckedArrivalAt:0,
+      landingRecommendation:null,
       ...(await SLINK.core.storage.get(KEYS.runtime, {}))
     };
   }
@@ -137,13 +145,114 @@
     return Object.fromEntries(recent);
   }
 
+  function travelContext(currentRuntime, now = Date.now()) {
+    const travel = currentRuntime?.snapshot?.data?.travel || {};
+    const destination = String(travel.destination || travel.country || travel.location || '').trim();
+    let arrivalAt = Number(travel.arrival_at || travel.arrivalAt || 0);
+    if (arrivalAt > 0 && arrivalAt < 10_000_000_000) arrivalAt *= 1000;
+    if (!arrivalAt) {
+      const seconds = Number(travel.time_left || travel.timeLeft || 0);
+      const observedAt = Number(currentRuntime?.snapshot?.mobilityFetchedAt || currentRuntime?.fetchedAt || now);
+      if (seconds > 0) arrivalAt = observedAt + seconds * 1000;
+    }
+    const country = ABROAD.countryRecord(destination);
+    return destination && country && arrivalAt > now - LANDING_ALERT_GRACE_MS
+      ? { arrivalAt, countryCode:country.code, countryName:country.name }
+      : null;
+  }
+
+  async function currentTravelContext(now = Date.now()) {
+    const adhdRuntime = await SLINK.core.storage.get('adhd.runtime.v1', {});
+    return travelContext(adhdRuntime, now);
+  }
+
+  function marketPriceRows(payload) {
+    const value = payload?.items ?? payload?.data?.items ?? payload?.data ?? [];
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object') {
+      return Object.entries(value).map(([id,row]) => ({ id:Number(row?.id || id) || id, ...(row || {}) }));
+    }
+    return [];
+  }
+
+  function marketPriceMap(payload) {
+    const prices = {};
+    for (const row of marketPriceRows(payload)) {
+      const id = Number(row?.id || row?.item_id || row?.itemId || 0);
+      const price = Number(row?.market_price ?? row?.marketPrice ?? row?.market_value ?? row?.marketValue
+        ?? row?.value?.market_price ?? row?.value?.marketPrice ?? row?.value?.market_value ?? row?.value?.marketValue);
+      if (id > 0 && price > 0) prices[id] = price;
+    }
+    return prices;
+  }
+
+  async function ensureMarketPrices(currentRuntime, now = Date.now()) {
+    if (Number(currentRuntime.marketPricesFetchedAt || 0) + MARKET_CACHE_MS > now
+      && Object.keys(currentRuntime.marketPrices || {}).length) return currentRuntime.marketPrices;
+    const key = await tornKey();
+    if (!key) throw new Error('Save a Torn API key before enabling landing purchase recommendations.');
+    await SLINK.core.tornApiLimiter.reserve({ wait:true });
+    const url = new URL('https://api.torn.com/v2/torn/items');
+    url.searchParams.set('cat', 'All');
+    url.searchParams.set('sort', 'ASC');
+    url.searchParams.set('comment', 'SLINK abroad landing ROI');
+    const response = await SLINK.core.http.requestJson('tornApi', url.href, {
+      headers:{ Authorization:`ApiKey ${key}` },
+      cache:'no-store'
+    });
+    if (response?.error) throw new Error(response.error.message || response.error.error || 'Torn item prices request failed.');
+    const prices = marketPriceMap(response);
+    if (!Object.keys(prices).length) throw new Error('Torn returned no item market prices.');
+    currentRuntime.marketPrices = prices;
+    currentRuntime.marketPricesFetchedAt = now;
+    return prices;
+  }
+
+  function bestLandingRecommendation(rows, marketPrices, travel, now = Date.now()) {
+    const candidates = [];
+    for (const row of rows || []) {
+      if (String(row.countryCode || '').toUpperCase() !== String(travel.countryCode || '').toUpperCase()) continue;
+      const marketPrice = Number(marketPrices?.[Number(row.itemId)]) || 0;
+      if (!marketPrice) continue;
+      const available = ['yata','prometheus','tornIntel'].map(providerId => ({ providerId, ...(row.sources?.[providerId] || {}) }))
+        .filter(source => Number(source.quantity) > 0 && Number(source.cost) > 0)
+        .sort((left,right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0));
+      const source = available[0];
+      if (!source) continue;
+      const cost = Number(source.cost);
+      const profit = marketPrice - cost;
+      const roi = profit / cost;
+      if (!(profit > 0) || !(roi > 0)) continue;
+      candidates.push({
+        itemId:Number(row.itemId) || null,
+        itemName:String(row.itemName || 'item'),
+        countryCode:travel.countryCode,
+        countryName:travel.countryName,
+        arrivalAt:travel.arrivalAt,
+        source:source.providerId,
+        quantity:Number(source.quantity),
+        cost,
+        marketPrice,
+        profit,
+        roi,
+        createdAt:now
+      });
+    }
+    candidates.sort((left,right) => right.roi - left.roi || right.profit - left.profit || right.quantity - left.quantity);
+    return candidates[0] || null;
+  }
+
   async function refresh(force = false) {
     if (refreshing) return refreshing;
     refreshing = (async () => {
       const now = Date.now();
-      const [currentRuntime, storedSettings, currentWatches] = await Promise.all([runtime(), settings(), watches()]);
-      if (!force && Number(currentRuntime.fetchedAt) + CACHE_MS > now) return publicStatus(false);
-      if (!force && Number(currentRuntime.activeUntil) <= now && !currentWatches.length) return publicStatus(false);
+      const [currentRuntime, storedSettings, currentWatches, travel] = await Promise.all([runtime(), settings(), watches(), currentTravelContext(now)]);
+      const landingDue = storedSettings.landingRecommendationEnabled && travel
+        && now >= travel.arrivalAt - LANDING_LEAD_MS
+        && now <= travel.arrivalAt + LANDING_ALERT_GRACE_MS
+        && Number(currentRuntime.landingCheckedArrivalAt || 0) !== Number(travel.arrivalAt);
+      if (!force && !landingDue && Number(currentRuntime.fetchedAt) + CACHE_MS > now) return publicStatus(false);
+      if (!force && !landingDue && Number(currentRuntime.activeUntil) <= now && !currentWatches.length) return publicStatus(false);
 
       const currentSettings = await detectTravelDefault(currentRuntime, storedSettings);
       const providerIds = ['yata','prometheus','tornIntel', ...(currentSettings.useDroqs ? ['droqs'] : [])];
@@ -172,6 +281,18 @@
       const previousHistory = await SLINK.core.storage.get(KEYS.history, {});
       const history = updateHistory(previousHistory, snapshots);
       const mergedRows = ABROAD.mergeSnapshots(snapshots, history);
+      if (landingDue) {
+        try {
+          const prices = await ensureMarketPrices(currentRuntime, now);
+          currentRuntime.landingRecommendation = bestLandingRecommendation(mergedRows, prices, travel, now);
+          currentRuntime.landingRecommendationError = '';
+          currentRuntime.landingCheckedArrivalAt = travel.arrivalAt;
+        } catch (error) {
+          currentRuntime.landingRecommendation = null;
+          currentRuntime.landingRecommendationError = SLINK.core.format.errorMessage(error);
+          currentRuntime.landingCheckedArrivalAt = travel.arrivalAt;
+        }
+      }
       await Promise.all([
         SLINK.core.storage.set(KEYS.history, history),
         SLINK.core.storage.set(KEYS.runtime, {
@@ -256,9 +377,9 @@
     const [currentRuntime, currentSettings, currentWatches, snoozes] = await Promise.all([
       runtime(), settings(), watches(), SLINK.core.storage.get(KEYS.snoozes, {})
     ]);
-    if (!currentSettings.alertsEnabled) return [];
+    const alerts = [];
     const byKey = new Map((currentRuntime.rows || []).map(row => [row.key, row]));
-    return currentWatches.flatMap(watch => {
+    if (currentSettings.alertsEnabled) alerts.push(...currentWatches.flatMap(watch => {
       const row = byKey.get(watch.key);
       const nextRestockAt = Number(row?.nextRestockAt) || 0;
       const leaveAt = ABROAD.departureAt(row, currentSettings);
@@ -278,7 +399,25 @@
         links:[['Travel Agency','https://www.torn.com/travelagency.php']],
         shareText:'Abroad Stocks | ' + row.itemName + ' in ' + row.countryName + ' | Leave ' + leaveText + ' | Estimated restock ' + restockText
       }];
-    });
+    }));
+    const recommendation = currentRuntime.landingRecommendation;
+    if (currentSettings.landingRecommendationEnabled && recommendation
+      && Number(recommendation.arrivalAt) - LANDING_LEAD_MS <= now
+      && now <= Number(recommendation.arrivalAt) + LANDING_ALERT_GRACE_MS) {
+      const id = 'abroad:landing:' + Number(recommendation.arrivalAt) + ':' + (recommendation.itemId || recommendation.itemName);
+      if (Number(snoozes?.[id] || 0) <= now) {
+        const roi = Math.round(Number(recommendation.roi || 0) * 100);
+        alerts.push({
+          id,
+          title:'Buy ' + recommendation.itemName,
+          detail:'Best current return in ' + recommendation.countryName + ': +' + roi + '% ROI · buy for $' + Number(recommendation.cost).toLocaleString() + ' · market value $' + Number(recommendation.marketPrice).toLocaleString() + ' · ' + Number(recommendation.quantity).toLocaleString() + ' reported available.',
+          tone:'urgent',
+          links:[['Travel','https://www.torn.com/index.php']],
+          shareText:'Abroad Stocks | Buy ' + recommendation.itemName + ' in ' + recommendation.countryName + ' | +' + roi + '% ROI | $' + Number(recommendation.cost).toLocaleString() + ' → $' + Number(recommendation.marketPrice).toLocaleString()
+        });
+      }
+    }
+    return alerts;
   }
 
   async function publicStatus(refreshIfDue = true) {
@@ -294,6 +433,8 @@
       rows:(currentRuntime.rows || []).map(row => ({ ...row, watched:watched.has(row.key), departureAt:ABROAD.departureAt(row, currentSettings) })),
       watches:currentWatches,
       activeUntil:Number(currentRuntime.activeUntil) || 0,
+      landingRecommendation:currentRuntime.landingRecommendation || null,
+      landingRecommendationError:String(currentRuntime.landingRecommendationError || ''),
       activeAlerts:await activeAlerts()
     };
   }

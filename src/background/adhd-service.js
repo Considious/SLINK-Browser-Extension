@@ -74,11 +74,13 @@
     return url.href;
   }
 
-  function mobilityMonitoringEnabled(settingsValue) {
+  async function mobilityMonitoringEnabled(settingsValue) {
+    const abroadSettings = await SLINK.core.storage.get('abroadStocks.settings.v1', {});
     return settingsValue.enabled.raceOrFly !== false
       || settingsValue.soundEnabled.raceOrFly === true
       || settingsValue.enabled.landing !== false
-      || settingsValue.soundEnabled.landing === true;
+      || settingsValue.soundEnabled.landing === true
+      || abroadSettings?.landingRecommendationEnabled !== false;
   }
 
   function crimeMonitoringEnabled(settingsValue) {
@@ -296,7 +298,7 @@
     mobilityRefreshing = (async () => {
       const currentRuntime = await runtime();
       const currentSettings = await settings();
-      if (!currentRuntime.snapshot || !mobilityMonitoringEnabled(currentSettings)) return publicStatus(false);
+      if (!currentRuntime.snapshot || !await mobilityMonitoringEnabled(currentSettings)) return publicStatus(false);
       if (!force && Number(currentRuntime.nextMobilityRefreshAt || 0) > Date.now()) return publicStatus(false);
       try {
         await requireAccess();
@@ -563,7 +565,7 @@
       catch {}
     }
     if (refreshIfDue && access.configured && currentRuntime.snapshot
-      && mobilityMonitoringEnabled(currentSettings)
+      && await mobilityMonitoringEnabled(currentSettings)
       && Number(currentRuntime.nextMobilityRefreshAt || 0) <= Date.now()) {
       try { return await refreshMobility(false); }
       catch {}
