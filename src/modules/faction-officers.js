@@ -41,8 +41,9 @@
       }
       function render(){
         const root=ui.getContentElement();if(!current){root.innerHTML='<p>Loading officer controls…</p>';return;}
-        root.innerHTML=`<div class="slink-fo-stack">${thresholdCard('armory','Faction armory thresholds','One consolidated alert lists every configured item below target.')}${thresholdCard('oc','Organized crime supplies','Tracks OC stock and checks active assigned slots for missing required items.')}${accessCard()}</div>`;
+        root.innerHTML=`<div class="slink-fo-stack">${current?.access?.armory?`<section class="slink-fo-card"><div class="slink-fo-head"><div><h3>Armory Recaller</h3><p>Manual ranked-item retrieval, available with the faction officer Armory permission.</p></div></div><div class="slink-fo-controls"><button type="button" data-fo-action="open-recaller">Open Armory Recaller</button><a href="https://www.torn.com/factions.php?step=your#/tab=armoury">Open faction armory</a></div></section>`:''}${thresholdCard('armory','Faction armory thresholds','One consolidated alert lists every configured item below target.')}${thresholdCard('oc','Organized crime supplies','Tracks OC stock and checks active assigned slots for missing required items.')}${accessCard()}</div>`;
         root.onclick=async event=>{const button=event.target.closest('[data-fo-action]');if(!button)return;const action=button.dataset.foAction;
+          if(action==='open-recaller'){await SLINK.core.storage.set('ui.war.requestedTab','armory');global.dispatchEvent(new CustomEvent('slink:open-armory-recaller'));ui.navigateTo?.('war');return;}
           try{busy=true;button.disabled=true;
             if(action==='save-access'){const assignments=Object.fromEntries(SCOPES.map(scope=>[scope,{roles:[],users:[]}]));
               root.querySelectorAll('[data-fo-grant]:checked').forEach(input=>{const row=assignments[input.dataset.foScope];if(input.dataset.foGrant==='role')row.roles.push(input.dataset.foId);else row.users.push({id:Number(input.dataset.foId),name:input.dataset.foName});});

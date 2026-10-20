@@ -468,7 +468,9 @@
     function refreshShell() {
       const docked = [...views.values()];
       const firstRunFallback = NAVIGATION_FALLBACK_ORDER.map(id => views.get(id)).find(Boolean) || docked[0] || null;
-      if (!navigationSelectionChanged && !hasRestoredNavigationSelection && firstRunFallback) {
+      if (views.has(preferredActiveId)) {
+        activeId = preferredActiveId;
+      } else if (!navigationSelectionChanged && !hasRestoredNavigationSelection && firstRunFallback) {
         activeId = firstRunFallback.id;
       } else if (!docked.some(view => view.id === activeId)) {
         const preferredForSavedGroup = preferredActiveIdsByGroup.get(preferredActiveGroup);
@@ -643,6 +645,7 @@
             actions.append(button);
           }
         },
+        navigateTo(moduleId) { if (views.has(String(moduleId || ''))) setActive(String(moduleId), true); },
         showAlert,
         dismissAlert,
         setBubbleAlert,

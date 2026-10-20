@@ -82,7 +82,8 @@
     group:'combat',
     groupTitle:'Combat',
     defaultShowInTorn:true,
-    requiredScopes:['slink.war'],
+    requiredScopes:[],
+    permissionTest:permissions=>['slink.war','slink.war.officer','slink.officer.armory','admin.*'].some(scope=>SLINK.core.permissions.hasScope(permissions,scope)),
     matches:url => url.hostname === 'www.torn.com',
 
     async start(context) {
@@ -137,7 +138,16 @@
       function profileUrl(id) { return `https://www.torn.com/profiles.php?XID=${encodeURIComponent(id)}`; }
       function attackUrl(id) { return `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(id)}`; }
       function duration(seconds) { return SLINK.core.format.formatHumanDuration(Math.max(0, seconds)); }
-      function money(value) { return `$${Math.max(0, Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits:0 })}`; }
+      function money(value) { return `${Math.max(0, Number(value) || 0).toLocaleString('en-US', { maximumFractionDigits:0 })}`; }
+      function clientHasScope(scope) { return SLINK.core.permissions.hasScope(context.permissions || {}, scope); }
+      function canUseArmoryRecaller() { return current?.session?.officer === true || clientHasScope('slink.officer.armory') || clientHasScope('admin.*'); }
+      function openArmoryRecaller() {
+        if (!canUseArmoryRecaller()) return;
+        activeTab = 'armory';
+        void SLINK.core.storage.set('ui.war.activeTab.v1', activeTab);
+        void SLINK.core.storage.remove('ui.war.requestedTab');
+        render();
+      }
       function pageIsFocused() { return document.visibilityState === 'visible' && document.hasFocus(); }
 
       function moduleVisible() {
@@ -893,7 +903,8 @@
         const stats = current?.runtime?.panelStats || {};
         const canViewLogs = current?.session?.canViewLogs === true;
         const officer = current?.session?.officer === true;
-        if ((activeTab === 'logs' && !canViewLogs) || (activeTab === 'armory' && !officer)) {
+        const armoryOfficer = canUseArmoryRecaller();
+        if ((activeTab === 'logs' && !canViewLogs) || (activeTab === 'armory' && !armoryOfficer)) {
           activeTab = 'targets';
           void SLINK.core.storage.set('ui.war.activeTab.v1', activeTab);
         }
@@ -901,7 +912,7 @@
         context.ui.setSubtitle(current?.session?.authenticated ? `${current.session.factionCapable ? 'Faction API' : 'Public API'} / ${current.activeWar?.opponentName || 'No assigned opponent'}${phaseLabel ? ` / ${phaseLabel}` : ''}` : 'Setup required');
         context.ui.setStatus(localError || current?.runtime?.lastError || current?.runtime?.status || 'SLINK War ready.', (localError || current?.runtime?.lastError) ? 'error' : (current?.configured ? 'ready' : 'normal'));
         context.ui.setActions([{ label:busy ? 'Refreshing...' : 'Refresh', disabled:busy, onClick:() => runCycle(true) }]);
-        const tabs = ['targets', 'outside', 'claims', ...(officer ? ['armory'] : []), ...(canViewLogs ? ['logs'] : []), 'settings'];
+        const tabs = ['targets', 'outside', 'claims', ...(armoryOfficer ? ['armory'] : []), ...(canViewLogs ? ['logs'] : []), 'settings'];
         const body = activeTab === 'targets' ? targetCards() : activeTab === 'outside' ? outsideCards() : activeTab === 'claims' ? claimCards() : activeTab === 'armory' ? armoryHtml() : activeTab === 'logs' ? logCards() : settingsHtml();
         const chain = stats.chain?.current ? `${stats.chain.current}${stats.chain.target ? `/${stats.chain.target}` : ''}` : 'None';
         const insideCap = Math.max(0, Number(current?.sharedConfig?.insideHitCap) || 0);
@@ -909,7 +920,7 @@
           ? `${Number(stats.mugs)} mugs • ${money(stats.mugTotal)} total • ${money(stats.mugMin)} min • ${money(stats.mugAverage)} avg • ${money(stats.mugMax)} max`
           : 'Mug totals appear after a mug.';
         const retals = visibleRetals();
-        const armoryRequestCount = officer ? (snapshot.itemRequests || []).length : 0;
+        const armoryRequestCount = armoryOfficer ? (snapshot.itemRequests || []).length : 0;
         const tabBar = `<div class="slink-war-subtabs">${tabs.map(tab => `<button class="slink-war-subtab" data-war-tab="${tab}" aria-selected="${activeTab === tab}"><span>${tab[0].toUpperCase()}${tab.slice(1)}</span>${tab === 'armory' && armoryRequestCount ? `<span class="nav-alert-count" aria-label="${armoryRequestCount} active Armory requests">${armoryRequestCount > 99 ? '99+' : armoryRequestCount}</span>` : ''}</button>`).join('')}</div>`;
         const content = activeTab === 'armory'
           ? `${tabBar}<div>${body}</div>`
@@ -1257,10 +1268,11 @@
         insideUnlockedTarget = Number(storedInsideUnlock.targetId) || 0;
         insideUnlockedUntil = Number(storedInsideUnlock.expiresAt) || 0;
       }
-      if (await SLINK.core.storage.get('ui.war.requestedTab', '') === 'armory' && current?.session?.officer) {
+      if (await SLINK.core.storage.get('ui.war.requestedTab', '') === 'armory' && canUseArmoryRecaller()) {
         activeTab = 'armory';
         await SLINK.core.storage.remove('ui.war.requestedTab');
       }
+      global.addEventListener('slink:open-armory-recaller', openArmoryRecaller);
       document.addEventListener('click', handleProfileAttack, true);
       document.addEventListener('click', handleRankTabClick, true);
       document.addEventListener('visibilitychange', refreshLeader);
@@ -1309,6 +1321,7 @@
         context.ui.setBubbleAlert('', 0, 'war');
         context.ui.setAlertCount('war', 0);
         setPageAlert(false);
+        global.removeEventListener('slink:open-armory-recaller', openArmoryRecaller);
         document.removeEventListener('click', handleProfileAttack, true);
         document.removeEventListener('click', handleRankTabClick, true);
         document.removeEventListener('visibilitychange', refreshLeader);
