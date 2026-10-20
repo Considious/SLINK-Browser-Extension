@@ -478,6 +478,22 @@
           });
           actions.append(checked);
         }
+        if (alert.kind === 'faction-onboarding') {
+          const verified = document.createElement('button'); verified.type = 'button'; verified.className = 'small secondary';
+          verified.textContent = alert.viewerIsAdmin ? 'Admin verified' : 'Verified';
+          verified.addEventListener('click', async () => {
+            await SLINK.core.messaging.send('faction.onboarding.verify', { memberId:alert.memberId });
+            adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:false });
+            renderAdhd();
+          });
+          const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'small secondary'; dismiss.textContent = 'Dismiss';
+          dismiss.addEventListener('click', async () => {
+            await SLINK.core.messaging.send('faction.onboarding.dismiss', { memberId:alert.memberId, joinedAt:alert.joinedAt });
+            adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:false });
+            renderAdhd();
+          });
+          actions.append(verified, dismiss);
+        }
         card.append(copy, actions); return card;
       }));
     }
@@ -1113,7 +1129,7 @@
   }
 
   const qualityInstances = new Map();
-  const qualityModuleIds = Object.freeze(['racing', 'abroad-stocks', 'company', 'museums', 'money-property', 'events']);
+  const qualityModuleIds = Object.freeze(['racing', 'abroad-stocks', 'company', 'museums', 'money-property', 'events', 'faction-officers']);
   let qualityActive = 'racing';
 
   function qualityDefinition(id) {

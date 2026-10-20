@@ -169,6 +169,23 @@
             checked.addEventListener('click', async () => render(await SLINK.core.messaging.send('adhd.crime-unique.acknowledge', { id:alert.id })));
             links.append(checked);
           }
+          if (alert.kind === 'faction-onboarding') {
+            const verified = document.createElement('button'); verified.type = 'button';
+            verified.textContent = alert.viewerIsAdmin ? 'Admin verified' : 'Verified';
+            verified.title = alert.viewerIsAdmin && alert.officerVerifiedAt
+              ? 'An officer already verified this member; confirm the administrator check'
+              : 'Confirm weapon, armor, and Pepper Spray were checked';
+            verified.addEventListener('click', async () => {
+              await SLINK.core.messaging.send('faction.onboarding.verify', { memberId:alert.memberId });
+              await load(false);
+            });
+            const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.textContent = 'Dismiss';
+            dismiss.addEventListener('click', async () => {
+              await SLINK.core.messaging.send('faction.onboarding.dismiss', { memberId:alert.memberId, joinedAt:alert.joinedAt });
+              await load(false);
+            });
+            links.append(verified, dismiss);
+          }
           card.append(title, detail, links); list.append(card);
         }
         root.append(list);

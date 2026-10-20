@@ -274,3 +274,7 @@ assert(dashboardQualityHtml.includes('data-page-tab="quality"') && dashboardQual
 assert(dashboardQualityHtml.includes('../modules/racing.js') && dashboardQualityHtml.includes('../modules/events.js'), 'Dashboard does not load the shared Quality of Life modules.');
 assert(dashboardQualityJs.includes('ui.quality.activeView') && dashboardQualityJs.includes('definition.start'), 'Dashboard does not preserve or start shared Quality of Life modules.');
 assert(!abroadQualityModule.includes('data-setting="tornIntelKey"'), 'The unsupported Torn Intel client-key entry is still visible.');
+
+assert(read('src/background/faction-officer-service.js').includes('/api/faction/onboarding/sync') && read('src/background/faction-officer-service.js').includes('/officer-roles'), 'Faction onboarding sharing or role-based officer assignment service is missing.');
+assert(read('src/modules/faction-officers.js').includes("requiredScopes:['admin.*']") && dashboardHtml.includes('data-quality-view="faction-officers"'), 'Admin faction-officer role settings are missing from Quality of Life.');
+assert(read('src/core/adhd.js').includes("id:'factionOnboarding'") && read('src/background/adhd-service.js').includes('factionOfficer.activeAlerts'), 'Faction onboarding alerts are not integrated into Efficiency alerts.');

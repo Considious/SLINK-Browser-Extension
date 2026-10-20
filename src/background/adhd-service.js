@@ -502,11 +502,12 @@
     const efficiencyAlerts = ADHD.buildAlerts(currentRuntime.snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
       .filter(alert => (currentRuntime.snapshot || alert.id === 'timer24') && currentSettings.soundEnabled[alert.id] === true)
       .map(alert => alert.soundId ? { ...alert, id:alert.soundId, sourceId:alert.id } : alert);
-    const [stakeoutAlerts, abroadAlerts, companyAlerts, moneyAlerts, abroadSettings, moneyStatus] = await Promise.all([
+    const [stakeoutAlerts, abroadAlerts, companyAlerts, moneyAlerts, onboardingAlerts, abroadSettings, moneyStatus] = await Promise.all([
       SLINK.services.targetList.activeAlerts(),
       SLINK.services.abroadStocks.activeAlerts(),
       SLINK.services.company.activeAlerts(),
       SLINK.services.moneyProperty.activeAlerts(),
+      SLINK.services.factionOfficer.activeAlerts(false),
       SLINK.services.abroadStocks.publicStatus(false),
       SLINK.services.moneyProperty.publicStatus(false)
     ]);
@@ -514,6 +515,7 @@
       ...efficiencyAlerts,
       ...stakeoutAlerts,
       ...companyAlerts,
+      ...(currentSettings.soundEnabled.factionOnboarding === true ? onboardingAlerts : []),
       ...(abroadSettings.settings.soundEnabled ? abroadAlerts : []),
       ...(moneyStatus.settings.soundEnabled ? moneyAlerts : [])
     ];
@@ -570,11 +572,12 @@
     }
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, ADHD.ALERT_SCOPE);
     const snapshot = currentRuntime.snapshot;
-    const [stakeoutAlerts, abroadAlerts, companyAlerts, moneyAlerts] = await Promise.all([
+    const [stakeoutAlerts, abroadAlerts, companyAlerts, moneyAlerts, onboardingAlerts] = await Promise.all([
       SLINK.services.targetList.activeAlerts(),
       SLINK.services.abroadStocks.activeAlerts(),
       SLINK.services.company.activeAlerts(),
-      SLINK.services.moneyProperty.activeAlerts()
+      SLINK.services.moneyProperty.activeAlerts(),
+      SLINK.services.factionOfficer.activeAlerts(refreshIfDue)
     ]);
     return {
       configured:Boolean(access.configured),
@@ -586,7 +589,8 @@
         ...stakeoutAlerts,
         ...abroadAlerts,
         ...companyAlerts,
-        ...moneyAlerts
+        ...moneyAlerts,
+        ...onboardingAlerts
       ],
       city:snapshot ? ADHD.cityProgress(snapshot, currentSettings) : { bought:null, remaining:null, complete:false, manuallyDone:false },
       crimeUniques:snapshot ? ADHD.crimeUniqueProgress(snapshot) : [],

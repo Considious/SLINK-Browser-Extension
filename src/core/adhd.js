@@ -54,6 +54,7 @@
     Object.freeze({ id:'casinoTokens', label:'Spend casino tokens' }),
     Object.freeze({ id:'stockBenefits', label:'Stock benefits ready' }),
     Object.freeze({ id:'googlePlayPoints', label:'Google Play Points weekly prize' }),
+    Object.freeze({ id:'factionOnboarding', label:'New faction member equipment check' }),
     ...CRIME_UNIQUE_DEFINITIONS
   ]);
   const ALL_ALERT_IDS = Object.freeze([

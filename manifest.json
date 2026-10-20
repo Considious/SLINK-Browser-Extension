@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.18.77",
+  "version": "0.18.78",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -83,6 +83,7 @@
         "src/modules/museums.js",
         "src/modules/money-property.js",
         "src/modules/events.js",
+        "src/modules/faction-officers.js",
         "src/modules/contribution.js",
         "src/content/content-script.js"
       ]
