@@ -11,7 +11,7 @@
   });
   const ASSET_ORIGIN = 'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/';
   const PACKAGED_ASSET_FILES = new Set([
-    'halloween-2026-background.jpg',
+    'halloween-2026-background.png',
     'halloween-2026-icons.png'
   ]);
   const TOKEN_NAMES = new Set([
