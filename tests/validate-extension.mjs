@@ -34,15 +34,17 @@ assert(!JSON.stringify(manifest).includes('<all_urls>'), 'The extension must not
 assert(manifest.permissions.includes('storage'), 'Storage permission is required.');
 assert(manifest.permissions.includes('alarms'), 'Alarms permission is required.');
 assert(manifest.permissions.includes('offscreen'), 'Background alert audio requires Chrome offscreen-document access.');
+const requiredHosts = [
+  'https://www.torn.com/*',
+  'https://api.torn.com/*',
+  'https://ffscouter.com/*',
+  'https://weav3r.dev/*',
+  'https://slinkyleveling.richard-johnson554.workers.dev/*',
+  'https://slinkcontributionworker.richard-johnson554.workers.dev/*',
+  'https://slinkwarworker.richard-johnson554.workers.dev/*'
+];
 assert(
-  manifest.host_permissions.length === 7 &&
-  manifest.host_permissions.includes('https://www.torn.com/*') &&
-  manifest.host_permissions.includes('https://api.torn.com/*') &&
-  manifest.host_permissions.includes('https://ffscouter.com/*') &&
-  manifest.host_permissions.includes('https://weav3r.dev/*') &&
-  manifest.host_permissions.includes('https://slinkyleveling.richard-johnson554.workers.dev/*') &&
-  manifest.host_permissions.includes('https://slinkcontributionworker.richard-johnson554.workers.dev/*') &&
-  manifest.host_permissions.includes('https://slinkwarworker.richard-johnson554.workers.dev/*'),
+  requiredHosts.every(host => manifest.host_permissions.includes(host)),
   'Required host access must include Torn, Torn API, FFScouter, Weaver, and all SLINK Workers.'
 );
 assert(
