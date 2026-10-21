@@ -51,7 +51,8 @@
       SLINK.core.storage.get('war.acceptedTerms.v1', null),
       SLINK.core.storage.get('leveling.acceptedTerms.v1', null)
     ]);
-    return records.some(accepted => accepted?.version === terms.version && accepted?.sha256 === terms.sha256);
+    return records.some(accepted => accepted?.version === terms.version
+      && String(accepted?.sha256 || accepted?.documentSha256 || '') === terms.sha256);
   }
 
   async function clearSession() {
@@ -274,3 +275,5 @@
 
   SLINK.define('services', 'permissionAccess', Object.freeze({ clearSession, ensureSession, routes, settings, status }));
 })(globalThis);
+
+

@@ -205,7 +205,7 @@ assert(read('src/background/theme-service.js').includes('/api/themes'), 'Backgro
 assert(!manifest.host_permissions.some(origin => /githubusercontent|github\.com/.test(origin)), 'The extension must receive theme data through its existing Worker, not direct GitHub host access.');
 assert(manifest.web_accessible_resources?.some(entry => entry.resources?.includes('assets/themes/halloween-2026-background.jpg') && entry.resources?.includes('assets/themes/halloween-2026-icons.png')), 'Halloween 2026 visual assets are not exposed to the Torn content UI.');
 assert(read('src/core/themes.js').includes('ASSET_ORIGIN') && read('src/core/themes.js').includes('assetVariables'), 'The theme core is missing validated image-asset support.');
-assert(read('src/dashboard/dashboard.css').includes('data-slink-theme="halloween-2026"') && read('src/dashboard/dashboard.css').includes('--slink-theme-background-image'), 'The dashboard is missing the Halloween 2026 image layer.');
+assert(read('src/dashboard/dashboard.css').includes('data-slink-image-theme="true"') && read('src/dashboard/dashboard.css').includes('data-slink-icon-theme="true"') && read('src/dashboard/dashboard.css').includes('--slink-theme-background-image'), 'The dashboard is missing the generic live image-theme layer.');
 const uiStateSource = read('src/core/ui-state.js');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/core/ui-state.js')), 'Reusable GUI interaction-state preservation is not loaded in Torn.');
 assert(uiStateSource.includes('selectionStart') && uiStateSource.includes("querySelectorAll('details')") && uiStateSource.includes('data-slink-preserve-scroll'), 'GUI state preservation is missing focus/cursor, open-section, or scroll restoration.');
@@ -280,3 +280,5 @@ assert(!abroadQualityModule.includes('data-setting="tornIntelKey"'), 'The unsupp
 assert(read('src/background/faction-officer-service.js').includes('/api/faction/onboarding/sync') && read('src/background/faction-officer-service.js').includes('/officer-roles'), 'Faction onboarding sharing or role-based officer assignment service is missing.');
 assert(read('src/modules/faction-officers.js').includes("requiredScopes:['admin.*']") && dashboardHtml.includes('data-quality-view="faction-officers"'), 'Admin faction-officer role settings are missing from Quality of Life.');
 assert(read('src/core/adhd.js').includes("id:'factionOnboarding'") && read('src/background/adhd-service.js').includes('factionOfficer.activeAlerts'), 'Faction onboarding alerts are not integrated into Efficiency alerts.');
+
+

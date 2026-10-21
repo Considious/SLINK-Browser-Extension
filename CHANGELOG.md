@@ -1,3 +1,9 @@
+## 0.18.88 - 2026-10-21
+
+- Made image-backed themes truly catalog-driven after this one-time renderer bootstrap, with a 15-minute catalog cache and a forced live refresh whenever the dashboard opens.
+- Unified shared Terms acceptance across Leveling, War, Efficiency, and Mugging so an accepted current document no longer reappears because one service used a different stored hash field.
+- Stopped API-derived Efficiency alerts and sounds after their source snapshot is more than 15 minutes old, while preserving local reminders such as the 24-hour timer.
+
 ## 0.18.87 - 2026-10-20
 
 - Added the permission-gated Halloween 2026 theme with a compressed scenic background and reusable 4-by-5 icon sprite.
@@ -678,3 +684,5 @@ This changelog covers the `0.18.x` release series. It focuses on user-visible be
 - Market Watch prices are sourced only from Torn's v2 Item Market API and Weaver's marketplace JSON API; the extension does not scrape Torn pages for listing data.
 - Watch configuration, item catalogs, and results remain in local extension storage. SLINK's permission service only authenticates the signed Market Watch tier.
 - Added the Weaver API host permission required for API-only Bazaar Watch requests.
+
+

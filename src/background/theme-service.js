@@ -2,7 +2,7 @@
   'use strict';
 
   const SLINK = global.SLINK_EXTENSION;
-  const MAX_AGE_MS = 12 * 60 * 60 * 1000;
+  const MAX_AGE_MS = 15 * 60 * 1000;
   let loading = null;
 
   async function cachedRecord() {
@@ -45,8 +45,10 @@
   SLINK.define('services', 'themes', Object.freeze({
     load,
     routes:Object.freeze({
-      'themes.catalog': () => load(false),
+      'themes.catalog': payload => load(payload?.force === true),
       'themes.refresh': () => load(true)
     })
   }));
 })(globalThis);
+
+

@@ -363,8 +363,16 @@
     const terms = leveling?.terms || war?.terms || access?.terms || {};
     byId('shared-terms-summary').textContent = terms.summary || war?.terms?.summary || 'Current SLINK terms are loading.';
     byId('shared-terms-link').href = terms.documentUrl || war?.terms?.documentUrl || '#';
-    byId('shared-terms-state').textContent = `Leveling: ${levelAccepted ? 'accepted' : 'acceptance required'} / War: ${warAccepted ? 'accepted' : 'acceptance required'} / ADHD: ${adhdAccepted ? 'accepted' : 'acceptance required'}`;
-    byId('shared-terms-full').hidden = !termsExpanded && levelAccepted && warAccepted && adhdAccepted;
+    const enabledTerms = [
+      { label:'Leveling', enabled:leveling?.settings?.hasTornKey === true, accepted:levelAccepted },
+      { label:'War', enabled:war?.settings?.hasTornKey === true, accepted:warAccepted },
+      { label:'Efficiency / Mugging', enabled:(access?.settings?.hasTornKey === true && access?.settings?.enabled === true) || muggingSettings?.enabled === true, accepted:adhdAccepted }
+    ].filter(entry => entry.enabled);
+    const enabledTermsAccepted = enabledTerms.every(entry => entry.accepted);
+    byId('shared-terms-state').textContent = enabledTerms.length
+      ? enabledTerms.map(entry => `${entry.label}: ${entry.accepted ? 'accepted' : 'acceptance required'}`).join(' / ')
+      : 'No SLINK modules currently use the shared terms.';
+    byId('shared-terms-full').hidden = !termsExpanded && enabledTermsAccepted;
     byId('toggle-shared-terms').textContent = byId('shared-terms-full').hidden ? 'View terms' : 'Hide terms';
     const authenticated = [leveling?.session, war?.session, access?.session].find(session => session?.authenticated);
     byId('identity-state').textContent = authenticated ? `Torn ID ${authenticated.userId}` : 'Enter a key to unlock access';
@@ -1265,7 +1273,7 @@
     const [status, terms, themeRecord, statsStatus, meritsStatus, marketStatus, dollarStatus, savedMuggingSettings] = await Promise.all([
       SLINK.core.messaging.send('system.status'),
       SLINK.core.messaging.send('contribution.terms').catch(() => null),
-      SLINK.core.messaging.send('themes.catalog').catch(() => null),
+      SLINK.core.messaging.send('themes.catalog', { force:true }).catch(() => null),
       SLINK.core.messaging.send('playerStats.status', { refreshIfStale:true }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null })),
       SLINK.core.messaging.send('merits.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), goals:[], pinned:[], settings:SLINK.core.merits.defaultSettings() })),
       SLINK.core.messaging.send('market.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), opportunities:[], settings:SLINK.core.market.defaultSettings(), catalog:{ items:[] } })),
@@ -1783,3 +1791,6 @@
   setInterval(() => { updateAdhdClock(); updateMarketClock(); updateMeritsClock(); updateDollarBazaarClock(); }, 1_000);
   addEventListener('pagehide', () => { void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {}); }, { once:true });
 })();
+
+
+

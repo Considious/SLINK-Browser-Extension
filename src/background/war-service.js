@@ -148,8 +148,13 @@
 
   async function acceptedCurrentTerms(current = null) {
     const terms = current || await fetchTerms();
-    const accepted = await SLINK.core.storage.get(KEYS.acceptedTerms, null);
-    return Boolean(accepted?.version === terms.version && accepted?.sha256 === terms.sha256);
+    const records = await Promise.all([
+      SLINK.core.storage.get(KEYS.acceptedTerms, null),
+      SLINK.core.storage.get('access.acceptedTerms.v1', null),
+      SLINK.core.storage.get('leveling.acceptedTerms.v1', null)
+    ]);
+    return records.some(accepted => accepted?.version === terms.version
+      && String(accepted?.sha256 || accepted?.documentSha256 || '') === terms.sha256);
   }
 
   async function recomputePermissions() {
@@ -1246,4 +1251,6 @@
 
   SLINK.define('services', 'war', api);
 })(globalThis);
+
+
 

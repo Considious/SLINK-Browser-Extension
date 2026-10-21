@@ -132,14 +132,22 @@
 
   async function acceptedCurrentTerms(terms = null) {
     const current = terms || await fetchTerms();
-    const accepted = await SLINK.core.storage.get(KEYS.acceptedTerms, null);
-    return Boolean(
-      accepted &&
-      accepted.version === current.version &&
-      accepted.documentSha256 === current.documentSha256 &&
-      accepted.disclosureVersion === current.disclosureVersion &&
-      accepted.disclosureSha256 === current.disclosureSha256
-    );
+    const records = await Promise.all([
+      SLINK.core.storage.get(KEYS.acceptedTerms, null),
+      SLINK.core.storage.get('access.acceptedTerms.v1', null),
+      SLINK.core.storage.get('war.acceptedTerms.v1', null)
+    ]);
+    return records.some(accepted => {
+      if (!accepted || accepted.version !== current.version) return false;
+      const documentSha256 = String(accepted.documentSha256 || accepted.sha256 || '');
+      if (documentSha256 !== current.documentSha256) return false;
+      if (accepted.disclosureVersion || accepted.disclosureSha256) {
+        return accepted.disclosureVersion === current.disclosureVersion
+          && accepted.disclosureSha256 === current.disclosureSha256;
+      }
+      return current.disclosureVersion === current.version
+        && current.disclosureSha256 === current.documentSha256;
+    });
   }
 
   async function clearSession() {
@@ -1105,4 +1113,6 @@
 
   SLINK.define('services', 'leveling', api);
 })(globalThis);
+
+
 

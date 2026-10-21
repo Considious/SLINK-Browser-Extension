@@ -107,7 +107,7 @@ remoteThemes.push({
   assets:{
     background:'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/halloween-2026-background.jpg',
     iconSheet:'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/halloween-2026-icons.png',
-    packaged:true
+    packaged:false
   },
   tokens:{ '--slink-accent':'#445566' }
 });
@@ -512,3 +512,6 @@ const searchWindows = SLINK.core.adhd.searchForCashOpportunities(
 assert(searchWindows.includes('Low subway ridership') && searchWindows.includes('Very low crushing rating') && searchWindows.includes('Extreme tide'), 'Search for Cash live conditions were not recognized.');
 
 console.log('Core storage, hosts, scopes, modules, HTTP, limiter, messaging and reminder checks passed.');
+
+
+

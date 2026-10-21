@@ -14,6 +14,7 @@
   const MOBILITY_SELECTIONS = 'travel,profile,icons,races';
   const MOBILITY_REFRESH_MS = 60_000;
   const CRIME_LIVE_REFRESH_MS = 60_000;
+  const SNAPSHOT_MAX_AGE_MS = 15 * 60_000;
   let refreshing = null;
   let mobilityRefreshing = null;
   let crimeRefreshing = null;
@@ -39,6 +40,12 @@
     const next = { ...(await runtime()), ...changes };
     await SLINK.core.storage.set(KEYS.runtime, next);
     return next;
+  }
+
+  function usableSnapshot(currentRuntime, now = Date.now()) {
+    const snapshot = currentRuntime?.snapshot;
+    const fetchedAt = Math.max(Number(currentRuntime?.fetchedAt) || 0, Number(snapshot?.fetchedAt) || 0);
+    return snapshot && fetchedAt > 0 && now - fetchedAt <= SNAPSHOT_MAX_AGE_MS ? snapshot : null;
   }
 
   async function accessKey() {
@@ -505,8 +512,9 @@
     const [currentSettings, currentRuntime, previous] = await Promise.all([
       settings(), runtime(), SLINK.core.storage.get(KEYS.soundState, { activeIds:[], pendingIds:[] })
     ]);
-    const efficiencyAlerts = ADHD.buildAlerts(currentRuntime.snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
-      .filter(alert => (currentRuntime.snapshot || alert.id === 'timer24') && currentSettings.soundEnabled[alert.id] === true)
+    const snapshot = usableSnapshot(currentRuntime);
+    const efficiencyAlerts = ADHD.buildAlerts(snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
+      .filter(alert => (snapshot || alert.id === 'timer24') && currentSettings.soundEnabled[alert.id] === true)
       .map(alert => alert.soundId ? { ...alert, id:alert.soundId, sourceId:alert.id } : alert);
     const [stakeoutAlerts, abroadAlerts, companyAlerts, moneyAlerts, onboardingAlerts, abroadSettings, moneyStatus] = await Promise.all([
       SLINK.services.targetList.activeAlerts(),
@@ -553,31 +561,32 @@
   }
 
   async function publicStatus(refreshIfDue = true) {
-    const [currentSettings, currentRuntime, access, permissions, usage] = await Promise.all([
+    const [currentSettings, initialRuntime, access, permissions, usage] = await Promise.all([
       settings(),
       runtime(),
       SLINK.services.permissionAccess.status().catch(error => ({ configured:false, error:SLINK.core.format.errorMessage(error) })),
       SLINK.core.storage.get('permissions.snapshot', null),
       SLINK.core.tornApiLimiter.getUsage()
     ]);
+    let currentRuntime = initialRuntime;
     if (refreshIfDue && access.configured && Number(currentRuntime.nextRefreshAt || 0) <= Date.now()) {
       try { return await refresh(false); }
-      catch {}
+      catch { currentRuntime = await runtime(); }
     }
     if (refreshIfDue && access.configured && currentRuntime.snapshot
       && await mobilityMonitoringEnabled(currentSettings)
       && Number(currentRuntime.nextMobilityRefreshAt || 0) <= Date.now()) {
       try { return await refreshMobility(false); }
-      catch {}
+      catch { currentRuntime = await runtime(); }
     }
     if (refreshIfDue && access.configured && currentRuntime.snapshot
       && crimeMonitoringEnabled(currentSettings)
       && Number(currentRuntime.nextCrimeRefreshAt || 0) <= Date.now()) {
       try { return await refreshCrimeWindows(false); }
-      catch {}
+      catch { currentRuntime = await runtime(); }
     }
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, ADHD.ALERT_SCOPE);
-    const snapshot = currentRuntime.snapshot;
+    const snapshot = usableSnapshot(currentRuntime);
     const [stakeoutAlerts, abroadAlerts, companyAlerts, moneyAlerts, onboardingAlerts] = await Promise.all([
       SLINK.services.targetList.activeAlerts(),
       SLINK.services.abroadStocks.activeAlerts(),
@@ -629,4 +638,6 @@
 
   SLINK.define('services', 'adhd', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, refreshMobility, refreshCrimeWindows, routes }));
 })(globalThis);
+
+
 

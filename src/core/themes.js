@@ -310,6 +310,8 @@
     const theme = resolve(id, permissions);
     element.dataset.slinkTheme = theme.id;
     element.dataset.slinkOrnament = theme.ornament || 'none';
+    element.dataset.slinkImageTheme = theme.assets?.background ? 'true' : 'false';
+    element.dataset.slinkIconTheme = theme.assets?.iconSheet ? 'true' : 'false';
     for (const [name, value] of Object.entries(theme.tokens)) element.style.setProperty(name, value);
     for (const [name, value] of Object.entries(assetVariables(theme))) element.style.setProperty(name, value);
     return theme;
@@ -333,3 +335,5 @@
     validateCatalog
   }));
 })(globalThis);
+
+
