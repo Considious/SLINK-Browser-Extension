@@ -10,6 +10,10 @@
     iconSheet:'--slink-theme-icon-sheet'
   });
   const ASSET_ORIGIN = 'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/';
+  const PACKAGED_ASSET_FILES = new Set([
+    'halloween-2026-background.jpg',
+    'halloween-2026-icons.png'
+  ]);
   const TOKEN_NAMES = new Set([
     '--slink-bg', '--slink-bg-raised', '--slink-bg-control', '--slink-surface', '--slink-card',
     '--slink-control', '--slink-border', '--slink-border-soft', '--slink-text', '--slink-muted',
@@ -70,10 +74,15 @@
   function normalizeAssets(entry, themeId) {
     if (entry?.assets === undefined || entry?.assets === null) return Object.freeze({ background:'', iconSheet:'', packaged:false });
     if (typeof entry.assets !== 'object' || Array.isArray(entry.assets)) throw new Error(`Theme ${themeId} has invalid assets.`);
+    const background = validateAssetUrl(entry.assets.background, themeId, 'background');
+    const iconSheet = validateAssetUrl(entry.assets.iconSheet, themeId, 'icon sheet');
+    const assetFiles = [background, iconSheet].filter(Boolean).map(value => new URL(value).pathname.split('/').pop());
     return Object.freeze({
-      background:validateAssetUrl(entry.assets.background, themeId, 'background'),
-      iconSheet:validateAssetUrl(entry.assets.iconSheet, themeId, 'icon sheet'),
-      packaged:entry.assets.packaged === true
+      background,
+      iconSheet,
+      // Older Worker builds omitted the packaged flag. Recognize only the
+      // reviewed assets that are actually shipped in this extension package.
+      packaged:entry.assets.packaged === true || (assetFiles.length > 0 && assetFiles.every(file => PACKAGED_ASSET_FILES.has(file)))
     });
   }
 
