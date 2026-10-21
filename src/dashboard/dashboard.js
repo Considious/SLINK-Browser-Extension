@@ -1320,20 +1320,22 @@
     if (byId('use-leveling').checked) tasks.push(SLINK.core.messaging.send('leveling.settings.save', {
       tornKey, ffKey, pollSeconds:byId('poll-seconds').value, contributorOnly:byId('contributor-only').checked,
       apiContributionLimit:byId('zero-contribution').checked ? 0 : 60, minFF:byId('min-ff').value, maxFF:byId('max-ff').value,
-      acceptTerms:acceptTerms && !leveling?.terms?.accepted
+      // An explicit agreement must be forwarded to every enabled service.
+      // Do not suppress it based on a possibly stale pre-save status snapshot.
+      acceptTerms
     })); else if (leveling?.settings?.hasTornKey) tasks.push(SLINK.core.messaging.send('leveling.settings.save', { clearTornKey:true, clearFfKey:true }).then(() => SLINK.core.messaging.send('leveling.session.clear')));
     if (byId('use-war').checked) tasks.push(SLINK.core.messaging.send('war.settings.save', {
       tornKey, ffKey, displayMode:byId('war-display-mode').value, warMode:byId('war-mode').value, idleMinutes:byId('war-idle-minutes').value,
       minFF:byId('min-ff').value, maxFF:byId('max-ff').value, alertSound:byId('war-alert-sound').checked,
       alertPanelFlash:byId('war-alert-panel').checked, alertPageFlash:byId('war-alert-page').checked, chainAlert:byId('war-chain-alert').checked,
-      turtleAlert:byId('war-turtle-alert').checked, turtleMinutes:byId('war-turtle-minutes').value, acceptTerms:acceptTerms && !war?.terms?.accepted
+      turtleAlert:byId('war-turtle-alert').checked, turtleMinutes:byId('war-turtle-minutes').value, acceptTerms
     })); else if (war?.settings?.hasTornKey) tasks.push(SLINK.core.messaging.send('war.settings.save', { clearTornKey:true, clearFfKey:true }).then(() => SLINK.core.messaging.send('war.session.clear')));
     const useEfficiency = byId('use-adhd').checked;
     const useMugging = byId('use-mugging').checked;
     if (useEfficiency || useMugging) tasks.push(SLINK.core.messaging.send('access.settings.save', {
       enabled:useEfficiency,
       tornKey,
-      acceptTerms:acceptTerms && !access?.terms?.accepted
+      acceptTerms
     })); else if (access?.settings?.hasTornKey || access?.settings?.enabled) tasks.push(SLINK.core.messaging.send('access.settings.save', { enabled:false, clearTornKey:true }).then(() => SLINK.core.messaging.send('access.session.clear')));
     tasks.push(SLINK.core.storage.set('mugging.settings.v1', { ...(muggingSettings || {}), enabled:useMugging }));
     const results = await Promise.allSettled(tasks);

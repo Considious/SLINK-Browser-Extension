@@ -1,3 +1,8 @@
+## 0.18.89 - 2026-10-21
+
+- Made an explicit Terms agreement refresh every enabled service instead of trusting a stale pre-save acceptance flag.
+- Restored the packaged Halloween 2026 background and icon sheet so Chrome renders the supplied image assets instead of silently falling back to colors.
+
 ## 0.18.88 - 2026-10-21
 
 - Made image-backed themes truly catalog-driven after this one-time renderer bootstrap, with a 15-minute catalog cache and a forced live refresh whenever the dashboard opens.
