@@ -1,3 +1,7 @@
+## 0.18.90 - 2026-10-21
+
+- Kept navigation labels mathematically centered by removing decorative theme icons and alert badges from the buttons' layout flow.
+
 ## 0.18.89 - 2026-10-21
 
 - Made an explicit Terms agreement refresh every enabled service instead of trusting a stale pre-save acceptance flag.

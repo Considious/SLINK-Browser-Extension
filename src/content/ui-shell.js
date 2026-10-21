@@ -59,7 +59,7 @@
     .group-tab[aria-selected="true"] { border-color:var(--slink-accent-alt); background:var(--slink-selected-bg); color:var(--slink-text); box-shadow:0 0 10px var(--slink-glow-right); }
     .tab { flex:1 0 auto; min-height:27px; padding:3px 7px; color:var(--slink-muted); }
     .tab[aria-selected="true"] { border-color:var(--slink-border); background:var(--slink-accent); color:var(--slink-text); }
-    .group-tab,.tab { display:flex; align-items:center; justify-content:center; gap:5px; }
+    .group-tab,.tab { position:relative; display:flex; align-items:center; justify-content:center; gap:5px; text-align:center; }
     .nav-alert-count { display:inline-grid; place-items:center; min-width:18px; height:18px; padding:0 4px; border:2px solid #050505; border-radius:999px; background:#d71920; color:#fff; box-shadow:0 0 0 1px rgba(255,255,255,.32); font:bold 10px/14px Arial,sans-serif; }
     .nav-alert-count[hidden] { display:none; }
     .module-head { display:flex; align-items:center; gap:7px; padding:6px 9px 0; }
@@ -90,6 +90,8 @@
     :host([data-slink-image-theme="true"]) .group-tab[aria-selected="true"],:host([data-slink-image-theme="true"]) .tab[aria-selected="true"] { border-color:var(--slink-accent-alt); background:var(--slink-selected-bg); box-shadow:-3px 0 11px var(--slink-glow-left),3px 0 13px var(--slink-glow-right); }
     :host([data-slink-image-theme="true"]) .content > * { border-color:var(--slink-border-soft); }
     :host([data-slink-icon-theme="true"]) .group-tab::before,:host([data-slink-icon-theme="true"]) .tab::before,:host([data-slink-icon-theme="true"]) .module-head strong::before { display:inline-block; width:17px; height:17px; flex:0 0 17px; margin-right:4px; vertical-align:-4px; background-image:var(--slink-theme-icon-sheet); background-repeat:no-repeat; background-size:400% 500%; filter:drop-shadow(0 0 4px var(--slink-glow-right)); content:""; }
+    :host([data-slink-icon-theme="true"]) .group-tab::before,:host([data-slink-icon-theme="true"]) .tab::before { position:absolute; left:6px; top:50%; margin-right:0; transform:translateY(-50%); }
+    .group-tab > .nav-alert-count,.tab > .nav-alert-count { position:absolute; right:5px; top:50%; transform:translateY(-50%); }
     :host([data-slink-icon-theme="true"]) [data-slink-group="combat"]::before { background-position:66.666% 75%; }
     :host([data-slink-icon-theme="true"]) [data-slink-group="efficiency"]::before { background-position:0 25%; }
     :host([data-slink-icon-theme="true"]) [data-slink-group="quality-of-life"]::before { background-position:66.666% 0; }
