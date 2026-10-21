@@ -1,3 +1,9 @@
+## 0.18.87 - 2026-10-20
+
+- Added the permission-gated Halloween 2026 theme with a compressed scenic background and reusable 4-by-5 icon sprite.
+- Added safe image-asset validation, packaged extension assets, responsive glass panels, and matching PDA presentation.
+- Kept all existing SLINK layout, navigation, alert, form, and storage behavior unchanged when the theme is not selected.
+
 ## 0.18.69 - 2026-10-17
 
 - Made last-page restoration a navigation invariant across the dedicated dashboard and in-Torn panel.

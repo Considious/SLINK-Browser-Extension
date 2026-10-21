@@ -103,16 +103,28 @@ const remoteThemes = Object.values(SLINK.core.themes.THEMES).map(theme => ({
 }));
 remoteThemes.push({
   id:'slinky-test', label:'Slinky Test', description:'Validated remote visual tokens.',
-  scope:'slink.theme.test', ornament:'coil', swatch:['#112233','#445566','#778899'],
+  scope:'slink.theme.test', ornament:'halloween', swatch:['#112233','#445566','#778899'],
+  assets:{
+    background:'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/halloween-2026-background.jpg',
+    iconSheet:'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/halloween-2026-icons.png',
+    packaged:true
+  },
   tokens:{ '--slink-accent':'#445566' }
 });
 SLINK.core.themes.installCatalog({ schemaVersion:1, revision:'test.1', themes:remoteThemes });
 assert(SLINK.core.themes.list({ userId:12, scopes:['slink.theme.test'] }).some(theme => theme.id === 'slinky-test' && theme.unlocked), 'Validated remote theme was not installed.');
+assert(SLINK.core.themes.get('slinky-test').ornament === 'halloween', 'Halloween ornament was not preserved.');
+assert(SLINK.core.themes.cssVariables('slinky-test', { userId:12, scopes:['slink.theme.test'] }).includes('--slink-theme-background-image:url('), 'Image-backed theme variables were not generated.');
 let rejectedRemoteCode = false;
 try {
   SLINK.core.themes.validateCatalog({ schemaVersion:1, revision:'bad.1', themes:[...remoteThemes.slice(0, 4), { ...remoteThemes[4], tokens:{ '--slink-page-bg':'url(https://evil.test/code.js)' } }] });
 } catch { rejectedRemoteCode = true; }
 assert(rejectedRemoteCode, 'Remote URL/code-like theme content was not rejected.');
+let rejectedRemoteAsset = false;
+try {
+  SLINK.core.themes.validateCatalog({ schemaVersion:1, revision:'bad.2', themes:[...remoteThemes.slice(0, 4), { ...remoteThemes[4], assets:{ background:'https://evil.test/theme.jpg' } }] });
+} catch { rejectedRemoteAsset = true; }
+assert(rejectedRemoteAsset, 'Untrusted remote theme assets were not rejected.');
 assert(permissions.hasScope({ scopes: ['slink.level'] }, 'slink.level'), 'Exact scope matching failed.');
 assert(permissions.hasScope({ userId:3853023, scopes: ['admin.*'] }, 'admin.users'), 'Wildcard scope matching failed.');
 assert(permissions.hasScope({ userId:3853023, scopes: ['admin.*'] }, 'slink.mugging'), 'Owner admin scope did not unlock Mugging.');
@@ -500,4 +512,3 @@ const searchWindows = SLINK.core.adhd.searchForCashOpportunities(
 assert(searchWindows.includes('Low subway ridership') && searchWindows.includes('Very low crushing rating') && searchWindows.includes('Extreme tide'), 'Search for Cash live conditions were not recognized.');
 
 console.log('Core storage, hosts, scopes, modules, HTTP, limiter, messaging and reminder checks passed.');
-

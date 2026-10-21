@@ -1052,10 +1052,16 @@
       button.setAttribute('aria-checked', String(activeTheme.id === theme.id));
       const swatch = document.createElement('span');
       swatch.className = 'theme-swatch';
-      for (const color of theme.swatch) {
-        const colorBand = document.createElement('span');
-        colorBand.style.background = color;
-        swatch.append(colorBand);
+      const preview = SLINK.core.themes.assetVariables(theme)['--slink-theme-background-image'];
+      if (preview && preview !== 'none') {
+        swatch.classList.add('theme-swatch-image');
+        swatch.style.setProperty('--slink-theme-preview', preview);
+      } else {
+        for (const color of theme.swatch) {
+          const colorBand = document.createElement('span');
+          colorBand.style.background = color;
+          swatch.append(colorBand);
+        }
       }
       const copy = document.createElement('span');
       const title = document.createElement('strong');
@@ -1777,4 +1783,3 @@
   setInterval(() => { updateAdhdClock(); updateMarketClock(); updateMeritsClock(); updateDollarBazaarClock(); }, 1_000);
   addEventListener('pagehide', () => { void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {}); }, { once:true });
 })();
-

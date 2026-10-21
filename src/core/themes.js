@@ -5,6 +5,11 @@
   const DEFAULT_THEME_ID = 'slink-dark';
   const STORAGE_KEY = 'ui.theme';
   const CATALOG_STORAGE_KEY = 'themes.catalog.v1';
+  const ASSET_VARIABLES = Object.freeze({
+    background:'--slink-theme-background-image',
+    iconSheet:'--slink-theme-icon-sheet'
+  });
+  const ASSET_ORIGIN = 'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/';
   const TOKEN_NAMES = new Set([
     '--slink-bg', '--slink-bg-raised', '--slink-bg-control', '--slink-surface', '--slink-card',
     '--slink-control', '--slink-border', '--slink-border-soft', '--slink-text', '--slink-muted',
@@ -47,6 +52,47 @@
       '--slink-metal-dark': '#536474',
       ...values
     });
+  }
+
+  function validateAssetUrl(raw, themeId, kind) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    let parsed;
+    try { parsed = new URL(value); }
+    catch { throw new Error(`Theme ${themeId} has an invalid ${kind} asset URL.`); }
+    if (!value.startsWith(ASSET_ORIGIN) || parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) {
+      throw new Error(`Theme ${themeId} has a disallowed ${kind} asset URL.`);
+    }
+    if (!/\.(?:png|jpe?g|webp)$/i.test(parsed.pathname)) throw new Error(`Theme ${themeId} has an unsupported ${kind} asset type.`);
+    return value;
+  }
+
+  function normalizeAssets(entry, themeId) {
+    if (entry?.assets === undefined || entry?.assets === null) return Object.freeze({ background:'', iconSheet:'', packaged:false });
+    if (typeof entry.assets !== 'object' || Array.isArray(entry.assets)) throw new Error(`Theme ${themeId} has invalid assets.`);
+    return Object.freeze({
+      background:validateAssetUrl(entry.assets.background, themeId, 'background'),
+      iconSheet:validateAssetUrl(entry.assets.iconSheet, themeId, 'icon sheet'),
+      packaged:entry.assets.packaged === true
+    });
+  }
+
+  function resolvedAssetUrl(theme, kind) {
+    const remote = String(theme?.assets?.[kind] || '');
+    if (!remote) return '';
+    if (theme.assets.packaged && global.chrome?.runtime?.getURL) {
+      const filename = new URL(remote).pathname.split('/').pop();
+      return global.chrome.runtime.getURL(`assets/themes/${filename}`);
+    }
+    return remote;
+  }
+
+  function assetVariables(themeOrId, permissions = {}) {
+    const theme = typeof themeOrId === 'string' ? resolve(themeOrId, permissions) : themeOrId;
+    return Object.fromEntries(Object.entries(ASSET_VARIABLES).map(([kind, property]) => {
+      const url = resolvedAssetUrl(theme, kind);
+      return [property, url ? `url("${url}")` : 'none'];
+    }));
   }
 
   const THEMES = Object.freeze({
@@ -202,8 +248,9 @@
         label,
         description,
         scope,
-        ornament:entry.ornament === 'coil' ? 'coil' : 'none',
+        ornament:['coil', 'halloween'].includes(entry.ornament) ? entry.ornament : 'none',
         swatch:Object.freeze(entry.swatch.map(String)),
+        assets:normalizeAssets(entry, id),
         tokens:tokens(values)
       });
     }
@@ -252,7 +299,8 @@
   }
 
   function cssVariables(id, permissions = {}) {
-    return Object.entries(resolve(id, permissions).tokens)
+    const theme = resolve(id, permissions);
+    return Object.entries({ ...theme.tokens, ...assetVariables(theme) })
       .map(([name, value]) => `${name}:${value}`)
       .join(';');
   }
@@ -263,6 +311,7 @@
     element.dataset.slinkTheme = theme.id;
     element.dataset.slinkOrnament = theme.ornament || 'none';
     for (const [name, value] of Object.entries(theme.tokens)) element.style.setProperty(name, value);
+    for (const [name, value] of Object.entries(assetVariables(theme))) element.style.setProperty(name, value);
     return theme;
   }
 
@@ -271,6 +320,8 @@
     CATALOG_STORAGE_KEY,
     STORAGE_KEY,
     THEMES,
+    ASSET_VARIABLES,
+    assetVariables,
     applyToElement,
     cssVariables,
     catalog,

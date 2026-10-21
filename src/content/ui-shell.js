@@ -85,6 +85,25 @@
     :host(:not([data-slink-theme="slink-dark"])) .tab[aria-selected="true"] { background:var(--slink-selected-bg); box-shadow:0 0 12px var(--slink-glow-right); }
     :host(:not([data-slink-theme="slink-dark"])) .actions button { background:var(--slink-button-bg); }
     :host([data-slink-ornament="coil"]) .module-head strong::before { display:inline-block; width:20px; height:15px; margin-right:6px; vertical-align:-3px; background:repeating-radial-gradient(ellipse at center,transparent 0 2px,var(--slink-metal) 3px 4px,transparent 5px 7px); filter:drop-shadow(0 0 4px var(--slink-glow-right)); content:""; }
+    :host([data-slink-theme="halloween-2026"]) .window { border-color:rgba(204,145,255,.72); background-color:#07040c; background-image:linear-gradient(rgba(5,3,9,.30),rgba(5,3,9,.53)),var(--slink-theme-background-image); background-position:center top; background-size:cover; box-shadow:-5px 0 20px rgba(112,255,58,.28),5px 0 22px rgba(182,55,255,.42),0 14px 34px rgba(0,0,0,.86); }
+    :host([data-slink-theme="halloween-2026"]) .head,:host([data-slink-theme="halloween-2026"]) .groups,:host([data-slink-theme="halloween-2026"]) .tabs,:host([data-slink-theme="halloween-2026"]) .module-view { background:rgba(7,5,11,.72); backdrop-filter:blur(7px) saturate(1.12); }
+    :host([data-slink-theme="halloween-2026"]) .group-tab[aria-selected="true"],:host([data-slink-theme="halloween-2026"]) .tab[aria-selected="true"] { border-color:#c767ff; background:linear-gradient(135deg,#9e21e8,#411351 57%,#48b826); box-shadow:-3px 0 11px rgba(111,255,61,.32),3px 0 13px rgba(187,58,255,.48); }
+    :host([data-slink-theme="halloween-2026"]) .content > * { border-color:rgba(204,145,255,.34); }
+    :host([data-slink-theme="halloween-2026"]) .group-tab::before,:host([data-slink-theme="halloween-2026"]) .tab::before,:host([data-slink-theme="halloween-2026"]) .module-head strong::before { display:inline-block; width:17px; height:17px; flex:0 0 17px; margin-right:4px; vertical-align:-4px; background-image:var(--slink-theme-icon-sheet); background-repeat:no-repeat; background-size:400% 500%; filter:drop-shadow(0 0 4px rgba(185,67,255,.58)); content:""; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-group="combat"]::before { background-position:66.666% 75%; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-group="efficiency"]::before { background-position:0 25%; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-group="quality-of-life"]::before { background-position:66.666% 0; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-module="adhd"]::before { background-position:0 0; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-module="market"]::before { background-position:33.333% 0; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-module="merits"]::before { background-position:66.666% 0; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-module="dollar-bazaars"]::before { background-position:100% 0; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-module="player-stats"]::before { background-position:0 25%; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-module="company"]::before { background-position:66.666% 25%; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-module="faction-officers"]::before { background-position:33.333% 25%; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-module="money-property"]::before { background-position:100% 0; }
+    :host([data-slink-theme="halloween-2026"]) [data-slink-module="bounties"]::before,:host([data-slink-theme="halloween-2026"]) [data-slink-module="target-list"]::before { background-position:66.666% 75%; }
+    :host([data-slink-theme="halloween-2026"]) .module-head strong::before { background-position:0 25%; }
+    :host([data-slink-theme="halloween-2026"]) .bubble { background:linear-gradient(145deg,#791cb2,#261132 56%,#347b1b); }
     @media(max-width:420px) { .window{width:min(300px,calc(100vw - 8px))}.main{right:4px;top:4px}.popup{left:4px;top:4px}.bubble{right:6px;top:64px;width:46px;height:46px}.row{grid-template-columns:90px minmax(0,1fr)}.content{max-height:calc(100dvh - 190px)} }
   `;
 
@@ -595,6 +614,7 @@
       element.querySelector('strong').textContent = module.title;
       const tab = document.createElement('button');
       tab.className = 'tab'; tab.type = 'button'; tab.setAttribute('role', 'tab');
+      tab.dataset.slinkModule = module.id;
       const tabLabel = document.createElement('span'); tabLabel.textContent = module.shortTitle || module.title;
       const tabAlertBadge = document.createElement('span'); tabAlertBadge.className = 'nav-alert-count'; tabAlertBadge.hidden = true; tabAlertBadge.setAttribute('aria-hidden', 'true');
       tab.append(tabLabel, tabAlertBadge);
@@ -604,6 +624,7 @@
         const groupButton = document.createElement('button');
         groupButton.className = 'group-tab';
         groupButton.type = 'button';
+        groupButton.dataset.slinkGroup = group;
         const groupLabel = String(module.groupTitle || group);
         groupButton.dataset.label = groupLabel;
         const label = document.createElement('span'); label.textContent = groupLabel;

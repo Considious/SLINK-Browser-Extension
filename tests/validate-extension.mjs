@@ -203,7 +203,9 @@ assert(!dashboardSource.includes('Send to Faction'), 'The extension dashboard mu
 assert(read('src/background/adhd-service.js').includes('/v2/torn/stocks') && read('src/core/adhd.js').includes('bonus?.passive !== false'), 'Stock alerts do not use Torn catalog names or still include passive benefits.');
 assert(read('src/background/theme-service.js').includes('/api/themes'), 'Background theme catalog route is missing.');
 assert(!manifest.host_permissions.some(origin => /githubusercontent|github\.com/.test(origin)), 'The extension must receive theme data through its existing Worker, not direct GitHub host access.');
-const uiShellSource = read('src/content/ui-shell.js');
+assert(manifest.web_accessible_resources?.some(entry => entry.resources?.includes('assets/themes/halloween-2026-background.jpg') && entry.resources?.includes('assets/themes/halloween-2026-icons.png')), 'Halloween 2026 visual assets are not exposed to the Torn content UI.');
+assert(read('src/core/themes.js').includes('ASSET_ORIGIN') && read('src/core/themes.js').includes('assetVariables'), 'The theme core is missing validated image-asset support.');
+assert(read('src/dashboard/dashboard.css').includes('data-slink-theme="halloween-2026"') && read('src/dashboard/dashboard.css').includes('--slink-theme-background-image'), 'The dashboard is missing the Halloween 2026 image layer.');
 const uiStateSource = read('src/core/ui-state.js');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/core/ui-state.js')), 'Reusable GUI interaction-state preservation is not loaded in Torn.');
 assert(uiStateSource.includes('selectionStart') && uiStateSource.includes("querySelectorAll('details')") && uiStateSource.includes('data-slink-preserve-scroll'), 'GUI state preservation is missing focus/cursor, open-section, or scroll restoration.');
