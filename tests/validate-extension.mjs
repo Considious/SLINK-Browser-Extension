@@ -303,3 +303,5 @@ assert(chatMinimizeShell.includes("row.insertBefore(chatButton, settingsButton)"
 assert(read('src/dashboard/dashboard.html').includes('id="torn-chat-minimize"') && read('src/dashboard/dashboard.js').includes("tornMinimizedMode = event.currentTarget.checked ? 'chat' : 'bubble'"), 'Extension dashboard chat-button setting is missing.');
 
 assert(read('src/content/ui-shell.js').includes('slink-chat-theme-icon') && read('src/content/ui-shell.js').includes('data-slink-brand-icon'), 'Halloween brand or chat icon integration is missing.');
+
+assert(read('src/background/theme-service.js').includes('catalogHasCurrentAssets') && read('src/background/theme-service.js').includes("'?refresh=1'"), 'Theme catalog asset-schema cache migration is missing.');

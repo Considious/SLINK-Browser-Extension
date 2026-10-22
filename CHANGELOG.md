@@ -1,3 +1,9 @@
+## 0.18.97 - 2026-10-22
+
+- Detect cached theme catalogs created before independent brand and chat assets existed.
+- Force one Worker catalog refresh when the cached asset shape is stale, then immediately reapply the active theme.
+- Prevent the Halloween background from updating while its approved brand and chat icons remain stuck on legacy fallbacks.
+
 ## 0.18.96 - 2026-10-22
 
 - Replace the Halloween 2026 background with the approved composition that keeps the Headless Horseman below the top banner.
