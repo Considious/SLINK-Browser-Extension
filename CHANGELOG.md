@@ -1,3 +1,9 @@
+## 0.18.93 - 2026-10-21
+
+- Restrict in-page SLINK activity to the most recently visible Torn tab; inactive Torn tabs now stop their module timers and DOM observers.
+- Remove the obsolete attack-page status scraper and gate Events, Racing, Market, War, and Chat DOM work to relevant pages or mutations.
+- Remove live backdrop blur from the in-Torn image-theme panel and reduce shared API-ledger synchronization frequency to prevent attack animation stutter.
+
 ## 0.18.90 - 2026-10-21
 
 - Kept navigation labels mathematically centered by removing decorative theme icons and alert badges from the buttons' layout flow.

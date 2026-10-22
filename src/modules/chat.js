@@ -93,8 +93,15 @@
           await SLINK.core.storage.set(STORAGE_KEY,settings);clearHighlights();scanHighlights();render();
         });
       }
+      function hasActiveHighlights() { return settings.highlights.some(item => item.enabled && String(item.term || '').trim()); }
+      function mutationContainsChatMessage(mutation) {
+        if (mutation.target?.closest?.(MESSAGE_SELECTOR)) return true;
+        return [...mutation.addedNodes].some(node => node.nodeType === Node.ELEMENT_NODE && (node.matches?.(MESSAGE_SELECTOR) || node.querySelector?.(MESSAGE_SELECTOR)));
+      }
       render();
-      observer=new MutationObserver(scheduleScan);observer.observe(document.body,{childList:true,subtree:true});scanHighlights();
+      observer=new MutationObserver(mutations => { if (hasActiveHighlights() && mutations.some(mutationContainsChatMessage)) scheduleScan(); });
+      observer.observe(document.body,{childList:true,subtree:true});
+      if (hasActiveHighlights()) scanHighlights();
       return {stop(){observer?.disconnect();observer=null;clearTimeout(scanTimer);}};
     }
   });

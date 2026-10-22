@@ -63,8 +63,14 @@
         root.innerHTML = `<strong>${escapeHtml(next.track ? `${next.track}: ${next.message}` : next.message)}</strong>${next.nickname ? `<span>Expected car: ${escapeHtml(next.nickname)}</span>` : '<span>Uses Torn page text only; no API calls.</span>'}`;
       }
 
+      function onRacewayPage() {
+        const page = new URL(global.location.href);
+        return /race/i.test(page.pathname) || /race/i.test(page.hash) || /race/i.test(String(page.searchParams.get('sid') || ''));
+      }
+
       function scanOfficialRaceDom() {
         if (stopped) return;
+        if (!onRacewayPage()) { clearHighlight(); return; }
         clearHighlight();
         const trackNode = [...document.querySelectorAll(racing.RACEWAY_DOM.OFFICIAL_RACE_TRACK_SELECTOR)]
           .find(node => /-\s*Official race\s*$/i.test(String(node.textContent || '').trim()));
@@ -186,6 +192,7 @@
       render();
       ensureHighlightStyle();
       observer = new MutationObserver(mutations => {
+        if (!onRacewayPage()) return;
         if (mutations.every(mutation => mutation.target?.closest?.('[data-slink-racing-label],#slink-extension-panel'))) return;
         scheduleScan();
       });

@@ -428,28 +428,6 @@
         cycleTimer = setTimeout(() => void runCycle(false), delay);
       }
 
-      async function reportAttackPage() {
-        const page = new URL(global.location.href);
-        if (page.searchParams.get('sid') !== 'attack') return false;
-        const targetId = Number(page.searchParams.get('user2ID'));
-        if (!Number.isInteger(targetId) || targetId <= 0 || document.visibilityState !== 'visible') return false;
-        const nodes = [...document.querySelectorAll('[class*="status"], [class*="profile"], [class*="info"], [data-testid*="status"]')];
-        const candidates = [...nodes.map(node => node.innerText || node.textContent || ''), document.body?.innerText || ''];
-        for (const text of candidates) {
-          const status = detectAttackStatus(text);
-          if (!status) continue;
-          const remaining = parseVisibleRemainingMs(text);
-          await SLINK.core.messaging.send('leveling.attack.observe', {
-            targetId,
-            state: status,
-            description: text.trim().slice(0, 500),
-            until: remaining > 0 ? Math.floor((Date.now() + remaining) / 1000) : 0
-          });
-          return true;
-        }
-        return false;
-      }
-
       leaderTimer = setInterval(() => void isLeader(), 5_000);
       await refreshStatus();
       const moduleView = context.ui.getContentElement()?.closest('.module-view');
@@ -459,18 +437,12 @@
       }
       syncActivityHeartbeat();
       if (current.configured && moduleVisible()) void runCycle(false);
-      let attackAttempts = 0;
-      const attackTimer = setInterval(async () => {
-        attackAttempts++;
-        if (await reportAttackPage() || attackAttempts >= 6) clearInterval(attackTimer);
-      }, 1_000);
 
       return Object.freeze({
         async stop() {
           stopped = true;
           clearTimeout(cycleTimer);
           clearInterval(leaderTimer);
-          clearInterval(attackTimer);
           clearInterval(activityTimer);
           visibilityObserver?.disconnect();
           await SLINK.core.messaging.send('leveling.leader.release');

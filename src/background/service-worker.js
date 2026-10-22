@@ -420,6 +420,48 @@ const routes = {
   ...SLINK.services.audio.routes
 };
 
+let activeTornPageTabId = null;
+
+async function notifyTornPageActivity(tabId, active) {
+  if (!Number.isInteger(tabId)) return;
+  try {
+    await chrome.tabs.sendMessage(tabId, { channel:'slink-page-activity', type:'active-state', active:Boolean(active) });
+  } catch {
+    // Non-Torn tabs and pages still loading do not have the content listener.
+  }
+}
+
+async function claimTornPageActivity(tabId) {
+  if (!Number.isInteger(tabId)) return false;
+  const previousTabId = activeTornPageTabId;
+  activeTornPageTabId = tabId;
+  if (Number.isInteger(previousTabId) && previousTabId !== tabId) await notifyTornPageActivity(previousTabId, false);
+  await notifyTornPageActivity(tabId, true);
+  return activeTornPageTabId === tabId;
+}
+
+async function releaseTornPageActivity(tabId) {
+  if (!Number.isInteger(tabId) || activeTornPageTabId !== tabId) return false;
+  activeTornPageTabId = null;
+  await notifyTornPageActivity(tabId, false);
+  return true;
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.channel !== 'slink-page-activity') return false;
+  const tabId = Number.isInteger(sender?.tab?.id) ? sender.tab.id : null;
+  if (message.type === 'claim' && message.visible === true) {
+    void claimTornPageActivity(tabId).then(active => sendResponse({ active })).catch(error => sendResponse({ active:false, error:SLINK.core.format.errorMessage(error) }));
+    return true;
+  }
+  if (message.type === 'release') {
+    void releaseTornPageActivity(tabId).then(() => sendResponse({ active:false })).catch(error => sendResponse({ active:false, error:SLINK.core.format.errorMessage(error) }));
+    return true;
+  }
+  sendResponse({ active:activeTornPageTabId === tabId });
+  return false;
+});
+
 chrome.runtime.onMessage.addListener(SLINK.core.messaging.createRouter(routes));
 
 chrome.runtime.onInstalled.addListener(details => {

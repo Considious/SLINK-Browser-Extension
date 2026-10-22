@@ -142,8 +142,17 @@
         overlay.innerHTML = `<div class="slink-halloween-head"><div><h3>SLINK Halloween Upgrade Guide</h3><p>${escapeHtml(snapshot.rank || 'Halloween Basket')} · ${guide.completedCount}/${guide.total} guide steps complete</p></div><a href="${CORE.HALLOWEEN_GUIDE_URL}">Full guide</a></div>${guide.complete ? '<p><strong>Normal guide path complete.</strong></p>' : `<ol>${guide.recommendations.map(upgrade => `<li data-current="${String(upgrade.current)}" data-disabled="${String(upgrade.disabled)}"><span class="slink-step">#${upgrade.step}</span><span><strong>${escapeHtml(upgrade.name)}</strong><small>${upgrade.cost.toLocaleString()} treats${upgrade.note ? ' · ' + escapeHtml(upgrade.note) : ''}</small></span><span class="slink-state">${upgrade.disabled ? 'Locked—evolve basket' : upgrade.current ? 'Next' : 'Then'}</span></li>`).join('')}</ol>`}`;
       }
 
+      function onHalloweenBasketPage() {
+        return /\/item(?:s)?\.php$/i.test(global.location.pathname);
+      }
+
       function scanBasket() {
         if (stopped) return;
+        if (!onHalloweenBasketPage()) {
+          document.getElementById(OVERLAY_ID)?.remove();
+          basketSignature = '';
+          return;
+        }
         const snapshot = readHalloweenBasketDom();
         if (!snapshot) {
           document.getElementById(OVERLAY_ID)?.remove();
@@ -186,6 +195,7 @@
       });
 
       basketObserver = new MutationObserver(mutations => {
+        if (!onHalloweenBasketPage()) return;
         if (mutations.every(mutation => mutation.target?.closest?.(`#${OVERLAY_ID},#slink-extension-panel`))) return;
         scheduleBasketScan();
       });

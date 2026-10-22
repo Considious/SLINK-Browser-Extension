@@ -284,3 +284,14 @@ assert(read('src/modules/faction-officers.js').includes("requiredScopes:['admin.
 assert(read('src/core/adhd.js').includes("id:'factionOnboarding'") && read('src/background/adhd-service.js').includes('factionOfficer.activeAlerts'), 'Faction onboarding alerts are not integrated into Efficiency alerts.');
 
 
+
+
+const contentRuntimeSource = read('src/content/content-script.js');
+assert(serviceWorkerSource.includes("channel:'slink-page-activity'") && serviceWorkerSource.includes('activeTornPageTabId'), 'The extension does not enforce one active Torn page.');
+assert(contentRuntimeSource.includes('claimRuntimeActivity') && contentRuntimeSource.includes('releaseRuntimeActivity') && contentRuntimeSource.includes('await SLINK.modules.stopAll()'), 'Inactive Torn pages do not suspend their modules.');
+assert(contentRuntimeSource.includes('10_000') && !contentRuntimeSource.includes('2_000);'), 'The shared API ledger still synchronizes too aggressively.');
+assert(!read('src/modules/leveling.js').includes('reportAttackPage') && !read('src/modules/leveling.js').includes('document.body?.innerText'), 'The obsolete attack-page status scraper remains active.');
+assert(read('src/modules/events.js').includes('onHalloweenBasketPage') && read('src/modules/racing.js').includes('onRacewayPage'), 'Events or Racing DOM observers are not route-gated.');
+assert(read('src/modules/market.js').includes('if (onPurchaseOpportunityPage()) schedulePurchaseOpportunityFormatting(80);'), 'Market DOM formatting still runs on unrelated pages.');
+assert(read('src/modules/war.js').includes('mutationsMayContainAttackResult') && read('src/modules/chat.js').includes('hasActiveHighlights'), 'High-frequency War or Chat mutation work is not filtered.');
+assert(!read('src/content/ui-shell.js').includes('backdrop-filter:blur(var(--slink-theme-panel-blur'), 'The Torn overlay still applies expensive image-theme blur.');

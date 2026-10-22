@@ -1257,7 +1257,9 @@
         }
       });
       ui.setActions(marketActions);
-      observer = new MutationObserver(() => schedulePurchaseOpportunityFormatting(80));
+      observer = new MutationObserver(() => {
+        if (onPurchaseOpportunityPage()) schedulePurchaseOpportunityFormatting(80);
+      });
       observer.observe(document.body, { childList:true, subtree:true });
       global.addEventListener('hashchange', schedulePurchaseOpportunityFormatting);
       global.addEventListener('popstate', schedulePurchaseOpportunityFormatting);

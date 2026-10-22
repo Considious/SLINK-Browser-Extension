@@ -260,6 +260,11 @@
         }
       }
 
+      function mutationsMayContainAttackResult(records) {
+        const selector = 'div[class*="dialog___"] div[class*="title___"],div[class*="green___"] div[class*="title___"]';
+        return records.some(record => [...record.addedNodes].some(node => node.nodeType === Node.ELEMENT_NODE && (node.matches?.(selector) || node.querySelector?.(selector))));
+      }
+
       function scanAttackMugResults() {
         if (!onAttackPage() || attackMugScanTimer) return;
         attackMugScanTimer = setTimeout(() => {
@@ -1290,9 +1295,9 @@
       await refreshLeader();
       leaderTimer = setInterval(() => void refreshLeader(), 5_000);
       armoryObserver = new MutationObserver(records => {
-        renderProfileAttackGate();
-        scanAttackMugResults();
-        if (rankPanelIsVisible()) scheduleRankOrderCapture();
+        if (/\/profiles\.php$/i.test(location.pathname)) renderProfileAttackGate();
+        if (onAttackPage() && mutationsMayContainAttackResult(records)) scanAttackMugResults();
+        if (/\/factions\.php$/i.test(location.pathname) && rankPanelIsVisible()) scheduleRankOrderCapture();
       });
       armoryObserver.observe(document.body, { childList:true, subtree:true });
       render();

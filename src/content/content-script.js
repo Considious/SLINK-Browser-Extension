@@ -11,6 +11,9 @@
   let apiLedgerTimer = null;
   let stakeoutTimer = null;
   let stakeoutTicking = false;
+  let runtimeActive = false;
+  let modulesRunning = false;
+  let activityTransition = Promise.resolve();
 
   ui.setHidden(await SLINK.core.storage.get('ui.pagePanelHidden', false));
 
@@ -67,6 +70,70 @@
     }
   }
 
+  function stopRuntimeTimers() {
+    if (apiLedgerTimer) global.clearInterval(apiLedgerTimer);
+    if (stakeoutTimer) global.clearInterval(stakeoutTimer);
+    apiLedgerTimer = null;
+    stakeoutTimer = null;
+  }
+
+  async function runStakeoutTick() {
+    if (!runtimeActive || stakeoutTicking || !global.chrome?.runtime?.id) return;
+    stakeoutTicking = true;
+    try { await SLINK.core.messaging.send('targetList.stakeout.run'); }
+    catch (error) { if (global.chrome?.runtime?.id) console.debug('[SLINK] Stakeout heartbeat paused:', error); }
+    finally { stakeoutTicking = false; }
+  }
+
+  async function startRuntimeTimers() {
+    stopRuntimeTimers();
+    await syncSharedApiLedger();
+    if (!runtimeActive) return;
+    apiLedgerTimer = global.setInterval(() => void syncSharedApiLedger(), 10_000);
+    await runStakeoutTick();
+    if (runtimeActive) stakeoutTimer = global.setInterval(() => void runStakeoutTick(), 5_000);
+  }
+
+  async function applyRuntimeActivity(active) {
+    const next = Boolean(active);
+    activityTransition = activityTransition.then(async () => {
+      runtimeActive = next;
+      if (!runtimeActive) {
+        stopRuntimeTimers();
+        if (modulesRunning) { await SLINK.modules.stopAll(); modulesRunning = false; }
+        return;
+      }
+      if (!initialized || modulesRunning) return;
+      const permissions = await reloadThemeAndPermissions();
+      if (!runtimeActive) return;
+      await startModules(permissions);
+      modulesRunning = true;
+      await startRuntimeTimers();
+    }).catch(error => console.error('[SLINK] Page activity transition:', error));
+    return activityTransition;
+  }
+
+  async function claimRuntimeActivity() {
+    if (document.visibilityState !== 'visible' || !global.chrome?.runtime?.id) {
+      await applyRuntimeActivity(false);
+      return false;
+    }
+    try {
+      const response = await chrome.runtime.sendMessage({ channel:'slink-page-activity', type:'claim', visible:true, url:global.location.href });
+      await applyRuntimeActivity(response?.active === true);
+      return response?.active === true;
+    } catch (error) {
+      console.debug('[SLINK] Page activity claim paused:', error);
+      await applyRuntimeActivity(false);
+      return false;
+    }
+  }
+
+  function releaseRuntimeActivity() {
+    void applyRuntimeActivity(false);
+    if (global.chrome?.runtime?.id) void chrome.runtime.sendMessage({ channel:'slink-page-activity', type:'release' }).catch(() => {});
+  }
+
   async function reloadThemeAndPermissions() {
     const [permissions, themeRecord] = await Promise.all([
       SLINK.core.messaging.send('permissions.get'),
@@ -91,10 +158,16 @@
   async function restartModules({ restore = false } = {}) {
     if (restarting) return restarting;
     restarting = (async () => {
+      stopRuntimeTimers();
       await SLINK.modules.stopAll();
+      modulesRunning = false;
       if (restore) await ui.restore();
+      if (!runtimeActive) return { restored:restore, inactive:true };
       const permissions = await reloadThemeAndPermissions();
+      if (!runtimeActive) return { restored:restore, inactive:true };
       const result = await startModules(permissions);
+      modulesRunning = true;
+      await startRuntimeTimers();
       if (restore) await ui.restore();
       return { restored:restore, ...result };
     })();
@@ -120,7 +193,7 @@
     const adhdVisibilityKey = SLINK.core.storage.fullKey('ui.modules.adhd.showInTorn');
     const marketVisibilityKey = SLINK.core.storage.fullKey('ui.modules.market.showInTorn');
     const warSettingsKey = SLINK.core.storage.fullKey('war.settings.v1');
-    if (initialized && (changes[levelingVisibilityKey] || changes[adhdVisibilityKey] || changes[marketVisibilityKey] || changes[warSettingsKey])) {
+    if (initialized && runtimeActive && modulesRunning && (changes[levelingVisibilityKey] || changes[adhdVisibilityKey] || changes[marketVisibilityKey] || changes[warSettingsKey])) {
       void restartModules().catch(error => console.error('[SLINK] Could not apply the Torn GUI mode in place:', error));
     }
     const permissionsKey = SLINK.core.storage.fullKey('permissions.snapshot');
@@ -131,7 +204,7 @@
       try { SLINK.core.themes.installCatalog(changes[catalogKey].newValue.catalog); }
       catch (error) { console.error('[SLINK] Rejected invalid cached theme catalog:', error); }
     }
-    if (changes[permissionsKey] && initialized) {
+    if (changes[permissionsKey] && initialized && runtimeActive && modulesRunning) {
       void restartModules().catch(error => console.error('[SLINK] Could not apply refreshed permissions in place:', error));
       return;
     }
@@ -151,6 +224,12 @@
   });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.channel !== 'slink-page-activity' || message?.type !== 'active-state') return false;
+    void applyRuntimeActivity(message.active === true).then(() => sendResponse({ ok:true, active:runtimeActive })).catch(error => sendResponse({ ok:false, error:SLINK.core.format.errorMessage(error) }));
+    return true;
+  });
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.channel !== 'slink-ui-control' || message?.type !== 'restore') return false;
     void restartModules({ restore:true })
       .then(result => sendResponse({ ok:true, ...result }))
@@ -160,30 +239,18 @@
 
   try {
     await SLINK.core.messaging.send('content.ready', { url:global.location.href });
-    const permissions = await reloadThemeAndPermissions();
-    await startModules(permissions);
     initialized = true;
-    await syncSharedApiLedger();
-    apiLedgerTimer = global.setInterval(() => void syncSharedApiLedger(), 2_000);
-    const runStakeoutTick = async () => {
-      if (stakeoutTicking || !global.chrome?.runtime?.id) return;
-      stakeoutTicking = true;
-      try {
-        await SLINK.core.messaging.send('targetList.stakeout.run');
-      } catch (error) {
-        if (global.chrome?.runtime?.id) console.debug('[SLINK] Stakeout heartbeat paused:', error);
-      } finally {
-        stakeoutTicking = false;
-      }
-    };
-    await runStakeoutTick();
-    stakeoutTimer = global.setInterval(() => void runStakeoutTick(), 5_000);
+    await reloadThemeAndPermissions();
+    await claimRuntimeActivity();
   } catch (error) {
     console.error('[SLINK] Content startup:', error);
   }
 
-  global.addEventListener('pagehide', () => {
-    if (apiLedgerTimer) global.clearInterval(apiLedgerTimer);
-    if (stakeoutTimer) global.clearInterval(stakeoutTimer);
-  }, { once:true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void claimRuntimeActivity();
+    else releaseRuntimeActivity();
+  });
+  global.addEventListener('focus', () => void claimRuntimeActivity());
+  global.addEventListener('pageshow', () => void claimRuntimeActivity());
+  global.addEventListener('pagehide', releaseRuntimeActivity);
 })(globalThis);
