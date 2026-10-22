@@ -1,3 +1,8 @@
+## 0.18.95 - 2026-10-22
+
+- Color the optional Torn chat-row SLINK button from the active theme and render the Slinky in the theme's contrasting text color.
+- Use Torn's native message-count element and exact text classes for the alert badge instead of a separately styled replica.
+
 ## 0.18.94 - 2026-10-22
 
 - Add an optional Torn chat-row minimize mode for the in-page SLINK panel without changing the existing default.

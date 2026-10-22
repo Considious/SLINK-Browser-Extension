@@ -144,8 +144,8 @@
       themeStyle.textContent = `:host{${SLINK.core.themes.cssVariables(theme.id, permissions)}}`;
       chatButtonTheme = theme;
       if (chatButton) {
-        chatButton.style.setProperty('--slink-chat-accent', theme.tokens?.['--slink-accent'] || '#2f74ad');
-        chatButton.style.setProperty('--slink-chat-accent-alt', theme.tokens?.['--slink-accent-alt'] || '#69b5f4');
+        chatButton.style.setProperty('--slink-chat-button', theme.tokens?.['--slink-accent'] || '#2f74ad');
+        chatButton.style.setProperty('--slink-chat-icon', theme.tokens?.['--slink-text'] || '#fff');
       }
       return theme;
     }
@@ -191,7 +191,7 @@
       if (document.getElementById(id)) return;
       const style = document.createElement('style');
       style.id = id;
-      style.textContent = `#slink_extension_chat_button{position:relative;color:var(--slink-chat-accent,#2f74ad)!important}#slink_extension_chat_button .slink-chat-coil{display:block;width:24px;height:24px;filter:drop-shadow(0 0 3px var(--slink-chat-accent-alt,#69b5f4));pointer-events:none}#slink_extension_chat_button .slink-chat-coil ellipse{fill:none;stroke:currentColor;stroke-width:1.8}#slink_extension_chat_button .slink-chat-alert-count{position:absolute;right:-4px;top:-5px;z-index:2;display:grid;min-width:17px;height:17px;padding:0 4px;place-items:center;border:2px solid #202020;border-radius:999px;background:#d72638;color:#fff;font:bold 10px/1 Arial,sans-serif;box-sizing:border-box;pointer-events:none}#slink_extension_chat_button[hidden],#slink_extension_chat_button .slink-chat-alert-count[hidden]{display:none!important}`;
+      style.textContent = `#slink_extension_chat_button{position:relative;background:var(--slink-chat-button,#2f74ad)!important;background-color:var(--slink-chat-button,#2f74ad)!important;border-color:var(--slink-chat-icon,#fff)!important;color:var(--slink-chat-icon,#fff)!important}#slink_extension_chat_button .slink-chat-coil{display:block;width:24px;height:24px;filter:drop-shadow(0 0 3px var(--slink-chat-icon,#fff));pointer-events:none}#slink_extension_chat_button .slink-chat-coil ellipse{fill:none;stroke:currentColor;stroke-width:1.8}#slink_extension_chat_button[hidden],#slink_extension_chat_button .messageCount___EWpiR[hidden]{display:none!important}`;
       (document.head || document.documentElement).appendChild(style);
     }
 
@@ -202,14 +202,14 @@
       button.type = 'button';
       button.title = 'SLINK';
       button.dataset.preventFlyoutSwipe = 'true';
-      button.innerHTML = '<svg class="slink-chat-coil" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="7.5" ry="3"></ellipse><ellipse cx="12" cy="9.5" rx="7.5" ry="3"></ellipse><ellipse cx="12" cy="14" rx="7.5" ry="3"></ellipse><ellipse cx="12" cy="18.5" rx="7.5" ry="3"></ellipse></svg><div class="messageCount___EWpiR slink-chat-alert-count" hidden><span>0</span></div>';
+      button.innerHTML = '<svg class="slink-chat-coil" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="7.5" ry="3"></ellipse><ellipse cx="12" cy="9.5" rx="7.5" ry="3"></ellipse><ellipse cx="12" cy="14" rx="7.5" ry="3"></ellipse><ellipse cx="12" cy="18.5" rx="7.5" ry="3"></ellipse></svg><div class="messageCount___EWpiR" hidden><span class="root___XpplE headingH1___VK9XQ root____FDYX oneDigit___FJ3vn" style="color: white;">0</span></div>';
       button.addEventListener('click', () => void setCollapsed(false));
       return button;
     }
 
     function updateChatButtonAlertCount() {
       if (!chatButton) return;
-      const badge = chatButton.querySelector('.slink-chat-alert-count');
+      const badge = chatButton.querySelector('.messageCount___EWpiR');
       badge.hidden = chatButtonAlertCount === 0;
       badge.querySelector('span').textContent = chatButtonAlertCount ? displayAlertCount(chatButtonAlertCount) : '0';
       chatButton.setAttribute('aria-label', chatButtonAlertCount
@@ -227,8 +227,8 @@
       chatButton.className = peopleButton?.className || settingsButton.className;
       if (chatButton.parentElement !== row || chatButton.nextElementSibling !== settingsButton) row.insertBefore(chatButton, settingsButton);
       const theme = chatButtonTheme || SLINK.core.themes.get();
-      chatButton.style.setProperty('--slink-chat-accent', theme.tokens?.['--slink-accent'] || '#2f74ad');
-      chatButton.style.setProperty('--slink-chat-accent-alt', theme.tokens?.['--slink-accent-alt'] || '#69b5f4');
+      chatButton.style.setProperty('--slink-chat-button', theme.tokens?.['--slink-accent'] || '#2f74ad');
+      chatButton.style.setProperty('--slink-chat-icon', theme.tokens?.['--slink-text'] || '#fff');
       updateChatButtonAlertCount();
     }
 

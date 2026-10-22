@@ -299,5 +299,5 @@ assert(!read('src/content/ui-shell.js').includes('backdrop-filter:blur(var(--sli
 
 const chatMinimizeShell = read('src/content/ui-shell.js');
 assert(chatMinimizeShell.includes("MINIMIZED_MODE_STORAGE_KEY = 'ui.main.minimizedMode'") && chatMinimizeShell.includes("getElementById('notes_settings_button')"), 'Optional Torn chat-row minimize mode is missing.');
-assert(chatMinimizeShell.includes("row.insertBefore(chatButton, settingsButton)") && chatMinimizeShell.includes('slink-chat-alert-count'), 'SLINK chat button placement or alert badge is missing.');
+assert(chatMinimizeShell.includes("row.insertBefore(chatButton, settingsButton)") && chatMinimizeShell.includes('messageCount___EWpiR') && chatMinimizeShell.includes('root____FDYX oneDigit___FJ3vn'), 'SLINK chat button placement or native Torn alert badge is missing.');
 assert(read('src/dashboard/dashboard.html').includes('id="torn-chat-minimize"') && read('src/dashboard/dashboard.js').includes("tornMinimizedMode = event.currentTarget.checked ? 'chat' : 'bubble'"), 'Extension dashboard chat-button setting is missing.');
