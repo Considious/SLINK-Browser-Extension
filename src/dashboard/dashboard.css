@@ -90,3 +90,5 @@ input,select{border-color:var(--slink-border-soft);background:var(--slink-bg);co
 @media(max-width:520px){:root[data-slink-image-theme="true"] body{background-attachment:scroll}:root[data-slink-icon-theme="true"] .dashboard-tab::before,:root[data-slink-icon-theme="true"] .quality-tab::before{width:17px;height:17px;flex-basis:17px}}
 
 
+
+:root[data-slink-brand-icon="true"] .brand>span{background:center/contain no-repeat var(--slink-theme-brand-icon)!important;color:transparent;box-shadow:none;text-shadow:none}

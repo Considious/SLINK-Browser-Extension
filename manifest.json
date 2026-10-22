@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.18.95",
+  "version": "0.18.96",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -37,7 +37,9 @@
     {
       "resources": [
         "assets/themes/halloween-2026-background.png",
-        "assets/themes/halloween-2026-icons.png"
+        "assets/themes/halloween-2026-icons.png",
+        "assets/themes/halloween-2026-brand.png",
+        "assets/themes/halloween-2026-chat.png"
       ],
       "matches": [
         "https://www.torn.com/*"

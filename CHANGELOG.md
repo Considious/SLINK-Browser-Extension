@@ -1,3 +1,10 @@
+## 0.18.96 - 2026-10-22
+
+- Replace the Halloween 2026 background with the approved composition that keeps the Headless Horseman below the top banner.
+- Add the approved carved `S L` jack-o'-lantern as the Halloween brand mark.
+- Add the approved Slinky-carved jack-o'-lantern to the optional Torn chat-row control while retaining the standard coil for other themes.
+- Extend the validated live-theme asset pipeline with independent brand and chat icons.
+
 ## 0.18.95 - 2026-10-22
 
 - Color the optional Torn chat-row SLINK button from the active theme and render the Slinky in the theme's contrasting text color.

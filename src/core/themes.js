@@ -9,12 +9,16 @@
   const CATALOG_STORAGE_KEY = 'themes.catalog.v1';
   const ASSET_VARIABLES = Object.freeze({
     background:'--slink-theme-background-image',
-    iconSheet:'--slink-theme-icon-sheet'
+    iconSheet:'--slink-theme-icon-sheet',
+    brandIcon:'--slink-theme-brand-icon',
+    chatIcon:'--slink-theme-chat-icon'
   });
   const ASSET_ORIGIN = 'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/';
   const PACKAGED_ASSET_FILES = new Set([
     'halloween-2026-background.png',
-    'halloween-2026-icons.png'
+    'halloween-2026-icons.png',
+    'halloween-2026-brand.png',
+    'halloween-2026-chat.png'
   ]);
   const TOKEN_NAMES = new Set([
     '--slink-bg', '--slink-bg-raised', '--slink-bg-control', '--slink-surface', '--slink-card',
@@ -74,14 +78,18 @@
   }
 
   function normalizeAssets(entry, themeId) {
-    if (entry?.assets === undefined || entry?.assets === null) return Object.freeze({ background:'', iconSheet:'', packaged:false });
+    if (entry?.assets === undefined || entry?.assets === null) return Object.freeze({ background:'', iconSheet:'', brandIcon:'', chatIcon:'', packaged:false });
     if (typeof entry.assets !== 'object' || Array.isArray(entry.assets)) throw new Error(`Theme ${themeId} has invalid assets.`);
     const background = validateAssetUrl(entry.assets.background, themeId, 'background');
     const iconSheet = validateAssetUrl(entry.assets.iconSheet, themeId, 'icon sheet');
-    const assetFiles = [background, iconSheet].filter(Boolean).map(value => new URL(value).pathname.split('/').pop());
+    const brandIcon = validateAssetUrl(entry.assets.brandIcon, themeId, 'brand icon');
+    const chatIcon = validateAssetUrl(entry.assets.chatIcon, themeId, 'chat icon');
+    const assetFiles = [background, iconSheet, brandIcon, chatIcon].filter(Boolean).map(value => new URL(value).pathname.split('/').pop());
     return Object.freeze({
       background,
       iconSheet,
+      brandIcon,
+      chatIcon,
       // Older Worker builds omitted the packaged flag. Recognize only the
       // reviewed assets that are actually shipped in this extension package.
       packaged:entry.assets.packaged === true || (assetFiles.length > 0 && assetFiles.every(file => PACKAGED_ASSET_FILES.has(file)))
@@ -345,6 +353,7 @@
     element.dataset.slinkOrnament = theme.ornament || 'none';
     element.dataset.slinkImageTheme = theme.assets?.background ? 'true' : 'false';
     element.dataset.slinkIconTheme = theme.assets?.iconSheet ? 'true' : 'false';
+    element.dataset.slinkBrandIcon = theme.assets?.brandIcon ? 'true' : 'false';
     for (const [name, value] of Object.entries(theme.tokens)) element.style.setProperty(name, value);
     for (const [name, value] of Object.entries(assetVariables(theme))) element.style.setProperty(name, value);
     return theme;

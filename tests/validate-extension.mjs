@@ -205,8 +205,8 @@ assert(!dashboardSource.includes('Send to Faction'), 'The extension dashboard mu
 assert(read('src/background/adhd-service.js').includes('/v2/torn/stocks') && read('src/core/adhd.js').includes('bonus?.passive !== false'), 'Stock alerts do not use Torn catalog names or still include passive benefits.');
 assert(read('src/background/theme-service.js').includes('/api/themes'), 'Background theme catalog route is missing.');
 assert(!manifest.host_permissions.some(origin => /githubusercontent|github\.com/.test(origin)), 'The extension must receive theme data through its existing Worker, not direct GitHub host access.');
-assert(manifest.web_accessible_resources?.some(entry => entry.resources?.includes('assets/themes/halloween-2026-background.jpg') && entry.resources?.includes('assets/themes/halloween-2026-icons.png')), 'Halloween 2026 visual assets are not exposed to the Torn content UI.');
-assert(read('src/core/themes.js').includes('ASSET_ORIGIN') && read('src/core/themes.js').includes('assetVariables'), 'The theme core is missing validated image-asset support.');
+assert(manifest.web_accessible_resources?.some(entry => entry.resources?.includes('assets/themes/halloween-2026-background.png') && entry.resources?.includes('assets/themes/halloween-2026-icons.png') && entry.resources?.includes('assets/themes/halloween-2026-brand.png') && entry.resources?.includes('assets/themes/halloween-2026-chat.png')), 'Halloween 2026 visual assets are not exposed to the Torn content UI.');
+assert(read('src/core/themes.js').includes('ASSET_ORIGIN') && read('src/core/themes.js').includes('assetVariables') && read('src/core/themes.js').includes('brandIcon') && read('src/core/themes.js').includes('chatIcon'), 'The theme core is missing validated image-asset support.');
 assert(read('src/dashboard/dashboard.css').includes('data-slink-image-theme="true"') && read('src/dashboard/dashboard.css').includes('data-slink-icon-theme="true"') && read('src/dashboard/dashboard.css').includes('--slink-theme-background-image'), 'The dashboard is missing the generic live image-theme layer.');
 const uiStateSource = read('src/core/ui-state.js');
 assert(manifest.content_scripts.some(entry => entry.js?.includes('src/core/ui-state.js')), 'Reusable GUI interaction-state preservation is not loaded in Torn.');
@@ -301,3 +301,5 @@ const chatMinimizeShell = read('src/content/ui-shell.js');
 assert(chatMinimizeShell.includes("MINIMIZED_MODE_STORAGE_KEY = 'ui.main.minimizedMode'") && chatMinimizeShell.includes("getElementById('notes_settings_button')"), 'Optional Torn chat-row minimize mode is missing.');
 assert(chatMinimizeShell.includes("row.insertBefore(chatButton, settingsButton)") && chatMinimizeShell.includes('messageCount___EWpiR') && chatMinimizeShell.includes('root____FDYX oneDigit___FJ3vn'), 'SLINK chat button placement or native Torn alert badge is missing.');
 assert(read('src/dashboard/dashboard.html').includes('id="torn-chat-minimize"') && read('src/dashboard/dashboard.js').includes("tornMinimizedMode = event.currentTarget.checked ? 'chat' : 'bubble'"), 'Extension dashboard chat-button setting is missing.');
+
+assert(read('src/content/ui-shell.js').includes('slink-chat-theme-icon') && read('src/content/ui-shell.js').includes('data-slink-brand-icon'), 'Halloween brand or chat icon integration is missing.');
