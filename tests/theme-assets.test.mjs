@@ -36,7 +36,7 @@ const halloween = {
   ornament:'halloween',
   swatch:['#08050f','#a72cff','#75ff42'],
   assets:{
-    background:'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/halloween-2026-background.jpg',
+    background:'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/halloween-2026-background.png',
     iconSheet:'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/halloween-2026-icons.png',
     packaged:false
   },
@@ -48,13 +48,19 @@ assert.equal(themes.resolve('halloween-2026', { scopes:[] }).id, 'slink-dark');
 assert.equal(themes.resolve('halloween-2026', { scopes:['slink.theme.halloween'] }).id, 'halloween-2026');
 assert.equal(themes.resolve('halloween-2026', { scopes:['admin.*'] }).id, 'halloween-2026');
 const css = themes.cssVariables('halloween-2026', { scopes:['slink.theme.halloween'] });
-assert.match(css, /chrome-extension:\/\/unit\/assets\/themes\/halloween-2026-background\.jpg/);
+assert.match(css, /chrome-extension:\/\/unit\/assets\/themes\/halloween-2026-background\.png/);
 assert.doesNotMatch(css, /raw\.githubusercontent\.com/);
 assert.match(css, /--slink-theme-icon-sheet:url/);
 const element = { dataset:{}, style:{ values:new Map(), setProperty(name, value) { this.values.set(name, value); } } };
 themes.applyToElement(element, 'halloween-2026', { scopes:['slink.theme.halloween'] });
 assert.equal(element.dataset.slinkImageTheme, 'true');
 assert.equal(element.dataset.slinkIconTheme, 'true');
+assert.equal(themes.normalizePanelOpacity(-20), 0);
+assert.equal(themes.normalizePanelOpacity(150), 100);
+assert.equal(themes.applyPanelOpacity(element, 0), 0);
+assert.equal(element.style.values.get('--slink-theme-panel-opacity'), '0%');
+assert.equal(element.style.values.get('--slink-theme-panel-blur'), '0.00px');
+assert.equal(element.style.values.get('--slink-theme-veil-top'), '0.00%');
 assert.throws(() => themes.validateCatalog({
   schemaVersion:1,
   revision:'bad-asset',

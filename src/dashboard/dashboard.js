@@ -21,6 +21,7 @@
   let targetView = 'leveling';
   let adminUser = null;
   let activeTheme = SLINK.core.themes.get();
+  let themePanelOpacity = SLINK.core.themes.DEFAULT_PANEL_OPACITY;
   let warLeader = false;
   let dismissedRetals = {};
   let pendingCustomSoundDataUrl = null;
@@ -1085,18 +1086,32 @@
     }));
     const revision = SLINK.core.themes.catalog()?.revision || 'bundled';
     byId('theme-summary').textContent = `${activeTheme.label} is active. Theme catalog ${revision}; visual changes apply without a Web Store update.`;
+    const opacityRow = byId('theme-panel-opacity-row');
+    const opacityInput = byId('theme-panel-opacity');
+    const opacityLabel = byId('theme-panel-opacity-label');
+    opacityRow.hidden = !activeTheme.assets?.background;
+    opacityInput.value = String(themePanelOpacity);
+    opacityLabel.value = `${themePanelOpacity}%`;
+    opacityLabel.textContent = `${themePanelOpacity}%`;
   }
 
   async function applySavedTheme() {
-    const preferred = await SLINK.core.storage.get(
-      SLINK.core.themes.STORAGE_KEY,
-      SLINK.core.themes.DEFAULT_THEME_ID
-    );
+    const [preferred, storedOpacity] = await Promise.all([
+      SLINK.core.storage.get(
+        SLINK.core.themes.STORAGE_KEY,
+        SLINK.core.themes.DEFAULT_THEME_ID
+      ),
+      SLINK.core.storage.get(
+        SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY,
+        SLINK.core.themes.DEFAULT_PANEL_OPACITY
+      )
+    ]);
     activeTheme = SLINK.core.themes.applyToElement(
       document.documentElement,
       preferred,
       system?.permissions || {}
     );
+    themePanelOpacity = SLINK.core.themes.applyPanelOpacity(document.documentElement, storedOpacity);
     renderThemes();
   }
 
@@ -1358,6 +1373,15 @@
   });
   byId('toggle-access').addEventListener('click', () => { accessExpanded = !accessExpanded; renderAccess(); });
   byId('toggle-shared-terms').addEventListener('click', () => { termsExpanded = !termsExpanded; renderAccess(); });
+  byId('theme-panel-opacity').addEventListener('input', event => {
+    themePanelOpacity = SLINK.core.themes.applyPanelOpacity(document.documentElement, event.target.value);
+    byId('theme-panel-opacity-label').value = `${themePanelOpacity}%`;
+    byId('theme-panel-opacity-label').textContent = `${themePanelOpacity}%`;
+  });
+  byId('theme-panel-opacity').addEventListener('change', async event => {
+    themePanelOpacity = SLINK.core.themes.normalizePanelOpacity(event.target.value);
+    await SLINK.core.storage.set(SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY, themePanelOpacity);
+  });
   byId('theme-options').addEventListener('click', async event => {
     const button = event.target.closest('[data-theme-id]');
     if (!button || button.disabled) return;

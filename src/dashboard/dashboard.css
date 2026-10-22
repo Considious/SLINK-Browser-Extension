@@ -19,7 +19,7 @@ input,select{border-color:var(--slink-border-soft);background:var(--slink-bg);co
 .target-head a,.retal-item a{color:var(--slink-text)}
 .workspace-overview{grid-template-columns:repeat(3,minmax(0,1fr))}
 .retals-card{min-width:0}
-.theme-options{display:grid;gap:7px}
+.theme-options{display:grid;gap:7px}.theme-opacity-control{display:grid;gap:6px;margin-top:10px;padding:9px 10px;border:1px solid var(--slink-border-soft);border-radius:8px;background:var(--slink-bg-raised)}.theme-opacity-control>span{display:flex;justify-content:space-between;gap:10px;color:var(--slink-muted)}.theme-opacity-control output{color:var(--slink-text);font-weight:800}.theme-opacity-control input{width:100%;min-height:30px;margin:0;cursor:ew-resize;touch-action:none;accent-color:var(--slink-accent)}
 .theme-option{display:grid;grid-template-columns:52px minmax(0,1fr) auto;align-items:center;gap:9px;width:100%;min-height:48px;padding:7px 9px;background:var(--slink-control);text-align:left}
 .theme-option[aria-checked="true"]{border-color:var(--slink-accent-alt);background:var(--slink-selected-bg);box-shadow:0 0 14px var(--slink-glow-right)}
 .theme-option:disabled{cursor:not-allowed;filter:none;opacity:.52}
@@ -67,9 +67,9 @@ input,select{border-color:var(--slink-border-soft);background:var(--slink-bg);co
 /* Halloween 2026 is the first image-backed SLINK theme. The asset variables are
    installed by the validated theme catalog; these rules stay inert otherwise. */
 .theme-swatch.theme-swatch-image{display:block;background-image:linear-gradient(rgba(5,3,9,.08),rgba(5,3,9,.18)),var(--slink-theme-preview);background-position:center 18%;background-size:cover}
-:root[data-slink-image-theme="true"] body{min-height:100vh;background-color:var(--slink-bg);background-image:linear-gradient(rgba(5,3,9,.24),rgba(5,3,9,.46)),var(--slink-theme-background-image);background-position:center top;background-size:cover;background-attachment:fixed}
+:root[data-slink-image-theme="true"] body{min-height:100vh;background-color:var(--slink-bg);background-image:linear-gradient(color-mix(in srgb,rgb(5 3 9) var(--slink-theme-veil-top,24%),transparent),color-mix(in srgb,rgb(5 3 9) var(--slink-theme-veil-bottom,46%),transparent)),var(--slink-theme-background-image);background-position:center top;background-size:cover;background-attachment:fixed}
 :root[data-slink-image-theme="true"] .topbar{background:color-mix(in srgb,var(--slink-bg) 87%,transparent);backdrop-filter:blur(13px) saturate(1.15)}
-:root[data-slink-image-theme="true"] .card{border-color:var(--slink-border);background:color-mix(in srgb,var(--slink-panel-bg) 89%,transparent);box-shadow:-5px 0 19px var(--slink-glow-left),5px 0 21px var(--slink-glow-right),0 14px 34px var(--slink-shadow);backdrop-filter:blur(8px) saturate(1.08)}
+:root[data-slink-image-theme="true"] .card{border-color:var(--slink-border);background:color-mix(in srgb,var(--slink-panel-bg) var(--slink-theme-panel-opacity,72%),transparent);box-shadow:-5px 0 19px var(--slink-glow-left),5px 0 21px var(--slink-glow-right),0 14px 34px var(--slink-shadow);backdrop-filter:blur(var(--slink-theme-panel-blur,7px)) saturate(1.08)}
 :root[data-slink-image-theme="true"] button,:root[data-slink-image-theme="true"] .button{border-color:var(--slink-border-soft);text-shadow:0 1px 2px #000;box-shadow:inset 0 0 0 1px rgba(255,255,255,.035)}
 :root[data-slink-image-theme="true"] .dashboard-tab.active,:root[data-slink-image-theme="true"] .efficiency-tab.active,:root[data-slink-image-theme="true"] .quality-tab.active{border-color:var(--slink-accent-alt);background:var(--slink-selected-bg);box-shadow:-4px 0 15px var(--slink-glow-left),4px 0 17px var(--slink-glow-right)}
 :root[data-slink-icon-theme="true"] .dashboard-tab::before,:root[data-slink-icon-theme="true"] .efficiency-tab::before,:root[data-slink-icon-theme="true"] .quality-tab::before,:root[data-slink-icon-theme="true"] #refresh-all::before{display:inline-block;width:19px;height:19px;flex:0 0 19px;background-image:var(--slink-theme-icon-sheet);background-repeat:no-repeat;background-size:400% 500%;vertical-align:-4px;filter:drop-shadow(0 0 4px var(--slink-glow-right));content:""}

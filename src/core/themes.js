@@ -4,6 +4,8 @@
   const SLINK = global.SLINK_EXTENSION;
   const DEFAULT_THEME_ID = 'slink-dark';
   const STORAGE_KEY = 'ui.theme';
+  const PANEL_OPACITY_STORAGE_KEY = 'ui.themePanelOpacity';
+  const DEFAULT_PANEL_OPACITY = 72;
   const CATALOG_STORAGE_KEY = 'themes.catalog.v1';
   const ASSET_VARIABLES = Object.freeze({
     background:'--slink-theme-background-image',
@@ -307,6 +309,28 @@
     }));
   }
 
+  function normalizePanelOpacity(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.min(100, Math.max(0, Math.round(number))) : DEFAULT_PANEL_OPACITY;
+  }
+
+  function panelOpacityVariables(value) {
+    const opacity = normalizePanelOpacity(value);
+    return Object.freeze({
+      '--slink-theme-panel-opacity':`${opacity}%`,
+      '--slink-theme-panel-blur':`${(opacity * 7 / DEFAULT_PANEL_OPACITY).toFixed(2)}px`,
+      '--slink-theme-veil-top':`${(opacity * 24 / DEFAULT_PANEL_OPACITY).toFixed(2)}%`,
+      '--slink-theme-veil-bottom':`${(opacity * 46 / DEFAULT_PANEL_OPACITY).toFixed(2)}%`
+    });
+  }
+
+  function applyPanelOpacity(element, value) {
+    if (!element?.style) throw new TypeError('A styleable element is required to apply SLINK panel opacity.');
+    const opacity = normalizePanelOpacity(value);
+    for (const [name, setting] of Object.entries(panelOpacityVariables(opacity))) element.style.setProperty(name, setting);
+    return opacity;
+  }
+
   function cssVariables(id, permissions = {}) {
     const theme = resolve(id, permissions);
     return Object.entries({ ...theme.tokens, ...assetVariables(theme) })
@@ -328,13 +352,18 @@
 
   SLINK.define('core', 'themes', Object.freeze({
     DEFAULT_THEME_ID,
+    DEFAULT_PANEL_OPACITY,
     CATALOG_STORAGE_KEY,
+    PANEL_OPACITY_STORAGE_KEY,
     STORAGE_KEY,
     THEMES,
     ASSET_VARIABLES,
     assetVariables,
+    applyPanelOpacity,
     applyToElement,
     cssVariables,
+    normalizePanelOpacity,
+    panelOpacityVariables,
     catalog,
     get,
     installCatalog,

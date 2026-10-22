@@ -73,11 +73,18 @@
       SLINK.core.messaging.send('themes.catalog').catch(() => null)
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
-    const preferredTheme = await SLINK.core.storage.get(
-      SLINK.core.themes.STORAGE_KEY,
-      SLINK.core.themes.DEFAULT_THEME_ID
-    );
+    const [preferredTheme, panelOpacity] = await Promise.all([
+      SLINK.core.storage.get(
+        SLINK.core.themes.STORAGE_KEY,
+        SLINK.core.themes.DEFAULT_THEME_ID
+      ),
+      SLINK.core.storage.get(
+        SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY,
+        SLINK.core.themes.DEFAULT_PANEL_OPACITY
+      )
+    ]);
     ui.setTheme(preferredTheme, permissions);
+    ui.setThemePanelOpacity(panelOpacity);
     return permissions;
   }
 
@@ -118,6 +125,7 @@
     }
     const permissionsKey = SLINK.core.storage.fullKey('permissions.snapshot');
     const themeKey = SLINK.core.storage.fullKey(SLINK.core.themes.STORAGE_KEY);
+    const themePanelOpacityKey = SLINK.core.storage.fullKey(SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY);
     const catalogKey = SLINK.core.storage.fullKey(SLINK.core.themes.CATALOG_STORAGE_KEY);
     if (changes[catalogKey]?.newValue?.catalog) {
       try { SLINK.core.themes.installCatalog(changes[catalogKey].newValue.catalog); }
@@ -126,6 +134,9 @@
     if (changes[permissionsKey] && initialized) {
       void restartModules().catch(error => console.error('[SLINK] Could not apply refreshed permissions in place:', error));
       return;
+    }
+    if (changes[themePanelOpacityKey]) {
+      ui.setThemePanelOpacity(changes[themePanelOpacityKey].newValue);
     }
     if (changes[themeKey] || changes[catalogKey]) {
       void Promise.all([

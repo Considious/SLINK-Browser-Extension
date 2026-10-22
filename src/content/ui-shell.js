@@ -85,8 +85,8 @@
     :host(:not([data-slink-theme="slink-dark"])) .tab[aria-selected="true"] { background:var(--slink-selected-bg); box-shadow:0 0 12px var(--slink-glow-right); }
     :host(:not([data-slink-theme="slink-dark"])) .actions button { background:var(--slink-button-bg); }
     :host([data-slink-ornament="coil"]) .module-head strong::before { display:inline-block; width:20px; height:15px; margin-right:6px; vertical-align:-3px; background:repeating-radial-gradient(ellipse at center,transparent 0 2px,var(--slink-metal) 3px 4px,transparent 5px 7px); filter:drop-shadow(0 0 4px var(--slink-glow-right)); content:""; }
-    :host([data-slink-image-theme="true"]) .window { border-color:var(--slink-border); background-color:var(--slink-bg); background-image:linear-gradient(rgba(5,3,9,.30),rgba(5,3,9,.53)),var(--slink-theme-background-image); background-position:center top; background-size:cover; box-shadow:-5px 0 20px var(--slink-glow-left),5px 0 22px var(--slink-glow-right),0 14px 34px var(--slink-shadow); }
-    :host([data-slink-image-theme="true"]) .head,:host([data-slink-image-theme="true"]) .groups,:host([data-slink-image-theme="true"]) .tabs,:host([data-slink-image-theme="true"]) .module-view { background:color-mix(in srgb,var(--slink-bg) 72%,transparent); backdrop-filter:blur(7px) saturate(1.12); }
+    :host([data-slink-image-theme="true"]) .window { border-color:var(--slink-border); background-color:var(--slink-bg); background-image:linear-gradient(color-mix(in srgb,rgb(5 3 9) var(--slink-theme-veil-top,24%),transparent),color-mix(in srgb,rgb(5 3 9) var(--slink-theme-veil-bottom,46%),transparent)),var(--slink-theme-background-image); background-position:center top; background-size:cover; box-shadow:-5px 0 20px var(--slink-glow-left),5px 0 22px var(--slink-glow-right),0 14px 34px var(--slink-shadow); }
+    :host([data-slink-image-theme="true"]) .head,:host([data-slink-image-theme="true"]) .groups,:host([data-slink-image-theme="true"]) .tabs,:host([data-slink-image-theme="true"]) .module-view { background:color-mix(in srgb,var(--slink-bg) var(--slink-theme-panel-opacity,72%),transparent); backdrop-filter:blur(var(--slink-theme-panel-blur,7px)) saturate(1.12); }
     :host([data-slink-image-theme="true"]) .group-tab[aria-selected="true"],:host([data-slink-image-theme="true"]) .tab[aria-selected="true"] { border-color:var(--slink-accent-alt); background:var(--slink-selected-bg); box-shadow:-3px 0 11px var(--slink-glow-left),3px 0 13px var(--slink-glow-right); }
     :host([data-slink-image-theme="true"]) .content > * { border-color:var(--slink-border-soft); }
     :host([data-slink-icon-theme="true"]) .group-tab::before,:host([data-slink-icon-theme="true"]) .tab::before,:host([data-slink-icon-theme="true"]) .module-head strong::before { display:inline-block; width:17px; height:17px; flex:0 0 17px; margin-right:4px; vertical-align:-4px; background-image:var(--slink-theme-icon-sheet); background-repeat:no-repeat; background-size:400% 500%; filter:drop-shadow(0 0 4px var(--slink-glow-right)); content:""; }
@@ -123,6 +123,10 @@
     const themeStyle = document.createElement('style');
     shadow.append(style, themeStyle);
     SLINK.core.formState?.protect(shadow);
+
+    function setThemePanelOpacity(value) {
+      return SLINK.core.themes.applyPanelOpacity(host, value);
+    }
 
     function setTheme(id, permissions = {}) {
       const theme = SLINK.core.themes.resolve(id, permissions);
@@ -734,6 +738,7 @@
       setBubbleAlert,
       setAlertCount,
       setTheme,
+      setThemePanelOpacity,
       setCollapsed,
       setHidden(value) { hidden = Boolean(value); refreshShell(); },
       resetPosition:restore,
