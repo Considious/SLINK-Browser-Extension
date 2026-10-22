@@ -295,3 +295,9 @@ assert(read('src/modules/events.js').includes('onHalloweenBasketPage') && read('
 assert(read('src/modules/market.js').includes('if (onPurchaseOpportunityPage()) schedulePurchaseOpportunityFormatting(80);'), 'Market DOM formatting still runs on unrelated pages.');
 assert(read('src/modules/war.js').includes('mutationsMayContainAttackResult') && read('src/modules/chat.js').includes('hasActiveHighlights'), 'High-frequency War or Chat mutation work is not filtered.');
 assert(!read('src/content/ui-shell.js').includes('backdrop-filter:blur(var(--slink-theme-panel-blur'), 'The Torn overlay still applies expensive image-theme blur.');
+
+
+const chatMinimizeShell = read('src/content/ui-shell.js');
+assert(chatMinimizeShell.includes("MINIMIZED_MODE_STORAGE_KEY = 'ui.main.minimizedMode'") && chatMinimizeShell.includes("getElementById('notes_settings_button')"), 'Optional Torn chat-row minimize mode is missing.');
+assert(chatMinimizeShell.includes("row.insertBefore(chatButton, settingsButton)") && chatMinimizeShell.includes('slink-chat-alert-count'), 'SLINK chat button placement or alert badge is missing.');
+assert(read('src/dashboard/dashboard.html').includes('id="torn-chat-minimize"') && read('src/dashboard/dashboard.js').includes("tornMinimizedMode = event.currentTarget.checked ? 'chat' : 'bubble'"), 'Extension dashboard chat-button setting is missing.');

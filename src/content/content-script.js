@@ -189,6 +189,8 @@
     if (changes[hiddenKey]) ui.setHidden(Boolean(changes[hiddenKey].newValue));
     const collapsedKey = SLINK.core.storage.fullKey('ui.main.collapsed');
     if (changes[collapsedKey]) void ui.setCollapsed(Boolean(changes[collapsedKey].newValue), false);
+    const minimizedModeKey = SLINK.core.storage.fullKey('ui.main.minimizedMode');
+    if (changes[minimizedModeKey]) void ui.setMinimizedMode(changes[minimizedModeKey].newValue, false);
     const levelingVisibilityKey = SLINK.core.storage.fullKey('ui.modules.leveling.showInTorn');
     const adhdVisibilityKey = SLINK.core.storage.fullKey('ui.modules.adhd.showInTorn');
     const marketVisibilityKey = SLINK.core.storage.fullKey('ui.modules.market.showInTorn');

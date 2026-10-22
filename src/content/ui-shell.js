@@ -12,6 +12,7 @@
   const LEGACY_NAVIGATION_MIRROR_KEY = 'slink-extension:ui:main:navigation:v1';
   const MAIN_SIZE_STORAGE_KEY = 'ui.main.size';
   const MAIN_SIZE_MIRROR_KEY = 'slink-extension:ui:main:size:v1';
+  const MINIMIZED_MODE_STORAGE_KEY = 'ui.main.minimizedMode';
   const NAVIGATION_FALLBACK_ORDER = Object.freeze(['leveling','bounties','mugging','target-list','war','player-stats','adhd','market','merits','dollar-bazaars','racing']);
   const STYLES = `
     :host { all: initial; ${SLINK.core.themes.cssVariables('slink-dark')} }
@@ -124,6 +125,12 @@
     shadow.append(style, themeStyle);
     SLINK.core.formState?.protect(shadow);
 
+    let chatButton = null;
+    let chatButtonObserver = null;
+    let chatButtonAlertCount = 0;
+    let chatButtonTheme = null;
+    let minimizedMode = 'bubble';
+
     function setThemePanelOpacity(value) {
       return SLINK.core.themes.applyPanelOpacity(host, value);
     }
@@ -135,6 +142,11 @@
       host.dataset.slinkImageTheme = theme.assets?.background ? 'true' : 'false';
       host.dataset.slinkIconTheme = theme.assets?.iconSheet ? 'true' : 'false';
       themeStyle.textContent = `:host{${SLINK.core.themes.cssVariables(theme.id, permissions)}}`;
+      chatButtonTheme = theme;
+      if (chatButton) {
+        chatButton.style.setProperty('--slink-chat-accent', theme.tokens?.['--slink-accent'] || '#2f74ad');
+        chatButton.style.setProperty('--slink-chat-accent-alt', theme.tokens?.['--slink-accent-alt'] || '#69b5f4');
+      }
       return theme;
     }
     setTheme(options.themeId || SLINK.core.themes.DEFAULT_THEME_ID, options.permissions || {});
@@ -173,6 +185,76 @@
     let navigationUpdatedAt = 0;
     let navigationWriteQueue = Promise.resolve();
     const bubbleAlertSources = new Map();
+
+    function installChatButtonStyle() {
+      const id = 'slink-extension-chat-button-style';
+      if (document.getElementById(id)) return;
+      const style = document.createElement('style');
+      style.id = id;
+      style.textContent = `#slink_extension_chat_button{position:relative;color:var(--slink-chat-accent,#2f74ad)!important}#slink_extension_chat_button .slink-chat-coil{display:block;width:24px;height:24px;filter:drop-shadow(0 0 3px var(--slink-chat-accent-alt,#69b5f4));pointer-events:none}#slink_extension_chat_button .slink-chat-coil ellipse{fill:none;stroke:currentColor;stroke-width:1.8}#slink_extension_chat_button .slink-chat-alert-count{position:absolute;right:-4px;top:-5px;z-index:2;display:grid;min-width:17px;height:17px;padding:0 4px;place-items:center;border:2px solid #202020;border-radius:999px;background:#d72638;color:#fff;font:bold 10px/1 Arial,sans-serif;box-sizing:border-box;pointer-events:none}#slink_extension_chat_button[hidden],#slink_extension_chat_button .slink-chat-alert-count[hidden]{display:none!important}`;
+      (document.head || document.documentElement).appendChild(style);
+    }
+
+    function createChatButton() {
+      installChatButtonStyle();
+      const button = document.createElement('button');
+      button.id = 'slink_extension_chat_button';
+      button.type = 'button';
+      button.title = 'SLINK';
+      button.dataset.preventFlyoutSwipe = 'true';
+      button.innerHTML = '<svg class="slink-chat-coil" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="7.5" ry="3"></ellipse><ellipse cx="12" cy="9.5" rx="7.5" ry="3"></ellipse><ellipse cx="12" cy="14" rx="7.5" ry="3"></ellipse><ellipse cx="12" cy="18.5" rx="7.5" ry="3"></ellipse></svg><div class="messageCount___EWpiR slink-chat-alert-count" hidden><span>0</span></div>';
+      button.addEventListener('click', () => void setCollapsed(false));
+      return button;
+    }
+
+    function updateChatButtonAlertCount() {
+      if (!chatButton) return;
+      const badge = chatButton.querySelector('.slink-chat-alert-count');
+      badge.hidden = chatButtonAlertCount === 0;
+      badge.querySelector('span').textContent = chatButtonAlertCount ? displayAlertCount(chatButtonAlertCount) : '0';
+      chatButton.setAttribute('aria-label', chatButtonAlertCount
+        ? `Open SLINK, ${chatButtonAlertCount} active alert${chatButtonAlertCount === 1 ? '' : 's'}`
+        : 'Open SLINK');
+    }
+
+    function ensureChatButton() {
+      if (minimizedMode !== 'chat') return;
+      const settingsButton = document.getElementById('notes_settings_button');
+      const peopleButton = document.getElementById('people_panel_button');
+      const row = settingsButton?.parentElement;
+      if (!row) return;
+      if (!chatButton) chatButton = createChatButton();
+      chatButton.className = peopleButton?.className || settingsButton.className;
+      if (chatButton.parentElement !== row || chatButton.nextElementSibling !== settingsButton) row.insertBefore(chatButton, settingsButton);
+      const theme = chatButtonTheme || SLINK.core.themes.get();
+      chatButton.style.setProperty('--slink-chat-accent', theme.tokens?.['--slink-accent'] || '#2f74ad');
+      chatButton.style.setProperty('--slink-chat-accent-alt', theme.tokens?.['--slink-accent-alt'] || '#69b5f4');
+      updateChatButtonAlertCount();
+    }
+
+    function syncChatButtonVisibility() {
+      const shouldShow = minimizedMode === 'chat' && collapsed && !hidden && views.size > 0;
+      if (shouldShow) ensureChatButton();
+      if (chatButton) chatButton.hidden = !shouldShow;
+    }
+
+    function observeChatButtonAnchor() {
+      if (chatButtonObserver || !document.documentElement) return;
+      chatButtonObserver = new MutationObserver(() => {
+        if (minimizedMode === 'chat' && collapsed && (!chatButton || !chatButton.isConnected)) ensureChatButton();
+      });
+      chatButtonObserver.observe(document.documentElement, { childList:true, subtree:true });
+    }
+
+    async function setMinimizedMode(value, persist = true) {
+      minimizedMode = value === 'chat' ? 'chat' : 'bubble';
+      if (persist) await SLINK.core.storage.set(MINIMIZED_MODE_STORAGE_KEY, minimizedMode);
+      syncChatButtonVisibility();
+      refreshShell();
+      return minimizedMode;
+    }
+
+    observeChatButtonAnchor();
 
     function normalizeNavigationState(value) {
       const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -281,6 +363,8 @@
         view.tab.title = description;
         view.tab.setAttribute('aria-label', description ? `${view.title}: ${description}` : view.title);
       }
+      chatButtonAlertCount = [...navigationAlerts.values()].reduce((total, alert) => total + Math.max(0, Number(alert.count) || 0), 0);
+      updateChatButtonAlertCount();
       for (const [groupId, button] of groupButtons) {
         const count = [...navigationAlerts.values()].filter(alert => alert.group === groupId).reduce((total, alert) => total + Math.max(0, Number(alert.count) || 0), 0);
         const badge = button.querySelector('.nav-alert-count');
@@ -512,7 +596,8 @@
       groups.hidden = groupButtons.size < 2;
       tabs.hidden = activeViews.length === 0;
       main.element.hidden = hidden || collapsed || docked.length === 0;
-      bubble.hidden = hidden || !collapsed || views.size === 0;
+      bubble.hidden = hidden || !collapsed || views.size === 0 || minimizedMode === 'chat';
+      syncChatButtonVisibility();
       for (const alert of alerts.values()) alert.element.hidden = hidden;
     }
 
@@ -713,7 +798,13 @@
       const selection = views.has(preferredActiveId) ? preferredActiveId : views.has(preferredForSavedGroup) ? preferredForSavedGroup : '';
       if (selection) setActive(selection, false);
     });
-    void SLINK.core.storage.get('ui.main.collapsed', false).then(value => setCollapsed(Boolean(value), false));
+    void Promise.all([
+      SLINK.core.storage.get('ui.main.collapsed', false),
+      SLINK.core.storage.get(MINIMIZED_MODE_STORAGE_KEY, 'bubble')
+    ]).then(([collapsedValue, mode]) => {
+      void setMinimizedMode(mode, false);
+      void setCollapsed(Boolean(collapsedValue), false);
+    });
     async function restore() {
       await Promise.all([
         SLINK.core.storage.remove('ui.main.position'),
@@ -739,6 +830,7 @@
       setAlertCount,
       setTheme,
       setThemePanelOpacity,
+      setMinimizedMode,
       setCollapsed,
       setHidden(value) { hidden = Boolean(value); refreshShell(); },
       resetPosition:restore,

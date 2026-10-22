@@ -1,3 +1,9 @@
+## 0.18.94 - 2026-10-22
+
+- Add an optional Torn chat-row minimize mode for the in-page SLINK panel without changing the existing default.
+- Place a theme-colored Slinky control immediately left of Torn Settings and show the combined SLINK alert count in a contrasting red Torn-style badge.
+- Keep the chat control synchronized across Torn chat rerenders and expose the setting in the extension dashboard.
+
 ## 0.18.93 - 2026-10-21
 
 - Restrict in-page SLINK activity to the most recently visible Torn tab; inactive Torn tabs now stop their module timers and DOM observers.

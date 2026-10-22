@@ -22,6 +22,7 @@
   let adminUser = null;
   let activeTheme = SLINK.core.themes.get();
   let themePanelOpacity = SLINK.core.themes.DEFAULT_PANEL_OPACITY;
+  let tornMinimizedMode = 'bubble';
   let warLeader = false;
   let dismissedRetals = {};
   let pendingCustomSoundDataUrl = null;
@@ -1093,10 +1094,11 @@
     opacityInput.value = String(themePanelOpacity);
     opacityLabel.value = `${themePanelOpacity}%`;
     opacityLabel.textContent = `${themePanelOpacity}%`;
+    byId('torn-chat-minimize').checked = tornMinimizedMode === 'chat';
   }
 
   async function applySavedTheme() {
-    const [preferred, storedOpacity] = await Promise.all([
+    const [preferred, storedOpacity, storedMinimizedMode] = await Promise.all([
       SLINK.core.storage.get(
         SLINK.core.themes.STORAGE_KEY,
         SLINK.core.themes.DEFAULT_THEME_ID
@@ -1104,7 +1106,8 @@
       SLINK.core.storage.get(
         SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY,
         SLINK.core.themes.DEFAULT_PANEL_OPACITY
-      )
+      ),
+      SLINK.core.storage.get('ui.main.minimizedMode', 'bubble')
     ]);
     activeTheme = SLINK.core.themes.applyToElement(
       document.documentElement,
@@ -1112,6 +1115,7 @@
       system?.permissions || {}
     );
     themePanelOpacity = SLINK.core.themes.applyPanelOpacity(document.documentElement, storedOpacity);
+    tornMinimizedMode = storedMinimizedMode === 'chat' ? 'chat' : 'bubble';
     renderThemes();
   }
 
@@ -1381,6 +1385,10 @@
   byId('theme-panel-opacity').addEventListener('change', async event => {
     themePanelOpacity = SLINK.core.themes.normalizePanelOpacity(event.target.value);
     await SLINK.core.storage.set(SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY, themePanelOpacity);
+  });
+  byId('torn-chat-minimize').addEventListener('change', async event => {
+    tornMinimizedMode = event.currentTarget.checked ? 'chat' : 'bubble';
+    await SLINK.core.storage.set('ui.main.minimizedMode', tornMinimizedMode);
   });
   byId('theme-options').addEventListener('click', async event => {
     const button = event.target.closest('[data-theme-id]');
