@@ -70,9 +70,12 @@ const gothic = {
   },
   tokens:{ '--slink-accent':'#780d19' }
 };
-assert.match(shellSource, /\.head \{ margin:64px 12% 0;.*background:transparent!important/);
+assert.match(shellSource, /window\.main>\.theme-content-shell \{ position:absolute; inset:8\.5% 15% 9%; z-index:2; display:flex/);
+assert.match(shellSource, /themeContentShell\.append\(main\.head, groups, tabs\)/);
+assert.match(shellSource, /themeContentShell\.append\(element\)/);
 assert.match(shellSource, /content > \*:not\(style\):not\(script\)::before \{[^}]*z-index:0;/);
-assert.match(shellSource, /background-image:var\(--slink-theme-panel-smoke-image\)!important/);
+assert.match(shellSource, /group-tab.*background:#181819!important/);
+assert.doesNotMatch(shellSource, /group-tab.*background-image:var\(--slink-theme-panel-smoke-image\)!important/);
 assert.doesNotMatch(shellSource, /group-tab::after.*z-index:-1/);
 
 themes.installCatalog({ schemaVersion:1, revision:'gothic-test', themes:[fallback, halloween, gothic] });
@@ -124,7 +127,7 @@ assert.match(shellSource, /\.tab::before \{ position:static; margin-right:1px; t
 assert.doesNotMatch(shellSource, /\.group-tab::before,:host\(\[data-slink-icon-theme="true"\]\) \.tab::before \{ position:absolute/);
 assert.match(shellSource, /data-slink-ornament="gothic"/);
 assert.match(shellSource, /opacity:\.68/);
-assert.match(shellSource, /window>\.head/);
+assert.match(shellSource, /window\.main>\.theme-content-shell/);
 assert.match(shellSource, /panel-smoke-image/);
 
 console.log('SLINK image theme asset checks passed.');

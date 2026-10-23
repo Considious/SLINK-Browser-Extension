@@ -19,8 +19,9 @@
     * { box-sizing:border-box; }
     .window { position:fixed; z-index:999999; width:min(350px,calc(100vw - 16px)); overflow:hidden; border:1px solid var(--slink-border); border-radius:10px; background:var(--slink-bg); color:var(--slink-text); box-shadow:0 10px 28px var(--slink-shadow); font:12px/1.4 Arial,sans-serif; }
     .window.main { display:flex; flex-direction:column; width:min(350px,calc(100vw - 16px)); height:min(560px,calc(100dvh - 16px)); min-width:min(300px,calc(100vw - 16px)); min-height:220px; max-width:calc(100vw - 8px); max-height:calc(100dvh - 8px); resize:both; }
-    .window.main > .head, .window.main > .groups, .window.main > .tabs { flex:0 0 auto; }
-    .window.main > .module-view { display:flex; flex:1 1 auto; flex-direction:column; min-height:0; overflow:hidden; }
+    .window.main > .theme-content-shell { display:contents; }
+    .window.main > .theme-content-shell > .head, .window.main > .theme-content-shell > .groups, .window.main > .theme-content-shell > .tabs { flex:0 0 auto; }
+    .window.main > .theme-content-shell > .module-view { display:flex; flex:1 1 auto; flex-direction:column; min-height:0; overflow:hidden; }
     .window[hidden], .module-view[hidden], .groups[hidden], .tabs[hidden], .tab[hidden] { display:none !important; }
     .bubble { position:fixed; right:12px; top:88px; z-index:999999; display:grid; place-items:center; width:50px; height:50px; padding:0; border:1px solid var(--slink-border); border-radius:50%; background:var(--slink-panel-bg); color:var(--slink-text); box-shadow:-3px 0 14px var(--slink-glow-left),3px 0 14px var(--slink-glow-right),0 8px 22px var(--slink-shadow); cursor:grab; touch-action:none; user-select:none; }
     .bubble[hidden] { display:none; }
@@ -70,8 +71,8 @@
     .status[data-tone="error"] { max-height:72px; overflow:auto; overscroll-behavior:contain; overflow-wrap:anywhere; white-space:normal; color:var(--slink-error); }
     .content { display:grid; align-content:start; grid-auto-rows:max-content; gap:7px; width:100%; min-width:0; max-height:min(420px,calc(100dvh - 210px)); overflow:auto; padding:9px 10px; }
     .content > * { min-width:0; max-width:100%; }
-    .window.main > .module-view > .module-head, .window.main > .module-view > .status, .window.main > .module-view > .actions { flex:0 0 auto; }
-    .window.main > .module-view > .content { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
+    .window.main > .theme-content-shell > .module-view > .module-head, .window.main > .theme-content-shell > .module-view > .status, .window.main > .theme-content-shell > .module-view > .actions { flex:0 0 auto; }
+    .window.main > .theme-content-shell > .module-view > .content { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
     .row { display:grid; grid-template-columns:105px minmax(0,1fr); gap:8px; }
     .label { color:var(--slink-muted); }
     .value { overflow-wrap:anywhere; color:var(--slink-text); }
@@ -94,17 +95,18 @@
     :host([data-slink-ornament="gothic"]) .window { isolation:isolate; background-color:#09090a; background-image:linear-gradient(color-mix(in srgb,rgb(6 5 6) var(--slink-theme-veil-top,24%),transparent),color-mix(in srgb,rgb(6 5 6) var(--slink-theme-veil-bottom,46%),transparent)),var(--slink-theme-background-image); background-position:center top; background-repeat:no-repeat; background-size:cover; }
     :host([data-slink-ornament="gothic"]) .window::before { position:absolute; inset:0; z-index:0; background-image:var(--slink-theme-health-roses-image),var(--slink-theme-frame-image); background-position:center; background-repeat:no-repeat; background-size:100% 100%; content:""; pointer-events:none; user-select:none; }
     :host([data-slink-ornament="gothic"]) .window::after { position:absolute; inset:0; z-index:1; background:var(--slink-theme-health-blood-image) center/100% 100% no-repeat; content:""; opacity:.68; pointer-events:none; user-select:none; }
-    :host([data-slink-ornament="gothic"]) .window>.head,:host([data-slink-ornament="gothic"]) .window>.groups,:host([data-slink-ornament="gothic"]) .window>.tabs,:host([data-slink-ornament="gothic"]) .window>.module-view { position:relative; z-index:2; }
-    :host([data-slink-ornament="gothic"]) .head { margin:64px 12% 0; padding:6px 0; border:0; background:transparent!important; box-shadow:none; backdrop-filter:none; }
-    :host([data-slink-ornament="gothic"]) .groups,:host([data-slink-ornament="gothic"]) .tabs,:host([data-slink-ornament="gothic"]) .module-view { background:transparent!important; }
+    :host([data-slink-ornament="gothic"]) .window.main>.theme-content-shell { position:absolute; inset:8.5% 15% 9%; z-index:2; display:flex; min-width:0; min-height:0; overflow:hidden; flex-direction:column; }
+    :host([data-slink-ornament="gothic"]) .window.main .head { margin:0; padding:6px 0; border:0; background:transparent!important; box-shadow:none; backdrop-filter:none; }
+    :host([data-slink-ornament="gothic"]) .window.main .groups,:host([data-slink-ornament="gothic"]) .window.main .tabs,:host([data-slink-ornament="gothic"]) .window.main .module-view { background:transparent!important; }
+    :host([data-slink-ornament="gothic"]) .window:not(.main)>.head,:host([data-slink-ornament="gothic"]) .window:not(.main)>.content,:host([data-slink-ornament="gothic"]) .window:not(.main)>.actions { position:relative; z-index:2; }
     :host([data-slink-ornament="gothic"]) .content > *:not(style):not(script) { position:relative; isolation:isolate; background:transparent!important; }
     :host([data-slink-ornament="gothic"]) .content > *:not(style):not(script)::before { position:absolute; inset:-4px; z-index:0; background:var(--slink-theme-panel-smoke-image) center/100% 100% no-repeat; content:""; opacity:var(--slink-theme-panel-opacity,72%); pointer-events:none; }
     :host([data-slink-ornament="gothic"]) .content > *:not(style):not(script)>* { position:relative; z-index:1; }
     :host([data-slink-ornament="gothic"]) .content > *:nth-child(3n+2)::before { background-image:var(--slink-theme-panel-damask-image); }
     :host([data-slink-ornament="gothic"]) .content > *:nth-child(3n)::before { background-image:var(--slink-theme-panel-crimson-image); }
     :host([data-slink-ornament="gothic"]) .content > *:not(style):not(script) { border-color:transparent!important; box-shadow:none!important; }
-    :host([data-slink-ornament="gothic"]) .group-tab,:host([data-slink-ornament="gothic"]) .tab,:host([data-slink-ornament="gothic"]) .actions button { border-color:transparent!important; background-color:transparent!important; background-image:var(--slink-theme-panel-smoke-image)!important; background-position:center!important; background-repeat:no-repeat!important; background-size:100% 100%!important; box-shadow:none!important; backdrop-filter:none!important; }
-    :host([data-slink-ornament="gothic"]) .group-tab[aria-selected="true"],:host([data-slink-ornament="gothic"]) .tab[aria-selected="true"] { background-image:var(--slink-theme-panel-crimson-image)!important; }
+    :host([data-slink-ornament="gothic"]) .group-tab,:host([data-slink-ornament="gothic"]) .tab,:host([data-slink-ornament="gothic"]) .actions button { border:1px solid #a4a29c!important; border-radius:5px; background:#181819!important; color:#f0e9d9; box-shadow:none!important; backdrop-filter:none!important; }
+    :host([data-slink-ornament="gothic"]) .group-tab[aria-selected="true"],:host([data-slink-ornament="gothic"]) .tab[aria-selected="true"] { border-color:#f0e9d9!important; background:#780d19!important; color:#f0e9d9!important; }
     :host([data-slink-ornament="gothic"]) .module-head { flex-wrap:wrap; }
     :host([data-slink-ornament="gothic"]) .module-head::after { display:block; width:100%; height:64px; flex:1 0 100%; background-image:var(--slink-theme-divider-left-image),linear-gradient(90deg,transparent 10%,#e3e3df 28%,#4b4d50 50%,#e3e3df 72%,transparent 90%),var(--slink-theme-divider-middle-image),var(--slink-theme-divider-right-image); background-position:left center,center center,center center,right center; background-repeat:no-repeat,no-repeat,repeat-x,no-repeat; background-size:96px 64px,calc(100% - 170px) 2px,192px 128px,96px 64px; content:""; opacity:.9; pointer-events:none; }
     :host([data-slink-ornament="gothic"]) .nav-alert-count,:host([data-slink-ornament="gothic"]) .bubble-alert-count { width:28px; height:28px; padding:0; border:0; border-radius:0; background:var(--slink-theme-badge-ivory-image) center/contain no-repeat; color:#171514; box-shadow:none; font-size:11px; line-height:28px; }
@@ -185,7 +187,10 @@
     const tabs = document.createElement('nav');
     tabs.className = 'tabs';
     tabs.setAttribute('aria-label', 'SLINK tools');
-    main.head.after(groups, tabs);
+    const themeContentShell = document.createElement('div');
+    themeContentShell.className = 'theme-content-shell';
+    themeContentShell.append(main.head, groups, tabs);
+    main.element.append(themeContentShell);
     const bubble = document.createElement('button');
     bubble.type = 'button';
     bubble.className = 'bubble';
@@ -742,7 +747,7 @@
       const tabLabel = document.createElement('span'); tabLabel.textContent = module.shortTitle || module.title;
       const tabAlertBadge = document.createElement('span'); tabAlertBadge.className = 'nav-alert-count'; tabAlertBadge.hidden = true; tabAlertBadge.setAttribute('aria-hidden', 'true');
       tab.append(tabLabel, tabAlertBadge);
-      tabs.append(tab); main.element.append(element);
+      tabs.append(tab); themeContentShell.append(element);
       const group = String(module.group || 'other');
       if (!groupButtons.has(group)) {
         const groupButton = document.createElement('button');
