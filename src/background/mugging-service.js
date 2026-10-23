@@ -11,12 +11,13 @@
   const PENDING_KEY = 'mugging.contribution.pending.v1';
   const SYNC_KEY = 'mugging.contribution.sync.v1';
   const CLIENT_KEY = 'mugging.clientId.v1';
-  const OWN_STATS_KEY = 'mugging.ownBattleStats.v1';
+  const OWN_STATS_KEY = 'player.ownBattleStats.v1';
+  const LEGACY_OWN_STATS_KEY = 'mugging.ownBattleStats.v1';
   const ALARM = 'slink.mugging.contributor';
   const INACTIVE_AFTER_MS = 5 * 60_000;
   const CONTRIBUTION_CEILING = 40;
   const INTERACTIVE_RESERVE = 10;
-  const OWN_STATS_TTL_MS = 6 * 60 * 60_000;
+  const OWN_STATS_TTL_MS = 15 * 60_000;
   const ASSIGNMENT_REFRESH_MS = 5 * 60_000;
   const SYNC_INTERVAL_MS = 6 * 60 * 60_000;
   const SYNC_BATCH_SIZE = 100;
@@ -51,8 +52,30 @@
     return String(access?.tornKey || leveling?.tornKey || war?.tornKey || '').trim();
   }
 
+  function normalizeOwnBattleStats(value = {}) {
+    return {
+      total:Math.max(0, Number(value?.total) || 0),
+      level:Math.max(0, Math.trunc(Number(value?.level) || 0)),
+      checkedAt:Math.max(0, Number(value?.checkedAt) || 0)
+    };
+  }
+
+  async function storedOwnBattleStats() {
+    const [sharedValue, legacyValue] = await Promise.all([
+      SLINK.core.storage.get(OWN_STATS_KEY, null),
+      SLINK.core.storage.get(LEGACY_OWN_STATS_KEY, null)
+    ]);
+    const shared = normalizeOwnBattleStats(sharedValue);
+    const legacy = normalizeOwnBattleStats(legacyValue);
+    const newest = shared.checkedAt >= legacy.checkedAt ? shared : legacy;
+    if (newest.total > 0 && (shared.total !== newest.total || shared.level !== newest.level || shared.checkedAt !== newest.checkedAt)) {
+      await SLINK.core.storage.set(OWN_STATS_KEY, newest);
+    }
+    return newest;
+  }
+
   async function ownBattleStats(force = false) {
-    const cached = await SLINK.core.storage.get(OWN_STATS_KEY, null);
+    const cached = await storedOwnBattleStats();
     if (!force && Number(cached?.total) > 0 && Number(cached?.level) > 0 && Date.now() - Number(cached?.checkedAt || 0) < OWN_STATS_TTL_MS) return Number(cached.total);
     const key = await tornKey();
     if (!key) throw new Error('Save your Torn API key under API and feature access first.');
@@ -71,7 +94,7 @@
   }
 
   async function cachedOwnBattleStats() {
-    const cached = await SLINK.core.storage.get(OWN_STATS_KEY, null);
+    const cached = await storedOwnBattleStats();
     return Number(cached?.total) > 0 ? Number(cached.total) : 0;
   }
 
@@ -345,8 +368,13 @@
           limit:Math.max(1, Math.min(100, Math.trunc(Number(settings.limit) || 50)))
         })
       });
-      const ownProfile = await SLINK.core.storage.get(OWN_STATS_KEY, {});
-      const cache = normalizeCache({ ...response, userLevel:Math.max(0, Math.trunc(Number(ownProfile?.level) || 0)) });
+      const ownProfile = await storedOwnBattleStats();
+      const cache = normalizeCache({
+        ...response,
+        userBattleStats,
+        userLevel:Math.max(0, Math.trunc(Number(ownProfile?.level) || 0)),
+        ownBattleStatsCheckedAt:Math.max(0, Number(ownProfile?.checkedAt) || 0)
+      });
       await SLINK.core.storage.set(CACHE_KEY, cache);
       return { ...cache, contribution:await SLINK.core.storage.get(CONTRIBUTION_KEY, { enabled:false, mode:'disabled', fetched:0, skipped:0, errors:0, pendingSync:0 }) };
     })();
@@ -358,13 +386,19 @@
   }
 
   async function status() {
-    const [contribution, sync, pending] = await Promise.all([
+    const [contribution, sync, pending, ownProfile, storedCache] = await Promise.all([
       SLINK.core.storage.get(CONTRIBUTION_KEY, { enabled:false, mode:'disabled', fetched:0, skipped:0, errors:0, pendingSync:0 }),
       SLINK.core.storage.get(SYNC_KEY, {}),
-      SLINK.core.storage.get(PENDING_KEY, [])
+      SLINK.core.storage.get(PENDING_KEY, []),
+      storedOwnBattleStats(),
+      SLINK.core.storage.get(CACHE_KEY, {})
     ]);
+    const cache = normalizeCache(storedCache);
     return {
-      ...normalizeCache(await SLINK.core.storage.get(CACHE_KEY, {})),
+      ...cache,
+      userBattleStats:ownProfile.total > 0 ? ownProfile.total : cache.userBattleStats,
+      userLevel:ownProfile.level > 0 ? ownProfile.level : cache.userLevel,
+      ownBattleStatsCheckedAt:ownProfile.checkedAt,
       contribution:{
         ...contribution,
         pendingSync:Array.isArray(pending) ? pending.length : 0,
@@ -380,12 +414,16 @@
     'mugging.assignments.refresh':refresh,
     'mugging.contribution.run':runContribution,
     'mugging.contribution.sync':input => syncPending(input?.force === true),
-    'mugging.status':status
+    'mugging.status':status,
+    'battleStats.status':storedOwnBattleStats,
+    'battleStats.refresh':async () => { await ownBattleStats(true); return storedOwnBattleStats(); }
   });
 
   SLINK.define('services', 'mugging', Object.freeze({
     ALARM, BASE_URL, CONTRIBUTION_CEILING, INACTIVE_AFTER_MS, INTERACTIVE_RESERVE,
     battleStatsTotal, contributionBudget, contributionMode, ensureAlarm,
+    normalizeOwnBattleStats, storedOwnBattleStats,
     normalizeCache, refresh, reportForObservation, routes, runContribution, status, syncPending, touchActivity
   }));
 })(globalThis);
+

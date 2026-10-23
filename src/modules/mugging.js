@@ -165,7 +165,7 @@
         }
         busy = true; error = ''; notice = ''; render();
         try {
-          cache = normalizeCache(await SLINK.core.messaging.send('mugging.assignments.refresh', settings));
+          cache = normalizeCache(await SLINK.core.messaging.send('mugging.assignments.refresh', { ...settings, forceBattleStats:true }));
           notice = `Loaded ${cache.targets.length} rough Fair Fight assignments from cached Mugging intelligence.`;
         } catch (caught) {
           error = SLINK.core.format.errorMessage(caught);
@@ -298,3 +298,4 @@
     }
   });
 })(globalThis);
+
