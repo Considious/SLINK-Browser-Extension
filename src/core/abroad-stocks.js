@@ -53,19 +53,107 @@
       || null;
   }
 
+  function objectRecord(value) {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+  }
+
   function rows(value) {
     if (Array.isArray(value)) return value;
-    if (value && typeof value === 'object') return Object.values(value);
+    if (objectRecord(value)) return Object.values(value);
     return [];
+  }
+
+  function providerCountryRecord(value, fallback = '') {
+    const input = objectRecord(value) ? value : {};
+    const nested = objectRecord(input.country) ? input.country : {};
+    const codeCandidates = [
+      input.countryCode, input.country_code, input.yataCode, input.yata_code,
+      input.code, input.iata, nested.countryCode, nested.country_code,
+      nested.yataCode, nested.yata_code, nested.code, nested.iata, fallback
+    ];
+    const nameCandidates = [
+      input.countryName, input.country_name,
+      nested.name, nested.countryName, nested.country_name,
+      input.stocks || input.items || input.inventory || input.data ? input.name : '',
+      typeof input.country === 'string' ? input.country : ''
+    ];
+    for (const candidate of [...codeCandidates, ...nameCandidates]) {
+      const known = countryRecord(candidate);
+      if (known) return known;
+    }
+    const rawName = nameCandidates.map(value => String(value ?? '').trim()).find(Boolean) || '';
+    const rawCode = codeCandidates.map(value => String(value ?? '').trim()).find(value => /^[a-z0-9_-]{2,12}$/i.test(value)) || '';
+    const compactCode = key(rawCode).replace(/[^a-z0-9]/g, '');
+    const derivedCode = key(rawName).replace(/[^a-z0-9]/g, '').slice(0, 3);
+    const code = compactCode || derivedCode;
+    if (!code) return null;
+    return {
+      code,
+      name:rawName || rawCode.toUpperCase(),
+      minutes:null
+    };
+  }
+
+  function hasItemContainer(value) {
+    return objectRecord(value) && ['stocks','items','inventory','data'].some(name => Array.isArray(value[name]) || objectRecord(value[name]));
+  }
+
+  function keyedCountryRows(value) {
+    if (!objectRecord(value)) return [];
+    const wrapperKeys = new Set(['stocks','items','inventory','countries','data','result','timestamp','generatedAt','generated_at','updatedAt','updated_at']);
+    return Object.entries(value)
+      .filter(([country, record]) => !wrapperKeys.has(country) && (Array.isArray(record) || hasItemContainer(record)))
+      .map(([country, record]) => Array.isArray(record)
+        ? { country, stocks:record }
+        : { country, ...record });
+  }
+
+  function itemRows(value) {
+    if (Array.isArray(value)) return value;
+    if (!objectRecord(value)) return [];
+    return Object.entries(value).map(([fallbackId, item]) => {
+      if (!objectRecord(item)) return { id:fallbackId, quantity:item };
+      if (item.id !== undefined || item.itemId !== undefined || item.item_id !== undefined) return item;
+      return /^\d+$/.test(fallbackId) ? { id:Number(fallbackId), ...item } : item;
+    });
+  }
+
+  function flatCountryRows(value) {
+    if (!Array.isArray(value)) return [];
+    const grouped = new Map();
+    for (const item of value) {
+      const country = providerCountryRecord(item);
+      if (!country) continue;
+      const current = grouped.get(country.code) || { country:country.code, name:country.name, stocks:[] };
+      current.stocks.push(item);
+      grouped.set(country.code, current);
+    }
+    return [...grouped.values()];
   }
 
   function sourceCountries(payload) {
     const stocks = payload?.stocks || payload?.data?.stocks || payload?.result?.stocks;
-    if (stocks && typeof stocks === 'object' && !Array.isArray(stocks)) {
-      return Object.entries(stocks).map(([country, record]) => ({ country, ...(record || {}) }));
+    const stockRows = keyedCountryRows(stocks);
+    if (stockRows.length) return stockRows;
+
+    const countryCandidates = [
+      payload?.countries, payload?.data?.countries, payload?.result?.countries,
+      payload?.data, payload?.result
+    ];
+    for (const candidate of countryCandidates) {
+      if (Array.isArray(candidate) && candidate.some(hasItemContainer)) return candidate;
+      const keyed = keyedCountryRows(candidate);
+      if (keyed.length) return keyed;
     }
-    for (const candidate of [payload?.countries, payload?.data?.countries, payload?.result?.countries, payload?.data]) {
-      if (Array.isArray(candidate)) return candidate;
+
+    const flatCandidates = [
+      payload?.items, payload?.inventory, payload?.data?.items, payload?.data?.inventory,
+      payload?.result?.items, payload?.result?.inventory,
+      ...countryCandidates.filter(Array.isArray)
+    ];
+    for (const candidate of flatCandidates) {
+      const grouped = flatCountryRows(candidate);
+      if (grouped.length) return grouped;
     }
     return [];
   }
@@ -85,21 +173,41 @@
     if (!provider) throw new Error('Unknown abroad-stock provider.');
     const normalized = [];
     for (const countryInput of sourceCountries(payload || {})) {
-      const country = countryRecord(countryInput?.country || countryInput?.code || countryInput?.iata || countryInput?.yataCode || countryInput?.name);
+      const country = providerCountryRecord(countryInput, countryInput?.country);
       if (!country) continue;
       const updatedAt = timestamp(
-        countryInput?.update ?? countryInput?.updatedAt ?? countryInput?.lastUpdated ?? countryInput?.timestamp,
-        payload?.timestamp ?? payload?.generatedAt ?? fetchedAt
+        countryInput?.update ?? countryInput?.updatedAt ?? countryInput?.updated_at
+          ?? countryInput?.lastUpdated ?? countryInput?.last_updated ?? countryInput?.timestamp,
+        payload?.timestamp ?? payload?.generatedAt ?? payload?.generated_at ?? fetchedAt
       );
-      const itemRows = rows(countryInput?.stocks || countryInput?.items || countryInput?.inventory || countryInput?.data);
-      for (const item of itemRows) {
-        const name = String(item?.name || item?.itemName || item?.item || '').trim();
-        const id = Math.max(0, Math.trunc(finite(item?.id ?? item?.itemId ?? item?.item_id) || 0));
+      const source = countryInput?.stocks ?? countryInput?.items ?? countryInput?.inventory ?? countryInput?.data;
+      for (const item of itemRows(source)) {
+        const nestedItem = objectRecord(item?.item) ? item.item : {};
+        const name = String(
+          item?.name ?? item?.itemName ?? item?.item_name ?? nestedItem?.name
+            ?? (typeof item?.item === 'string' ? item.item : '')
+        ).trim();
+        const id = Math.max(0, Math.trunc(finite(
+          item?.id ?? item?.itemId ?? item?.item_id ?? nestedItem?.id ?? nestedItem?.itemId
+        ) || 0));
         if (!id && !name) continue;
-        const quantity = finite(item?.quantity ?? item?.stock ?? item?.current ?? item?.amount);
-        const cost = finite(item?.cost ?? item?.buyPrice ?? item?.price ?? item?.foreignPrice);
-        let nextRestockAt = itemTimestamp(item, ['nextRestock','next_restock','nextRestockAt','estimatedRestockAt','restockAt']);
-        if (!nextRestockAt && finite(item?.estimatedRestockMinutes) !== null) nextRestockAt = fetchedAt + Number(item.estimatedRestockMinutes) * 60_000;
+        const quantity = finite(
+          item?.quantity ?? item?.stock ?? item?.current ?? item?.currentStock
+            ?? item?.current_stock ?? item?.amount ?? item?.available
+        );
+        const cost = finite(
+          item?.cost ?? item?.buyPrice ?? item?.buy_price ?? item?.price
+            ?? item?.foreignPrice ?? item?.foreign_price
+        );
+        let nextRestockAt = itemTimestamp(item, [
+          'nextRestock','next_restock','nextRestockAt','next_restock_at',
+          'estimatedRestockAt','estimated_restock_at','estimatedRestockTime',
+          'restockAt','restock_at'
+        ]);
+        const estimatedMinutes = finite(item?.estimatedRestockMinutes ?? item?.estimated_restock_minutes ?? item?.restockMinutes);
+        if (!nextRestockAt && estimatedMinutes !== null && estimatedMinutes >= 0) {
+          nextRestockAt = timestamp(payload?.generatedAt ?? payload?.generated_at, fetchedAt) + estimatedMinutes * 60_000;
+        }
         normalized.push({
           provider:providerId,
           countryCode:country.code,
@@ -108,8 +216,12 @@
           itemName:name || ('Item ' + id),
           quantity:quantity === null ? null : Math.max(0, Math.trunc(quantity)),
           cost:cost === null ? null : Math.max(0, Math.round(cost)),
-          updatedAt,
-          lastRestockAt:itemTimestamp(item, ['lastRestock','last_restock','lastRestockAt','previousRestockAt']),
+          updatedAt:itemTimestamp(item, [
+            'stockUpdatedAt','stock_updated_at','updatedAt','updated_at','lastUpdated','last_updated','timestamp'
+          ], updatedAt),
+          lastRestockAt:itemTimestamp(item, [
+            'lastRestock','last_restock','lastRestockAt','last_restock_at','previousRestockAt','previous_restock_at'
+          ]),
           nextRestockAt,
           predictionSource:nextRestockAt ? provider.label : ''
         });

@@ -41,6 +41,36 @@ assert(yata.length === 1, 'YATA country/item payload was not normalized.');
 assert(yata[0].countryCode === 'mex' && yata[0].itemName === 'Xanax', 'Normalized YATA identity is wrong.');
 assert(prometheus.length === 1 && prometheus[0].quantity === 39, 'Prometheus payload was not normalized.');
 
+const futureItem = abroad.normalizeProvider('yata', {
+  stocks:{
+    mex:{
+      stocks:[{ id:9999, name:'Future provider item', quantity:7, cost:123456 }]
+    }
+  }
+}, fetchedAt);
+assert(futureItem.length === 1 && futureItem[0].itemId === 9999, 'New provider items must not require a hard-coded catalog update.');
+
+const futureCountry = abroad.normalizeProvider('prometheus', {
+  data:{
+    nzl:{
+      name:'New Zealand',
+      items:{
+        777:{ item_name:'Kiwi', current_stock:4, buy_price:50 }
+      }
+    }
+  }
+}, fetchedAt);
+assert(futureCountry.length === 1, 'Unknown provider destinations should not be silently discarded.');
+assert(futureCountry[0].countryCode === 'nzl' && futureCountry[0].countryName === 'New Zealand', 'Dynamic country identity was not preserved.');
+assert(futureCountry[0].itemId === 777 && futureCountry[0].quantity === 4, 'Object-keyed provider items were not normalized.');
+
+const flatItems = abroad.normalizeProvider('tornIntel', {
+  data:{
+    items:[{ country_code:'mex', item_id:206, item_name:'Xanax', available:5, foreign_price:735000 }]
+  }
+}, fetchedAt);
+assert(flatItems.length === 1 && flatItems[0].countryCode === 'mex' && flatItems[0].quantity === 5, 'Flat provider item lists were not normalized.');
+
 const merged = abroad.mergeSnapshots({ yata, prometheus });
 assert(merged.length === 1, 'Matching provider rows should merge into one country/item row.');
 assert(merged[0].sources.yata.quantity === 41 && merged[0].sources.prometheus.quantity === 39, 'Merged provider readings are missing.');
