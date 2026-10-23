@@ -43,8 +43,33 @@ const halloween = {
   },
   tokens:{ '--slink-accent':'#a72cff' }
 };
+const asset = name => `https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/${name}`;
+const gothic = {
+  id:'gothic-valentines',
+  label:'Gothic Valentines',
+  description:'Image-backed steel and roses theme.',
+  scope:'slink.theme.gothic-valentines',
+  ornament:'gothic',
+  swatch:['#09090a','#780d19','#f0e9d9'],
+  assets:{
+    background:asset('gothic-valentines-background.png'),
+    brandIcon:asset('gothic-valentines-rose-icon.png'),
+    chatIcon:asset('gothic-valentines-rose-icon.png'),
+    frame:asset('gothic-valentines-frame.png'),
+    panelSmoke:asset('gothic-valentines-panel-smoke.png'),
+    panelDamask:asset('gothic-valentines-panel-damask.png'),
+    panelCrimson:asset('gothic-valentines-panel-crimson.png'),
+    dividerLeft:asset('gothic-valentines-divider-left.png'),
+    dividerMiddle:asset('gothic-valentines-divider-middle.png'),
+    dividerRight:asset('gothic-valentines-divider-right.png'),
+    healthRoses:Object.fromEntries(['100','075','050','025','004'].map(state => [state, asset(`gothic-valentines-roses-${state}.png`)])),
+    healthBlood:Object.fromEntries(['100','075','050','025','004'].map(state => [state, asset(`gothic-valentines-blood-${state}.png`)])),
+    packaged:true
+  },
+  tokens:{ '--slink-accent':'#780d19' }
+};
 
-themes.installCatalog({ schemaVersion:1, revision:'halloween-test', themes:[fallback, halloween] });
+themes.installCatalog({ schemaVersion:1, revision:'gothic-test', themes:[fallback, halloween, gothic] });
 assert.equal(themes.resolve('halloween-2026', { scopes:[] }).id, 'slink-dark');
 assert.equal(themes.resolve('halloween-2026', { scopes:['slink.theme.halloween'] }).id, 'halloween-2026');
 assert.equal(themes.resolve('halloween-2026', { scopes:['admin.*'] }).id, 'halloween-2026');
@@ -62,6 +87,16 @@ assert.equal(themes.applyPanelOpacity(element, 0), 0);
 assert.equal(element.style.values.get('--slink-theme-panel-opacity'), '0%');
 assert.equal(element.style.values.get('--slink-theme-panel-blur'), '0.00px');
 assert.equal(element.style.values.get('--slink-theme-veil-top'), '0.00%');
+assert.equal(themes.resolve('gothic-valentines', { scopes:['slink.theme.gothic-valentines'] }).ornament, 'gothic');
+assert.equal(themes.healthState(76, 100), '100');
+assert.equal(themes.healthState(75, 100), '075');
+assert.equal(themes.healthState(50, 100), '050');
+assert.equal(themes.healthState(5, 100), '025');
+assert.equal(themes.healthState(4, 100), '004');
+themes.applyHealthToElement(element, gothic, 4, 100);
+assert.equal(element.dataset.slinkThemeHealth, '004');
+assert.match(element.style.values.get('--slink-theme-health-roses-image'), /chrome-extension:\/\/unit\/assets\/themes\/gothic-valentines-roses-004\.png/);
+assert.match(element.style.values.get('--slink-theme-health-blood-image'), /chrome-extension:\/\/unit\/assets\/themes\/gothic-valentines-blood-004\.png/);
 assert.throws(() => themes.validateCatalog({
   schemaVersion:1,
   revision:'bad-asset',
@@ -71,6 +106,7 @@ assert.throws(() => themes.validateCatalog({
 assert.match(shellSource, /\.group-tab::before \{ position:absolute;/);
 assert.match(shellSource, /\.tab::before \{ position:static; margin-right:1px; transform:none; \}/);
 assert.doesNotMatch(shellSource, /\.group-tab::before,:host\(\[data-slink-icon-theme="true"\]\) \.tab::before \{ position:absolute/);
+assert.match(shellSource, /data-slink-ornament="gothic"/);
 
-console.log('SLINK Halloween 2026 theme asset checks passed.');
+console.log('SLINK image theme asset checks passed.');
 

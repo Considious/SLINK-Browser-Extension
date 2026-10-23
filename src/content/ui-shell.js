@@ -91,6 +91,11 @@
     :host([data-slink-image-theme="true"]) .head,:host([data-slink-image-theme="true"]) .groups,:host([data-slink-image-theme="true"]) .tabs,:host([data-slink-image-theme="true"]) .module-view { background:color-mix(in srgb,var(--slink-bg) var(--slink-theme-panel-opacity,72%),transparent); }
     :host([data-slink-image-theme="true"]) .group-tab[aria-selected="true"],:host([data-slink-image-theme="true"]) .tab[aria-selected="true"] { border-color:var(--slink-accent-alt); background:var(--slink-selected-bg); box-shadow:-3px 0 11px var(--slink-glow-left),3px 0 13px var(--slink-glow-right); }
     :host([data-slink-image-theme="true"]) .content > * { border-color:var(--slink-border-soft); }
+    :host([data-slink-ornament="gothic"]) .window { background-image:linear-gradient(color-mix(in srgb,rgb(6 5 6) var(--slink-theme-veil-top,24%),transparent),color-mix(in srgb,rgb(6 5 6) var(--slink-theme-veil-bottom,46%),transparent)),var(--slink-theme-health-blood-image),var(--slink-theme-health-roses-image),var(--slink-theme-frame-image),var(--slink-theme-background-image); background-position:center top; background-repeat:no-repeat; background-size:cover; }
+    :host([data-slink-ornament="gothic"]) .head { background-image:linear-gradient(color-mix(in srgb,var(--slink-bg) var(--slink-theme-panel-opacity,72%),transparent),color-mix(in srgb,var(--slink-bg) var(--slink-theme-panel-opacity,72%),transparent)),var(--slink-theme-panel-crimson-image); background-position:center; background-size:cover; }
+    :host([data-slink-ornament="gothic"]) .groups,:host([data-slink-ornament="gothic"]) .tabs { background-image:linear-gradient(color-mix(in srgb,var(--slink-bg) var(--slink-theme-panel-opacity,72%),transparent),color-mix(in srgb,var(--slink-bg) var(--slink-theme-panel-opacity,72%),transparent)),var(--slink-theme-panel-damask-image); background-position:center; background-size:cover; }
+    :host([data-slink-ornament="gothic"]) .module-view { background-image:linear-gradient(color-mix(in srgb,var(--slink-bg) var(--slink-theme-panel-opacity,72%),transparent),color-mix(in srgb,var(--slink-bg) var(--slink-theme-panel-opacity,72%),transparent)),var(--slink-theme-panel-smoke-image); background-position:center; background-size:cover; }
+    :host([data-slink-ornament="gothic"]) .module-head::after { display:block; min-width:42px; max-width:180px; height:14px; flex:1 1 120px; background-image:var(--slink-theme-divider-left-image),var(--slink-theme-divider-middle-image),var(--slink-theme-divider-right-image); background-position:left center,center,right center; background-repeat:no-repeat,repeat-x,no-repeat; background-size:auto 100%,auto 58%,auto 100%; content:""; opacity:.88; }
     :host([data-slink-icon-theme="true"]) .group-tab::before,:host([data-slink-icon-theme="true"]) .tab::before,:host([data-slink-icon-theme="true"]) .module-head strong::before { display:inline-block; width:17px; height:17px; flex:0 0 17px; margin-right:4px; vertical-align:-4px; background-image:var(--slink-theme-icon-sheet); background-repeat:no-repeat; background-size:400% 500%; filter:drop-shadow(0 0 4px var(--slink-glow-right)); content:""; }
     :host([data-slink-icon-theme="true"]) .group-tab::before { position:absolute; left:6px; top:50%; margin-right:0; transform:translateY(-50%); }
     :host([data-slink-icon-theme="true"]) .tab::before { position:static; margin-right:1px; transform:none; }
@@ -131,6 +136,7 @@
     let chatButtonObserver = null;
     let chatButtonAlertCount = 0;
     let chatButtonTheme = null;
+    let themeHealth = { current:100, maximum:100 };
     let minimizedMode = 'bubble';
 
     function setThemePanelOpacity(value) {
@@ -146,8 +152,14 @@
       host.dataset.slinkBrandIcon = theme.assets?.brandIcon ? 'true' : 'false';
       themeStyle.textContent = `:host{${SLINK.core.themes.cssVariables(theme.id, permissions)}}`;
       chatButtonTheme = theme;
+      SLINK.core.themes.applyHealthToElement(host, theme, themeHealth.current, themeHealth.maximum);
       applyChatButtonTheme(chatButton, theme);
       return theme;
+    }
+
+    function setThemeHealth(current, maximum) {
+      themeHealth = { current:Number(current), maximum:Number(maximum) };
+      return SLINK.core.themes.applyHealthToElement(host, chatButtonTheme || SLINK.core.themes.DEFAULT_THEME_ID, current, maximum);
     }
     setTheme(options.themeId || SLINK.core.themes.DEFAULT_THEME_ID, options.permissions || {});
 
@@ -836,6 +848,7 @@
       setBubbleAlert,
       setAlertCount,
       setTheme,
+      setThemeHealth,
       setThemePanelOpacity,
       setMinimizedMode,
       setCollapsed,

@@ -72,6 +72,7 @@
 
       function render(status) {
         current = status;
+        ui.setThemeHealth?.(status?.life?.current, status?.life?.maximum);
         const alerts = Array.isArray(status?.activeAlerts) ? status.activeAlerts : [];
         ui.setAlertCount('adhd', alerts.length, { group:'efficiency', label:'active Efficiency reminders' });
         updateStatus();

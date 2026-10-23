@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.18.99",
+  "version": "0.19.00",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -39,7 +39,26 @@
         "assets/themes/halloween-2026-background.png",
         "assets/themes/halloween-2026-icons.png",
         "assets/themes/halloween-2026-brand.png",
-        "assets/themes/halloween-2026-chat.png"
+        "assets/themes/halloween-2026-chat.png",
+        "assets/themes/gothic-valentines-background.png",
+        "assets/themes/gothic-valentines-frame.png",
+        "assets/themes/gothic-valentines-rose-icon.png",
+        "assets/themes/gothic-valentines-panel-smoke.png",
+        "assets/themes/gothic-valentines-panel-damask.png",
+        "assets/themes/gothic-valentines-panel-crimson.png",
+        "assets/themes/gothic-valentines-divider-left.png",
+        "assets/themes/gothic-valentines-divider-middle.png",
+        "assets/themes/gothic-valentines-divider-right.png",
+        "assets/themes/gothic-valentines-roses-100.png",
+        "assets/themes/gothic-valentines-roses-075.png",
+        "assets/themes/gothic-valentines-roses-050.png",
+        "assets/themes/gothic-valentines-roses-025.png",
+        "assets/themes/gothic-valentines-roses-004.png",
+        "assets/themes/gothic-valentines-blood-100.png",
+        "assets/themes/gothic-valentines-blood-075.png",
+        "assets/themes/gothic-valentines-blood-050.png",
+        "assets/themes/gothic-valentines-blood-025.png",
+        "assets/themes/gothic-valentines-blood-004.png"
       ],
       "matches": [
         "https://www.torn.com/*"

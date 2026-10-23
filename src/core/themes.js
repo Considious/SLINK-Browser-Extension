@@ -11,14 +11,35 @@
     background:'--slink-theme-background-image',
     iconSheet:'--slink-theme-icon-sheet',
     brandIcon:'--slink-theme-brand-icon',
-    chatIcon:'--slink-theme-chat-icon'
+    chatIcon:'--slink-theme-chat-icon',
+    frame:'--slink-theme-frame-image',
+    panelSmoke:'--slink-theme-panel-smoke-image',
+    panelDamask:'--slink-theme-panel-damask-image',
+    panelCrimson:'--slink-theme-panel-crimson-image',
+    dividerLeft:'--slink-theme-divider-left-image',
+    dividerMiddle:'--slink-theme-divider-middle-image',
+    dividerRight:'--slink-theme-divider-right-image'
   });
+  const HEALTH_STATES = Object.freeze(['100', '075', '050', '025', '004']);
   const ASSET_ORIGIN = 'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/';
   const PACKAGED_ASSET_FILES = new Set([
     'halloween-2026-background.png',
     'halloween-2026-icons.png',
     'halloween-2026-brand.png',
-    'halloween-2026-chat.png'
+    'halloween-2026-chat.png',
+    'gothic-valentines-background.png',
+    'gothic-valentines-frame.png',
+    'gothic-valentines-rose-icon.png',
+    'gothic-valentines-panel-smoke.png',
+    'gothic-valentines-panel-damask.png',
+    'gothic-valentines-panel-crimson.png',
+    'gothic-valentines-divider-left.png',
+    'gothic-valentines-divider-middle.png',
+    'gothic-valentines-divider-right.png',
+    ...HEALTH_STATES.flatMap(state => [
+      `gothic-valentines-roses-${state}.png`,
+      `gothic-valentines-blood-${state}.png`
+    ])
   ]);
   const TOKEN_NAMES = new Set([
     '--slink-bg', '--slink-bg-raised', '--slink-bg-control', '--slink-surface', '--slink-card',
@@ -77,19 +98,32 @@
     return value;
   }
 
+  function normalizeHealthAssets(raw, themeId, kind) {
+    if (raw === undefined || raw === null) return Object.freeze(Object.fromEntries(HEALTH_STATES.map(state => [state, ''])));
+    if (typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`Theme ${themeId} has invalid ${kind} assets.`);
+    return Object.freeze(Object.fromEntries(HEALTH_STATES.map(state => [
+      state,
+      validateAssetUrl(raw[state], themeId, `${kind} ${state}`)
+    ])));
+  }
+
   function normalizeAssets(entry, themeId) {
-    if (entry?.assets === undefined || entry?.assets === null) return Object.freeze({ background:'', iconSheet:'', brandIcon:'', chatIcon:'', packaged:false });
+    if (entry?.assets === undefined || entry?.assets === null) return Object.freeze({
+      ...Object.fromEntries(Object.keys(ASSET_VARIABLES).map(kind => [kind, ''])),
+      healthRoses:normalizeHealthAssets(null, themeId, 'health roses'),
+      healthBlood:normalizeHealthAssets(null, themeId, 'health blood'),
+      packaged:false
+    });
     if (typeof entry.assets !== 'object' || Array.isArray(entry.assets)) throw new Error(`Theme ${themeId} has invalid assets.`);
-    const background = validateAssetUrl(entry.assets.background, themeId, 'background');
-    const iconSheet = validateAssetUrl(entry.assets.iconSheet, themeId, 'icon sheet');
-    const brandIcon = validateAssetUrl(entry.assets.brandIcon, themeId, 'brand icon');
-    const chatIcon = validateAssetUrl(entry.assets.chatIcon, themeId, 'chat icon');
-    const assetFiles = [background, iconSheet, brandIcon, chatIcon].filter(Boolean).map(value => new URL(value).pathname.split('/').pop());
+    const direct = Object.fromEntries(Object.keys(ASSET_VARIABLES).map(kind => [kind, validateAssetUrl(entry.assets[kind], themeId, kind)]));
+    const healthRoses = normalizeHealthAssets(entry.assets.healthRoses, themeId, 'health roses');
+    const healthBlood = normalizeHealthAssets(entry.assets.healthBlood, themeId, 'health blood');
+    const assetFiles = [...Object.values(direct), ...Object.values(healthRoses), ...Object.values(healthBlood)]
+      .filter(Boolean).map(value => new URL(value).pathname.split('/').pop());
     return Object.freeze({
-      background,
-      iconSheet,
-      brandIcon,
-      chatIcon,
+      ...direct,
+      healthRoses,
+      healthBlood,
       // Older Worker builds omitted the packaged flag. Recognize only the
       // reviewed assets that are actually shipped in this extension package.
       packaged:entry.assets.packaged === true || (assetFiles.length > 0 && assetFiles.every(file => PACKAGED_ASSET_FILES.has(file)))
@@ -98,6 +132,11 @@
 
   function resolvedAssetUrl(theme, kind) {
     const remote = String(theme?.assets?.[kind] || '');
+    return resolvedAssetValue(theme, remote);
+  }
+
+  function resolvedAssetValue(theme, raw) {
+    const remote = String(raw || '');
     if (!remote) return '';
     if (theme.assets.packaged && global.chrome?.runtime?.getURL) {
       const filename = new URL(remote).pathname.split('/').pop();
@@ -108,10 +147,39 @@
 
   function assetVariables(themeOrId, permissions = {}) {
     const theme = typeof themeOrId === 'string' ? resolve(themeOrId, permissions) : themeOrId;
-    return Object.fromEntries(Object.entries(ASSET_VARIABLES).map(([kind, property]) => {
+    return Object.freeze({
+      ...Object.fromEntries(Object.entries(ASSET_VARIABLES).map(([kind, property]) => {
       const url = resolvedAssetUrl(theme, kind);
       return [property, url ? `url("${url}")` : 'none'];
-    }));
+      })),
+      ...healthAssetVariables(theme, 100, 100)
+    });
+  }
+
+  function healthState(current, maximum) {
+    const max = Number(maximum);
+    const value = Number(current);
+    if (!Number.isFinite(value) || !Number.isFinite(max) || max <= 0) return '100';
+    const percent = Math.max(0, Math.min(100, value / max * 100));
+    return percent > 75 ? '100' : percent > 50 ? '075' : percent > 25 ? '050' : percent >= 5 ? '025' : '004';
+  }
+
+  function healthAssetVariables(themeOrId, current, maximum, permissions = {}) {
+    const theme = typeof themeOrId === 'string' ? resolve(themeOrId, permissions) : themeOrId;
+    const state = healthState(current, maximum);
+    const roses = resolvedAssetValue(theme, theme?.assets?.healthRoses?.[state]);
+    const blood = resolvedAssetValue(theme, theme?.assets?.healthBlood?.[state]);
+    return Object.freeze({
+      '--slink-theme-health-roses-image':roses ? `url("${roses}")` : 'none',
+      '--slink-theme-health-blood-image':blood ? `url("${blood}")` : 'none'
+    });
+  }
+
+  function applyHealthToElement(element, themeOrId, current, maximum, permissions = {}) {
+    if (!element?.style) throw new TypeError('A styleable element is required to apply SLINK theme health artwork.');
+    for (const [name, value] of Object.entries(healthAssetVariables(themeOrId, current, maximum, permissions))) element.style.setProperty(name, value);
+    element.dataset.slinkThemeHealth = healthState(current, maximum);
+    return element.dataset.slinkThemeHealth;
   }
 
   const THEMES = Object.freeze({
@@ -267,7 +335,7 @@
         label,
         description,
         scope,
-        ornament:['coil', 'halloween'].includes(entry.ornament) ? entry.ornament : 'none',
+        ornament:['coil', 'halloween', 'gothic'].includes(entry.ornament) ? entry.ornament : 'none',
         swatch:Object.freeze(entry.swatch.map(String)),
         assets:normalizeAssets(entry, id),
         tokens:tokens(values)
@@ -368,9 +436,12 @@
     THEMES,
     ASSET_VARIABLES,
     assetVariables,
+    applyHealthToElement,
     applyPanelOpacity,
     applyToElement,
     cssVariables,
+    healthAssetVariables,
+    healthState,
     normalizePanelOpacity,
     panelOpacityVariables,
     catalog,
