@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const source = fs.readFileSync(new URL('../src/core/themes.js', import.meta.url), 'utf8');
+const shellSource = fs.readFileSync(new URL('../src/content/ui-shell.js', import.meta.url), 'utf8');
 const context = {
   URL,
   chrome:{ runtime:{ getURL:path => `chrome-extension://unit/${path}` } },
@@ -66,6 +67,10 @@ assert.throws(() => themes.validateCatalog({
   revision:'bad-asset',
   themes:[fallback, { ...halloween, assets:{ background:'https://evil.test/halloween.jpg' } }]
 }), /disallowed/);
+
+assert.match(shellSource, /\.group-tab::before \{ position:absolute;/);
+assert.match(shellSource, /\.tab::before \{ position:static; margin-right:1px; transform:none; \}/);
+assert.doesNotMatch(shellSource, /\.group-tab::before,:host\(\[data-slink-icon-theme="true"\]\) \.tab::before \{ position:absolute/);
 
 console.log('SLINK Halloween 2026 theme asset checks passed.');
 
