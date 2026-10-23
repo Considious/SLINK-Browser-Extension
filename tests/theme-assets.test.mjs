@@ -119,6 +119,9 @@ assert.match(shellSource, /\.group-tab::before \{ position:absolute;/);
 assert.match(shellSource, /\.tab::before \{ position:static; margin-right:1px; transform:none; \}/);
 assert.doesNotMatch(shellSource, /\.group-tab::before,:host\(\[data-slink-icon-theme="true"\]\) \.tab::before \{ position:absolute/);
 assert.match(shellSource, /data-slink-ornament="gothic"/);
+assert.match(shellSource, /opacity:\.68/);
+assert.match(shellSource, /window>\.head/);
+assert.match(shellSource, /panel-smoke-image/);
 
 console.log('SLINK image theme asset checks passed.');
 
