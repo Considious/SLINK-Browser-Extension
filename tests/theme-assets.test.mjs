@@ -56,6 +56,8 @@ const gothic = {
     brandIcon:asset('gothic-valentines-rose-icon.png'),
     chatIcon:asset('gothic-valentines-rose-icon.png'),
     frame:asset('gothic-valentines-frame.png'),
+    roseCorner:asset('gothic-valentines-rose-corner.png'),
+    badgeIvory:asset('gothic-valentines-badge-ivory.svg'),
     panelSmoke:asset('gothic-valentines-panel-smoke.png'),
     panelDamask:asset('gothic-valentines-panel-damask.png'),
     panelCrimson:asset('gothic-valentines-panel-crimson.png'),
@@ -97,6 +99,16 @@ themes.applyHealthToElement(element, gothic, 4, 100);
 assert.equal(element.dataset.slinkThemeHealth, '004');
 assert.match(element.style.values.get('--slink-theme-health-roses-image'), /chrome-extension:\/\/unit\/assets\/themes\/gothic-valentines-roses-004\.png/);
 assert.match(element.style.values.get('--slink-theme-health-blood-image'), /chrome-extension:\/\/unit\/assets\/themes\/gothic-valentines-blood-004\.png/);
+themes.installCatalog({ schemaVersion:1, revision:'legacy-worker-test', themes:[fallback, {
+  ...gothic,
+  ornament:'none',
+  assets:{ background:gothic.assets.background, brandIcon:gothic.assets.brandIcon, chatIcon:gothic.assets.chatIcon, packaged:true }
+}] });
+const recoveredGothic = themes.resolve('gothic-valentines', { scopes:['slink.theme.gothic-valentines'] });
+assert.equal(recoveredGothic.ornament, 'gothic');
+assert.match(themes.assetVariables(recoveredGothic)['--slink-theme-frame-image'], /gothic-valentines-frame\.png/);
+assert.match(themes.assetVariables(recoveredGothic)['--slink-theme-divider-left-image'], /gothic-valentines-divider-left\.png/);
+assert.match(themes.healthAssetVariables(recoveredGothic, 50, 100)['--slink-theme-health-roses-image'], /gothic-valentines-roses-050\.png/);
 assert.throws(() => themes.validateCatalog({
   schemaVersion:1,
   revision:'bad-asset',

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.19.00",
+  "version": "0.19.01",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -43,6 +43,8 @@
         "assets/themes/gothic-valentines-background.png",
         "assets/themes/gothic-valentines-frame.png",
         "assets/themes/gothic-valentines-rose-icon.png",
+        "assets/themes/gothic-valentines-rose-corner.png",
+        "assets/themes/gothic-valentines-badge-ivory.svg",
         "assets/themes/gothic-valentines-panel-smoke.png",
         "assets/themes/gothic-valentines-panel-damask.png",
         "assets/themes/gothic-valentines-panel-crimson.png",

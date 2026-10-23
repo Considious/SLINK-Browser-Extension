@@ -1,6 +1,6 @@
 {
   "name": "slink-browser-extension",
-  "version": "0.19.00",
+  "version": "0.19.01",
   "private": true,
   "description": "Chrome-first SLINK browser extension with Combat, Efficiency, and Quality of Life tools.",
   "scripts": {

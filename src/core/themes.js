@@ -13,6 +13,8 @@
     brandIcon:'--slink-theme-brand-icon',
     chatIcon:'--slink-theme-chat-icon',
     frame:'--slink-theme-frame-image',
+    roseCorner:'--slink-theme-rose-corner-image',
+    badgeIvory:'--slink-theme-badge-ivory-image',
     panelSmoke:'--slink-theme-panel-smoke-image',
     panelDamask:'--slink-theme-panel-damask-image',
     panelCrimson:'--slink-theme-panel-crimson-image',
@@ -30,6 +32,8 @@
     'gothic-valentines-background.png',
     'gothic-valentines-frame.png',
     'gothic-valentines-rose-icon.png',
+    'gothic-valentines-rose-corner.png',
+    'gothic-valentines-badge-ivory.svg',
     'gothic-valentines-panel-smoke.png',
     'gothic-valentines-panel-damask.png',
     'gothic-valentines-panel-crimson.png',
@@ -94,7 +98,7 @@
     if (!value.startsWith(ASSET_ORIGIN) || parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) {
       throw new Error(`Theme ${themeId} has a disallowed ${kind} asset URL.`);
     }
-    if (!/\.(?:png|jpe?g|webp)$/i.test(parsed.pathname)) throw new Error(`Theme ${themeId} has an unsupported ${kind} asset type.`);
+    if (!/\.(?:png|jpe?g|webp|svg)$/i.test(parsed.pathname)) throw new Error(`Theme ${themeId} has an unsupported ${kind} asset type.`);
     return value;
   }
 
@@ -116,8 +120,19 @@
     });
     if (typeof entry.assets !== 'object' || Array.isArray(entry.assets)) throw new Error(`Theme ${themeId} has invalid assets.`);
     const direct = Object.fromEntries(Object.keys(ASSET_VARIABLES).map(kind => [kind, validateAssetUrl(entry.assets[kind], themeId, kind)]));
-    const healthRoses = normalizeHealthAssets(entry.assets.healthRoses, themeId, 'health roses');
-    const healthBlood = normalizeHealthAssets(entry.assets.healthBlood, themeId, 'health blood');
+    let healthRoses = normalizeHealthAssets(entry.assets.healthRoses, themeId, 'health roses');
+    let healthBlood = normalizeHealthAssets(entry.assets.healthBlood, themeId, 'health blood');
+    if (themeId === 'gothic-valentines') {
+      const expected = {
+        background:'gothic-valentines-background.png', brandIcon:'gothic-valentines-rose-icon.png', chatIcon:'gothic-valentines-rose-icon.png',
+        frame:'gothic-valentines-frame.png', roseCorner:'gothic-valentines-rose-corner.png', badgeIvory:'gothic-valentines-badge-ivory.svg',
+        panelSmoke:'gothic-valentines-panel-smoke.png', panelDamask:'gothic-valentines-panel-damask.png', panelCrimson:'gothic-valentines-panel-crimson.png',
+        dividerLeft:'gothic-valentines-divider-left.png', dividerMiddle:'gothic-valentines-divider-middle.png', dividerRight:'gothic-valentines-divider-right.png'
+      };
+      for (const [kind, filename] of Object.entries(expected)) direct[kind] ||= `${ASSET_ORIGIN}${filename}`;
+      healthRoses = Object.freeze(Object.fromEntries(HEALTH_STATES.map(state => [state, healthRoses[state] || `${ASSET_ORIGIN}gothic-valentines-roses-${state}.png`])));
+      healthBlood = Object.freeze(Object.fromEntries(HEALTH_STATES.map(state => [state, healthBlood[state] || `${ASSET_ORIGIN}gothic-valentines-blood-${state}.png`])));
+    }
     const assetFiles = [...Object.values(direct), ...Object.values(healthRoses), ...Object.values(healthBlood)]
       .filter(Boolean).map(value => new URL(value).pathname.split('/').pop());
     return Object.freeze({
@@ -335,7 +350,7 @@
         label,
         description,
         scope,
-        ornament:['coil', 'halloween', 'gothic'].includes(entry.ornament) ? entry.ornament : 'none',
+        ornament:id === 'gothic-valentines' ? 'gothic' : ['coil', 'halloween', 'gothic'].includes(entry.ornament) ? entry.ornament : 'none',
         swatch:Object.freeze(entry.swatch.map(String)),
         assets:normalizeAssets(entry, id),
         tokens:tokens(values)
