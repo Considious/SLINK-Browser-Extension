@@ -5,6 +5,8 @@ import vm from 'node:vm';
 
 const limiterSource = fs.readFileSync(new URL('../src/core/torn-api-limiter.js', import.meta.url), 'utf8');
 const marketServiceSource = fs.readFileSync(new URL('../src/background/market-service.js', import.meta.url), 'utf8');
+const modulesSource = fs.readFileSync(new URL('../src/core/modules.js', import.meta.url), 'utf8');
+const contentScriptSource = fs.readFileSync(new URL('../src/content/content-script.js', import.meta.url), 'utf8');
 
 function runtimeFor(source, initial = {}) {
   const values = new Map(Object.entries(initial));
@@ -126,4 +128,12 @@ test('module loops use independent inactivity paths and preserve lightweight War
   assert.match(mugging, /syncMuggingVisibility/);
   assert.match(war, /war\.alerts\.prepare/);
   assert.match(warService, /async function prepareAlerts\(\)/);
+});
+
+test('inactive Torn tabs stop workers without destroying the cached interface', () => {
+  assert.match(modulesSource, /stopAll\(options = \{\}\)/);
+  assert.match(modulesSource, /const preserveUi = Boolean\(options\.preserveUi\)/);
+  assert.match(modulesSource, /!preserveUi && typeof entry\.moduleUi\?\.remove/);
+  assert.match(contentScriptSource, /stopAll\(\{ preserveUi:true \}\)/);
+  assert.doesNotMatch(contentScriptSource, /if \(modulesRunning\) \{ await SLINK\.modules\.stopAll\(\); modulesRunning = false; \}/);
 });

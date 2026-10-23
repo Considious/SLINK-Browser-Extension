@@ -100,7 +100,9 @@
       runtimeActive = next;
       if (!runtimeActive) {
         stopRuntimeTimers();
-        if (modulesRunning) { await SLINK.modules.stopAll(); modulesRunning = false; }
+        // Yield network/DOM workers to the newly active Torn tab without
+        // destroying this tab's mounted shell, selected page, or cached data.
+        if (modulesRunning) { await SLINK.modules.stopAll({ preserveUi:true }); modulesRunning = false; }
         return;
       }
       if (!initialized || modulesRunning) return;

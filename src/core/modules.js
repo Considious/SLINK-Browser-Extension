@@ -99,11 +99,12 @@
     return { started, denied, skipped, failed };
   }
 
-  async function stopAll() {
+  async function stopAll(options = {}) {
+    const preserveUi = Boolean(options.preserveUi);
     for (const [id, entry] of [...running.entries()].reverse()) {
       if (entry.module.stop) await entry.module.stop(entry.instance);
       else if (typeof entry.instance?.stop === 'function') await entry.instance.stop();
-      if (typeof entry.moduleUi?.remove === 'function') entry.moduleUi.remove();
+      if (!preserveUi && typeof entry.moduleUi?.remove === 'function') entry.moduleUi.remove();
       running.delete(id);
     }
   }
