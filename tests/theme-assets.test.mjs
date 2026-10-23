@@ -70,6 +70,10 @@ const gothic = {
   },
   tokens:{ '--slink-accent':'#780d19' }
 };
+assert.match(shellSource, /\.head \{ margin:64px 12% 0;.*background:transparent!important/);
+assert.match(shellSource, /content > \*:not\(style\):not\(script\)::before \{[^}]*z-index:0;/);
+assert.match(shellSource, /background-image:var\(--slink-theme-panel-smoke-image\)!important/);
+assert.doesNotMatch(shellSource, /group-tab::after.*z-index:-1/);
 
 themes.installCatalog({ schemaVersion:1, revision:'gothic-test', themes:[fallback, halloween, gothic] });
 assert.equal(themes.resolve('halloween-2026', { scopes:[] }).id, 'slink-dark');
