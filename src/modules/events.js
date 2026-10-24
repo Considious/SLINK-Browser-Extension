@@ -35,17 +35,23 @@
   }
 
   function readHalloweenBasketDom() {
-    const basketNameNode = [...document.querySelectorAll('span.name,.name')]
-      .find(node => /Halloween Basket/i.test(String(node.textContent || '')));
-    const wrapper = document.querySelector('.updates-grid-slides-wrapper');
-    if (!basketNameNode || !wrapper) return null;
+    const basket = [...document.querySelectorAll('.use-halloween-basket')].find(basketVisible);
+    const container = basket?.querySelector('.item-cont');
+    const grid = container?.querySelector('.updates-grid');
+    const wrapper = grid?.querySelector('.updates-grid-slides-wrapper');
+    const basketNameNode = basket?.closest('li[data-item]')?.querySelector('span.name,.name');
+    if (!basketNameNode || !container || !grid || !wrapper) return null;
     const upgrades = [...wrapper.querySelectorAll('.basket-update[data-basket-action="upgrade"][data-upgradeid]')].map(button => ({
       upgradeId:Number(button.dataset.upgradeid),
       name:button.querySelector('.update-name')?.textContent || '',
       unlocked:button.classList.contains('unlocked'),
       disabled:Boolean(button.disabled || button.closest('.updates-grid-slide')?.classList.contains('disabled'))
     }));
-    return { wrapper, rank:CORE.halloweenBasketRank(basketNameNode.textContent), upgrades };
+    return { basket, container, grid, wrapper, rank:CORE.halloweenBasketRank(basketNameNode.textContent), upgrades };
+  }
+
+  function basketVisible(element) {
+    return Boolean(element?.isConnected && element.getClientRects().length && global.getComputedStyle(element).visibility !== 'hidden');
   }
 
   function ensureOverlayStyle() {
@@ -53,14 +59,15 @@
     const style = document.createElement('style');
     style.id = OVERLAY_STYLE_ID;
     style.textContent = `
-      #${OVERLAY_ID}{margin:10px 0;padding:11px;border:2px solid #ff8a00;border-radius:9px;background:#17120d;color:#f5f5f5;box-shadow:0 2px 10px #0008;font:12px/1.4 Arial,sans-serif}
+      #${OVERLAY_ID}{position:relative!important;inset:auto!important;display:block;clear:both;box-sizing:border-box;min-width:0;max-width:100%;margin:6px 0;padding:7px 9px;border:1px solid #ff8a00;border-radius:7px;background:#17120d;color:#f5f5f5;font:12px/1.35 Arial,sans-serif}
       #${OVERLAY_ID} .slink-halloween-head{display:flex;align-items:start;justify-content:space-between;gap:9px;flex-wrap:wrap}
-      #${OVERLAY_ID} h3{margin:0;color:#ffb347;font-size:14px}#${OVERLAY_ID} p{margin:4px 0 0;color:#ccc}
-      #${OVERLAY_ID} ol{display:grid;gap:6px;margin:9px 0 0;padding:0;list-style:none}
-      #${OVERLAY_ID} li{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:7px;align-items:center;padding:7px;border:1px solid #555;border-radius:7px;background:#24201b}
+      #${OVERLAY_ID} h3{margin:0;color:#ffb347;font-size:13px}#${OVERLAY_ID} p{margin:2px 0 0;color:#ccc}
+      #${OVERLAY_ID} .slink-halloween-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}#${OVERLAY_ID} .slink-halloween-actions a{color:#8dd4ff}#${OVERLAY_ID} button{min-height:30px;padding:3px 8px;border:1px solid #777;border-radius:5px;background:#29231b;color:#eee;font:inherit;cursor:pointer}
+      #${OVERLAY_ID} ol{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));gap:5px;margin:6px 0 0;padding:0;list-style:none}
+      #${OVERLAY_ID} li{display:grid;grid-template-columns:24px minmax(0,1fr);gap:5px;align-items:start;padding:5px;border:1px solid #555;border-radius:5px;background:#24201b;min-width:0}
       #${OVERLAY_ID} li[data-current="true"]{border-color:#ff8a00;box-shadow:inset 3px 0 #ff8a00}
       #${OVERLAY_ID} li[data-disabled="true"]{opacity:.8}#${OVERLAY_ID} .slink-step{font-weight:900;color:#ffb347}
-      #${OVERLAY_ID} small{display:block;color:#aaa}#${OVERLAY_ID} .slink-state{font-weight:700;color:#9ee493;text-align:right}
+      #${OVERLAY_ID} small{display:block;color:#aaa}#${OVERLAY_ID} .slink-state{display:block;font-size:11px;font-weight:700;color:#9ee493}
       #${OVERLAY_ID} li[data-disabled="true"] .slink-state{color:#ffd166}
     `;
     (document.head || document.documentElement).append(style);
@@ -85,6 +92,8 @@
       let basketObserver = null;
       let basketScanTimer = null;
       let basketSignature = '';
+      let activeBasket = null;
+      let helperHidden = false;
 
       ui.setModuleStyles(`
         .slink-events{display:grid;gap:10px}.slink-event-card{min-width:0;padding:11px;border:1px solid var(--slink-border-soft);border-radius:9px;background:var(--slink-bg-control)}
@@ -102,7 +111,7 @@
         return `<article class="slink-event-card slink-event-progress"><div class="slink-event-head"><div><strong>Halloween basket guide</strong><small>Exact tested progression from the linked community guide</small></div><a href="${CORE.HALLOWEEN_GUIDE_URL}">Open guide</a></div>
           <div class="slink-halloween-path">${CORE.HALLOWEEN_UPGRADE_ORDER.map(upgrade => `<div><b>${upgrade.step}.</b> ${escapeHtml(upgrade.name)}${upgrade.optional ? ' <small>Optional</small>' : ''}</div>`).join('')}</div>
           <p><strong>Normal path skips:</strong> ${CORE.HALLOWEEN_SKIPPED_UPGRADES.map(upgrade => escapeHtml(upgrade.name)).join(', ')}. Mortal Coil, Inflation, and Summon Him belong to the separate M'aol path.</p>
-          <p>On the basket page, SLINK reads Torn's actual unlocked classes and overlays the next three guide steps. A merely selected upgrade never counts as unlocked.</p>
+          <p>On the basket page, SLINK reads Torn's actual unlocked classes and shows the next three guide steps below the treats bar. A merely selected upgrade never counts as unlocked.</p>
           <div class="slink-relic-list">${CORE.HALLOWEEN_RELICS.map(relic => `<div><strong>${escapeHtml(relic.name)}</strong><small>${escapeHtml(relic.effect)}</small></div>`).join('')}</div>
         </article>`;
       }
@@ -128,6 +137,7 @@
       }
 
       function renderBasketOverlay(snapshot) {
+        if (helperHidden) return;
         const guide = CORE.halloweenRecommendations(snapshot.upgrades, 3);
         const signature = JSON.stringify([snapshot.rank, snapshot.upgrades.map(item => [item.upgradeId,item.unlocked,item.disabled])]);
         if (signature === basketSignature && document.getElementById(OVERLAY_ID)) return;
@@ -137,9 +147,23 @@
         if (!overlay) {
           overlay = document.createElement('section');
           overlay.id = OVERLAY_ID;
-          snapshot.wrapper.parentElement?.insertBefore(overlay, snapshot.wrapper);
+          overlay.addEventListener('click', event => {
+            if (!event.target.closest('[data-slink-hide-helper]')) return;
+            event.preventDefault();
+            event.stopPropagation();
+            helperHidden = true;
+            overlay.remove();
+          });
         }
-        overlay.innerHTML = `<div class="slink-halloween-head"><div><h3>SLINK Halloween Upgrade Guide</h3><p>${escapeHtml(snapshot.rank || 'Halloween Basket')} · ${guide.completedCount}/${guide.total} guide steps complete</p></div><a href="${CORE.HALLOWEEN_GUIDE_URL}">Full guide</a></div>${guide.complete ? '<p><strong>Normal guide path complete.</strong></p>' : `<ol>${guide.recommendations.map(upgrade => `<li data-current="${String(upgrade.current)}" data-disabled="${String(upgrade.disabled)}"><span class="slink-step">#${upgrade.step}</span><span><strong>${escapeHtml(upgrade.name)}</strong><small>${upgrade.cost.toLocaleString()} treats${upgrade.note ? ' · ' + escapeHtml(upgrade.note) : ''}</small></span><span class="slink-state">${upgrade.disabled ? 'Locked—evolve basket' : upgrade.current ? 'Next' : 'Then'}</span></li>`).join('')}</ol>`}`;
+        if (overlay.parentElement !== snapshot.container || overlay.nextElementSibling !== snapshot.grid) snapshot.container.insertBefore(overlay, snapshot.grid);
+        overlay.innerHTML = `<div class="slink-halloween-head"><div><h3>SLINK Halloween Guide</h3><p>${escapeHtml(snapshot.rank || 'Halloween Basket')} · ${guide.completedCount}/${guide.total} complete</p></div><div class="slink-halloween-actions"><a href="${CORE.HALLOWEEN_GUIDE_URL}">Full guide</a><button type="button" data-slink-hide-helper>Hide helper</button></div></div>${guide.complete ? '<p><strong>Normal guide path complete.</strong></p>' : `<ol>${guide.recommendations.map(upgrade => `<li data-current="${String(upgrade.current)}" data-disabled="${String(upgrade.disabled)}"><span class="slink-step">#${upgrade.step}</span><span><strong>${escapeHtml(upgrade.name)}</strong><small>${upgrade.cost.toLocaleString()} treats${upgrade.note ? ' · ' + escapeHtml(upgrade.note) : ''}</small><span class="slink-state">${upgrade.disabled ? 'Locked—evolve basket' : upgrade.current ? 'Next' : 'Then'}</span></span></li>`).join('')}</ol>`}`;
+      }
+
+      function resetBasketSession() {
+        document.getElementById(OVERLAY_ID)?.remove();
+        basketSignature = '';
+        activeBasket = null;
+        helperHidden = false;
       }
 
       function onHalloweenBasketPage() {
@@ -149,15 +173,17 @@
       function scanBasket() {
         if (stopped) return;
         if (!onHalloweenBasketPage()) {
-          document.getElementById(OVERLAY_ID)?.remove();
-          basketSignature = '';
+          resetBasketSession();
           return;
         }
         const snapshot = readHalloweenBasketDom();
         if (!snapshot) {
-          document.getElementById(OVERLAY_ID)?.remove();
-          basketSignature = '';
+          resetBasketSession();
           return;
+        }
+        if (snapshot.basket !== activeBasket) {
+          resetBasketSession();
+          activeBasket = snapshot.basket;
         }
         renderBasketOverlay(snapshot);
       }
@@ -196,10 +222,11 @@
 
       basketObserver = new MutationObserver(mutations => {
         if (!onHalloweenBasketPage()) return;
+        if (activeBasket && !basketVisible(activeBasket)) resetBasketSession();
         if (mutations.every(mutation => mutation.target?.closest?.(`#${OVERLAY_ID},#slink-extension-panel`))) return;
         scheduleBasketScan();
       });
-      basketObserver.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class','disabled'] });
+      basketObserver.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class','disabled','style','hidden','aria-hidden','aria-expanded'] });
       global.addEventListener('hashchange', scheduleBasketScan);
       global.addEventListener('popstate', scheduleBasketScan);
       scheduleBasketScan(0);
