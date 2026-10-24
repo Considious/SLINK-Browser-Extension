@@ -38,4 +38,47 @@ assert.ok(alerts.some(alert => alert.id === 'money-property:upkeep'));
 assert.ok(alerts.some(alert => alert.id === 'money-property:lease-extension'));
 assert.ok(alerts.some(alert => alert.id === 'money-property:loan-shark'));
 assert.ok(alerts.some(alert => alert.id === 'money-property:stock:1:100'));
+const bankInput={
+  rates:{bank:[{days:7,rate:35},{days:14,rate:39},{days:30,rate:48},{days:60,rate:24},{days:90,rate:47}]},
+  userMerits:{merits:{upgrades:[{id:42,level:10}]}},
+  meritCatalog:{merits:[{id:42,name:'Bank Interest'}]},
+  tornStocks:{stocks:[{id:9,acronym:'TCI',bonus:{requirement:1500000}}]},
+  userStocks:{stocks:[{id:9,shares:1500000,bonus:{available:true}}]}
+};
+const comparison=money.bankComparison(bankInput,2e9);
+assert.equal(comparison.rows.length,5);
+assert.equal(comparison.best,30);
+assert.equal(comparison.rows[2].profit,comparison.rows[3].profit);
+assert.ok(Math.abs(comparison.rows[0].effectiveApr-57.75)<1e-9);
+assert.ok(money.bankComparison(bankInput,2000000001).error);
+assert.ok(money.bankComparison({...bankInput,userMerits:null},2e9).error);
+assert.equal(money.normalizeSettings({bankAmount:12345}).bankAmount,12345);
+
+// Run the background refresh, checking its independent bank rate cache.
+const store=new Map([['access.settings.v1',{tornKey:'fixture'}]]);
+const requests=[];
+Object.assign(sandbox.SLINK_EXTENSION.core,{
+  storage:{get:async(key,fallback)=>store.get(key)??fallback,set:async(key,value)=>store.set(key,value)},
+  tornApiLimiter:{reserve:async()=>{}},
+  http:{requestJson:async(_,url)=>{
+    requests.push(url);
+    if(url.includes('/torn/bank'))return bankInput.rates;
+    if(url.includes('/torn/merits'))return bankInput.meritCatalog;
+    if(url.includes('/user/merits'))return bankInput.userMerits;
+    if(url.includes('/user/stocks'))return bankInput.userStocks;
+    if(url.includes('/torn/stocks'))return bankInput.tornStocks;
+    if(url.includes('/user/money'))return {money:{wallet:12345}};
+    return {};
+  }},
+  market:{catalogItems:()=>[]},format:{errorMessage:error=>error.message},permissions:{hasScope:()=>true}
+});
+sandbox.SLINK_EXTENSION.services={permissionAccess:{settings:async()=>({tornKey:'fixture'}),ensureSession:async()=>{}}};
+vm.runInNewContext(fs.readFileSync(new URL('../src/background/money-property-service.js',import.meta.url),'utf8'),sandbox);
+const service=sandbox.SLINK_EXTENSION.services.moneyProperty;
+assert.equal((await service.refresh(true)).status.money.cashOnHand,12345);
+requests.length=0;
+store.get('money-property.runtime.v2').fetchedAt=0;
+const refreshed=await service.refresh(false);
+assert.equal(money.bankComparison(refreshed.status.bankPlanner,2e9).rows.length,5);
+assert.ok(!requests.some(url=>url.includes('/torn/bank')),'The extension must reuse bank rates within one hour.');
 console.log('money and property tests passed');

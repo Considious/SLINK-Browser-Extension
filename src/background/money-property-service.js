@@ -6,7 +6,8 @@
   const KEYS = Object.freeze({
     settings:'money-property.settings.v1',
     runtime:'money-property.runtime.v2',
-    catalog:'money-property.catalog.v2'
+    catalog:'money-property.catalog.v2',
+    bank:'money-property.bank.v1'
   });
   let refreshing = null;
 
@@ -43,15 +44,28 @@
 
   async function catalog(current, key, force = false) {
     if (!force && current?.fetchedAt && Date.now() - Number(current.fetchedAt) < CORE.CATALOG_MS
-      && current.tornStocks && current.itemCatalog) return current;
-    const [tornStocks, itemsBody] = await Promise.all([
+      && current.tornStocks && current.itemCatalog && current.meritCatalog) return current;
+    const [tornStocks, itemsBody, meritCatalog] = await Promise.all([
       tornJson('https://api.torn.com/v2/torn/stocks?comment=SLINK%20money%20property%20stocks', key),
-      tornJson('https://api.torn.com/v2/torn/items?sort=ASC&comment=SLINK%20money%20property%20items', key)
+      tornJson('https://api.torn.com/v2/torn/items?sort=ASC&comment=SLINK%20money%20property%20items', key),
+      tornJson('https://api.torn.com/v2/torn/merits?comment=SLINK%20bank%20merit%20names', key).catch(()=>null)
     ]);
     const itemCatalog = SLINK.core.market.catalogItems(itemsBody);
-    const next = { fetchedAt:Date.now(), tornStocks, itemCatalog };
+    const next = { fetchedAt:Date.now(), tornStocks, itemCatalog, meritCatalog };
     await SLINK.core.storage.set(KEYS.catalog, next);
     return next;
+  }
+
+  async function bankRates(key, force = false) {
+    const previous=await SLINK.core.storage.get(KEYS.bank,{});
+    if(!force && CORE.bankRateRows(previous.rates).length && Date.now()-Number(previous.fetchedAt||0)<CORE.BANK_RATE_CACHE_MS)return {...previous,error:''};
+    try{
+      const rates=await tornJson('https://api.torn.com/v2/torn/bank?comment=SLINK%20bank%20term%20rates',key);
+      if(!CORE.bankRateRows(rates).length)throw new Error('Torn returned no usable bank term rates.');
+      const result={rates,fetchedAt:Date.now(),error:''};
+      await SLINK.core.storage.set(KEYS.bank,result);
+      return result;
+    }catch(error){return {...previous,error:SLINK.core.format.errorMessage(error)};}
   }
 
   async function refresh(force = false) {
@@ -61,17 +75,19 @@
       const [current, currentSettings, cachedCatalog] = await Promise.all([
         runtime(), settings(), SLINK.core.storage.get(KEYS.catalog, {})
       ]);
-      if (!force && current.status && Date.now() - Number(current.fetchedAt || 0) < CORE.CACHE_MS) return publicStatus(false);
+      if (!force && current.status?.bankPlanner && Date.now() - Number(current.fetchedAt || 0) < CORE.CACHE_MS) return publicStatus(false);
       const key = await tornKey();
       if (!key) throw new Error('Save your Torn API key under API and feature access first.');
       try {
-        const [money, properties, currentProperty, stocks, achievementsResult, references] = await Promise.all([
+        const [money, properties, currentProperty, stocks, achievementsResult, references, userMerits, bank] = await Promise.all([
           tornJson('https://api.torn.com/v2/user/money?comment=SLINK%20money%20property', key),
           tornJson('https://api.torn.com/v2/user/properties?limit=100&comment=SLINK%20money%20property', key),
           tornJson('https://api.torn.com/v2/user/property?comment=SLINK%20current%20property', key).catch(() => ({})),
           tornJson('https://api.torn.com/v2/user/stocks?comment=SLINK%20money%20property', key),
           tornJson('https://api.torn.com/v2/user?selections=honors,medals,merits&comment=SLINK%20money%20property', key).catch(() => ({})),
-          catalog(cachedCatalog, key, force)
+          catalog(cachedCatalog, key, force),
+          tornJson('https://api.torn.com/v2/user/merits?comment=SLINK%20bank%20interest%20merits',key).catch(()=>null),
+          bankRates(key,force)
         ]);
         const user = {
           ...achievementsResult,
@@ -85,6 +101,7 @@
           tornStocks:references.tornStocks,
           itemCatalog:references.itemCatalog
         }, currentSettings);
+        status.bankPlanner={...bank,userMerits,userStocks:stocks,tornStocks:references.tornStocks,meritCatalog:references.meritCatalog};
         await SLINK.core.storage.set(KEYS.runtime, { fetchedAt:Date.now(), status, lastError:'' });
       } catch (error) {
         await SLINK.core.storage.set(KEYS.runtime, { ...current, lastError:SLINK.core.format.errorMessage(error) });
@@ -108,7 +125,7 @@
       runtime(), settings(), SLINK.core.storage.get('permissions.snapshot', null)
     ]);
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, CORE.SCOPE);
-    if (refreshIfDue && permitted && (!current.status || Date.now() - Number(current.fetchedAt || 0) >= CORE.CACHE_MS)) {
+    if (refreshIfDue && permitted && (!current.status?.bankPlanner || Date.now() - Number(current.fetchedAt || 0) >= CORE.CACHE_MS)) {
       try { return await refresh(false); } catch {}
     }
     return {

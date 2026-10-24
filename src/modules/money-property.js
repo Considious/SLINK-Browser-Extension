@@ -56,6 +56,16 @@
     </article>`;
   }
 
+  function bankResults(status, amount) {
+    const comparison=CORE.bankComparison(status?.bankPlanner,amount);
+    if(comparison.error)return `<p>${escapeHtml(comparison.error)}</p>`;
+    return `<p>Bank interest merits: ${comparison.meritLevel}/10 (+${comparison.meritLevel*5}%) · ${escapeHtml(comparison.stock.label)}</p><div class="slink-bank-terms">${comparison.rows.map(row=>`<article class="slink-finance-stat"><strong>${row.label}${row.days===comparison.best?' · Best daily ROI':''}</strong>${row.available?`<small>APR ${row.effectiveApr.toFixed(3)}% · ${row.days} days</small><p><strong>${exactMoney(row.profit)} profit</strong><small>${exactMoney(row.perDay)} per day</small><small>${exactMoney(row.total)} returned at maturity</small><small>Term ROI ${percent(row.roi)}</small><small>Daily ROI ${percent(row.dailyRoi)}</small></p>`:'<p>No rate returned for this term.</p>'}</article>`).join('')}</div>`;
+  }
+
+  function bankCard(status, settings) {
+    return `<article class="slink-finance-card"><div class="slink-finance-head"><div><strong>Bank investment comparison</strong><small>Rates checked ${relativeTime(status.bankPlanner?.fetchedAt)} · cached for up to 1 hour</small></div><a href="${CORE.BANK_URL}">Open bank</a></div><p>Each term uses its own Torn APR, your bank interest merits, and your active bank stock benefit. Daily income is an average; interest is paid at maturity.</p>${status.bankPlanner?.error?`<p>${escapeHtml(status.bankPlanner.error)}</p>`:''}<label class="slink-bank-amount">Amount to invest (maximum $2 billion)<input type="number" inputmode="numeric" min="0" max="2000000000" step="1" data-bank-amount value="${settings.bankAmount}"></label><div data-bank-results>${bankResults(status,settings.bankAmount)}</div></article>`;
+  }
+
   SLINK.modules.register({
     id:'money-property',
     title:'Money & Property',
@@ -79,6 +89,7 @@
         .slink-finance-settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:8px}.slink-finance-settings label{display:grid;gap:4px;color:var(--slink-muted)}.slink-finance-settings input:not([type="checkbox"]){width:100%;box-sizing:border-box;min-height:40px}
         .slink-stock-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:8px;margin-top:9px}.slink-stock-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;padding:10px;border:1px solid var(--slink-border-soft);border-radius:8px;background:var(--slink-bg)}.slink-stock-row>div,.slink-stock-row span{min-width:0}.slink-stock-row strong,.slink-stock-row small{display:block}.slink-stock-row small{margin-top:3px;color:var(--slink-muted);line-height:1.3}.slink-stock-title{min-width:0}.slink-stock-payout{text-align:right}.slink-stock-metrics{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.slink-stock-metrics span{padding:7px;border:1px solid var(--slink-border-soft);border-radius:6px}.slink-stock-row label{grid-column:1/-1;display:flex;gap:6px;align-items:center}
         .slink-finance-alerts{display:grid;gap:6px;margin-top:8px}.slink-finance-alert{padding:8px;border-left:3px solid var(--slink-warning);background:var(--slink-bg)}.slink-finance-alert strong,.slink-finance-alert small{display:block}.slink-finance-alert small{margin-top:3px}
+        .slink-bank-terms{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));gap:8px}.slink-bank-terms small{display:block;margin-top:4px;line-height:1.4;color:var(--slink-muted)}.slink-bank-terms p{margin-bottom:0}.slink-bank-amount{display:grid;gap:6px;margin:10px 0}.slink-bank-amount input{box-sizing:border-box;width:100%;min-height:42px}
         @media(max-width:420px){.slink-finance-stats,.slink-finance-settings{grid-template-columns:1fr 1fr}.slink-stock-row{grid-template-columns:minmax(0,1fr)}.slink-stock-payout{text-align:left}.slink-stock-metrics,.slink-stock-row label{grid-column:1}.slink-stock-metrics{grid-template-columns:1fr 1fr}}
       `);
 
@@ -101,6 +112,7 @@
           <article class="slink-finance-card"><div class="slink-finance-head"><strong>Current property</strong><a href="${CORE.PROPERTY_URL}">Open properties</a></div>
             ${property ? `<p><strong>${escapeHtml(property.name)}</strong> · rental ${due(property.rentalEndsAt)}</p><div class="slink-finance-stats"><div class="slink-finance-stat"><strong>${Number.isFinite(property.upkeepOwed) ? money(property.upkeepOwed) : '—'}</strong><small>${Number.isFinite(property.upkeepOwed) ? 'Upkeep owed' : 'Owed upkeep is not exposed by Torn API'}</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(property.upkeepPerDay))}">${money(property.upkeepPerDay)}</strong><small>Daily upkeep (property + staff)</small></div><div class="slink-finance-stat"><strong>${property.leaseExtension ? escapeHtml(property.leaseExtension.status) : 'None'}</strong><small>Extension offer</small></div></div>` : '<p>No property details were returned.</p>'}
           </article>
+          ${bankCard(status,settings)}
           <article class="slink-finance-card"><details><summary><strong>Reminder settings</strong></summary><div class="slink-finance-settings">
             <label>Bank warning (hours)<input type="number" min="0" max="168" data-money-setting="bankLeadHours" value="${settings.bankLeadHours}"></label>
             <label>Rental warning (days)<input type="number" min="0" max="30" data-money-setting="rentalLeadDays" value="${settings.rentalLeadDays}"></label>
@@ -151,6 +163,12 @@
       });
 
       root.addEventListener('change', async event => {
+        if(event.target.matches('[data-bank-amount]')){
+          if(!event.target.validity.valid)return;
+          try{data=await SLINK.core.messaging.send('money-property.settings.save',{bankAmount:Number(event.target.value)});}
+          catch(error){ui.setStatus(SLINK.core.format.errorMessage(error),'error');}
+          return;
+        }
         const control = event.target.closest('[data-stock-alert]');
         if (!control) return;
         control.disabled = true;
@@ -159,6 +177,12 @@
           notice = control.checked ? 'Stock affordability alert enabled.' : 'Stock affordability alert disabled.';
         } catch (error) { notice = SLINK.core.format.errorMessage(error); }
         render();
+      });
+
+      root.addEventListener('input',event=>{
+        if(!event.target.matches('[data-bank-amount]'))return;
+        const results=root.querySelector('[data-bank-results]');
+        if(results)results.innerHTML=bankResults(data?.status,event.target.value);
       });
 
       await load(false);

@@ -7,6 +7,64 @@
   const SCOPE = 'slink.qol.money-property';
   const CACHE_MS = 15 * 60_000;
   const CATALOG_MS = 7 * 86_400_000;
+
+const BANK_RATE_CACHE_MS = 60 * 60_000;
+const BANK_AMOUNT_LIMIT = 2_000_000_000;
+const BANK_TERMS = Object.freeze([{days:7,label:'1 week'},{days:14,label:'2 weeks'},{days:30,label:'1 month'},{days:60,label:'2 months'},{days:90,label:'3 months'}]);
+function bankMeritLevel(userMerits, meritCatalog) {
+  const merits=userMerits?.merits ?? userMerits;
+  if(!merits || typeof merits!=='object')return null;
+  const named=Object.entries(merits).find(([name])=>/bank[ _-]*interest|nothing for nothing/i.test(name));
+  if(named){const n=Number(named[1]?.level ?? named[1]);return Number.isFinite(n)?Math.max(0,Math.min(10,n)):null;}
+  const upgrades=Array.isArray(merits.upgrades)?merits.upgrades:Array.isArray(merits)?merits:null;
+  if(!upgrades)return null;
+  const definitions=Array.isArray(meritCatalog?.merits)?meritCatalog.merits:[];
+  const definition=definitions.find(row=>/bank.*interest|nothing for nothing/i.test(String(row.name||'')+' '+String(row.description||'')));
+  const entry=upgrades.find(row=>/bank.*interest|nothing for nothing/i.test(String(row.name||'')) || (definition && Number(row.id)===Number(definition.id)));
+  if(!entry)return definition?0:null;
+  const level=Number(entry.level);
+  return Number.isFinite(level)?Math.max(0,Math.min(10,level)):null;
+}
+function bankStockBonus(userStocks, tornStocks) {
+  const catalog=Array.isArray(tornStocks?.stocks)?tornStocks.stocks:Object.values(tornStocks?.stocks||{});
+  const definition=catalog.find(stock=>/^(TCI|TCB)$/i.test(stock.acronym||'') || /bank.*interest/i.test(stock.bonus?.description||''));
+  if(!definition || !Array.isArray(userStocks?.stocks))return {active:null,label:'Bank stock benefit unavailable'};
+  const holding=userStocks.stocks.find(stock=>Number(stock.id)===Number(definition.id));
+  const label=String(definition.acronym||'TCI');
+  if(!holding)return {active:false,label:label+' not owned'};
+  const required=Number(definition.bonus?.requirement);
+  const shares=Number(holding.shares ?? holding.total_shares);
+  if(Number.isFinite(required) && Number.isFinite(shares) && shares<required)return {active:false,label:label+' below benefit threshold'};
+  if(typeof holding.bonus?.available==='boolean')return {active:holding.bonus.available,label:label+(holding.bonus.available?' active · +10% interest':' held · benefit not active yet')};
+  return {active:null,label:label+' benefit activation unavailable'};
+}
+function bankRateRows(body) {
+  const bank=body?.bank;
+  if(!Array.isArray(bank))return [];
+  return bank.filter(row=>BANK_TERMS.some(term=>term.days===Number(row.days)) && row.rate!==null && row.rate!=='' && Number.isFinite(Number(row.rate)) && Number(row.rate)>=0)
+    .map(row=>({days:Number(row.days),baseApr:Number(row.rate)}));
+}
+function bankComparison(input, amount) {
+  const principal=Number(amount);
+  if(!Number.isFinite(principal)||principal<0||principal>BANK_AMOUNT_LIMIT)return {error:'Enter an amount from $0 to $2,000,000,000.',rows:[]};
+  const meritLevel=bankMeritLevel(input?.userMerits,input?.meritCatalog);
+  const stock=bankStockBonus(input?.userStocks,input?.tornStocks);
+  if(meritLevel===null||stock.active===null)return {error:'Your bank interest bonuses could not be verified. Refresh to load your merits and stock benefit.',rows:[],meritLevel,stock};
+  const multiplier=(1+meritLevel*.05)*(stock.active?1.1:1);
+  const rates=bankRateRows(input?.rates);
+  const comparisons=BANK_TERMS.map(term=>{
+    const rate=rates.find(row=>row.days===term.days);
+    if(!rate)return {...term,available:false};
+    // Torn's rate is the base APR for THIS term, expressed as a percent.
+    // Use each term independently; 30/60/90 days are Torn's fixed month terms.
+    const effectiveApr=rate.baseApr*multiplier;
+    const roi=effectiveApr/100*term.days/365;
+    const profit=Math.floor(principal*roi);
+    return {...term,available:true,baseApr:rate.baseApr,effectiveApr,roi,profit,total:principal+profit,perDay:profit/term.days,dailyRoi:roi/term.days};
+  });
+  const best=comparisons.filter(row=>row.available).sort((a,b)=>b.dailyRoi-a.dailyRoi||a.days-b.days)[0]?.days ?? null;
+  return {amount:principal,meritLevel,stock,rows:comparisons,best,error:rates.length?'':'Bank rates are unavailable. Refresh to try again.'};
+}
   const STOCKS_URL = 'https://www.torn.com/page.php?sid=stocks';
   const PROPERTY_URL = 'https://www.torn.com/properties.php';
   const BANK_URL = 'https://www.torn.com/city.php#/p=bank';
@@ -76,6 +134,7 @@
     const stockAlerts = value.stockAlerts && typeof value.stockAlerts === 'object' ? { ...value.stockAlerts } : {};
     return {
       enabled:value.enabled !== false,
+      bankAmount:Math.min(BANK_AMOUNT_LIMIT,Math.max(0,Number(value.bankAmount ?? BANK_AMOUNT_LIMIT)||0)),
       bankLeadHours:Math.min(168, Math.max(0, Number(value.bankLeadHours) || 2)),
       rentalLeadDays:Math.min(30, Math.max(0, Number(value.rentalLeadDays) || 3)),
       cashierLeadHours:Math.min(168, Math.max(0, Number(value.cashierLeadHours) || 24)),
@@ -344,6 +403,10 @@
   SLINK.define('core', 'moneyProperty', Object.freeze({
     SCOPE,
     CACHE_MS,
+    BANK_RATE_CACHE_MS,
+    BANK_AMOUNT_LIMIT,
+    bankComparison,
+    bankRateRows,
     CATALOG_MS,
     BANK_URL,
     LOAN_URL,
