@@ -144,15 +144,17 @@
     for (let index = 0; index < ids.length; index += CORE.MAX_FF_TARGETS) {
       const chunk = ids.slice(index, index + CORE.MAX_FF_TARGETS);
       if (!chunk.length) continue;
+      try {
       await reserveBudget('ff', currentSettings.ffBatchesPerMinute);
       const url = 'https://ffscouter.com/api/v1/get-stats' +
         `?key=${encodeURIComponent(key)}` +
         `&targets=${encodeURIComponent(chunk.join(','))}`;
       const response = await SLINK.core.http.requestJson('ffscouter', url, { cache:'no-store' });
+      if (response?.error) throw new Error('FFScouter unavailable.');
       const returned = new Set();
       for (const row of ffRows(response)) {
         const id = Number(row?.player_id ?? row?.id);
-        if (!Number.isInteger(id) || id <= 0) continue;
+        if (!Number.isInteger(id) || id <= 0 || !chunk.includes(id)) continue;
         returned.add(String(id));
         const fairFight = Number(row?.fair_fight);
         const bsEstimate = Number(row?.bs_estimate);
@@ -164,9 +166,10 @@
         };
       }
       for (const id of chunk) {
-        if (!returned.has(String(id))) cache[id] = { fairFight:null, bsEstimate:null, source:'FFScouter', checkedAt:now };
+        if (!returned.has(String(id)) && !cache[id]) cache[id] = { fairFight:null, bsEstimate:null, source:'FFScouter', checkedAt:now };
       }
       await SLINK.core.storage.set(KEYS.fairFight, cache);
+      } catch { break; /* Continue the bounty scan with known or unknown estimates. */ }
     }
   }
 
@@ -369,4 +372,5 @@
     scanBatch
   }));
 })(globalThis);
+
 

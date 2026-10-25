@@ -47,8 +47,11 @@
       statusUntil: Math.max(0, Number(member?.statusUntil) || 0),
       travelLocation: String(member?.travelLocation ?? member?.travel_location ?? member?.location?.name ?? (typeof member?.location === 'string' ? member.location : '')),
       position: String(member?.position || ''),
-      fairFight:Number.isFinite(Number(member?.fairFight ?? member?.fair_fight)) ? Number(member?.fairFight ?? member?.fair_fight) : null,
-      battleStatsEstimate:Number.isFinite(Number(member?.battleStatsEstimate ?? member?.battle_stats_estimate ?? member?.bs_estimate)) ? Number(member?.battleStatsEstimate ?? member?.battle_stats_estimate ?? member?.bs_estimate) : null
+      fairFight:SLINK.core.format.fairFightNumber(member?.fairFight ?? member?.fair_fight),
+      battleStatsEstimate:SLINK.core.format.finiteEstimate(member?.battleStatsEstimate ?? member?.battle_stats_estimate ?? member?.bs_estimate),
+      fairFightStale:Boolean(member?.fairFightStale),
+      fairFightCheckedAt:Number(member?.fairFightCheckedAt) || 0,
+      fairFightWarning:String(member?.fairFightWarning || '')
     };
   }
 
@@ -83,8 +86,8 @@
     const statusDescription = String(member.statusDescription || '').trim();
     if (statusDescription && statusDescription.toLowerCase() !== String(member.statusState || '').trim().toLowerCase()) details.push(`Status detail: ${escape(statusDescription)}`);
     if (Number.isFinite(member.battleStatsEstimate)) details.push(`Estimated BS: ${SLINK.core.format.shortNumber(member.battleStatsEstimate)}`);
-    if (Number.isFinite(member.fairFight)) details.push(`FF: ${member.fairFight.toFixed(2)}`);
-    return `${statusEmoji(member)} <a href="${profile}">${escape(member.name)} [${member.id}]</a> - ${details.join(' - ')}`;
+    if (Number.isFinite(member.fairFight)) details.push(`FF: ${SLINK.core.format.fairFightLabel(member)}`);
+    return SLINK.core.format.normalizeChatHtml(`${statusEmoji(member)} <a href="${profile}">${escape(member.name)} [${member.id}]</a> - ${details.join(' - ')}`);
   }
 
   function isHospitalized(member) {
@@ -222,3 +225,4 @@
     summarizeLogs
   }));
 })(globalThis);
+

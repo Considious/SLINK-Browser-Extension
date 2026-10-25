@@ -124,7 +124,7 @@
   }
 
   async function prime(value, options = {}) {
-    const text = String(value || '').trim();
+    const text = SLINK.core.format.normalizeChatHtml(value).trim();
     const key = String(options.key || '');
     if (!text) return { ok:false, label:'Nothing to copy', key };
     const copied = await copyText(text);
@@ -143,7 +143,7 @@
   }
 
   async function send(value) {
-    const text = String(value || '').trim();
+    const text = SLINK.core.format.normalizeChatHtml(value).trim();
     if (!text) return { ok:false, label:'Nothing copied to send' };
     if (sendInFlight) return { ok:false, label:'Faction message already sending' };
     if (!focusedTornPage()) return { ok:false, label:'Focus Torn first' };
@@ -202,3 +202,4 @@
     sendPrimed
   }));
 })(globalThis);
+

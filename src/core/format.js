@@ -23,6 +23,32 @@
     return `<a ${attributes.join(' ')}>${escapeHtml(options.label || ATTACK_LABEL)}</a>`;
   }
 
+  function normalizeChatHtml(value) {
+    // Torn accepts HTML input but may convert it to another internal format.
+    // Keep numeric IDs outside link labels to avoid nested square brackets.
+    return String(value ?? '').replace(/<a\b([^>]*?)\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi,
+      (_match, before, doubleQuoted, singleQuoted, bare) => `<a${before}href="${String(doubleQuoted ?? singleQuoted ?? bare ?? '').replace(/&(?!(?:[a-z][a-z0-9]+|#\d+|#x[\da-f]+);)/gi, '&amp;').replaceAll('"', '&quot;')}"`)
+      .replace(/<a\b([^>]*\bhref="https:\/\/www\.torn\.com\/profiles\.php\?[^">]*"[^>]*)>([^<]*?)\s*(\[\d+\])\s*<\/a>/gi,
+        (_match, attributes, name, id) => `<a${attributes}>${name.trim()}</a> ${id}`);
+  }
+
+  function finiteEstimate(value) {
+    if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  }
+
+  function fairFightNumber(value) {
+    const score = finiteEstimate(value);
+    return score !== null && score >= 1 && score <= 3 ? score : null;
+  }
+
+  function fairFightLabel(value) {
+    const score = fairFightNumber(value?.fairFight ?? value?.fair_fight);
+    if (score === null) return 'N/A — unverified';
+    return `${score.toFixed(2)}${value?.fairFightStale || value?.fair_fight_stale ? ' (cached estimate)' : ''}`;
+  }
+
   function errorMessage(error, fallback = 'Unknown error') {
     if (typeof error === 'string' && error.trim()) return error.trim();
     if (error?.message) return String(error.message);
@@ -60,9 +86,14 @@
   SLINK.define('core', 'format', Object.freeze({
     ATTACK_LABEL,
     attackLink,
+    normalizeChatHtml,
+    finiteEstimate,
+    fairFightLabel,
+    fairFightNumber,
     errorMessage,
     escapeHtml,
     formatHumanDuration,
     shortNumber
   }));
 })(globalThis);
+

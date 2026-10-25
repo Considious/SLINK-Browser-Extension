@@ -27,6 +27,8 @@ On 25 October 2026, candidate 2 passed 42/60 scripts, retaining these same 18 ba
 | PDA | test-timestamps.mjs | Runtime-discovery/assertion failure; investigate intended timestamp units before modifying logic. |
 | PDA | test-travel-safety.mjs | Expects a removed Travel Safety permission despite the feature's intentional headless/unpermissioned design. Preserve safety behavior tests. |
 
+Candidate 3 retains the 18 classified baseline failures, adds explicit form-commit regressions for both clients and integrates the two main hotfix regressions. Its browser checks cover actual Target List delayed-save and cancellation behavior plus PDA Shadow DOM focus transitions. The Faction Chat fixture now loads its real format dependency rather than an incomplete API stub.
+
 Do not delete these tests, silently skip them or rewrite production behavior just to pass them. Classification is triage, not proof that all later assertions in each script would pass. Repair incrementally with the relevant phase. The original audit's full stdout/stderr remains preserved locally; candidate results are recorded in the implementation checkpoint.
 
 Developer-only write-failure injection uses synthetic storage; ordinary testers should not delete saved data or intentionally corrupt their installation. The Racing browser fixture check passed in isolated headless Edge: one settled label, one replacement when Torn's car list is replaced, zero automatic scroll calls and cleanup on stop. This is not a live Torn/PDA production performance measurement.

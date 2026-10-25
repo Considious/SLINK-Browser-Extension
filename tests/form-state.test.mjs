@@ -7,7 +7,7 @@ const dashboard = fs.readFileSync(new URL('../src/dashboard/dashboard.js', impor
 const manifest = JSON.parse(fs.readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
 
 assert(formState.includes("'input, textarea, select, [contenteditable=\"true\"], details'"), 'All editable controls and expandable sections must be guarded.');
-assert(formState.includes("new MutationObserver(scheduleRestore)"), 'Background DOM replacements must restore dirty controls.');
+assert(formState.includes('if (mutationNeedsRestore(mutations)) scheduleRestore()'), 'Only actual editor replacements should schedule draft restoration.');
 assert(formState.includes("PANEL_STATE_KEY = 'ui.interaction.panels.v1'"), 'Expandable panel state must be persisted separately from feature settings.');
 assert(formState.includes("details[data-ui-key]"), 'Stable keyed panels must be restored after background rendering.');
 assert(!shell.includes("dismissAlert(id);\n      const alert = createWindow"), 'Updating an existing alert must not destroy and recreate its window.');

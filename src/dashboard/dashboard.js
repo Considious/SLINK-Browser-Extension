@@ -291,7 +291,7 @@
     }
     article.querySelector('.level').textContent = `Lv ${member.level || '?'}`;
     const readyAt = SLINK.core.war.isHospitalized(member) ? SLINK.core.war.tctTime(member.statusUntil) : '';
-    for (const text of [member.activity || 'Unknown', member.statusState || 'Okay', SLINK.core.war.isHospitalized(member) ? `Hospital ${SLINK.core.format.formatHumanDuration(remaining)}${readyAt ? ` / ${readyAt} TCT` : ''}` : '', Number.isFinite(member.battleStatsEstimate) ? `Estimated BS ${SLINK.core.format.shortNumber(member.battleStatsEstimate)}` : 'Estimated BS ?', Number.isFinite(member.fairFight) ? `FF ${member.fairFight.toFixed(2)}` : 'FF ?'].filter(Boolean)) article.querySelector('.target-meta').append(pill(text));
+    for (const text of [member.activity || 'Unknown', member.statusState || 'Okay', SLINK.core.war.isHospitalized(member) ? `Hospital ${SLINK.core.format.formatHumanDuration(remaining)}${readyAt ? ` / ${readyAt} TCT` : ''}` : '', Number.isFinite(member.battleStatsEstimate) ? `Estimated BS ${SLINK.core.format.shortNumber(member.battleStatsEstimate)}` : 'Estimated BS ?', `FF ${SLINK.core.format.fairFightLabel(member)}`].filter(Boolean)) article.querySelector('.target-meta').append(pill(text));
     const statusDescription = String(member.statusDescription || '').trim();
     const duplicateStatus = [member.statusState, member.activity].some(value => String(value || '').trim().toLowerCase() === statusDescription.toLowerCase());
     article.querySelector('.secondary-meta').textContent = duplicateStatus ? '' : statusDescription;
@@ -316,8 +316,8 @@
     const minimum = Math.min(Number(warTargetFilters.minFF) || 1, Number(warTargetFilters.maxFF) || 3);
     const maximum = Math.max(Number(warTargetFilters.minFF) || 1, Number(warTargetFilters.maxFF) || 3);
     return SLINK.core.war.sortMembers(values || [], Date.now(), warTargetFilters.sort || 'availability').filter(member => {
-      const ff = Number(member.fairFight);
-      if (!Number.isFinite(ff) || ff < minimum || ff > maximum) return false;
+      const ff = SLINK.core.format.fairFightNumber(member.fairFight);
+      if (ff !== null && (ff < minimum || ff > maximum)) return false;
       const okay = /^okay$/i.test(String(member.statusState || '').trim());
       if (warTargetFilters.status === 'okay' && !okay) return false;
       if (warTargetFilters.status === 'notOkay' && okay) return false;
@@ -852,7 +852,7 @@
         ['Attacked', `${retal.defenderName || `Player ${retal.defenderId}`}${retal.defenderId ? ` [${retal.defenderId}]` : ''}`],
         ['Status', `${retal.attackerStatus || retal.attackerActivity || 'Unknown'}${retal.attackerStatusDescription ? ` • ${retal.attackerStatusDescription}` : ''}`],
         ['Estimated BS', Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : 'Unknown'],
-        ['Fair Fight', Number.isFinite(retal.fairFight) ? retal.fairFight.toFixed(2) : 'Unknown']
+        ['Fair Fight', SLINK.core.format.fairFightLabel(retal)]
       ];
       const report = div.querySelector('.retal-report');
       for (const [label, value] of details) {

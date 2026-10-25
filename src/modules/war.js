@@ -715,7 +715,7 @@
         const faction = retal.attackerFactionName || (retal.attackerFactionId ? `Faction ${retal.attackerFactionId}` : 'No faction');
         const flags = [retal.isRetal ? 'Retal' : '', retal.isWar ? 'War' : ''].filter(Boolean);
         const estimates = [
-          Number.isFinite(retal.fairFight) ? `FF ${retal.fairFight.toFixed(2)}` : '',
+          Number.isFinite(retal.fairFight) ? `FF ${SLINK.core.format.fairFightLabel(retal)}` : '',
           Number.isFinite(retal.battleStatsEstimate) ? `~${SLINK.core.format.shortNumber(retal.battleStatsEstimate)} total` : ''
         ].filter(Boolean);
         const details = [
@@ -725,7 +725,7 @@
           `Status: ${retal.attackerStatus || retal.attackerActivity || 'Unknown'}`
         ].filter(Boolean);
         const name = escape(retal.attackerName || `Player ${retal.attackerId}`);
-        return `🚨 Retaliation: Please Hospitalize 🚨<br><a href="${profileUrl(retal.attackerId)}">${name} [${retal.attackerId}]</a> - ${SLINK.core.format.attackLink(attackUrl(retal.attackerId))} - (${escape(estimates.join(' | ') || 'Estimate unavailable')})${details.length ? `<br>${escape(details.join(' • '))}` : ''}`;
+        return `🚨 Retaliation: Please Hospitalize 🚨<br>⚫ <a href="${profileUrl(retal.attackerId)}">${name}</a> [${retal.attackerId}] - ${SLINK.core.format.attackLink(attackUrl(retal.attackerId))} - (Stats: ${escape(estimates.join(' | ') || 'N/A')})${details.length ? `<br>${escape(details.join(' • '))}` : ''}`;
       }
 
       async function copyRetal(retal, button) {
@@ -765,8 +765,8 @@
         const minimum = Math.min(Number(targetFilters.minFF) || 1, Number(targetFilters.maxFF) || 3);
         const maximum = Math.max(Number(targetFilters.minFF) || 1, Number(targetFilters.maxFF) || 3);
         const members = WAR.sortMembers(current?.runtime?.snapshot?.members || [], Date.now(), targetSort).filter(member => {
-          const ff = Number(member.fairFight);
-          if (!Number.isFinite(ff) || ff < minimum || ff > maximum) return false;
+          const ff = SLINK.core.format.fairFightNumber(member.fairFight);
+          if (ff !== null && (ff < minimum || ff > maximum)) return false;
           const okay = /^okay$/i.test(String(member.statusState || '').trim());
           const abroad = WAR.isAbroad(member);
           if (targetFilters.abroad === 'hide' && abroad) return false;
@@ -775,14 +775,14 @@
           return targetFilters.status === 'okay' ? okay : targetFilters.status === 'notOkay' ? !okay : true;
         });
         if (!members.length) return targetFilterControls() + assignmentControls() + '<div class="slink-war-empty">No targets match the current Fair Fight, status, and travel filters.</div>';
-        return targetFilterControls() + assignmentControls() + members.map(member => {
+        return targetFilterControls() + assignmentControls() + '<p class="slink-war-note">FF N/A targets are unverified and are not matched against the FF range. Cached estimates may be outdated.</p>' + members.map(member => {
           const hospitalized = WAR.isHospitalized(member);
           const remaining = WAR.statusSeconds(member);
           const readyAt = hospitalized ? WAR.tctTime(member.statusUntil) : '';
           const gate = insideGate(member.id);
           return `<article class="slink-war-card" ${gate.active ? 'data-inside-blocked="true"' : ''}>
             <div class="slink-war-card-head"><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">${escape(member.name)} [${member.id}]</a><span>Lv ${member.level || '?'}</span></div>
-            <div class="slink-war-meta"><span class="slink-war-pill ${member.activity === 'Online' ? 'slink-war-online' : ''}">${escape(member.activity || 'Unknown')}</span><span class="slink-war-pill ${hospitalized ? 'slink-war-hospital' : ''}">${escape(member.statusState || 'Okay')}${hospitalized ? ` ${duration(remaining)}${readyAt ? ` / ${readyAt} TCT` : ''}` : ''}</span><span class="slink-war-pill">Estimated BS ${Number.isFinite(member.battleStatsEstimate) ? SLINK.core.format.shortNumber(member.battleStatsEstimate) : '?'}</span><span class="slink-war-pill">FF ${Number.isFinite(member.fairFight) ? member.fairFight.toFixed(2) : '?'}</span>${memberContext(member)}</div>
+            <div class="slink-war-meta"><span class="slink-war-pill ${member.activity === 'Online' ? 'slink-war-online' : ''}">${escape(member.activity || 'Unknown')}</span><span class="slink-war-pill ${hospitalized ? 'slink-war-hospital' : ''}">${escape(member.statusState || 'Okay')}${hospitalized ? ` ${duration(remaining)}${readyAt ? ` / ${readyAt} TCT` : ''}` : ''}</span><span class="slink-war-pill">Estimated BS ${Number.isFinite(member.battleStatsEstimate) ? SLINK.core.format.shortNumber(member.battleStatsEstimate) : '?'}</span><span class="slink-war-pill">FF ${escape(SLINK.core.format.fairFightLabel(member))}</span>${memberContext(member)}</div>
             ${gate.active ? `<div class="slink-war-inside-disabled">${escape(insideGateMessage(gate))}</div>` : ''}
             <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">${gate.active && gate.mode === 'block' ? 'INSIDES DISABLED' : '【ATTACK】'}</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-save-target="${member.id}" data-war-save-source="war" type="button">Save Target</button><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-send="${member.id}" type="button" disabled>Send to Faction</button></div>
           </article>`;
@@ -798,7 +798,7 @@
           : !members.length ? '<div class="slink-war-empty">Choose a Fair Fight range and poll FFScouter for outside targets.</div>' : '';
         const cards = members.map(member => `<article class="slink-war-card">
           <div class="slink-war-card-head"><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">${escape(member.name)} [${member.id}]</a><span>Lv ${member.level || '?'}</span></div>
-          <div class="slink-war-meta"><span class="slink-war-pill">${escape(member.activity || 'Unknown')}</span><span class="slink-war-pill">${escape(member.statusState || 'Unknown')}</span><span class="slink-war-pill">Estimated BS ${Number.isFinite(member.battleStatsEstimate) ? SLINK.core.format.shortNumber(member.battleStatsEstimate) : '?'}</span><span class="slink-war-pill">FF ${Number.isFinite(member.fairFight) ? member.fairFight.toFixed(2) : '?'}</span>${memberContext(member)}</div>
+          <div class="slink-war-meta"><span class="slink-war-pill">${escape(member.activity || 'Unknown')}</span><span class="slink-war-pill">${escape(member.statusState || 'Unknown')}</span><span class="slink-war-pill">Estimated BS ${Number.isFinite(member.battleStatsEstimate) ? SLINK.core.format.shortNumber(member.battleStatsEstimate) : '?'}</span><span class="slink-war-pill">FF ${escape(SLINK.core.format.fairFightLabel(member))}</span>${memberContext(member)}</div>
           <div class="slink-war-card-actions"><a href="${attackUrl(member.id)}" data-war-attack="${member.id}" target="_blank" rel="noopener noreferrer">【ATTACK】</a><a href="${profileUrl(member.id)}" target="_blank" rel="noopener noreferrer">Profile</a><button data-war-save-target="${member.id}" data-war-save-source="outside" type="button">Save Target</button><button data-war-copy="${member.id}" type="button">Copy</button><button data-war-send="${member.id}" type="button" disabled>Send to Faction</button></div>
         </article>`).join('');
         return controls + message + cards;
@@ -839,7 +839,7 @@
           return `<article class="slink-war-card slink-war-retal"><button class="slink-war-retal-dismiss" data-war-retal-dismiss="${escape(retal.attackId)}" type="button" title="Dismiss alerts for this player" aria-label="Dismiss alerts for ${escape(retal.attackerName || `Player ${retal.attackerId}`)}">×</button>
           <div class="slink-war-card-head"><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">${escape(retal.attackerName || `Player ${retal.attackerId}`)} [${retal.attackerId}]</a><span>${duration(Number(retal.expiresAt) - now)}</span></div>
           <div class="slink-war-meta">${retal.isWar ? '<span class="slink-war-pill">⚔ War</span>' : ''}${retal.isRetal ? '<span class="slink-war-pill">🛡 Retal</span>' : ''}</div>
-          <div class="slink-war-retal-report"><span>Faction</span><span>${escape(faction + tag)}</span><span>Attacked</span><span>${escape(retal.defenderName || `Player ${retal.defenderId}`)}${retal.defenderId ? ` [${retal.defenderId}]` : ''}</span><span>Status</span><span>${escape(status)}${readyAt ? ` • out ${escape(readyAt)} TCT` : ''}${retal.attackerStatusDescription ? ` • ${escape(retal.attackerStatusDescription)}` : ''}</span><span>Estimated BS</span><span>${Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : 'Unknown'}</span><span>Fair Fight</span><span>${Number.isFinite(retal.fairFight) ? retal.fairFight.toFixed(2) : 'Unknown'}</span></div>
+          <div class="slink-war-retal-report"><span>Faction</span><span>${escape(faction + tag)}</span><span>Attacked</span><span>${escape(retal.defenderName || `Player ${retal.defenderId}`)}${retal.defenderId ? ` [${retal.defenderId}]` : ''}</span><span>Status</span><span>${escape(status)}${readyAt ? ` • out ${escape(readyAt)} TCT` : ''}${retal.attackerStatusDescription ? ` • ${escape(retal.attackerStatusDescription)}` : ''}</span><span>Estimated BS</span><span>${Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : 'Unknown'}</span><span>Fair Fight</span><span>${escape(SLINK.core.format.fairFightLabel(retal))}</span></div>
           <div class="slink-war-card-actions"><button data-war-retal-copy="${retal.attackId}" type="button">📋 Copy</button><button data-war-retal-send="${retal.attackId}" type="button" disabled title="Press Copy first. Send remains available for 30 seconds.">💬 Send</button><a class="slink-war-retal-attack" href="${attackUrl(retal.attackerId)}" data-war-attack="${retal.attackerId}" target="_blank" rel="noopener noreferrer">⚔ 【ATTACK】</a><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">Profile</a></div>
         </article>`;
         }).join('');
@@ -1337,4 +1337,5 @@
     }
   });
 })(globalThis);
+
 

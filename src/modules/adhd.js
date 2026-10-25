@@ -98,6 +98,7 @@
           error => ui.setStatus(SLINK.core.format.errorMessage(error), 'error')));
         const soundToggle = document.createElement('label'); soundToggle.className = 'slink-sound-toggle';
         const soundInput = document.createElement('input'); soundInput.type = 'checkbox';
+        soundInput.dataset.uiAutosave = 'true';
         const normalizedSettings = SLINK.core.adhd.normalizeSettings(status?.settings || {});
         soundInput.checked = Object.values(normalizedSettings.soundEnabled).some(Boolean);
         soundInput.addEventListener('change', async () => {

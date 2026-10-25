@@ -54,6 +54,7 @@
 
   function controlIdentity(control, root) {
     if (!control?.matches?.(CONTROL_SELECTOR)) return '';
+    if (control.matches('[data-ui-autosave="true"]')) return '';
     const scope = scopeFor(control, root);
     if (control.id) return `${scope}|id:${control.id}`;
     if (control.name) return `${scope}|name:${control.name}`;
@@ -106,6 +107,9 @@
     if (!root?.addEventListener || !root?.querySelectorAll) return null;
     if (protectedRoots.has(root)) return protectedRoots.get(root);
     const dirty = new Map();
+    const revisions = new Map();
+    const tickets = new WeakMap();
+    let revision = 0;
     let focusedKey = '';
     let restoring = false;
     let scheduled = false;
@@ -113,7 +117,10 @@
     function remember(control) {
       const key = controlIdentity(control, root);
       if (!key) return;
-      dirty.set(key, snapshot(control));
+      const next = snapshot(control);
+      const semantic = value => JSON.stringify(value && { kind:value.kind, value:value.value, checked:value.checked, values:value.values, open:value.open });
+      if (semantic(next) !== semantic(dirty.get(key))) revisions.set(key, ++revision);
+      dirty.set(key, next);
       if (control === (root.activeElement || document.activeElement)) focusedKey = key;
     }
 
@@ -123,6 +130,44 @@
         : scopeFor(element?.querySelector?.(CONTROL_SELECTOR) || element, root);
       for (const key of dirty.keys()) if (key.startsWith(`${scope}|`)) dirty.delete(key);
       if (focusedKey.startsWith(`${scope}|`)) focusedKey = '';
+    }
+
+    function keysIn(element) {
+      const controls = [...(element?.querySelectorAll?.(CONTROL_SELECTOR) || [])];
+      if (element?.matches?.(CONTROL_SELECTOR)) controls.unshift(element);
+      return [...new Set(controls.map(control => controlIdentity(control, root)).filter(Boolean))];
+    }
+
+    function begin(element = root) {
+      const ticket = Object.freeze({});
+      tickets.set(ticket, new Map(keysIn(element).map(key => [key, revisions.get(key) || 0])));
+      return ticket;
+    }
+
+    function isCurrent(ticket) {
+      const captured = tickets.get(ticket);
+      return Boolean(captured && [...captured].every(([key, version]) => (revisions.get(key) || 0) === version));
+    }
+
+    function commit(ticket) {
+      const captured = tickets.get(ticket);
+      if (!captured) return false;
+      const current = isCurrent(ticket);
+      for (const [key, version] of captured) {
+        if ((revisions.get(key) || 0) !== version) continue;
+        dirty.delete(key);
+        if (focusedKey === key) focusedKey = '';
+      }
+      tickets.delete(ticket);
+      return current;
+    }
+
+    function cancel(element = root) {
+      for (const key of keysIn(element)) {
+        revisions.set(key, ++revision);
+        dirty.delete(key);
+        if (focusedKey === key) focusedKey = '';
+      }
     }
 
     function restore() {
@@ -175,11 +220,12 @@
 
     function onFocusOut(event) {
       if (!event.target?.matches?.(CONTROL_SELECTOR)) return;
-      const key = controlIdentity(event.target, root);
+      const control = event.target;
+      const key = controlIdentity(control, root);
       queueMicrotask(() => {
-        if (!event.target.isConnected) return;
+        if (!control.isConnected) return;
         const active = root.activeElement || document.activeElement;
-        if (focusedKey === key && active !== event.target) focusedKey = '';
+        if (focusedKey === key && active !== control) focusedKey = '';
       });
     }
 
@@ -187,6 +233,7 @@
       const signature = actionSignature(event.target);
       if (!signature || !COMMIT_ACTION.test(signature)) return;
       const action = event.target.closest('button, input, [role="button"]');
+      if (action?.closest?.('[data-ui-explicit-commit="true"]')) return;
       global.setTimeout(() => clearScope(action), 0);
     }
 
@@ -206,10 +253,15 @@
     root.addEventListener('focusin', onFocusIn, true);
     root.addEventListener('focusout', onFocusOut, true);
     root.addEventListener('click', onClick, true);
-    const observer = new MutationObserver(scheduleRestore);
+    function mutationNeedsRestore(mutations) {
+      return mutations.some(mutation => [...mutation.addedNodes].some(node => node?.nodeType === 1
+        && (node.matches?.(CONTROL_SELECTOR) || node.querySelector?.(CONTROL_SELECTOR))));
+    }
+    const observer = new MutationObserver(mutations => { if (mutationNeedsRestore(mutations)) scheduleRestore(); });
     observer.observe(root, { childList:true, subtree:true });
 
     const api = Object.freeze({
+      begin, commit, cancel, isCurrent,
       clear(element = root) { clearScope(element); },
       restore,
       stop() {

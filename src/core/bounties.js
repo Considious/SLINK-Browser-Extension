@@ -146,6 +146,8 @@
         bsEstimate:hasEstimate ? bsEstimate : null,
         estimateSource:String(estimate.source || ''),
         estimateCheckedAt:Number(estimate.checkedAt) || 0,
+        fairFightCheckedAt:Number(estimate.checkedAt) || 0,
+        fairFightStale:now - Number(estimate.checkedAt || 0) >= FF_CACHE_MS,
         status
       };
     }).filter(target => {
@@ -178,4 +180,5 @@
     validTargetId
   }));
 })(globalThis);
+
 
