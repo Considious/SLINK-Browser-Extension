@@ -44,11 +44,7 @@
   }
 
   async function ensureCatalog(current, key, force = false) {
-    if (!force && current.catalog?.items?.length && Date.now() - Number(current.catalog.fetchedAt || 0) < MUSEUM.CATALOG_MS) return current.catalog;
-    const body = await tornJson('https://api.torn.com/v2/torn/items?sort=ASC&comment=SLINK%20museum%20catalog', key);
-    const items = SLINK.core.market.catalogItems(body);
-    if (!items.length) throw new Error('Torn returned an empty item catalog.');
-    return { fetchedAt:Date.now(), items };
+    return SLINK.services.sharedData.catalog({ key, force, maxAgeMs:MUSEUM.CATALOG_MS, needPrices:true });
   }
 
   async function refresh(force = false) {
@@ -62,7 +58,7 @@
       try {
         const [inventory, catalog] = await Promise.all([
           fetchInventory(key),
-          ensureCatalog(current, key, false)
+          ensureCatalog(current, key, force)
         ]);
         await SLINK.core.storage.set(KEYS.runtime, { fetchedAt:Date.now(), inventory, catalog, lastError:'' });
       } catch (error) {

@@ -80,36 +80,18 @@
   }
 
   async function storedOwnBattleStats() {
-    const [sharedValue, legacyValue] = await Promise.all([
-      SLINK.core.storage.get(OWN_STATS_KEY, null),
-      SLINK.core.storage.get(LEGACY_OWN_STATS_KEY, null)
-    ]);
-    const shared = normalizeOwnBattleStats(sharedValue);
-    const legacy = normalizeOwnBattleStats(legacyValue);
-    const newest = shared.checkedAt >= legacy.checkedAt ? shared : legacy;
-    if (newest.total > 0 && (shared.total !== newest.total || shared.level !== newest.level || shared.checkedAt !== newest.checkedAt)) {
-      await SLINK.core.storage.set(OWN_STATS_KEY, newest);
-    }
-    return newest;
+    const key = await tornKey();
+    if (!key) return normalizeOwnBattleStats({});
+    const record = await SLINK.services.sharedData.peekPersonal({ key });
+    return record || normalizeOwnBattleStats({});
   }
 
   async function ownBattleStats(force = false) {
-    const cached = await storedOwnBattleStats();
-    if (!force && Number(cached?.total) > 0 && Number(cached?.level) > 0 && Date.now() - Number(cached?.checkedAt || 0) < OWN_STATS_TTL_MS) return Number(cached.total);
     const key = await tornKey();
     if (!key) throw new Error('Save your Torn API key under API and feature access first.');
-    const endpoint = '/v2/user?selections=battlestats,basic';
-    await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Mugging', priority:'high', endpoint });
-    const response = await SLINK.core.http.requestJson(
-      'tornApi',
-      'https://api.torn.com/v2/user?selections=battlestats%2Cbasic&comment=SLINK%20Mugging%20rough%20assignment',
-      { headers:{ Authorization:`ApiKey ${key}` }, cache:'no-store' }
-    );
-    if (response?.error) throw new Error(response.error?.message || response.error?.error || 'Torn rejected the battle-stat request.');
-    const total = battleStatsTotal(response);
-    const level = Math.max(0, Math.trunc(Number(response?.level ?? response?.basic?.level) || 0));
-    await SLINK.core.storage.set(OWN_STATS_KEY, { total, level, checkedAt:Date.now() });
-    return total;
+    const record = await SLINK.services.sharedData.personal({ key, force, maxAgeMs:OWN_STATS_TTL_MS, requireLevel:true });
+    await SLINK.core.storage.set(OWN_STATS_KEY, record);
+    return record.total;
   }
 
   async function cachedOwnBattleStats() {
@@ -176,7 +158,7 @@
       bountyCount:Math.max(0, Math.trunc(Number(record.bountyCount) || 0)),
       bountyTotal:Math.max(0, Number(record.bountyTotal) || 0),
       battleStatsEstimate:Number.isFinite(Number(record.battleStatsEstimate)) ? Number(record.battleStatsEstimate) : null,
-      fairFight:Number.isFinite(Number(record.fairFight)) ? Number(record.fairFight) : null
+      fairFight:null // Observer-dependent values are not portable contributor intelligence.
     };
   }
 
@@ -415,8 +397,8 @@
     const cache = normalizeCache(storedCache);
     return {
       ...cache,
-      userBattleStats:ownProfile.total > 0 ? ownProfile.total : cache.userBattleStats,
-      userLevel:ownProfile.level > 0 ? ownProfile.level : cache.userLevel,
+      userBattleStats:ownProfile.total > 0 ? ownProfile.total : 0,
+      userLevel:ownProfile.level > 0 ? ownProfile.level : 0,
       ownBattleStatsCheckedAt:ownProfile.checkedAt,
       contribution:{
         ...contribution,

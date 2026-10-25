@@ -1,8 +1,8 @@
-# SLINK audit tester build — candidate 3
+# SLINK audit tester build — candidate 4
 
 This is an early testing build, not the Chrome Web Store release. Main has not changed. The full audit plan is not implemented yet.
 
-- Version: **0.19.10.1**, displayed as **0.19.10 Audit Test 3**.
+- Version: **0.19.10.2**, displayed as **0.19.10 Audit Test 4**.
 - Branch: `audit/test-foundation`.
 - [Download the tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip).
 - [One running tester changelog for extension and PDA](https://github.com/Considious/SLINK-Browser-Extension/blob/audit/test-foundation/TESTER-CHANGELOG.md).

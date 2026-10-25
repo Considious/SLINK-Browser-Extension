@@ -187,24 +187,13 @@
   }
 
   async function ensureMarketPrices(currentRuntime, now = Date.now()) {
-    if (Number(currentRuntime.marketPricesFetchedAt || 0) + MARKET_CACHE_MS > now
-      && Object.keys(currentRuntime.marketPrices || {}).length) return currentRuntime.marketPrices;
     const key = await tornKey();
     if (!key) throw new Error('Save a Torn API key before enabling landing purchase recommendations.');
-    await SLINK.core.tornApiLimiter.reserve({ wait:true });
-    const url = new URL('https://api.torn.com/v2/torn/items');
-    url.searchParams.set('cat', 'All');
-    url.searchParams.set('sort', 'ASC');
-    url.searchParams.set('comment', 'SLINK abroad landing ROI');
-    const response = await SLINK.core.http.requestJson('tornApi', url.href, {
-      headers:{ Authorization:`ApiKey ${key}` },
-      cache:'no-store'
-    });
-    if (response?.error) throw new Error(response.error.message || response.error.error || 'Torn item prices request failed.');
-    const prices = marketPriceMap(response);
+    const catalog = await SLINK.services.sharedData.catalog({ key, maxAgeMs:MARKET_CACHE_MS, needPrices:true });
+    const prices = marketPriceMap({ items:catalog.items });
     if (!Object.keys(prices).length) throw new Error('Torn returned no item market prices.');
     currentRuntime.marketPrices = prices;
-    currentRuntime.marketPricesFetchedAt = now;
+    currentRuntime.marketPricesFetchedAt = catalog.pricesAt;
     return prices;
   }
 

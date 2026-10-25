@@ -23,6 +23,8 @@ importScripts(
   '../core/war.js',
   '../core/worker-client.js',
   '../core/torn-api-limiter.js',
+  '../core/shared-data.js',
+  'shared-data-service.js',
   'player-intelligence-service.js',
   'target-list-service.js',
   'theme-service.js',

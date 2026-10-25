@@ -62,6 +62,7 @@ Object.assign(sandbox.SLINK_EXTENSION.core,{
   tornApiLimiter:{reserve:async()=>{}},
   http:{requestJson:async(_,url)=>{
     requests.push(url);
+    if(url.includes('/torn/items'))return {items:[{id:1,name:'Drug Pack',value:{market_price:100}}]};
     if(url.includes('/torn/bank'))return bankInput.rates;
     if(url.includes('/torn/merits'))return bankInput.meritCatalog;
     if(url.includes('/user/merits'))return bankInput.userMerits;
@@ -70,9 +71,12 @@ Object.assign(sandbox.SLINK_EXTENSION.core,{
     if(url.includes('/user/money'))return {money:{wallet:12345}};
     return {};
   }},
-  market:{catalogItems:()=>[]},format:{errorMessage:error=>error.message},permissions:{hasScope:()=>true}
+  market:{catalogItems:body=>body.items.map(item=>({id:item.id,name:item.name,marketPrice:item.value.market_price}))},format:{errorMessage:error=>error.message},permissions:{hasScope:()=>true}
 });
 sandbox.SLINK_EXTENSION.services={permissionAccess:{settings:async()=>({tornKey:'fixture'}),ensureSession:async()=>{}}};
+sandbox.crypto=(await import('node:crypto')).webcrypto;sandbox.TextEncoder=TextEncoder;
+vm.runInNewContext(fs.readFileSync(new URL('../src/core/shared-data.js',import.meta.url),'utf8'),sandbox);
+vm.runInNewContext(fs.readFileSync(new URL('../src/background/shared-data-service.js',import.meta.url),'utf8'),sandbox);
 vm.runInNewContext(fs.readFileSync(new URL('../src/background/money-property-service.js',import.meta.url),'utf8'),sandbox);
 const service=sandbox.SLINK_EXTENSION.services.moneyProperty;
 assert.equal((await service.refresh(true)).status.money.cashOnHand,12345);

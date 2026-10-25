@@ -2,6 +2,45 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 4 — 25 October 2026 — shared data providers
+
+Builds: extension **0.19.10.2 / 0.19.10 Audit Test 4**, PDA **0.4.105-audit-test4**. Install the newest build using the same testing-branch links below; earlier candidates' checks remain part of this combined test. Main is unchanged.
+
+### Your own battle stats — reuse the newest authenticated record
+
+Leveling and Mugging on the extension now use one personal-stat provider. PDA Mugging uses the identical provider code through its native runtime adapter. It stores the four raw stat components, their total, authenticated player ID, level, source and times. Leveling still uses its original distribution-dependent score; it is not guessed from a legacy total or FFScouter's community estimates. Compatible requests share a request; a forced refresh cannot be overwritten by an earlier request arriving late. Different API credentials are kept separate until validated; using two different keys for one player may still cause separate fetches. No key is stored in the provider cache.
+
+Test:
+1. Refresh your own battle stats in Mugging. Note the total and time. Close/reopen SLINK, change Torn pages and reload. The last confirmed record must not revert to the old Mugging result.
+2. On the extension, visit Leveling after refreshing Mugging with the same Torn key configured. It should reuse compatible fresh raw stats, without changing the Fair Fight formula.
+3. Refresh again during a slow connection, then switch pages. Older responses must not replace the newer result. Developer tests deliberately reverse response order; ordinary testers need not edit storage.
+4. If you use separate test accounts, switch through normal authentication. The canonical provider must not reuse account A's record for account B. A missing/failed response must not invent zero battle stats. Do not share API keys or recordings containing them.
+
+### One item catalog, separate live observations
+
+Market Watch, Museums, Abroad Stocks landing recommendations and Money now share the compatible full Torn item catalog rather than fetching independent copies. Metadata and price ages are tracked separately. Explicit zero prices remain zero; omitted prices keep their previous value and original age, or remain unavailable. Requests that need fresh prices report an incomplete response instead of pretending old/unknown values are current. Private inventory, YATA/Prometheus/Intel observations and actual market listings are still separate.
+
+Test:
+1. Open each of those four modules in turn. Existing item names, museum valuations, stock payouts and landing recommendations should continue working.
+2. Use normal Refresh controls. Check that refreshing catalog data does not reset Museum inventory, supplier stock timestamps, watch settings or entered amounts.
+3. Return to Money after viewing Abroad Stocks. Market prices should be usable without changing bank-rate caching or investment calculations.
+4. During an API failure, good saved data must not be replaced by an empty catalog or false zero prices. Developer tests cover partial/missing data, coalescing and write failure/recovery.
+
+### Target intelligence — each kind of information has its own age
+
+Status, name, level, battle-stat estimate, Fair Fight and bounty observations now carry independent source/time metadata on both clients. Newer hospital status no longer makes an old estimate look newly checked. Older observations cannot replace newer values in the same field; a missing bounty field is not an authoritative zero. Shared contributor reports send raw target estimates, not an unbound Fair Fight value calculated for someone else. Unbound shared FF is shown as unknown rather than reused for the wrong observer; existing feature-owned FF retrieval/fallback remains in place.
+
+Test:
+1. Refresh target status from profiles/War/Targets and confirm known estimates are retained without their estimate date becoming the status-check date.
+2. Check bounty count/value after new observations. A confirmed zero may clear an old bounty; a response lacking bounty information must not.
+3. With FF unavailable, repeat the earlier War/Bounties/Leveling outage checks. Targets must still load; unavailable estimates must remain N/A rather than false certainty.
+
+Regression checks: saved alerts/snoozes, checkbox independence, open editors, last page/size, themes and all earlier candidate checks. No UI redesign, theme asset, permission grant, terms or automatic cloud recovery change is included.
+
+Developer validation: **48/66 scripts pass; the same 18 classified baseline failures remain**. All **23 focused commands** pass. New executable tests cover both runtimes' provider contract and target field freshness; Money tests exercise the actual provider integration; startup checks load every PDA fragment/add-on from one immutable revision. No live authenticated Torn API or physical PDA session was used.
+
+Limits: this is the selective provider batch, not completion of the full audit. Earlier native-storage acknowledgement/cross-WebView guarantees and remaining editor/lifecycle/dashboard work are still open. PDA preserves the existing dedicated own-stat key and adds provider metadata; it does not promise stronger native write durability. Legacy total-only records are not accepted as canonical score/identity data. Existing feature-owned FF caches are not globally replaced or reformulated.
+
 ## Candidate 3 — 25 October 2026 — awaiting combined tester review
 
 Builds: extension **0.19.10.1 / 0.19.10 Audit Test 3**, PDA **0.4.104-audit-test3**. Use the same `audit/test-foundation` install links. This candidate combines candidates 1/2 with both main hotfixes (working profile/【ATTACK】 links and FF outage fallback), then adds the form work below. Install only this newest candidate and work through all entries in this document; earlier versions do not need separate installations. Main was not changed for this batch. Keep the stable PDA copy disabled and use an isolated Chrome test profile as described in TESTING.md.

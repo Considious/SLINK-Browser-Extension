@@ -149,12 +149,13 @@
 
   async function ensureCatalog({ force = false, key = '', current = null } = {}) {
     const state = current || await runtime();
-    if (!force && state.catalog?.items?.length && Date.now() - Number(state.catalog.fetchedAt) < CATALOG_MAX_AGE_MS) return state.catalog;
     if (!(await accessState({ authenticate:true })).permitted) throw new Error('A signed SLINK Market Watch permission is required.');
-    const body = await tornJson('https://api.torn.com/v2/torn/items?cat=All&sort=ASC', key || await tornKey(), '/v2/torn/items', 'high');
-    const items = MARKET.catalogItems(body);
-    if (!items.length) throw new Error('Torn returned an empty item catalog.');
-    state.catalog = { fetchedAt:Date.now(), items }; await saveRuntime(state); return state.catalog;
+    const catalog = await SLINK.services.sharedData.catalog({ key:key || await tornKey(), force, maxAgeMs:CATALOG_MAX_AGE_MS, needPrices:true });
+    if (state.catalog?.metadataAt !== catalog.metadataAt || state.catalog?.pricesAt !== catalog.pricesAt) {
+      state.catalog = catalog;
+      await saveRuntime(state);
+    }
+    return catalog;
   }
 
   function due(source, force = false) { return force || !Number(source?.nextCheckAt) || Number(source.nextCheckAt) <= Date.now(); }

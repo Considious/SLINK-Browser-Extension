@@ -319,22 +319,9 @@
   }
 
   async function ensureBattleStats(force = false) {
-    const cached = await SLINK.core.storage.get(KEYS.battleStats, null);
-    if (!force && cached?.score > 0 && Date.now() - Number(cached.checkedAt) < BATTLE_STATS_CACHE_MS) return cached;
-    const data = await tornJson('https://api.torn.com/v2/user/battlestats');
-    const stats = data?.battlestats ?? data;
-    const values = ['strength', 'defense', 'speed', 'dexterity'].map(name => {
-      const value = finiteNumberOrNull(stats?.[name]?.value ?? stats?.[name]);
-      return value !== null && value >= 0 ? value : null;
-    });
-    if (values.some(value => value === null)) throw new Error('Torn returned incomplete battle stats.');
-    const result = {
-      score: values.reduce((sum, value) => sum + Math.sqrt(value), 0),
-      total: finiteNumberOrNull(stats?.total) ?? values.reduce((sum, value) => sum + value, 0),
-      checkedAt: Date.now()
-    };
-    await SLINK.core.storage.set(KEYS.battleStats, result);
-    return result;
+    const current = await settings();
+    if (!current.tornKey) throw new Error('Torn API key is not configured.');
+    return SLINK.services.sharedData.personal({ key:current.tornKey, force, maxAgeMs:BATTLE_STATS_CACHE_MS });
   }
 
   function fairFightToScoreRatio(fairFight) {

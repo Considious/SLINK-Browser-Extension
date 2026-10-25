@@ -43,14 +43,15 @@
   }
 
   async function catalog(current, key, force = false) {
+    const shared = await SLINK.services.sharedData.catalog({ key, force, maxAgeMs:CORE.CATALOG_MS, needPrices:true });
     if (!force && current?.fetchedAt && Date.now() - Number(current.fetchedAt) < CORE.CATALOG_MS
-      && current.tornStocks && current.itemCatalog && current.meritCatalog) return current;
+      && current.tornStocks && current.itemCatalog && current.meritCatalog) return { ...current, itemCatalog:shared.items, itemCatalogAt:shared.pricesAt };
     const [tornStocks, itemsBody, meritCatalog] = await Promise.all([
       tornJson('https://api.torn.com/v2/torn/stocks?comment=SLINK%20money%20property%20stocks', key),
-      tornJson('https://api.torn.com/v2/torn/items?sort=ASC&comment=SLINK%20money%20property%20items', key),
+      Promise.resolve(shared),
       tornJson('https://api.torn.com/v2/torn/merits?comment=SLINK%20bank%20merit%20names', key).catch(()=>null)
     ]);
-    const itemCatalog = SLINK.core.market.catalogItems(itemsBody);
+    const itemCatalog = itemsBody.items;
     const next = { fetchedAt:Date.now(), tornStocks, itemCatalog, meritCatalog };
     await SLINK.core.storage.set(KEYS.catalog, next);
     return next;

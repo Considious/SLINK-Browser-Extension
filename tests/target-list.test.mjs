@@ -7,7 +7,7 @@ const context = vm.createContext({
   globalThis:null
 });
 context.globalThis = context;
-for (const file of ['src/core/runtime.js', 'src/core/target-list.js']) {
+for (const file of ['src/core/runtime.js', 'src/core/player-intelligence.js', 'src/core/target-list.js']) {
   vm.runInContext(fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context, { filename:file });
 }
 

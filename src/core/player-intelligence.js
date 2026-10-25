@@ -39,6 +39,49 @@
     return seconds > 0 ? seconds * 1000 : 0;
   }
 
+
+  function contextualFairFight(record, context = {}) {
+    const bound=record?.fairFightContext;
+    if(!bound || !(Number(context.observerId)>0) || !(Number(context.ownStatsAt)>0)
+      || Number(bound.observerId)!==Number(context.observerId) || Number(bound.ownStatsAt)!==Number(context.ownStatsAt))return null;
+    return record.fairFight != null && Number.isFinite(Number(record.fairFight))?Number(record.fairFight):null;
+  }
+  function intelligenceFieldMeta(input, existing = {}) {
+    if (input.fieldMeta && typeof input.fieldMeta === 'object') return {...input.fieldMeta};
+    const at=Number(input.observedAt ?? input.checkedAt ?? input.updatedAt)||Date.now();
+    const source=String(input.source||'unknown');
+    const meta={};
+    const supplied={
+      status:input.state ?? input.status?.state,
+      name:input.name, level:input.level,
+      fairFight:input.fairFight,
+      battleStatsEstimate:input.battleStatsEstimate ?? input.bsEstimate,
+      bountyCount:input.bountyCount ?? input.bounty_count,
+      bountyTotal:input.bountyTotal ?? input.bounty_total
+    };
+    for(const [field,value] of Object.entries(supplied)){
+      if(value!==null && value!==undefined && value!=='')meta[field]={at,source};
+    }
+    return {...(existing.fieldMeta||{}),...meta};
+  }
+  function mergeIntelligenceFields(previous, next) {
+    const merged={...previous,fieldMeta:{...(previous.fieldMeta||{})}};
+    for(const field of ['status','name','level','fairFight','battleStatsEstimate','bountyCount','bountyTotal']){
+      const metadata=next.fieldMeta?.[field];
+      if(!metadata || Number(metadata.at)<Number(previous.fieldMeta?.[field]?.at||0))continue;
+      merged.fieldMeta[field]={...metadata};
+      if(field==='status'){
+        for(const key of ['state','until','description','source','observedAt'])merged[key]=next[key];
+      }else { merged[field]=next[field]; if(field==='fairFight')merged.fairFightContext=next.fairFightContext; }
+    }
+    merged.checkedAt=Math.max(previous.checkedAt,next.checkedAt);
+    merged.lastSeenMugged=Math.max(previous.lastSeenMugged,next.lastSeenMugged);
+    merged.lastDomObservedAt=Math.max(previous.lastDomObservedAt||0,next.lastDomObservedAt||0);
+    merged.lastApiCheckAt=Math.max(previous.lastApiCheckAt||0,next.lastApiCheckAt||0);
+    merged.sources=[...new Set([...previous.sources,...next.sources])].sort();
+    return merged;
+  }
+
   function normalizeRecord(input = {}, existing = {}) {
     const playerId = validPlayerId(
       input.playerId ?? input.player_id ?? input.targetId ?? input.id ??
@@ -84,6 +127,8 @@
       Number(input.bountyTotal ?? input.bounty_total ?? existing.bountyTotal) || 0
     );
     return {
+      fairFightContext:input.fairFightContext ?? existing.fairFightContext ?? null,
+      fieldMeta:intelligenceFieldMeta(input, existing),
       playerId,
       id:playerId,
       name:String(input.name ?? existing.name ?? `Player ${playerId}`).slice(0, 80),
@@ -92,14 +137,14 @@
       until,
       description,
       source,
-      observedAt,
+      observedAt:Number(intelligenceFieldMeta(input, existing).status?.at) || 0,
       checkedAt:Math.max(0, Number(input.checkedAt) || observedAt),
       lastDomObservedAt,
       lastApiCheckAt,
-      fairFight:Number.isFinite(Number(input.fairFight ?? existing.fairFight))
+      fairFight:(input.fairFight ?? existing.fairFight) != null && Number.isFinite(Number(input.fairFight ?? existing.fairFight))
         ? Number(input.fairFight ?? existing.fairFight)
         : null,
-      battleStatsEstimate:Number.isFinite(Number(
+      battleStatsEstimate:(input.battleStatsEstimate ?? input.bsEstimate ?? existing.battleStatsEstimate) != null && Number.isFinite(Number(
         input.battleStatsEstimate ?? input.bsEstimate ??
         existing.battleStatsEstimate
       ))
@@ -121,45 +166,9 @@
   }
 
   function mergeRecord(existing = null, incoming = {}) {
-    const previous = existing && typeof existing === 'object'
-      ? normalizeRecord(existing)
-      : null;
-    const next = normalizeRecord(incoming, previous || {});
-    if (!previous) return next;
-    const useIncomingStatus = next.observedAt >= previous.observedAt;
-    const merged = {
-      ...previous,
-      playerId:next.playerId,
-      id:next.playerId,
-      name:next.name !== `Player ${next.playerId}` || !previous.name
-        ? next.name
-        : previous.name,
-      level:next.level || previous.level,
-      fairFight:next.fairFight ?? previous.fairFight,
-      battleStatsEstimate:
-        next.battleStatsEstimate ?? previous.battleStatsEstimate,
-      bountyCount:Object.hasOwn(incoming, 'bountyCount') ||
-        Object.hasOwn(incoming, 'bounty_count')
-        ? next.bountyCount
-        : previous.bountyCount,
-      bountyTotal:Object.hasOwn(incoming, 'bountyTotal') ||
-        Object.hasOwn(incoming, 'bounty_total')
-        ? next.bountyTotal
-        : previous.bountyTotal,
-      lastSeenMugged:Math.max(previous.lastSeenMugged, next.lastSeenMugged),
-      checkedAt:Math.max(previous.checkedAt, next.checkedAt),
-      observedAt:Math.max(previous.observedAt, next.observedAt),
-      lastDomObservedAt:Math.max(previous.lastDomObservedAt || 0, next.lastDomObservedAt || 0),
-      lastApiCheckAt:Math.max(previous.lastApiCheckAt || 0, next.lastApiCheckAt || 0),
-      sources:[...new Set([...previous.sources, ...next.sources])].sort()
-    };
-    if (useIncomingStatus) {
-      merged.state = next.state;
-      merged.until = next.until;
-      merged.description = next.description;
-      merged.source = next.source;
-    }
-    return merged;
+    const previous=existing && typeof existing==='object'?normalizeRecord(existing):null;
+    const next=normalizeRecord(incoming);
+    return previous?mergeIntelligenceFields(previous,next):next;
   }
 
   function effectiveStatus(record = {}, now = Date.now()) {
@@ -229,8 +238,8 @@
       state:status?.state,
       until:status?.until,
       description:status?.description,
-      bountyCount:bounties.length,
-      bountyTotal:bounties.reduce(
+      bountyCount:Array.isArray(profile?.bounties)?bounties.length:undefined,
+      bountyTotal:!Array.isArray(profile?.bounties)?undefined:bounties.reduce(
         (total, bounty) => total + Math.max(0, Number(bounty?.reward) || 0),
         0
       ),
@@ -246,6 +255,7 @@
     DEFAULT_FRESH_MS,
     TIMER_BUFFER_MS,
     TIMED_STATES,
+    contextualFairFight,
     effectiveStatus,
     fromTornResponse,
     mergeRecord,
