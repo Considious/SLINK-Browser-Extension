@@ -20,7 +20,7 @@
     );
     if (!playerId) throw new Error('A valid Torn player ID is required.');
     let record = null;
-    writeQueue = writeQueue.then(async () => {
+    const task = writeQueue.then(async () => {
       const cache = await cacheMap();
       record = CORE.mergeRecord(cache[String(playerId)], {
         ...input,
@@ -29,14 +29,15 @@
       cache[String(playerId)] = record;
       await SLINK.core.storage.set(CACHE_KEY, cache);
     });
-    await writeQueue;
+    writeQueue = task.catch(() => undefined);
+    await task;
     return record;
   }
 
   async function observeMany(values = []) {
     let updated = 0;
     let cache = {};
-    writeQueue = writeQueue.then(async () => {
+    const task = writeQueue.then(async () => {
       cache = await cacheMap();
       for (const input of Array.isArray(values) ? values : []) {
         const playerId = CORE.validPlayerId(
@@ -51,7 +52,8 @@
       }
       if (updated) await SLINK.core.storage.set(CACHE_KEY, cache);
     });
-    await writeQueue;
+    writeQueue = task.catch(() => undefined);
+    await task;
     return { updated, cache };
   }
 

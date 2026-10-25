@@ -34,6 +34,11 @@
     return [...registry.values()];
   }
 
+  function canAccess(module, permissions) {
+    return Boolean(module && SLINK.core.permissions.hasAllScopes(permissions, module.requiredScopes || [])
+      && (!module.permissionTest || module.permissionTest(permissions)));
+  }
+
   async function startAll(context) {
     const started = [];
     const denied = [];
@@ -50,12 +55,8 @@
         skipped.push({ id: module.id, reason: 'url-mismatch' });
         continue;
       }
-      if (!SLINK.core.permissions.hasAllScopes(context.permissions, module.requiredScopes)) {
+      if (!canAccess(module, context.permissions)) {
         denied.push({ id: module.id, requiredScopes: [...module.requiredScopes] });
-        continue;
-      }
-      if (module.permissionTest && !module.permissionTest(context.permissions)) {
-        denied.push({ id:module.id, requiredScopes:['slink.adhd.marketwatch.<tier>'] });
         continue;
       }
 
@@ -111,6 +112,7 @@
 
   SLINK.define('modules', 'register', register);
   SLINK.define('modules', 'list', list);
+  SLINK.define('modules', 'canAccess', canAccess);
   SLINK.define('modules', 'startAll', startAll);
   SLINK.define('modules', 'stopAll', stopAll);
 })(globalThis);

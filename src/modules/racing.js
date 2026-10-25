@@ -26,6 +26,11 @@
       let observer = null;
       let scanTimer = null;
       let saveTimer = null;
+      let highlightedNode = null;
+      let recommendationLabel = null;
+      let recommendationKey = '';
+      let assistantRoot = null;
+      let assistantSignature = '';
       let userState = racing.normalizeUserState(await SLINK.core.storage.get(STORAGE_KEY, null));
       let assistant = { status:'waiting', track:null, nickname:'', message:'Open an official race to receive a recommendation.' };
 
@@ -50,14 +55,21 @@
       }
 
       function clearHighlight() {
-        document.querySelectorAll(`.${HIGHLIGHT_CLASS}`).forEach(node => node.classList.remove(HIGHLIGHT_CLASS));
-        document.querySelectorAll(`[${LABEL_ATTRIBUTE}]`).forEach(node => node.remove());
+        highlightedNode?.classList.remove(HIGHLIGHT_CLASS);
+        recommendationLabel?.remove();
+        highlightedNode = null;
+        recommendationLabel = null;
+        recommendationKey = '';
       }
 
       function setAssistant(next) {
         assistant = next;
         const root = ui.getContentElement().querySelector('[data-racing-assistant]');
         if (!root) return;
+        const signature = JSON.stringify(next);
+        if (root === assistantRoot && signature === assistantSignature) return;
+        assistantRoot = root;
+        assistantSignature = signature;
         const tone = next.status === 'ready' ? 'ready' : ['not-completed','not-found','invalid-nickname'].includes(next.status) ? 'warn' : 'normal';
         root.dataset.tone = tone;
         root.innerHTML = `<strong>${escapeHtml(next.track ? `${next.track}: ${next.message}` : next.message)}</strong>${next.nickname ? `<span>Expected car: ${escapeHtml(next.nickname)}</span>` : '<span>Uses Torn page text only; no API calls.</span>'}`;
@@ -65,52 +77,76 @@
 
       function onRacewayPage() {
         const page = new URL(global.location.href);
-        return /race/i.test(page.pathname) || /race/i.test(page.hash) || /race/i.test(String(page.searchParams.get('sid') || ''));
+        return /rac(?:e|ing)/i.test(page.pathname) || /rac(?:e|ing)/i.test(page.hash) || /rac(?:e|ing)/i.test(String(page.searchParams.get('sid') || ''));
       }
 
       function scanOfficialRaceDom() {
         if (stopped) return;
+        if (!pageEligible()) { clearHighlight(); return; }
         if (!onRacewayPage()) { clearHighlight(); return; }
-        clearHighlight();
         const trackNode = [...document.querySelectorAll(racing.RACEWAY_DOM.OFFICIAL_RACE_TRACK_SELECTOR)]
           .find(node => /-\s*Official race\s*$/i.test(String(node.textContent || '').trim()));
         const track = racing.parseOfficialRaceTrack(trackNode?.textContent);
         if (!track) {
+          clearHighlight();
           setAssistant({ status:'waiting', track:null, nickname:'', message:'Open an official race to receive a recommendation.' });
           return;
         }
         const recommendation = racing.recommendationForTrack(track, userState);
         if (recommendation.status === 'not-completed') {
+          clearHighlight();
           setAssistant({ ...recommendation, message:'Recommended build is not marked complete.' });
           return;
         }
         if (recommendation.status === 'invalid-nickname') {
+          clearHighlight();
           setAssistant({ ...recommendation, message:'Saved nickname is invalid. Fix it in the Racing guide.' });
           return;
         }
         if (recommendation.status !== 'ready') {
+          clearHighlight();
           setAssistant({ ...recommendation, message:'No saved Racing build is configured for this track.' });
           return;
         }
         const nodes = [...document.querySelectorAll(racing.RACEWAY_DOM.OFFICIAL_RACE_CAR_NAME_SELECTOR)];
         const match = racing.matchVisibleCar(recommendation.nickname, nodes.map(node => ({ name:node.textContent, node })));
         if (!match?.node) {
+          clearHighlight();
           setAssistant({ ...recommendation, status:'not-found', message:'Recommended car not found in Torn\'s visible car list.' });
           return;
         }
         ensureHighlightStyle();
+        const key = `${track}|${recommendation.nickname}`;
+        if (highlightedNode === match.node && recommendationLabel?.isConnected && recommendationKey === key) {
+          match.node.classList.add(HIGHLIGHT_CLASS);
+          return;
+        }
+        clearHighlight();
+        highlightedNode = match.node;
+        recommendationKey = key;
         match.node.classList.add(HIGHLIGHT_CLASS);
         const label = document.createElement('span');
+        recommendationLabel = label;
         label.setAttribute(LABEL_ATTRIBUTE, 'true');
         label.textContent = 'SLINK Recommended';
         match.node.after(label);
-        try { match.node.scrollIntoView({ block:'nearest', behavior:'smooth' }); } catch {}
         setAssistant({ ...recommendation, status:'ready', message:'Recommended car highlighted.' });
       }
 
       function scheduleScan(delay = 80) {
-        if (stopped || scanTimer) return;
+        if (stopped || !pageEligible() || scanTimer) return;
         scanTimer = global.setTimeout(() => { scanTimer = null; scanOfficialRaceDom(); }, delay);
+      }
+
+      function pageEligible() {
+        return context.presentation !== 'dashboard' && !document.hidden && document.hasFocus();
+      }
+
+      function onPageActivity() {
+        if (pageEligible()) { scheduleScan(0); return; }
+        if (scanTimer) global.clearTimeout(scanTimer);
+        scanTimer = null;
+        clearHighlight();
       }
 
       function queueSave() {
@@ -193,12 +229,19 @@
       ensureHighlightStyle();
       observer = new MutationObserver(mutations => {
         if (!onRacewayPage()) return;
-        if (mutations.every(mutation => mutation.target?.closest?.('[data-slink-racing-label],#slink-extension-panel'))) return;
+        if (mutations.every(mutation => {
+          if (mutation.target?.closest?.('[data-slink-racing-label],#slink-extension-panel')) return true;
+          const changed = [...mutation.addedNodes, ...mutation.removedNodes];
+          return changed.length > 0 && changed.every(node => node.nodeType === 1 && node.matches?.('[data-slink-racing-label]'));
+        })) return;
         scheduleScan();
       });
       observer.observe(document.body, { childList:true, subtree:true, characterData:true });
       global.addEventListener('hashchange', scheduleScan);
       global.addEventListener('popstate', scheduleScan);
+      global.addEventListener('focus', onPageActivity);
+      global.addEventListener('blur', onPageActivity);
+      document.addEventListener('visibilitychange', onPageActivity);
       scheduleScan(0);
 
       return {
@@ -209,6 +252,9 @@
           if (saveTimer) global.clearTimeout(saveTimer);
           global.removeEventListener('hashchange', scheduleScan);
           global.removeEventListener('popstate', scheduleScan);
+          global.removeEventListener('focus', onPageActivity);
+          global.removeEventListener('blur', onPageActivity);
+          document.removeEventListener('visibilitychange', onPageActivity);
           clearHighlight();
           document.getElementById(HIGHLIGHT_STYLE_ID)?.remove();
         }

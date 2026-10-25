@@ -1175,6 +1175,10 @@
     const status = panel?.querySelector(`[data-quality-status="${CSS.escape(id)}"]`);
     return {
       getContentElement:() => content,
+      navigateTo(moduleId) {
+        if (moduleId !== 'war') return;
+        window.open('https://www.torn.com/factions.php?step=your#/tab=armoury', '_blank', 'noopener');
+      },
       setModuleStyles(css) {
         const styleId = `slink-dashboard-quality-style-${id}`;
         let style = document.getElementById(styleId);
@@ -1202,14 +1206,18 @@
   }
 
   async function startQualityModule(id) {
-    if (qualityInstances.has(id)) return qualityInstances.get(id);
     const definition = qualityDefinition(id);
     if (!definition) throw new Error(`Quality of Life module "${id}" is unavailable.`);
     const required = Array.isArray(definition.requiredScopes) ? definition.requiredScopes : [];
-    if (!required.every(hasScope)) {
+    if (!SLINK.modules.canAccess(definition, system?.permissions || {})) {
+      const existing = qualityInstances.get(id);
+      if (typeof existing?.stop === 'function') await existing.stop();
+      qualityInstances.delete(id);
+      qualityUi(id).getContentElement()?.replaceChildren();
       qualityUi(id).setStatus(`Permission required: ${required.join(', ') || 'feature access'}`, 'error');
       return null;
     }
+    if (qualityInstances.has(id)) return qualityInstances.get(id);
     const instance = await definition.start({
       url:new URL('https://www.torn.com/'),
       permissions:system?.permissions || {},
@@ -1240,8 +1248,10 @@
     byId('admin-tab').hidden = !admin;
     byId('diagnostics-tab').hidden = !admin;
     let qualityCount = 0;
-    for (const button of document.querySelectorAll('[data-quality-scope]')) {
-      button.hidden = !hasScope(button.dataset.qualityScope);
+    for (const button of document.querySelectorAll('[data-quality-view]')) {
+      const id = button.dataset.qualityView;
+      button.hidden = !SLINK.modules.canAccess(qualityDefinition(id), system?.permissions || {});
+      if (button.hidden && qualityInstances.has(id)) void startQualityModule(id);
       if (!button.hidden) qualityCount++;
     }
     byId('quality-tab').hidden = qualityCount === 0;
