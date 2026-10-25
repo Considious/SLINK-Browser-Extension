@@ -41,16 +41,24 @@
 
   let observer = null;
   let enabled = false;
+  const activity = globalThis.SLINK_EXTENSION.core.pageActivity;
+  function syncActivity() {
+    observer?.disconnect();
+    if (!enabled || !activity.eligible()) { clearTimeout(scanTimer); scanTimer = null; return; }
+    observer.observe(document.documentElement, { childList:true, subtree:true });
+    scheduleScan();
+  }
+  activity.subscribe(syncActivity);
+  window.addEventListener('slink-chat-disable', () => { enabled = false; syncActivity(); });
   function enable() {
     if (enabled) return;
     enabled = true;
     addStyles();
-    scanContexts();
     observer = new MutationObserver(scheduleScan);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-    window.addEventListener('hashchange', scheduleScan);
+    syncActivity();
   }
   window.addEventListener('slink-chat-enable', enable);
+  window.addEventListener('hashchange', scheduleScan);
 
   window.addEventListener('resize', () => {
     if (menu && !menu.hidden && menuChatRoot) positionMenu(menuChatRoot);
@@ -272,6 +280,7 @@
   }
 
   function scheduleScan() {
+    if (!enabled || !activity.eligible()) return;
     if (scanTimer) window.clearTimeout(scanTimer);
     scanTimer = window.setTimeout(() => {
       scanTimer = null;
@@ -293,6 +302,7 @@
   }
 
   function scanContexts() {
+    if (!enabled || !activity.eligible()) return;
     const handledHeaders = new Set();
     document.querySelectorAll(CHAT_ROOT_SELECTOR).forEach((root) => {
       const header = chatHeader(root);

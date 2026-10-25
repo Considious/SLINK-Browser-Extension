@@ -117,6 +117,7 @@
       }
 
       function render() {
+        if (stopped || context.signal?.aborted) return;
         const calendar = data?.calendar;
         const selected = data?.selected;
         if (!calendar?.events?.length || !selected) {
@@ -171,7 +172,7 @@
       }
 
       function scanBasket() {
-        if (stopped) return;
+        if (stopped || context.isActive?.() === false || document.hidden) return;
         if (!onHalloweenBasketPage()) {
           resetBasketSession();
           return;
@@ -189,7 +190,7 @@
       }
 
       function scheduleBasketScan(delay = 80) {
-        if (stopped || basketScanTimer) return;
+        if (stopped || basketScanTimer || context.isActive?.() === false || document.hidden) return;
         basketScanTimer = global.setTimeout(() => { basketScanTimer = null; scanBasket(); }, delay);
       }
 
@@ -205,11 +206,11 @@
         } finally { busy = false; render(); }
       }
 
-      root.addEventListener('click', event => {
+      context.listen(root, 'click', event => {
         if (event.target.closest('[data-events-refresh]')) void load(true);
       });
 
-      root.addEventListener('change', async event => {
+      context.listen(root, 'change', async event => {
         const select = event.target.closest('[data-events-select]');
         if (!select) return;
         select.disabled = true;
@@ -221,6 +222,7 @@
       });
 
       basketObserver = new MutationObserver(mutations => {
+        if (context.isActive?.() === false || document.hidden) return;
         if (!onHalloweenBasketPage()) return;
         if (activeBasket && !basketVisible(activeBasket)) resetBasketSession();
         if (mutations.every(mutation => mutation.target?.closest?.(`#${OVERLAY_ID},#slink-extension-panel`))) return;

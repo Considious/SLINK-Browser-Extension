@@ -69,7 +69,9 @@ const onStartup = event();
 const onAlarm = event();
 
 const chrome = {
+  windows:{ getAll:async()=>[], onFocusChanged:event() },
   tabs: {
+    onActivated:event(), onRemoved:event(), onUpdated:event(),
     async query() { return [{ id:7, url:'https://www.torn.com/index.php' }]; },
     async sendMessage(tabId, message) {
       assert(tabId === 7 && message?.type === 'restore', 'Unexpected Torn UI control message.');

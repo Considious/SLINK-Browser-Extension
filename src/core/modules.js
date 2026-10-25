@@ -6,6 +6,54 @@
 
   const registry = new Map();
   const running = new Map();
+  let generation = 0;
+
+  function lifecycle(context) {
+    const controller = new AbortController();
+    const callbacks = [];
+    const active = () => !controller.signal.aborted && context.isActive?.() !== false;
+    const listen = (target, type, callback, options) => {
+      const guarded = (...args) => { if (active()) return callback(...args); };
+      target.addEventListener(type, guarded, options);
+      callbacks.push(() => target.removeEventListener(type, guarded, options));
+    };
+    const ui = context.ui && new Proxy(context.ui, { get(target, key) {
+      const value = target[key];
+      if (typeof value !== 'function') return value;
+      return (...args) => {
+        if (/^(?:set|render|update)/.test(String(key)) && !active()) return;
+        return value.apply(target, args);
+      };
+    } });
+    return {
+      context:{ ...context, ui, signal:controller.signal, isActive:active, listen },
+      dispose() {
+        if (controller.signal.aborted) return;
+        controller.abort();
+        for (const callback of callbacks.splice(0)) callback();
+      }
+    };
+  }
+
+  function stopEntry(entry) {
+    if (entry.stopping) return entry.stopping;
+    if (!entry.instance) return Promise.resolve();
+    // Invoke immediately so synchronous observer/timer cleanup is not queued
+    // behind unrelated module startup. Retain the promise for idempotent await.
+    try {
+      entry.stopping = Promise.resolve(entry.module.stop
+        ? entry.module.stop(entry.instance) : entry.instance.stop?.());
+    } catch (error) { entry.stopping = Promise.reject(error); }
+    return entry.stopping;
+  }
+
+  function invalidate() {
+    generation += 1;
+    for (const entry of running.values()) {
+      entry.lifecycle?.dispose();
+      void stopEntry(entry).catch(error => console.error('[SLINK] Module cleanup:', entry.module.id, error));
+    }
+  }
 
   function register(definition) {
     const id = String(definition?.id || '').trim();
@@ -40,6 +88,8 @@
   }
 
   async function startAll(context) {
+    const startedGeneration = generation;
+    const current = () => startedGeneration === generation && context.isActive?.() !== false;
     const started = [];
     const denied = [];
     const skipped = [];
@@ -47,6 +97,7 @@
     const planned = [];
 
     for (const module of registry.values()) {
+      if (!current()) break;
       if (running.has(module.id)) {
         skipped.push({ id: module.id, reason: 'already-running' });
         continue;
@@ -63,6 +114,7 @@
       const presentation = typeof context.modulePresentation === 'function'
         ? await context.modulePresentation(module)
         : (typeof context.moduleVisible === 'function' && !await context.moduleVisible(module) ? 'hidden' : 'full');
+      if (!current()) break;
       if (presentation === 'hidden') {
         skipped.push({ id: module.id, reason: 'hidden-by-user' });
         continue;
@@ -83,16 +135,28 @@
     // perform network or storage work, so running them one-by-one made later
     // tabs appear missing (and left the shell looking stuck on an earlier tab).
     await Promise.all(planned.map(async ({ module, presentation, moduleUi }) => {
+      if (!current()) return;
+      const scope = lifecycle({ ...context, module, ui:moduleUi, presentation });
+      const entry = { module, instance:null, moduleUi, lifecycle:scope };
+      running.set(module.id, entry);
       try {
-        const instance = await module.start({ ...context, module, ui:moduleUi, presentation });
-        running.set(module.id, { module, instance, moduleUi });
+        const instance = await module.start(scope.context);
+        entry.instance = instance;
+        if (!current() || scope.context.signal.aborted) {
+          scope.dispose();
+          await stopEntry(entry);
+          if (running.get(module.id) === entry) running.delete(module.id);
+          return;
+        }
         started.push(module.id);
       } catch (error) {
+        scope.dispose();
+        if (!current()) { if (running.get(module.id) === entry) running.delete(module.id); return; }
         const message = SLINK.core.format.errorMessage(error);
         moduleUi?.setStatus?.(message, 'error');
         // Retain the failed view so stopAll can remove it during an in-page
         // module restart instead of leaving a duplicate tab behind.
-        running.set(module.id, { module, instance:null, moduleUi, startFailed:true });
+        entry.startFailed = true;
         failed.push({ id:module.id, error:message });
       }
     }));
@@ -102,17 +166,21 @@
 
   async function stopAll(options = {}) {
     const preserveUi = Boolean(options.preserveUi);
+    invalidate();
     for (const [id, entry] of [...running.entries()].reverse()) {
-      if (entry.module.stop) await entry.module.stop(entry.instance);
-      else if (typeof entry.instance?.stop === 'function') await entry.instance.stop();
-      if (!preserveUi && typeof entry.moduleUi?.remove === 'function') entry.moduleUi.remove();
       running.delete(id);
+      try {
+        await stopEntry(entry);
+      } catch (error) { console.error('[SLINK] Module cleanup:', id, error); }
+      finally { if (!preserveUi && typeof entry.moduleUi?.remove === 'function') entry.moduleUi.remove(); }
     }
   }
 
   SLINK.define('modules', 'register', register);
   SLINK.define('modules', 'list', list);
   SLINK.define('modules', 'canAccess', canAccess);
+  SLINK.define('modules', 'lifecycle', lifecycle);
+  SLINK.define('modules', 'invalidate', invalidate);
   SLINK.define('modules', 'startAll', startAll);
   SLINK.define('modules', 'stopAll', stopAll);
 })(globalThis);

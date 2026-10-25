@@ -123,7 +123,7 @@
         render();
       }
 
-      root.addEventListener('click', event => {
+      context.listen(root, 'click', event => {
         if (event.target.closest('[data-company-refresh]')) void load(true);
         if (event.target.closest('[data-company-save]')) void save().catch(error => { notice = SLINK.core.format.errorMessage(error); render(); });
         const fill = event.target.closest('[data-company-fill-chat],[data-company-send-chat]');

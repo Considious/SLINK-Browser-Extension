@@ -126,8 +126,8 @@
       context.ui.setTitle('SLINK Mugging');
       context.ui.setModuleStyles(MODULE_STYLES);
 
-      async function persistSettings() {
-        await SLINK.core.storage.set(SETTINGS_KEY, settings);
+      async function persistSettings(patch) {
+        settings = normalizeSettings(await SLINK.core.messaging.send('mugging.settings.save', patch));
       }
 
       function moduleVisible() {
@@ -224,7 +224,7 @@
         const root = context.ui.getContentElement();
         root.querySelector('#mugging-enabled')?.addEventListener('change', async event => {
           settings = normalizeSettings({ ...settings, enabled:event.target.checked });
-          await persistSettings();
+          await persistSettings({ enabled:settings.enabled });
           error = '';
           notice = settings.enabled ? 'Mugging enabled locally; contributor scheduling started.' : 'Mugging disabled locally; cached assignments were kept.';
           if (settings.enabled) {
@@ -243,7 +243,7 @@
             maxFairFight:root.querySelector('#mugging-max-ff')?.value,
             limit:root.querySelector('#mugging-limit')?.value
           });
-          await persistSettings();
+          await persistSettings({ minFairFight:settings.minFairFight, maxFairFight:settings.maxFairFight, limit:settings.limit });
           if (settings.enabled) await SLINK.core.messaging.send('mugging.activity.touch').catch(() => null);
         };
         root.querySelector('#mugging-min-ff')?.addEventListener('change', saveFilters);
@@ -298,4 +298,3 @@
     }
   });
 })(globalThis);
-

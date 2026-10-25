@@ -233,7 +233,7 @@
 
       function bindEvents() {
         const root = context.ui.getContentElement();
-        root.addEventListener('pointerdown', () => void markActivity(), { once: true });
+        context.listen(root, 'pointerdown', () => void markActivity(), { once: true });
         for (const button of root.querySelectorAll('[data-leveling-save-target]')) button.addEventListener('click', async () => {
           const targetId = Number(button.dataset.levelingSaveTarget);
           const target = (current?.runtime?.targets || []).find(row => Number(row.id) === targetId);

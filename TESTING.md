@@ -1,8 +1,8 @@
-# SLINK audit tester build — candidate 1
+# SLINK audit tester build — candidate 2
 
 This is an early testing build, not the Chrome Web Store release. Main has not changed. The full audit plan is not implemented yet.
 
-- Version: **0.19.9.1**, displayed as **0.19.09 Audit Test 1**.
+- Version: **0.19.9.2**, displayed as **0.19.09 Audit Test 2**.
 - Branch: `audit/test-foundation`.
 - [Download the tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip).
 - [One running tester changelog for extension and PDA](https://github.com/Considious/SLINK-Browser-Extension/blob/audit/test-foundation/TESTER-CHANGELOG.md).
@@ -16,7 +16,7 @@ This is an early testing build, not the Chrome Web Store release. Main has not c
 4. Check that the installed name is **SLINK Audit Test** and the version is the tester version above.
 5. Sign in to Torn and authenticate SLINK normally in that test profile. Use harmless sample targets and settings for tests. Do not copy API keys into feedback or recordings.
 
-Do not run stable and tester copies together in the same profile. This candidate preserves current application storage keys; it does not isolate two copies sharing a Torn origin. No saved-data migration or reset is part of candidate 1. A new browser profile naturally starts with its own settings.
+Do not run stable and tester copies together in the same profile. This candidate preserves current application storage keys; it does not isolate two copies sharing a Torn origin. No saved-data migration or reset is part of candidate 2. A new browser profile naturally starts with its own settings.
 
 When a new candidate is published, download/extract its ZIP and use **Load unpacked** or the extension's **Reload** control for that extracted folder. The Web Store does not distribute these side-branch builds. Return to your normal profile to use stable SLINK.
 

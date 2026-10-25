@@ -421,31 +421,71 @@ const routes = {
 };
 
 let activeTornPageTabId = null;
+let activityRevision = 0;
+let activityQueue = Promise.resolve();
 
 async function notifyTornPageActivity(tabId, active) {
   if (!Number.isInteger(tabId)) return;
   try {
-    await chrome.tabs.sendMessage(tabId, { channel:'slink-page-activity', type:'active-state', active:Boolean(active) });
+    await chrome.tabs.sendMessage(tabId, { channel:'slink-page-activity', type:'active-state', active:Boolean(active), revision:activityRevision });
   } catch {
     // Non-Torn tabs and pages still loading do not have the content listener.
   }
 }
 
+async function eligibleTornPageTab() {
+  const windows = await chrome.windows.getAll({ populate:false });
+  const focused = windows.find(window => window.focused && window.state !== 'minimized');
+  if (!focused) return null;
+  const [tab] = await chrome.tabs.query({ active:true, windowId:focused.id });
+  try {
+    const url = new URL(tab?.url);
+    return url.protocol === 'https:' && url.hostname === 'www.torn.com' ? tab.id : null;
+  } catch { return null; }
+}
+
+function reconcileTornPageActivity(excludedTabId = null) {
+  const revision = ++activityRevision;
+  const task = activityQueue.then(async () => {
+    let next = await eligibleTornPageTab();
+    if (revision !== activityRevision) return false;
+    if (next === excludedTabId) next = null;
+    const previous = activeTornPageTabId;
+    activeTornPageTabId = null;
+    if (Number.isInteger(previous) && previous !== next) await notifyTornPageActivity(previous, false);
+    // A switch received while revocation was awaited must never grant the old candidate.
+    if (revision !== activityRevision) return false;
+    if (next !== await eligibleTornPageTab() || revision !== activityRevision) return false;
+    activeTornPageTabId = next;
+    if (Number.isInteger(next)) await notifyTornPageActivity(next, true);
+    return revision === activityRevision && activeTornPageTabId === next;
+  });
+  activityQueue = task.catch(() => undefined);
+  return task;
+}
+
 async function claimTornPageActivity(tabId) {
   if (!Number.isInteger(tabId)) return false;
-  const previousTabId = activeTornPageTabId;
-  activeTornPageTabId = tabId;
-  if (Number.isInteger(previousTabId) && previousTabId !== tabId) await notifyTornPageActivity(previousTabId, false);
-  await notifyTornPageActivity(tabId, true);
-  return activeTornPageTabId === tabId;
+  await reconcileTornPageActivity();
+  return activeTornPageTabId === tabId && tabId === await eligibleTornPageTab();
 }
 
 async function releaseTornPageActivity(tabId) {
-  if (!Number.isInteger(tabId) || activeTornPageTabId !== tabId) return false;
-  activeTornPageTabId = null;
-  await notifyTornPageActivity(tabId, false);
+  if (!Number.isInteger(tabId)) return false;
+  if (activeTornPageTabId !== tabId) return false;
+  await reconcileTornPageActivity(tabId);
   return true;
 }
+
+function refreshTornPageActivity() {
+  void reconcileTornPageActivity().catch(error => console.debug('[SLINK] Activity reconciliation:', error));
+}
+chrome.tabs.onActivated.addListener(refreshTornPageActivity);
+chrome.tabs.onRemoved.addListener(refreshTornPageActivity);
+chrome.tabs.onUpdated.addListener((_id, changes) => { if (changes.url || changes.status === 'complete') refreshTornPageActivity(); });
+chrome.windows.onFocusChanged.addListener(refreshTornPageActivity);
+// Worker globals are not durable. Recover ownership from Chrome, not a saved tab ID.
+refreshTornPageActivity();
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.channel !== 'slink-page-activity') return false;

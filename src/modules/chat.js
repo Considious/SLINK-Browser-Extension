@@ -57,8 +57,8 @@
     }
     container.dataset.slinkChatHighlighted='true';
   }
-  function scanHighlights() { document.querySelectorAll(MESSAGE_SELECTOR).forEach(highlightNode); }
-  function scheduleScan() { clearTimeout(scanTimer); scanTimer=setTimeout(scanHighlights,80); }
+  function scanHighlights() { if (SLINK.core.pageActivity?.eligible()) document.querySelectorAll(MESSAGE_SELECTOR).forEach(highlightNode); }
+  function scheduleScan() { if (!SLINK.core.pageActivity?.eligible()) return; clearTimeout(scanTimer); scanTimer=setTimeout(scanHighlights,80); }
 
   SLINK.modules.register({
     id:'chat', title:'Chat', shortTitle:'Chat', group:'quality-of-life', groupTitle:'Quality of Life',
@@ -102,7 +102,7 @@
       observer=new MutationObserver(mutations => { if (hasActiveHighlights() && mutations.some(mutationContainsChatMessage)) scheduleScan(); });
       observer.observe(document.body,{childList:true,subtree:true});
       if (hasActiveHighlights()) scanHighlights();
-      return {stop(){observer?.disconnect();observer=null;clearTimeout(scanTimer);}};
+      return {stop(){observer?.disconnect();observer=null;clearTimeout(scanTimer);global.dispatchEvent(new CustomEvent('slink-chat-disable'));}};
     }
   });
 })(globalThis);

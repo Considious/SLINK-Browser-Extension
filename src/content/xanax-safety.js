@@ -80,6 +80,7 @@
   }
 
   function handleXanaxUse(event) {
+    if (!global.SLINK_EXTENSION.core.pageActivity.eligible()) return;
     const action = xanaxAction(event.target);
     if (!action) return;
     const energy = currentEnergy();
@@ -93,6 +94,7 @@
   let decorateScheduled = false;
   function decorateXanaxActions() {
     decorateScheduled = false;
+    if (!global.SLINK_EXTENSION.core.pageActivity.eligible()) return;
     const energy = currentEnergy();
     const guarded = energy !== null && energy > SAFE_ENERGY_LIMIT;
     for (const action of document.querySelectorAll(ACTION_SELECTOR)) {
@@ -103,7 +105,7 @@
   }
 
   function scheduleDecoration() {
-    if (decorateScheduled) return;
+    if (decorateScheduled || !global.SLINK_EXTENSION.core.pageActivity.eligible()) return;
     decorateScheduled = true;
     global.requestAnimationFrame(decorateXanaxActions);
   }
@@ -115,11 +117,13 @@
 
   document.addEventListener('click', handleXanaxUse, true);
   const observer = new MutationObserver(scheduleDecoration);
-  observer.observe(document.documentElement, { childList:true, subtree:true, characterData:true });
-  scheduleDecoration();
-
-  global.addEventListener('pagehide', () => {
+  global.SLINK_EXTENSION.core.pageActivity.subscribe(active => {
     observer.disconnect();
-    document.removeEventListener('click', handleXanaxUse, true);
-  }, { once:true });
+    if (!active) return;
+    observer.observe(document.documentElement, { childList:true, subtree:true, characterData:true });
+    scheduleDecoration();
+  });
+
+  // Keep the guarded click handler for a BFCache pageshow; the activity adapter
+  // disconnects observation during pagehide and reconnects after a fresh grant.
 })(globalThis);

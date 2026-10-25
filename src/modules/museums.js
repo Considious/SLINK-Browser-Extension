@@ -67,7 +67,7 @@
         } finally { busy = false; render(); }
       }
 
-      root.addEventListener('click', async event => {
+      context.listen(root, 'click', async event => {
         if (event.target.closest('[data-museum-refresh]')) { void load(true); return; }
         const abroad = event.target.closest('[data-museum-abroad]');
         if (abroad) {

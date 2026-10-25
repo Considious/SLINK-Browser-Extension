@@ -1218,14 +1218,18 @@
       return null;
     }
     if (qualityInstances.has(id)) return qualityInstances.get(id);
-    const instance = await definition.start({
+    const scope = SLINK.modules.lifecycle({
       url:new URL('https://www.torn.com/'),
       permissions:system?.permissions || {},
       ui:qualityUi(id),
       module:definition,
       presentation:'dashboard'
     });
-    qualityInstances.set(id, instance || {});
+    let instance;
+    try { instance = await definition.start(scope.context); }
+    catch (error) { scope.dispose(); throw error; }
+    const stop = instance?.stop?.bind(instance);
+    qualityInstances.set(id, { ...instance, async stop() { scope.dispose(); await stop?.(); } });
     return instance;
   }
 
@@ -1366,7 +1370,7 @@
       tornKey,
       acceptTerms
     })); else if (access?.settings?.hasTornKey || access?.settings?.enabled) tasks.push(SLINK.core.messaging.send('access.settings.save', { enabled:false, clearTornKey:true }).then(() => SLINK.core.messaging.send('access.session.clear')));
-    tasks.push(SLINK.core.storage.set('mugging.settings.v1', { ...(muggingSettings || {}), enabled:useMugging }));
+    tasks.push(SLINK.core.messaging.send('mugging.settings.save', { enabled:useMugging }));
     const results = await Promise.allSettled(tasks);
     const failures = results.filter(result => result.status === 'rejected');
     if (failures.length) throw new Error(failures.map(result => errorText(result.reason)).join(' / '));
@@ -1423,7 +1427,7 @@
       await refresh();
     } catch (error) { byId('access-message').textContent = errorText(error); } finally { setBusy(submit, false); }
   });
-  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('access.settings.save',{enabled:false,clearTornKey:true}),SLINK.core.storage.set('mugging.settings.v1',{...(muggingSettings||{}),enabled:false})]); await Promise.all([SLINK.core.messaging.send('leveling.session.clear'),SLINK.core.messaging.send('war.session.clear'),SLINK.core.messaging.send('access.session.clear')]); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
+  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('access.settings.save',{enabled:false,clearTornKey:true}),SLINK.core.messaging.send('mugging.settings.save',{enabled:false})]); await Promise.all([SLINK.core.messaging.send('leveling.session.clear'),SLINK.core.messaging.send('war.session.clear'),SLINK.core.messaging.send('access.session.clear')]); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
   byId('backup-local-data').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true);
     try {

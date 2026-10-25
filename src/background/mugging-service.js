@@ -25,6 +25,25 @@
   let refreshing = null;
   let contributing = null;
   let syncing = null;
+  let settingsQueue = Promise.resolve();
+
+  function saveSettings(input = {}) {
+    const task = settingsQueue.then(async () => {
+      const current = await SLINK.core.storage.get(SETTINGS_KEY, {});
+      const next = { ...current };
+      if (Object.hasOwn(input, 'enabled')) next.enabled = input.enabled === true;
+      for (const [key,min,max] of [['minFairFight',1,3],['maxFairFight',1,3],['limit',1,100]]) {
+        if (!Object.hasOwn(input, key)) continue;
+        const value = Number(input[key]);
+        if (!Number.isFinite(value)) throw new Error('Invalid Mugging setting: ' + key);
+        next[key] = Math.max(min, Math.min(max, key === 'limit' ? Math.trunc(value) : value));
+      }
+      await SLINK.core.storage.set(SETTINGS_KEY, next);
+      return next;
+    });
+    settingsQueue = task.catch(() => undefined);
+    return task;
+  }
 
   function finiteStat(value) {
     const candidate = value && typeof value === 'object'
@@ -410,6 +429,7 @@
   }
 
   const routes = Object.freeze({
+    'mugging.settings.save':saveSettings,
     'mugging.activity.touch':touchActivity,
     'mugging.assignments.refresh':refresh,
     'mugging.contribution.run':runContribution,
@@ -426,4 +446,3 @@
     normalizeCache, refresh, reportForObservation, routes, runContribution, status, syncPending, touchActivity
   }));
 })(globalThis);
-

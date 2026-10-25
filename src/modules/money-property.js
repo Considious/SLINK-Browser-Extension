@@ -141,7 +141,7 @@
         } finally { busy = false; render(); }
       }
 
-      root.addEventListener('click', async event => {
+      context.listen(root, 'click', async event => {
         if (event.target.closest('[data-money-refresh]')) { void load(true); return; }
         const save = event.target.closest('[data-money-save]');
         if (save) {
@@ -162,7 +162,7 @@
         }
       });
 
-      root.addEventListener('change', async event => {
+      context.listen(root, 'change', async event => {
         if(event.target.matches('[data-bank-amount]')){
           if(!event.target.validity.valid)return;
           try{data=await SLINK.core.messaging.send('money-property.settings.save',{bankAmount:Number(event.target.value)});}
@@ -179,7 +179,7 @@
         render();
       });
 
-      root.addEventListener('input',event=>{
+      context.listen(root, 'input',event=>{
         if(!event.target.matches('[data-bank-amount]'))return;
         const results=root.querySelector('[data-bank-results]');
         if(results)results.innerHTML=bankResults(data?.status,event.target.value);

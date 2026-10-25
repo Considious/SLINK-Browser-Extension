@@ -2,7 +2,9 @@
 
 Baseline source: extension 6c249c2384c8af236f236b73d4921d86d3aa1cf9 and SLINK-PDA 43cf003370750ab30dfd2945870ed7f9955d239e. Main is unchanged. Candidate 1 adds four executable regression scripts and a focused `test:audit` command per client.
 
-On 24 October 2026, all candidate test scripts were run individually against isolated local source copies. **39 of 57 scripts passed; 18 failed.** The failure inventory matches the independent audit. These are script exits, not individual assertion counts. The focused candidate checks pass; the full legacy suite does not.
+On 24 October 2026, all candidate test scripts were run individually against isolated local source copies. **39 of 57 scripts passed; 18 failed.** The failure inventory matches the independent audit.
+
+On 25 October 2026, candidate 2 passed 42/60 scripts, retaining these same 18 baseline failures. Three additional executable regression scripts cover arbitration/lifecycle, serialized settings and PDA page activity. Market DOM fixtures now distinguish the extension ownership adapter from PDA visibility; PDA readiness fixtures match candidate metadata. A real headless Edge fixture passed repeated Racing resume, one click moving the intended build out of Needed, stable labels and no automatic scrolling. No native-device validation is claimed. These are script exits, not individual assertion counts. The focused candidate checks pass; the full legacy suite does not.
 
 | Client | Script | Classification / next action |
 |---|---|---|

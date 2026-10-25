@@ -58,9 +58,7 @@
       `);
 
       function focusedTornPage() {
-        // PDA/WebView and some Torn SPA transitions can report hasFocus() as
-        // false while the visible page is still fully interactive.
-        return document.visibilityState !== 'hidden';
+        return !stopped && context.isActive?.() !== false && SLINK.core.pageActivity?.eligible() === true;
       }
 
       function elementVisible(element) {
@@ -1132,6 +1130,7 @@
         if (purchaseState.bazaarOneDollarTimer) return;
         purchaseState.bazaarOneDollarTimer = window.setTimeout(() => {
           purchaseState.bazaarOneDollarTimer = null;
+          if (!focusedTornPage()) return;
           formatBazaarOneDollarListings();
           formatItemMarketPurchaseOpportunities();
           syncHighlightedQuickPurchaseControls();

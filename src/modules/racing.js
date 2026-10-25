@@ -139,7 +139,7 @@
       }
 
       function pageEligible() {
-        return context.presentation !== 'dashboard' && !document.hidden && document.hasFocus();
+        return context.presentation !== 'dashboard' && context.isActive?.() !== false && !document.hidden && document.hasFocus();
       }
 
       function onPageActivity() {
@@ -159,6 +159,7 @@
       }
 
       function render() {
+        if (stopped || context.signal?.aborted) return;
         userState = racing.normalizeUserState(userState);
         const definitions = racing.buildsForView(userState.view, userState);
         const completed = racing.RECOMMENDED_BUILDS.filter(definition => userState.builds[definition.id].completed).length;
@@ -184,7 +185,7 @@
       }
 
       const content = ui.getContentElement();
-      content.addEventListener('click', event => {
+      context.listen(content, 'click', event => {
         const viewButton = event.target.closest('[data-racing-view]');
         if (viewButton) {
           userState.view = viewButton.dataset.racingView;
@@ -206,7 +207,7 @@
           render();
         }
       });
-      content.addEventListener('input', event => {
+      context.listen(content, 'input', event => {
         if (!event.target.matches('[data-racing-name]')) return;
         const card = event.target.closest('[data-racing-build]');
         const buildState = userState.builds[card?.dataset.racingBuild];
@@ -247,6 +248,7 @@
       return {
         stop() {
           stopped = true;
+          const pendingSave = saveTimer ? SLINK.core.storage.set(STORAGE_KEY, userState) : null;
           observer?.disconnect();
           if (scanTimer) global.clearTimeout(scanTimer);
           if (saveTimer) global.clearTimeout(saveTimer);
@@ -257,6 +259,7 @@
           document.removeEventListener('visibilitychange', onPageActivity);
           clearHighlight();
           document.getElementById(HIGHLIGHT_STYLE_ID)?.remove();
+          return pendingSave;
         }
       };
     }

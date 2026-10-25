@@ -75,7 +75,7 @@
   }
 
   function activeProfile(expectedPlayerId = 0) {
-    if (!global.document || global.document.visibilityState !== 'visible' || !global.document.hasFocus?.()) {
+    if (!global.document || !SLINK.core.pageActivity?.eligible()) {
       return { active:false, reason:'inactive-page' };
     }
     let url;
@@ -212,17 +212,14 @@
 
   function schedule() {
     clearTimeout(timer);
+    if (!activeProfile().active) return;
     timer = setTimeout(() => void observeCurrentPage(), OBSERVE_DEBOUNCE_MS);
   }
 
   function start() {
-    if (!global.document?.documentElement || observer) return;
+    if (!global.document?.documentElement || observer || !activeProfile().active) return;
     observer = new MutationObserver(schedule);
     observer.observe(global.document.documentElement, { childList:true, subtree:true });
-    global.document.addEventListener('visibilitychange', schedule);
-    global.addEventListener('focus', schedule);
-    global.addEventListener('hashchange', schedule);
-    global.addEventListener('popstate', schedule);
     schedule();
   }
 
@@ -246,5 +243,9 @@
     stop
   }));
 
-  if (global.document) start();
+  if (global.document) {
+    SLINK.core.pageActivity?.subscribe(active => { if (active) start(); else stop(); });
+    global.addEventListener('hashchange', () => { stop(); start(); });
+    global.addEventListener('popstate', () => { stop(); start(); });
+  }
 })(globalThis);
