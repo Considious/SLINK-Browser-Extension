@@ -93,6 +93,7 @@
       }
 
       function render() {
+        if(context.signal?.aborted)return;
         if (!status) return;
         const root = ui.getContentElement();
         const providerStrip = PROVIDER_ORDER.map(providerId => {

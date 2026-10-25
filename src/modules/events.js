@@ -117,6 +117,7 @@
       }
 
       function render() {
+        if(context.signal?.aborted)return;
         if (stopped || context.signal?.aborted) return;
         const calendar = data?.calendar;
         const selected = data?.selected;
@@ -221,7 +222,7 @@
         render();
       });
 
-      basketObserver = new MutationObserver(mutations => {
+      if(context.presentation!=='dashboard'){basketObserver = new MutationObserver(mutations => {
         if (context.isActive?.() === false || document.hidden) return;
         if (!onHalloweenBasketPage()) return;
         if (activeBasket && !basketVisible(activeBasket)) resetBasketSession();
@@ -231,7 +232,7 @@
       basketObserver.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class','disabled','style','hidden','aria-hidden','aria-expanded'] });
       global.addEventListener('hashchange', scheduleBasketScan);
       global.addEventListener('popstate', scheduleBasketScan);
-      scheduleBasketScan(0);
+      scheduleBasketScan(0);}
 
       await load(false);
       return {

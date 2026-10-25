@@ -29,6 +29,9 @@
   const SCOPES = new Set(Object.keys(SCOPE_CONTEXTS));
 
   let macros = loadMacros();
+  let sharedRevision = null;
+  let sharedReady = null;
+  let savingEditorData = false;
   let menu = null;
   let menuChatRoot = null;
   let menuStatus = '';
@@ -53,6 +56,10 @@
   function enable() {
     if (enabled) return;
     enabled = true;
+    sharedReady = SLINK_EXTENSION.core.messaging.send('chat.macros.importLegacy',{macros:loadMacros()}).then(record=>{
+      sharedRevision=record.revision;macros=normalizeMacros(record.macros);
+      if(menu&&!menu.hidden)renderMenu();return record;
+    }).catch(error=>{sharedRevision=null;console.warn('[SLINK] Chat buttons not synchronized:',error.message);return null;});
     addStyles();
     observer = new MutationObserver(scheduleScan);
     syncActivity();
@@ -123,9 +130,19 @@
     }
   }
 
-  function saveMacros() {
+  async function saveMacros(nextMacros) {
+    await sharedReady;
+    if(sharedRevision===null)throw Error('Chat storage is unavailable. Your draft has been kept; reopen Chat after access is restored.');
+    const record=await SLINK_EXTENSION.core.messaging.send('chat.macros.save',{macros:nextMacros,expectedRevision:sharedRevision});
+    sharedRevision=record.revision;macros=normalizeMacros(record.macros);
     GM_setValue(STORAGE_KEY, macros);
   }
+  chrome.storage.onChanged.addListener((changes,area)=>{
+    const record=changes[SLINK_EXTENSION.STORAGE_PREFIX+'qol.chat.macros.v1']?.newValue;
+    if(area!=='local'||!record||editor)return;
+    sharedRevision=record.revision;macros=normalizeMacros(record.macros);clearArmed();
+    if(menu&&!menu.hidden)renderMenu();
+  });
 
   function isNewsletterPage() {
     return /factions\.php$/i.test(window.location.pathname) && /(?:^|[&#])option=newsletter(?:&|$)/i.test(window.location.hash);
@@ -737,7 +754,9 @@
     }
   }
 
-  function openEditor() {
+  async function openEditor() {
+    await sharedReady;
+    if(sharedRevision===null){window.alert('Chat settings could not be loaded. Your existing buttons have not been changed.');return;}
     closeMenu();
     if (editor) return;
     editorDraft = macros.map((macro) => ({ ...macro }));
@@ -963,7 +982,8 @@
     renderEditor();
   }
 
-  function saveEditor() {
+  async function saveEditor() {
+    if(savingEditorData)return;
     const incomplete = editorDraft.find((macro) => !String(macro.label || '').trim() || !String(macro.message || '').trim());
     if (incomplete) {
       window.alert('Every custom message button needs both a label and a message.');
@@ -980,9 +1000,13 @@
       window.alert(`Newsletter button "${oversizedNewsletter.label}" exceeds the separate ${NEWSLETTER_FALLBACK_LIMIT.toLocaleString()} character limit.`);
       return;
     }
-    macros = normalizeMacros(editorDraft);
-    saveMacros();
+    const submittedEditor=editor,submittedDraft=JSON.stringify(editorDraft);
+    savingEditorData=true;
+    try { await saveMacros(normalizeMacros(editorDraft)); }
+    catch(error){window.alert(error.message);return;}
+    finally{savingEditorData=false;}
     clearArmed();
+    if(editor!==submittedEditor||JSON.stringify(editorDraft)!==submittedDraft){scanContexts();return;}
     closeEditor();
     scanContexts();
   }

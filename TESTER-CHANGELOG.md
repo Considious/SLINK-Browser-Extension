@@ -2,6 +2,42 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 5 — 25 October 2026 — dashboard parity, awaiting combined tester review
+
+Extension **0.19.10.3 / 0.19.10 Audit Test 5** on the same testing branch. PDA stays at **0.4.105-audit-test4**: this batch changes the standalone extension dashboard and its shared extension presenters, not the PDA launcher. Main and the Chrome Store release are unchanged. Test this newest extension together with the earlier entries below.
+
+### Dashboard combat tools
+
+Combat now has Leveling & War (the original overview), Bounties, Mugging and Target List. The added views use the same modules/services as the Torn panel rather than independently copied forms. Existing permissions apply, including admin override and inherited faction scopes. Only the selected permitted dashboard module runs; leaving its view, hiding the dashboard or losing access stops its presentation loops. This does not disable configured background alerts or contribution services.
+
+1. Open the extension dashboard with the appropriate permissions. Verify each permitted Combat view appears, and denied views do not.
+2. In Target List, add a harmless sample target, edit its tags/notes, try Refresh, toggle a stakeout, open polling settings and remove only the sample when finished. A failed save must keep the entered values.
+3. Leave a Target List edit open, switch to Mugging, then back. The edit must remain. Explicit Cancel must discard it. Recheck the earlier delayed/failed-save tests.
+4. In Mugging, check enable/filters/count, Find targets, your own stats and Save Target. In Bounties, check filters/settings, results, restart and Save Target. Live searches still need valid feature access/credentials.
+5. Leveling, War and outside-target cards now have Save Target. Check the saved list has the expected name, Level/War tag and source, with no duplicates from repeated updates.
+6. Profile and attack links should open Torn separately, leaving the dashboard usable. Target Refresh uses the background service, not a scrape of the dashboard.
+
+### Chat settings and native-page handoffs
+
+QoL now includes Chat on the dashboard: configure highlighted terms/colors and custom message button labels, messages, destinations and enabled state. Sending remains your action in Torn chat.
+
+1. Open Torn with Chat access once to import existing custom buttons. Then open dashboard QoL > Chat. Your old buttons should be present; their original local copy is not cleared.
+2. Add a harmless test macro and highlight term. Save, reopen Chat and refresh the dashboard. Verify labels, quoted links, message text, destination, color and enabled state survive.
+3. Edit macros in the dashboard and Torn editor at the same time. A stale save must explain the conflict and retain its draft, not overwrite newer accepted settings. Copy any unsaved draft before reopening after a conflict.
+4. Remove the test macro and reload Torn. The one-time import must not resurrect the deleted button. Do not clear application data to test migration.
+5. In a director's Company view, the dashboard offers Copy reminder, Message and Open profile/chat instead of pretending it can fill/send a nonexistent native chat. Actual fill/send controls remain on Torn.
+6. Officers > Open Armory Recaller should open Torn's faction armory with the existing War Armory subtab requested. Actual recalling remains a deliberate Torn-page action.
+
+### Navigation and nearby regression checks
+
+Choose an existing main page and a subview, reload/reopen the dashboard and verify it restores both. Opening the dashboard without requesting a specific destination must not force Combat or QoL. Switch rapidly, use two dashboard tabs, revoke/regrant access where safe, and recheck existing Torn panel behavior. Saved settings, keys, themes and supplied image assets must remain intact. No automatic cloud restore or permission migration is included.
+
+Developer validation: **49/67 scripts pass**, with the same **18 documented baseline failures**; all focused checks pass, including the new real-host/macro tests. A synthetic headless Edge fixture exercises actual dashboard HTML/CSS/modules at **390px and 1100px**, target draft retention/refresh, Chat editing, Company/Recaller handoffs and denied access. Its service replies are mocked; it does not prove live Torn API behavior or physical PDA persistence.
+
+Known limits: original source-specific profile-scraping intent is not carried from the extension origin into the newly opened Torn tab; use the normal Refresh action for dashboard target updates. Live scans, faction/officer operations and full War action-by-action parity still need tester acceptance. Earlier lifecycle/native-storage tasks remain open. See docs/audit/DASHBOARD-PARITY.md for the implemented/delegated/unresolved inventory. This is not a full-audit completion claim.
+
+Try to break it: rapid view changes during slow responses; newer typing during Save; Cancel and reopen; two editors saving different revisions; repeated open/close; denied versus exact-grant versus admin accounts; narrow windows. Report build, platform, steps and expected/actual behavior, without API keys or tokens.
+
 ## Candidate 4 — 25 October 2026 — shared data providers
 
 Builds: extension **0.19.10.2 / 0.19.10 Audit Test 4**, PDA **0.4.105-audit-test4**. Install the newest build using the same testing-branch links below; earlier candidates' checks remain part of this combined test. Main is unchanged.

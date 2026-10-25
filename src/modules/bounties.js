@@ -171,7 +171,7 @@
       function bindEvents() {
         const root = context.ui.getContentElement();
         root.querySelectorAll('[data-bounty-profile-id]').forEach(link => {
-          link.addEventListener('click', () => rememberBountyProfileIntent(link.dataset.bountyProfileId));
+          if(context.presentation!=='dashboard')link.addEventListener('click', () => rememberBountyProfileIntent(link.dataset.bountyProfileId));
         });
         root.querySelectorAll('[data-bounty-save-target]').forEach(button => {
           button.addEventListener('click', async () => {

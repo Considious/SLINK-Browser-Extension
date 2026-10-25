@@ -29,6 +29,7 @@ importScripts(
   'target-list-service.js',
   'theme-service.js',
   'permission-service.js',
+  'chat-config-service.js',
   'faction-officer-service.js',
   'travel-safety-service.js',
   'company-service.js',
@@ -371,9 +372,9 @@ const routes = {
   },
 
   async 'ui.dashboard.open'(payload = {}) {
-    const page = ['workspace', 'alerts', 'admin', 'diagnostics'].includes(String(payload.page))
+    const page = ['workspace', 'alerts', 'quality', 'admin', 'diagnostics'].includes(String(payload.page))
       ? String(payload.page)
-      : 'workspace';
+      : await SLINK.core.storage.get('ui.dashboard.activePage','workspace');
     await SLINK.core.storage.set('ui.dashboard.activePage', page);
     if (page === 'alerts') {
       const efficiencyView = ['alerts', 'market', 'merits', 'dollar'].includes(String(payload.efficiencyView))
@@ -381,6 +382,8 @@ const routes = {
         : 'alerts';
       await SLINK.core.storage.set('ui.efficiency.activeView', efficiencyView);
     }
+    if(page==='workspace'&&['overview','bounties','mugging','target-list'].includes(payload.combatView))await SLINK.core.storage.set('ui.dashboard.combatView',payload.combatView);
+    if(page==='quality'&&['racing','abroad-stocks','company','museums','money-property','events','faction-officers','chat'].includes(payload.qualityView))await SLINK.core.storage.set('ui.quality.activeView',payload.qualityView);
     await chrome.runtime.openOptionsPage();
     return { opened:true, page };
   },
@@ -402,6 +405,7 @@ const routes = {
   ...SLINK.services.leveling.routes,
   ...SLINK.services.playerIntelligence.routes,
   ...SLINK.services.targetList.routes,
+  ...SLINK.services.chatConfig.routes,
   ...SLINK.services.bounties.routes,
   ...SLINK.services.war.routes,
   ...SLINK.services.permissionAccess.routes,

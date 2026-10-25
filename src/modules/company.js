@@ -63,6 +63,7 @@
     async start(context) {
       const ui = context.ui;
       const root = ui.getContentElement();
+      const dashboard=context.presentation==='dashboard';
       let status = null;
       let busy = false;
       let notice = '';
@@ -80,6 +81,7 @@
       `);
 
       function render() {
+        if(context.signal?.aborted)return;
         const snapshot = status?.snapshot;
         const settings = status?.settings || COMPANY.DEFAULT_SETTINGS;
         if (!snapshot) {
@@ -99,6 +101,10 @@
           </article>
           ${snapshot.director ? `<article class="slink-company-card"><div class="slink-company-head"><div><strong>Director view</strong><small>Train priority is an estimate based on working-stat effectiveness headroom; it is not an exact stat-gain promise.</small></div><span>${ranked.length} employees ranked</span></div><div class="slink-company-list">${ranked.map((employee, index) => `<div class="slink-company-employee"><div><strong>#${index + 1} ${escapeHtml(employee.name)}</strong><small>${escapeHtml(employee.position || 'Employee')} · addiction ${employee.addictionPenalty === null ? 'unavailable' : '-' + employee.addictionPenalty} · effectiveness ${employee.totalEffectiveness === null ? 'unavailable' : employee.totalEffectiveness} · train headroom ${employee.trainHeadroom}</small></div><div class="slink-company-actions"><a href="https://www.torn.com/messages.php#/p=compose&amp;XID=${employee.id}" target="_blank" rel="noopener">Message</a><a href="https://www.torn.com/profiles.php?XID=${employee.id}" target="_blank" rel="noopener">Open profile/chat</a><button type="button" data-company-fill-chat="${employee.id}">Fill chat</button><button type="button" data-company-send-chat="${employee.id}">Send chat</button></div></div>`).join('') || '<p>No extended employee effectiveness data is available.</p>'}</div></article>` : ''}
         </div>`;
+        if(dashboard){
+          root.querySelectorAll('[data-company-fill-chat]').forEach(button=>{button.textContent='Copy reminder';});
+          root.querySelectorAll('[data-company-send-chat]').forEach(button=>{button.hidden=true;});
+        }
       }
 
       async function load(force = false) {
@@ -123,7 +129,7 @@
         render();
       }
 
-      context.listen(root, 'click', event => {
+      context.listen(root, 'click', async event => {
         if (event.target.closest('[data-company-refresh]')) void load(true);
         if (event.target.closest('[data-company-save]')) void save().catch(error => { notice = SLINK.core.format.errorMessage(error); render(); });
         const fill = event.target.closest('[data-company-fill-chat],[data-company-send-chat]');
@@ -131,6 +137,7 @@
           const id = Number(fill.dataset.companyFillChat || fill.dataset.companySendChat);
           const employee = status?.snapshot?.employees?.find(row => row.id === id);
           try {
+            if(dashboard){await navigator.clipboard.writeText(COMPANY.reminderText(employee));notice='Reminder copied. Open the employee profile/chat and paste it manually.';render();return;}
             fillPrivateChat(employee, Boolean(fill.dataset.companySendChat));
             notice = fill.dataset.companySendChat ? `Reminder sent to ${employee.name}.` : `Reminder placed in ${employee.name}'s open chat.`;
           } catch (error) { notice = SLINK.core.format.errorMessage(error); }

@@ -66,8 +66,13 @@
     defaultShowInTorn:true, matches:url=>url.hostname==='www.torn.com',
     async start(context) {
       const ui=context.ui;
+      const dashboard=context.presentation==='dashboard';
+      let macroRecord=dashboard?await SLINK.core.messaging.send('chat.macros.get'):null;
+      const root=ui.getContentElement();
+      root.dataset.uiExplicitCommit='true';
+      const drafts=SLINK.core.formState?.protect(root.getRootNode?.()||root);
       settings=normalized(await SLINK.core.storage.get(STORAGE_KEY,{highlights:[]}));
-      global.dispatchEvent(new CustomEvent('slink-chat-enable'));
+      if(!dashboard)global.dispatchEvent(new CustomEvent('slink-chat-enable'));
       ui.setModuleStyles(`
         .slink-chat-stack{display:grid;gap:9px}.slink-chat-card{padding:9px;border:1px solid var(--slink-border-soft);border-radius:8px;background:var(--slink-bg-control)}
         .slink-chat-card h3{margin:0 0 4px}.slink-chat-card p{margin:3px 0 8px;color:var(--slink-muted)}
@@ -77,20 +82,54 @@
         .slink-chat-token{font-family:monospace;color:var(--slink-accent)}
         @media(max-width:430px){.slink-chat-row{grid-template-columns:minmax(0,1fr) 105px auto}.slink-chat-row label{grid-column:1/-1}}
       `);
+      function macroHtml() {
+        const options=['faction','private','newsletter','both','faction_newsletter','private_newsletter','all'];
+        const rows=macroRecord.macros.map(row=>`<div class="slink-chat-card" data-macro-id="${escape(row.id)}"><label>Label<input id="macro-label-${escape(row.id)}" data-macro-label maxlength="80" value="${escape(row.label)}"></label><label>Message<textarea id="macro-message-${escape(row.id)}" data-macro-message maxlength="60000">${escape(row.message)}</textarea></label><label>Destination<select id="macro-scope-${escape(row.id)}" data-macro-scope>${options.map(scope=>`<option ${row.scope===scope?'selected':''}>${scope}</option>`).join('')}</select></label><label><input id="macro-enabled-${escape(row.id)}" data-macro-enabled type="checkbox" ${row.enabled?'checked':''}> Enabled</label><button type="button" data-macro-remove>Remove button</button></div>`).join('');
+        return `<section class="slink-chat-card" data-macro-editor><h3>Custom buttons</h3><p>Open Torn once to import existing Torn-page buttons. Sending still requires your click in Torn chat.</p>${rows}<div class="slink-chat-actions"><button type="button" data-macro-add>Add button</button><button type="button" data-macro-save>Save buttons</button></div><p data-macro-notice role="status"></p></section>`;
+      }
+      function collectMacros() {
+        macroRecord.macros=[...root.querySelectorAll('[data-macro-id]')].map(row=>({id:row.dataset.macroId,label:row.querySelector('[data-macro-label]').value,message:row.querySelector('[data-macro-message]').value,scope:row.querySelector('[data-macro-scope]').value,enabled:row.querySelector('[data-macro-enabled]').checked}));
+      }
+      function collectHighlights() {
+        settings.highlights=[...root.querySelectorAll('[data-chat-highlight-row]')].map(row=>({id:row.dataset.chatId,term:row.querySelector('[data-chat-term]').value,color:row.querySelector('[data-chat-color]').value,enabled:row.querySelector('[data-chat-enabled]').checked}));
+      }
       function render() {
+        if(context.signal?.aborted)return;
         const rows=settings.highlights.map(row=>`<div class="slink-chat-row" data-chat-highlight-row data-chat-id="${escape(row.id)}"><input type="text" data-chat-term value="${escape(row.term)}" placeholder="Term or phrase"><select data-chat-color>${COLORS.map(([id])=>`<option value="${id}" ${row.color===id?'selected':''}>${id[0].toUpperCase()+id.slice(1)}</option>`).join('')}</select><label><input type="checkbox" data-chat-enabled ${row.enabled?'checked':''}> On</label><button type="button" data-chat-delete aria-label="Delete highlight">×</button></div>`).join('');
         ui.setStatus('Custom chat buttons and term highlighting are stored on this device.','ready');
         ui.setContentHtml(`<div class="slink-chat-stack"><section class="slink-chat-card"><h3>Custom chat buttons</h3><p>Uses the existing two-click flow: first click loads the HTML message; second click sends it. Unquoted links are corrected to <span class="slink-chat-token">&lt;a href="link"&gt;</span>.</p><div class="slink-chat-actions"><button type="button" data-chat-manage>Manage custom buttons</button></div><p>Available tokens: <span class="slink-chat-token">{{page_link}}</span>, <span class="slink-chat-token">{{page_link:Label}}</span>, <span class="slink-chat-token">{{page_url}}</span>, and <span class="slink-chat-token">{{page_title}}</span>.</p></section><section class="slink-chat-card"><h3>Highlight chat terms</h3><p>Add a word or phrase and choose one of ten highlight colors. Matching is case-insensitive.</p><div data-chat-rows>${rows || '<p>No highlighted terms configured.</p>'}</div><div class="slink-chat-actions"><button type="button" data-chat-add>Add term</button><button type="button" data-chat-save>Save highlights</button></div></section></div>`);
+        if(dashboard){root.querySelector('[data-chat-manage]').hidden=true;root.insertAdjacentHTML('beforeend',macroHtml());}
         bind();
       }
       function bind() {
         const root=ui.getContentElement();
+        root.querySelector('[data-macro-add]')?.addEventListener('click',()=>{
+          collectMacros();macroRecord.macros.push({id:crypto.randomUUID(),label:'',message:'',scope:'both',enabled:true});render();
+        });
+        root.querySelectorAll('[data-macro-remove]').forEach(button=>button.addEventListener('click',()=>{
+          collectMacros();const row=button.closest('[data-macro-id]');drafts?.cancel(row);macroRecord.macros=macroRecord.macros.filter(item=>item.id!==row.dataset.macroId);render();
+        }));
+        root.querySelector('[data-macro-save]')?.addEventListener('click',async event=>{
+          const button=event.currentTarget;button.disabled=true;collectMacros();
+          const ticket=drafts?.begin(root.querySelector('[data-macro-editor]'));
+          try{
+            const saved=await SLINK.core.messaging.send('chat.macros.save',{expectedRevision:macroRecord.revision,macros:macroRecord.macros});
+            if(context.signal?.aborted)return;
+            macroRecord.revision=saved.revision;
+            if(!ticket||drafts.isCurrent(ticket)){macroRecord=saved;if(ticket)drafts.commit(ticket);}
+            root.querySelector('[data-macro-notice]').textContent='Buttons saved.';
+          }catch(error){if(!context.signal?.aborted)root.querySelector('[data-macro-notice]').textContent=SLINK.core.format.errorMessage(error);}
+          finally{button.disabled=false;}
+        });
         root.querySelector('[data-chat-manage]')?.addEventListener('click',()=>global.dispatchEvent(new CustomEvent('slink-chat-open-editor')));
-        root.querySelector('[data-chat-add]')?.addEventListener('click',()=>{settings.highlights.push({id:crypto.randomUUID?.()||String(Date.now()),term:'',color:'yellow',enabled:true});render();});
-        root.querySelectorAll('[data-chat-delete]').forEach(button=>button.addEventListener('click',()=>{const id=button.closest('[data-chat-id]')?.dataset.chatId;settings.highlights=settings.highlights.filter(row=>row.id!==id);render();}));
+        root.querySelector('[data-chat-add]')?.addEventListener('click',()=>{collectHighlights();settings.highlights.push({id:crypto.randomUUID?.()||String(Date.now()),term:'',color:'yellow',enabled:true});render();});
+        root.querySelectorAll('[data-chat-delete]').forEach(button=>button.addEventListener('click',()=>{collectHighlights();const row=button.closest('[data-chat-id]');drafts?.cancel(row);settings.highlights=settings.highlights.filter(item=>item.id!==row.dataset.chatId);render();}));
         root.querySelector('[data-chat-save]')?.addEventListener('click',async()=>{
-          settings=normalized({highlights:[...root.querySelectorAll('[data-chat-highlight-row]')].map(row=>({id:row.dataset.chatId,term:row.querySelector('[data-chat-term]').value,color:row.querySelector('[data-chat-color]').value,enabled:row.querySelector('[data-chat-enabled]').checked}))});
-          await SLINK.core.storage.set(STORAGE_KEY,settings);clearHighlights();scanHighlights();render();
+          collectHighlights();const captured=normalized(settings),ticket=drafts?.begin(root.querySelector('[data-chat-rows]'));
+          try{
+            await SLINK.core.storage.set(STORAGE_KEY,captured);
+            if(!ticket||drafts.isCurrent(ticket)){settings=captured;if(ticket)drafts.commit(ticket);if(!dashboard){clearHighlights();scanHighlights();}render();}
+          }catch(error){ui.setStatus(SLINK.core.format.errorMessage(error),'error');}
         });
       }
       function hasActiveHighlights() { return settings.highlights.some(item => item.enabled && String(item.term || '').trim()); }
@@ -99,10 +138,10 @@
         return [...mutation.addedNodes].some(node => node.nodeType === Node.ELEMENT_NODE && (node.matches?.(MESSAGE_SELECTOR) || node.querySelector?.(MESSAGE_SELECTOR)));
       }
       render();
-      observer=new MutationObserver(mutations => { if (hasActiveHighlights() && mutations.some(mutationContainsChatMessage)) scheduleScan(); });
+      if(!dashboard){observer=new MutationObserver(mutations => { if (hasActiveHighlights() && mutations.some(mutationContainsChatMessage)) scheduleScan(); });
       observer.observe(document.body,{childList:true,subtree:true});
-      if (hasActiveHighlights()) scanHighlights();
-      return {stop(){observer?.disconnect();observer=null;clearTimeout(scanTimer);global.dispatchEvent(new CustomEvent('slink-chat-disable'));}};
+      if (hasActiveHighlights()) scanHighlights();}
+      return {stop(){observer?.disconnect();observer=null;clearTimeout(scanTimer);if(!dashboard)global.dispatchEvent(new CustomEvent('slink-chat-disable'));}};
     }
   });
 })(globalThis);

@@ -18,20 +18,8 @@ assert.equal(api.modules.canAccess(officer,{scopes:[]}),false);
 assert.equal(api.modules.canAccess(museum,{scopes:['slink.qol.museum']}),true);
 assert.equal(api.modules.canAccess(museum,{scopes:[]}),false);
 
-const dashboard=read('src/dashboard/dashboard.js');
-const start=dashboard.indexOf('  async function startQualityModule(id)');
-const end=dashboard.indexOf('  async function switchQuality(',start);
-let stops=0,clears=0,opened='';
-const denied=vm.createContext({SLINK:api,qualityInstances:new Map([['faction-officers',{stop:async()=>stops++}]]),qualityDefinition:()=>officer,system:{permissions:{scopes:[]}},qualityUi:()=>({getContentElement:()=>({replaceChildren(){clears++;}}),setStatus(){}})});
-vm.runInContext(dashboard.slice(start,end),denied);
-assert.equal(await denied.startQualityModule('faction-officers'),null);
-assert.equal(stops,1);assert.equal(clears,1);assert.equal(denied.qualityInstances.size,0);
-const uiStart=dashboard.indexOf('  function qualityUi(id)');
-const uiEnd=dashboard.indexOf('  async function startQualityModule(',uiStart);
-const adapter=vm.createContext({CSS:{escape:value=>value},document:{querySelector:()=>null},window:{open:url=>opened=url}});
-vm.runInContext(dashboard.slice(uiStart,uiEnd),adapter);
-adapter.qualityUi('faction-officers').navigateTo('war');
-assert.equal(opened,'https://www.torn.com/factions.php?step=your#/tab=armoury');
+// Dashboard lifecycle, revocation and Recaller navigation are exercised through
+// the real shared host in dashboard-parity.test.mjs (not obsolete adapter slices).
 
 // A failed individual write rejects its caller, but must not poison the queue.
 let attempts=0;const storage=new Map();

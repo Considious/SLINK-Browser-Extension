@@ -189,7 +189,7 @@
         const root = context.ui.getContentElement();
         root.querySelectorAll('[data-target-list-profile]').forEach(link => {
           link.addEventListener('click', () => {
-            SLINK.core.playerIntelligenceDom.rememberIntent(
+            if(context.presentation!=='dashboard')SLINK.core.playerIntelligenceDom.rememberIntent(
               Number(link.dataset.targetListProfile),
               'target-list'
             );
@@ -285,7 +285,7 @@
               }
               if (action === 'refresh') {
                 busyId = playerId; render();
-                await SLINK.core.playerIntelligenceDom.observeCurrentPage({
+                if(context.presentation!=='dashboard')await SLINK.core.playerIntelligenceDom.observeCurrentPage({
                   playerId,
                   source:'target-list',
                   requireIntent:false

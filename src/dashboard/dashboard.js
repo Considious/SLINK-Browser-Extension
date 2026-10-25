@@ -19,6 +19,8 @@
   let termsExpanded = false;
   let accessExpanded = null;
   let targetView = 'leveling';
+  let efficiencyActive='alerts';
+  const visiblePage=()=>document.visibilityState!=='hidden'?document.querySelector('[data-dashboard-page]:not([hidden])')?.dataset.dashboardPage:null;
   let adminUser = null;
   let activeTheme = SLINK.core.themes.get();
   let themePanelOpacity = SLINK.core.themes.DEFAULT_PANEL_OPACITY;
@@ -244,6 +246,21 @@
     return `INSIDE HITS DISABLED — chain ${gate.count} is inside the ${gate.minimum}–${gate.maximum} major bonus window.`;
   }
 
+  function addSavedTargetAction(article,target,source) {
+    if(!hasScope('slink.combat.target-list'))return;
+    const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Save Target';
+    button.addEventListener('click',async()=>{
+      button.disabled=true;
+      try{
+        await SLINK.core.messaging.send('targetList.add',{playerId:target.id,name:target.name,tags:[source==='leveling'?'Level':'War'],
+          source:source==='outside'?'outside-targets':source,sourceLabel:source==='leveling'?'Leveling':source==='outside'?'Outside targets':'War',
+          battleStatsEstimate:target.battleStatsEstimate??target.bs_estimate??target.total_stats??undefined});
+        button.textContent='Saved';
+      }catch(error){button.disabled=false;button.textContent='Save failed — retry';button.title=errorText(error);}
+    });
+    article.querySelector('.target-actions').append(button);
+  }
+
   function targetCard(target) {
     const article = document.createElement('article');
     article.className = 'target';
@@ -257,6 +274,7 @@
     article.querySelector('.level').textContent = `Lv ${target.level ?? '?'}`;
     for (const text of [target.status || 'Unknown', `FF ${Number.isFinite(ff) ? `${target.fair_fight_estimated ? '~' : ''}${ff.toFixed(2)}` : '?'}`, target.local_difficulty, `BS ${SLINK.core.format.shortNumber(target.bs_estimate ?? target.total_stats)}`].filter(Boolean)) article.querySelector('.target-meta').append(pill(text));
     article.querySelector('.secondary-meta').textContent = `${target.competition_tier || 'Prime'} ${Number(target.competition_score) || 0}`;
+    addSavedTargetAction(article,target,'leveling');
     return article;
   }
 
@@ -295,6 +313,7 @@
     const statusDescription = String(member.statusDescription || '').trim();
     const duplicateStatus = [member.statusState, member.activity].some(value => String(value || '').trim().toLowerCase() === statusDescription.toLowerCase());
     article.querySelector('.secondary-meta').textContent = duplicateStatus ? '' : statusDescription;
+    addSavedTargetAction(article,member,outside?'outside':'war');
     const copyButton = article.querySelector('.copy-war-target');
     copyButton.addEventListener('click', async () => {
       await copyText(SLINK.core.war.factionCallout(member));
@@ -1161,76 +1180,31 @@
     }));
   }
 
-  const qualityInstances = new Map();
-  const qualityModuleIds = Object.freeze(['racing', 'abroad-stocks', 'company', 'museums', 'money-property', 'events', 'faction-officers']);
+  const qualityModuleIds = Object.freeze(["racing","abroad-stocks","company","museums","money-property","events","faction-officers","chat"]);
+  const combatModuleIds = Object.freeze(['bounties','mugging','target-list']);
   let qualityActive = 'racing';
-
+  let combatActive = 'overview';
+  let navigationReady=false;
+  const dashboardHost=SLINK.core.dashboardHost.create({
+    permissions:()=>system?.permissions||{},
+    visible:()=>document.visibilityState!=='hidden'
+  });
   function qualityDefinition(id) {
-    return SLINK.modules.list().find(definition => definition.id === id && definition.group === 'quality-of-life') || null;
+    return SLINK.modules.list().find(definition=>definition.id===id&&definition.group==='quality-of-life')||null;
   }
-
-  function qualityUi(id) {
-    const panel = document.querySelector(`[data-quality-panel="${CSS.escape(id)}"]`);
-    const content = panel?.querySelector(`[data-quality-content="${CSS.escape(id)}"]`);
-    const status = panel?.querySelector(`[data-quality-status="${CSS.escape(id)}"]`);
-    return {
-      getContentElement:() => content,
-      navigateTo(moduleId) {
-        if (moduleId !== 'war') return;
-        window.open('https://www.torn.com/factions.php?step=your#/tab=armoury', '_blank', 'noopener');
-      },
-      setModuleStyles(css) {
-        const styleId = `slink-dashboard-quality-style-${id}`;
-        let style = document.getElementById(styleId);
-        if (!style) {
-          style = document.createElement('style');
-          style.id = styleId;
-          document.head.append(style);
-        }
-        style.textContent = String(css || '');
-      },
-      setStatus(message, tone = 'normal') {
-        if (!status) return;
-        status.textContent = String(message || '');
-        status.hidden = !message;
-        status.className = `quality-status ${tone === 'error' ? 'error' : tone === 'ready' ? 'ready' : 'muted'}`;
-      },
-      setAlertCount(moduleOrCount, maybeCount) {
-        const count = maybeCount === undefined ? moduleOrCount : maybeCount;
-        const badge = document.querySelector('[data-alert-count="quality"]');
-        if (!badge) return;
-        badge.textContent = String(Math.max(0, Number(count) || 0));
-        badge.hidden = !(Number(count) > 0);
-      }
-    };
+  function syncDashboardModule() {
+    const page=navigationReady?document.querySelector('[data-dashboard-page]:not([hidden])')?.dataset.dashboardPage:null;
+    const id=page==='quality'?qualityActive:page==='workspace'&&combatActive!=='overview'?combatActive:null;
+    return dashboardHost.select(id);
   }
-
-  async function startQualityModule(id) {
-    const definition = qualityDefinition(id);
-    if (!definition) throw new Error(`Quality of Life module "${id}" is unavailable.`);
-    const required = Array.isArray(definition.requiredScopes) ? definition.requiredScopes : [];
-    if (!SLINK.modules.canAccess(definition, system?.permissions || {})) {
-      const existing = qualityInstances.get(id);
-      if (typeof existing?.stop === 'function') await existing.stop();
-      qualityInstances.delete(id);
-      qualityUi(id).getContentElement()?.replaceChildren();
-      qualityUi(id).setStatus(`Permission required: ${required.join(', ') || 'feature access'}`, 'error');
-      return null;
-    }
-    if (qualityInstances.has(id)) return qualityInstances.get(id);
-    const scope = SLINK.modules.lifecycle({
-      url:new URL('https://www.torn.com/'),
-      permissions:system?.permissions || {},
-      ui:qualityUi(id),
-      module:definition,
-      presentation:'dashboard'
-    });
-    let instance;
-    try { instance = await definition.start(scope.context); }
-    catch (error) { scope.dispose(); throw error; }
-    const stop = instance?.stop?.bind(instance);
-    qualityInstances.set(id, { ...instance, async stop() { scope.dispose(); await stop?.(); } });
-    return instance;
+  async function switchCombat(name,persist=true) {
+    const selected=combatModuleIds.includes(name)&&dashboardHost.allowed(name)?name:'overview';
+    combatActive=selected;
+    for(const node of document.querySelectorAll('[data-combat-overview]'))node.hidden=selected!=='overview';
+    for(const panel of document.querySelectorAll('[data-host-module]'))if(combatModuleIds.includes(panel.dataset.hostModule))panel.hidden=panel.dataset.hostModule!==selected;
+    for(const button of document.querySelectorAll('[data-combat-view]')){button.classList.toggle('active',button.dataset.combatView===selected);button.setAttribute('aria-pressed',String(button.dataset.combatView===selected));}
+    if(persist)void SLINK.core.storage.set('ui.dashboard.combatView',selected);
+    await syncDashboardModule();
   }
 
   async function switchQuality(name, persist = true) {
@@ -1243,8 +1217,7 @@
     for (const panel of document.querySelectorAll('[data-quality-panel]')) panel.hidden = panel.dataset.qualityPanel !== selected;
     for (const button of document.querySelectorAll('[data-quality-view]')) button.classList.toggle('active', button.dataset.qualityView === selected);
     if (persist) void SLINK.core.storage.set('ui.quality.activeView', selected);
-    try { await startQualityModule(selected); }
-    catch (error) { qualityUi(selected).setStatus(errorText(error), 'error'); }
+    await syncDashboardModule();
   }
 
   function renderAccessTabs() {
@@ -1255,10 +1228,13 @@
     for (const button of document.querySelectorAll('[data-quality-view]')) {
       const id = button.dataset.qualityView;
       button.hidden = !SLINK.modules.canAccess(qualityDefinition(id), system?.permissions || {});
-      if (button.hidden && qualityInstances.has(id)) void startQualityModule(id);
+      // The shared host rechecks authorization and stops a revoked module below.
       if (!button.hidden) qualityCount++;
     }
+    for(const button of document.querySelectorAll('[data-combat-view]'))if(button.dataset.combatView!=='overview')button.hidden=!dashboardHost.allowed(button.dataset.combatView);
+    if(combatActive!=='overview'&&!dashboardHost.allowed(combatActive))void switchCombat('overview',false);
     byId('quality-tab').hidden = qualityCount === 0;
+    void syncDashboardModule();
     const activePage = document.querySelector('[data-dashboard-page]:not([hidden])')?.dataset.dashboardPage;
     if ((!admin && (activePage === 'admin' || activePage === 'diagnostics')) || (activePage === 'quality' && qualityCount === 0)) switchPage('workspace', false);
     if (qualityCount > 0 && ![...document.querySelectorAll('[data-quality-view]')].some(button => !button.hidden && button.dataset.qualityView === qualityActive)) void switchQuality(qualityActive, false);
@@ -1271,10 +1247,12 @@
     for (const button of document.querySelectorAll('[data-page-tab]')) button.classList.toggle('active', button.dataset.pageTab === name);
     if (persist) void SLINK.core.storage.set('ui.dashboard.activePage', name);
     if (name === 'quality') void switchQuality(qualityActive, false);
+    else void syncDashboardModule();
   }
 
   function switchEfficiency(name) {
     const selected = ['alerts', 'market', 'merits', 'dollar'].includes(name) ? name : 'alerts';
+    efficiencyActive=selected;
     for (const panel of document.querySelectorAll('[data-efficiency-panel]')) panel.hidden = panel.dataset.efficiencyPanel !== selected;
     for (const button of document.querySelectorAll('[data-efficiency-view]')) button.classList.toggle('active', button.dataset.efficiencyView === selected);
     void SLINK.core.storage.set('ui.efficiency.activeView', selected);
@@ -1307,10 +1285,10 @@
       SLINK.core.messaging.send('system.status'),
       SLINK.core.messaging.send('contribution.terms').catch(() => null),
       SLINK.core.messaging.send('themes.catalog', { force:true }).catch(() => null),
-      SLINK.core.messaging.send('playerStats.status', { refreshIfStale:true }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null })),
-      SLINK.core.messaging.send('merits.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), goals:[], pinned:[], settings:SLINK.core.merits.defaultSettings() })),
-      SLINK.core.messaging.send('market.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), opportunities:[], settings:SLINK.core.market.defaultSettings(), catalog:{ items:[] } })),
-      SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:true }).catch(error => ({ bazaars:[], fetchedAt:0, nextRefreshAt:0, lastError:errorText(error) })),
+      SLINK.core.messaging.send('playerStats.status', { refreshIfStale:false }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null })),
+      SLINK.core.messaging.send('merits.status', { refreshIfDue:false }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), goals:[], pinned:[], settings:SLINK.core.merits.defaultSettings() })),
+      SLINK.core.messaging.send('market.status', { refreshIfDue:false }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), opportunities:[], settings:SLINK.core.market.defaultSettings(), catalog:{ items:[] } })),
+      SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:false }).catch(error => ({ bazaars:[], fetchedAt:0, nextRefreshAt:0, lastError:errorText(error) })),
       SLINK.core.storage.get('mugging.settings.v1', {})
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
@@ -1336,7 +1314,7 @@
   }
 
   async function claimWarLeader() {
-    if (document.visibilityState !== 'visible') {
+    if (visiblePage()!=='workspace'||combatActive!=='overview') {
       if (warLeader) void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {});
       warLeader = false;
       return false;
@@ -1773,6 +1751,9 @@
   for (const button of document.querySelectorAll('[data-page-tab]')) button.addEventListener('click', () => switchPage(button.dataset.pageTab));
   for (const button of document.querySelectorAll('[data-efficiency-view]')) button.addEventListener('click', () => switchEfficiency(button.dataset.efficiencyView));
   for (const button of document.querySelectorAll('[data-quality-view]')) button.addEventListener('click', () => void switchQuality(button.dataset.qualityView));
+  for(const button of document.querySelectorAll('[data-combat-view]'))button.addEventListener('click',()=>void switchCombat(button.dataset.combatView));
+  document.addEventListener('visibilitychange',()=>void syncDashboardModule());
+  addEventListener('pagehide',()=>void dashboardHost.stop());
   byId('donation-form').addEventListener('submit', async event => { event.preventDefault(); const submit = byId('donation-submit'); setBusy(submit,true); byId('donation-message').textContent=''; try { contribution=await SLINK.core.messaging.send('contribution.donate',{apiKey:byId('donation-key').value,acceptTerms:byId('donation-accept').checked}); byId('donation-key').value=''; byId('donation-accept').checked=false; byId('donation-message').textContent='Public Only key validated and saved on SLINK servers in encrypted form.'; renderContribution(); } catch(error){ byId('donation-message').textContent=errorText(error); } finally{ setBusy(submit,false); } });
   byId('donation-revoke').addEventListener('click', async () => { if (!confirm('Revoke this saved donation and erase its encrypted key material?')) return; try { contribution=await SLINK.core.messaging.send('contribution.revoke'); byId('donation-message').textContent='Donation revoked and encrypted key material erased.'; renderContribution(); } catch(error) { byId('donation-message').textContent=errorText(error); } });
   byId('run-diagnostic').addEventListener('click', async event => { const button=event.currentTarget; setBusy(button,true); try { byId('diagnostic').textContent=formatDiagnostic(await SLINK.core.messaging.send('diagnostics.run')); } catch(error){ byId('diagnostic').textContent=errorText(error); } finally{ setBusy(button,false); } });
@@ -1786,8 +1767,10 @@
     const requestedPage = await SLINK.core.storage.get('ui.dashboard.activePage', 'workspace');
     qualityActive = await SLINK.core.storage.get('ui.quality.activeView', 'racing');
     switchEfficiency(await SLINK.core.storage.get('ui.efficiency.activeView', 'alerts'));
+    await switchCombat(await SLINK.core.storage.get('ui.dashboard.combatView','overview'),false);
     await switchQuality(qualityActive, false);
     switchPage(['workspace', 'alerts', 'quality', 'admin', 'diagnostics'].includes(requestedPage) ? requestedPage : 'workspace', false);
+    navigationReady=true;await syncDashboardModule();
   }
   catch (error) {
     byId('connection').textContent = 'Extension background unavailable';
@@ -1808,7 +1791,7 @@
     } catch {}
   }, 2_000);
   setInterval(async () => {
-    if (!war?.configured) return;
+    if (!war?.configured||visiblePage()!=='workspace'||combatActive!=='overview') return;
     try {
       war = warLeader
         ? await SLINK.core.messaging.send('war.cycle.prepare')
@@ -1818,21 +1801,22 @@
     } catch (error) { showError('war-error', error); }
   }, 10_000);
   setInterval(async () => {
-    if (!adhd?.configured) return;
+    if (!adhd?.configured||visiblePage()!=='alerts'||efficiencyActive!=='alerts') return;
     try { adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:true }); renderAdhd(); }
     catch (error) { byId('adhd-error').textContent = errorText(error); byId('adhd-error').hidden = false; }
   }, 30_000);
   setInterval(async () => {
-    if (!merits?.configured) return;
+    if (!merits?.configured||visiblePage()!=='alerts'||efficiencyActive!=='merits') return;
     try { merits = await SLINK.core.messaging.send('merits.status', { refreshIfDue:true }); renderMerits(); }
     catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
   }, 60_000);
   setInterval(async () => {
-    if (!market?.configured || !market?.permitted) return;
+    if (!market?.configured || !market?.permitted||visiblePage()!=='alerts'||efficiencyActive!=='market') return;
     try { market = await SLINK.core.messaging.send('market.status', { refreshIfDue:true }); renderMarket(); }
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
   }, 30_000);
   setInterval(async () => {
+    if(visiblePage()!=='alerts'||efficiencyActive!=='dollar')return;
     try { dollarBazaars = await SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:true }); renderDollarBazaars(); }
     catch (error) { byId('dollar-bazaars-error').textContent = errorText(error); byId('dollar-bazaars-error').hidden = false; }
   }, 60_000);

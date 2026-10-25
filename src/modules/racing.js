@@ -159,6 +159,7 @@
       }
 
       function render() {
+        if(context.signal?.aborted)return;
         if (stopped || context.signal?.aborted) return;
         userState = racing.normalizeUserState(userState);
         const definitions = racing.buildsForView(userState.view, userState);
@@ -227,7 +228,7 @@
       });
 
       render();
-      ensureHighlightStyle();
+      if(context.presentation!=='dashboard'){ensureHighlightStyle();
       observer = new MutationObserver(mutations => {
         if (!onRacewayPage()) return;
         if (mutations.every(mutation => {
@@ -243,7 +244,7 @@
       global.addEventListener('focus', onPageActivity);
       global.addEventListener('blur', onPageActivity);
       document.addEventListener('visibilitychange', onPageActivity);
-      scheduleScan(0);
+      scheduleScan(0);}
 
       return {
         stop() {

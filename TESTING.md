@@ -1,8 +1,8 @@
-# SLINK audit tester build — candidate 4
+# SLINK audit tester build — candidate 5
 
 This is an early testing build, not the Chrome Web Store release. Main has not changed. The full audit plan is not implemented yet.
 
-- Version: **0.19.10.2**, displayed as **0.19.10 Audit Test 4**.
+- Version: **0.19.10.3**, displayed as **0.19.10 Audit Test 5**.
 - Branch: `audit/test-foundation`.
 - [Download the tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip).
 - [One running tester changelog for extension and PDA](https://github.com/Considious/SLINK-Browser-Extension/blob/audit/test-foundation/TESTER-CHANGELOG.md).
@@ -16,7 +16,7 @@ This is an early testing build, not the Chrome Web Store release. Main has not c
 4. Check that the installed name is **SLINK Audit Test** and the version is the tester version above.
 5. Sign in to Torn and authenticate SLINK normally in that test profile. Use harmless sample targets and settings for tests. Do not copy API keys into feedback or recordings.
 
-Do not run stable and tester copies together in the same profile. This candidate preserves current application storage keys; it does not isolate two copies sharing a Torn origin. No saved-data migration or reset is part of candidate 3. A new browser profile naturally starts with its own settings.
+Do not run stable and tester copies together in the same profile. Existing application storage keys are preserved; this does not isolate two copies sharing a Torn origin. Candidate 5 adds a shared Chat macro record and a one-time, non-destructive import of existing Torn-page buttons. It does not reset settings. A new browser profile naturally starts with its own settings.
 
 When a new candidate is published, download/extract its ZIP and use **Load unpacked** or the extension's **Reload** control for that extracted folder. The Web Store does not distribute these side-branch builds. Return to your normal profile to use stable SLINK.
 
@@ -32,4 +32,4 @@ Follow the linked changelog for step-by-step test and break-it instructions. Thi
 
 Run `npm run test:audit` for the focused candidate checks. They cover the actual dashboard imports, exact-grant access, revocation, Recaller navigation, intelligence queue recovery and Racing behavior, together with selected existing domain tests.
 
-The full script inventory currently reports 39 passing and 18 failing scripts across both clients (57 total). The failures are inherited from the pre-audit baseline. See `docs/audit/BASELINE.md`; do not represent the full suite as green.
+The full script inventory currently reports 49 passing and 18 failing scripts across both clients (67 total). The failures are inherited from the pre-audit baseline. See `docs/audit/BASELINE.md`; do not represent the full suite as green.

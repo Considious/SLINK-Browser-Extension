@@ -45,6 +45,7 @@
       `);
 
       function render() {
+        if(context.signal?.aborted)return;
         if (!status?.sets?.length) {
           root.innerHTML = `<div class="slink-museum"><article class="slink-museum-summary"><div class="slink-museum-head"><strong>Museum Sets</strong><button type="button" data-museum-refresh>${busy ? 'Checking…' : 'Refresh inventory'}</button></div><p>${escapeHtml(status?.lastError || 'Refresh to compare your inventory against every Museum set.')}</p></article></div>`;
           return;

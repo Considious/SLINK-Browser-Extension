@@ -94,6 +94,7 @@
       `);
 
       function render() {
+        if(context.signal?.aborted)return;
         const status = data?.status;
         const settings = data?.settings || CORE.normalizeSettings();
         if (!status) {
