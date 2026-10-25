@@ -32,4 +32,4 @@ Follow the linked changelog for step-by-step test and break-it instructions. Thi
 
 Run `npm run test:audit` for the focused candidate checks. They cover the actual dashboard imports, exact-grant access, revocation, Recaller navigation, intelligence queue recovery and Racing behavior, together with selected existing domain tests.
 
-The full script inventory currently reports 38 passing and 18 failing scripts across both clients (56 total). The failures are inherited from the pre-audit baseline. See `docs/audit/BASELINE.md`; do not represent the full suite as green.
+The full script inventory currently reports 39 passing and 18 failing scripts across both clients (57 total). The failures are inherited from the pre-audit baseline. See `docs/audit/BASELINE.md`; do not represent the full suite as green.

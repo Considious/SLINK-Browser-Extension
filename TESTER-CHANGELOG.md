@@ -60,7 +60,7 @@ Developer-only break-it check: a synthetic failed write must reject that individ
 
 - The wider foreground ownership, module cleanup, saved-target migration, shared providers, additional dashboard pages and loading optimizations are not implemented yet.
 - The tester PDA launcher uses a separate downloaded-runtime cache and a pinned source revision. Its update link remains on the testing branch.
-- The full test inventory has **38 passing and 18 failing scripts**, including three new passing regression scripts. The 18 failure entries match the pre-audit baseline and remain unresolved; this is not a fully green suite. Developer details are in `docs/audit/BASELINE.md` on the extension testing branch.
+- The full test inventory has **39 passing and 18 failing scripts**, including four new passing regression scripts. The 18 failure entries match the pre-audit baseline and remain unresolved; this is not a fully green suite. Developer details are in `docs/audit/BASELINE.md` on the extension testing branch.
 - Android installation/background/resume and live Torn behavior still require testers. No lag-reduction percentage is claimed.
 - All changes remain on side branches. Tester confirmation and owner approval are required before anything reaches main.
 
