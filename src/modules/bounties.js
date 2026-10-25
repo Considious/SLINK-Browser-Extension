@@ -135,7 +135,7 @@
             <div class="bounty-meta">
               <span class="bounty-badge" data-state="${escape(target.status?.state || 'Unknown')}">${statusText(target)}</span>
               <span class="bounty-badge">Lv ${Number(target.level) || '?'}</span>
-              <span class="bounty-badge">FF ${target.fairFight ? Number(target.fairFight).toFixed(2) : '?'}</span>
+              <span class="bounty-badge">FF ${escape(SLINK.core.format.fairFightLabel(target))}</span>
               <span class="bounty-badge">BS ${target.bsEstimate ? escape(SLINK.core.format.shortNumber(target.bsEstimate)) : '?'}</span>
               ${Number(target.highestQuantity) > 1 ? `<span class="bounty-badge">×${Number(target.highestQuantity)}</span>` : ''}
             </div>
@@ -312,4 +312,5 @@
     }
   });
 })(globalThis);
+
 

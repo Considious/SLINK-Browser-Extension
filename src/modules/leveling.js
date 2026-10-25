@@ -167,7 +167,7 @@
         return targets.map(target => {
           const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(target.id)}`;
           const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(target.id)}`;
-          const fairFight = finiteFairFight(target.fair_fight, target.fair_fight_estimated);
+          const fairFight = finiteFairFight(target.fair_fight, target.fair_fight_estimated) + (target.fair_fight_stale ? ' (cached estimate)' : '');
           return `
             <article class="leveling-target">
               <div class="leveling-target-head">
@@ -197,7 +197,7 @@
 
       function finiteFairFight(value, estimated) {
         const parsed = Number(value);
-        return Number.isFinite(parsed) && parsed > 0 ? `${estimated ? '~' : ''}${parsed.toFixed(2)}` : '?';
+        return Number.isFinite(parsed) && parsed > 0 ? `${estimated ? '~' : ''}${parsed.toFixed(2)}` : 'N/A';
       }
 
       function render() {
@@ -451,4 +451,5 @@
     }
   });
 })(globalThis);
+
 

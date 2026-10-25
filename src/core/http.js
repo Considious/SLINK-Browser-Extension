@@ -35,7 +35,33 @@
     return url;
   }
 
+  const ffRetryAt = new Map();
   async function requestJson(capabilityName, input, options = {}) {
+    if (capabilityName !== 'ffscouter') return requestJsonRaw(capabilityName, input, options);
+    const audience = validateUrl(capabilityName, input).searchParams.get('key') || '';
+    if (Date.now() < (ffRetryAt.get(audience) || 0)) {
+      const error = new Error('FFScouter is temporarily unavailable; cached estimates or N/A are being used.');
+      error.code = 'SLINK_FF_BACKOFF';
+      throw error;
+    }
+    const controller = new AbortController();
+    let timer;
+    try {
+      const timeout = new Promise((_, reject) => {
+        timer = global.setTimeout(() => { controller.abort(); reject(new Error('FFScouter timed out.')); }, 5_000);
+      });
+      const value = await Promise.race([requestJsonRaw(capabilityName, input, { ...options, signal:controller.signal }), timeout]);
+      if (!value || value.error) throw new Error('FFScouter could not provide estimates.');
+      if (new URL(input).pathname.endsWith('/get-stats') && !Array.isArray(value) && !Array.isArray(value.data) && !Array.isArray(value.results)) throw new Error('Invalid FFScouter estimates response.');
+      ffRetryAt.delete(audience);
+      return value;
+    } catch (error) {
+      ffRetryAt.set(audience, Date.now() + Math.max(60_000, Math.min(30 * 60_000, Number(error.retryAfterMs) || 0)));
+      throw error;
+    } finally { global.clearTimeout(timer); }
+  }
+
+  async function requestJsonRaw(capabilityName, input, options = {}) {
     const url = validateUrl(capabilityName, input);
     if (!await hasCapability(capabilityName)) {
       const error = new Error(`${SLINK.core.permissions.getCapability(capabilityName).label} permission has not been granted.`);
@@ -112,4 +138,5 @@
     validateUrl
   }));
 })(globalThis);
+
 

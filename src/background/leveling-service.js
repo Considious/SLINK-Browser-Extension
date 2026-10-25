@@ -373,16 +373,18 @@
     const now = Date.now();
     const needed = targets.filter(target => now - Number(cache[String(target.id)]?.checkedAt || 0) >= FF_CACHE_MS);
     if (needed.length && currentSettings.ffKey) {
+      try {
       const ids = [...new Set(needed.map(target => String(target.id)))];
       const url = 'https://ffscouter.com/api/v1/get-stats' +
         `?key=${encodeURIComponent(currentSettings.ffKey)}` +
         `&targets=${encodeURIComponent(ids.join(','))}`;
       const response = await SLINK.core.http.requestJson('ffscouter', url, { cache: 'no-store' });
       const rows = Array.isArray(response) ? response : (response?.results || response?.data || []);
+      if (response?.error || !Array.isArray(rows)) throw new Error('Invalid FFScouter response.');
       const returned = new Set();
       for (const row of rows) {
         const id = Number(row?.player_id ?? row?.id);
-        if (!Number.isInteger(id) || id <= 0) continue;
+        if (!Number.isInteger(id) || id <= 0 || !ids.includes(String(id))) continue;
         returned.add(String(id));
         cache[id] = {
           fairFight: finiteNumberOrNull(row?.fair_fight),
@@ -392,9 +394,10 @@
         };
       }
       for (const id of ids) {
-        if (!returned.has(id)) cache[id] = { fairFight: null, bsEstimate: null, source: 'FFScouter', checkedAt: now };
+        if (!returned.has(id) && !cache[id]) cache[id] = { fairFight: null, bsEstimate: null, source: 'FFScouter', checkedAt: now };
       }
       await SLINK.core.storage.set(KEYS.fairFightCache, cache);
+      } catch { /* Optional estimates must not abort Torn/SLINK recommendations. */ }
     }
 
     const minFF = Math.min(currentSettings.minFF, currentSettings.maxFF);
@@ -409,6 +412,8 @@
         fair_fight: fairFight,
         fair_fight_estimated: refined === null && estimated !== null,
         fair_fight_source: refined !== null ? cached.source : (estimated !== null ? 'Local estimate' : ''),
+        fair_fight_stale:refined !== null && now - Number(cached.checkedAt || 0) >= FF_CACHE_MS,
+        fair_fight_checked_at:Number(cached.checkedAt) || 0,
         bs_estimate: finiteNumberOrNull(cached.bsEstimate) ?? finiteNumberOrNull(target.total_stats),
         local_difficulty: localDifficulty(target.total_stats, battleStats)
       };
@@ -1113,6 +1118,7 @@
 
   SLINK.define('services', 'leveling', api);
 })(globalThis);
+
 
 
 

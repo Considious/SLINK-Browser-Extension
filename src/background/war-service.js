@@ -576,14 +576,16 @@
 
   function fairFightValue(row) {
     for (const value of [row?.fair_fight, row?.fairFight, row?.ff, row?.ff_score, row?.score, row?.estimate?.fair_fight]) {
+      if (value === null || value === undefined || value === '') continue;
       const number = Number(value);
-      if (Number.isFinite(number)) return number;
+      if (Number.isFinite(number) && number >= 1 && number <= 3) return number;
     }
     return null;
   }
 
   function battleStatsValue(row) {
     for (const value of [row?.bs_estimate, row?.battle_stats_estimate, row?.battleStatsEstimate, row?.total_stats, row?.estimate?.battle_stats]) {
+      if (value === null || value === undefined || value === '') continue;
       const number = Number(value);
       if (Number.isFinite(number) && number >= 0) return number;
     }
@@ -595,25 +597,40 @@
     if (!currentSettings.ffKey || !values.length) return values;
     const now = Date.now();
     const cache = await SLINK.core.storage.get(KEYS.ffCache, {});
+    let warning = '';
     const missing = values.filter(member => !cache[member.id] || now - Number(cache[member.id].checkedAt) > 5 * 60 * 1000).map(member => member.id);
     for (let index = 0; index < missing.length; index += 100) {
       const targets = missing.slice(index, index + 100);
+      try {
       const response = await SLINK.core.http.requestJson('ffscouter', `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(currentSettings.ffKey)}&targets=${targets.join(',')}`, { cache:'no-store' });
       const rows = Array.isArray(response) ? response : response?.data ?? response?.results ?? [];
+      if (response?.error || !Array.isArray(rows)) throw new Error('Invalid FFScouter response.');
       const returned = new Set();
       for (const row of rows) {
         const id = WAR.positiveInteger(row?.player_id ?? row?.id ?? row?.user_id);
-        if (!id) continue;
+        if (!id || !targets.includes(id)) continue;
         returned.add(id);
-        cache[id] = { value:fairFightValue(row), battleStatsEstimate:battleStatsValue(row), checkedAt:now };
+        const value = fairFightValue(row), battleStatsEstimate = battleStatsValue(row);
+        if (value !== null || battleStatsEstimate !== null) cache[id] = {
+          ...cache[id], value:value ?? cache[id]?.value ?? null,
+          battleStatsEstimate:battleStatsEstimate ?? cache[id]?.battleStatsEstimate ?? null,
+          checkedAt:value !== null ? now : Number(cache[id]?.checkedAt) || 0
+        };
       }
-      for (const id of targets) if (!returned.has(id)) cache[id] = { value:null, checkedAt:now };
+      for (const id of targets) if (!returned.has(id) && !cache[id]) cache[id] = { value:null, checkedAt:now };
+      } catch {
+        warning = 'FFScouter unavailable. Cached estimates or N/A are shown; War remains active.';
+        break;
+      }
     }
     await SLINK.core.storage.set(KEYS.ffCache, cache);
     return values.map(member => ({
       ...member,
-      fairFight:Number.isFinite(Number(cache[member.id]?.value)) ? Number(cache[member.id].value) : null,
-      battleStatsEstimate:Number.isFinite(Number(cache[member.id]?.battleStatsEstimate)) ? Number(cache[member.id].battleStatsEstimate) : null
+      fairFight:fairFightValue({ fairFight:cache[member.id]?.value }) ?? fairFightValue(member),
+      battleStatsEstimate:battleStatsValue(cache[member.id]) ?? battleStatsValue(member),
+      fairFightCheckedAt:Number(cache[member.id]?.checkedAt) || Number(member.fairFightCheckedAt) || 0,
+      fairFightStale:Boolean(warning || now - Number(cache[member.id]?.checkedAt || 0) > 5 * 60_000),
+      fairFightWarning:warning
     }));
   }
 
@@ -663,7 +680,7 @@
       return publicStatus();
     } catch (error) {
       await setRuntime({ outsideError:SLINK.core.format.errorMessage(error) });
-      throw error;
+      return publicStatus();
     }
   }
 
@@ -778,8 +795,11 @@
         attackerStatusDescription:live?.statusDescription || retal.attackerStatusDescription || '',
         attackerStatusUntil:live?.statusUntil || retal.attackerStatusUntil || 0,
         attackerLastActionRelative:live?.lastActionRelative || retal.attackerLastActionRelative || '',
-        fairFight:Number.isFinite(estimate?.fairFight) ? estimate.fairFight : null,
-        battleStatsEstimate:Number.isFinite(estimate?.battleStatsEstimate) ? estimate.battleStatsEstimate : null
+        fairFight:Number.isFinite(estimate?.fairFight) ? estimate.fairFight : fairFightValue(retal),
+        battleStatsEstimate:Number.isFinite(estimate?.battleStatsEstimate) ? estimate.battleStatsEstimate : battleStatsValue(retal),
+        fairFightStale:Boolean(estimate?.fairFightStale),
+        fairFightCheckedAt:Number(estimate?.fairFightCheckedAt) || 0,
+        fairFightWarning:String(estimate?.fairFightWarning || '')
       };
     });
   }
@@ -1251,6 +1271,7 @@
 
   SLINK.define('services', 'war', api);
 })(globalThis);
+
 
 
 
