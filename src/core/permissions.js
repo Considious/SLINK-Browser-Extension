@@ -134,17 +134,21 @@
     const snapshots = await Promise.all([
       SLINK.core.storage.get('permissions.leveling', null),
       SLINK.core.storage.get('permissions.war', null),
-      SLINK.core.storage.get('permissions.access', null)
+      SLINK.core.storage.get('permissions.access', null),
+      SLINK.core.storage.get('permissions.snapshot', null)
     ]);
+    const previous = snapshots.pop();
     const combined = combineSnapshots(...snapshots, {
       userId:null,
       roles:['foundation'],
       scopes:[],
       source:'local-bootstrap',
-      issuedAt:Date.now(),
+      issuedAt:0,
       expiresAt:0
     });
-    await SLINK.core.storage.set('permissions.snapshot', combined);
+    if (JSON.stringify(normalizeSnapshot(previous || {})) !== JSON.stringify(combined)) {
+      await SLINK.core.storage.set('permissions.snapshot', combined);
+    }
     return combined;
   }
 
@@ -166,3 +170,4 @@
     scopeMatches
   }));
 })(globalThis);
+

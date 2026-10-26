@@ -1,3 +1,11 @@
+## 0.19.11 - 2026-10-26
+
+- Start from locally saved appearance/layout and permissions instead of waiting for a remote theme catalog on every Torn page.
+- Restore saved position, size, selected navigation and collapsed state before revealing the shell.
+- Do not rewrite unchanged permission snapshots or restart modules for timestamp-only session renewals.
+- Remove duplicate startup theme loading and let page registration run without blocking usable cached UI.
+- Keep permission expiry/revocation, active-page ownership, background freshness rules and saved storage keys intact.
+
 ## 0.19.10 - 2026-10-25
 
 - Upload queued Mugging observations about every five minutes while the client runs, rather than every six hours.
@@ -732,6 +740,7 @@ This changelog covers the `0.18.x` release series. It focuses on user-visible be
 - Market Watch prices are sourced only from Torn's v2 Item Market API and Weaver's marketplace JSON API; the extension does not scrape Torn pages for listing data.
 - Watch configuration, item catalogs, and results remain in local extension storage. SLINK's permission service only authenticates the signed Market Watch tier.
 - Added the Weaver API host permission required for API-only Bazaar Watch requests.
+
 
 
 

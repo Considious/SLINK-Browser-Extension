@@ -132,12 +132,17 @@
   `;
 
   function createShell(options = {}) {
+    const readPreference = (key, fallback) => options.preferences
+      ? Promise.resolve(Object.hasOwn(options.preferences, key) ? options.preferences[key] : fallback)
+      : SLINK.core.storage.get(key, fallback);
     let host = document.getElementById(HOST_ID);
     if (!host) {
       host = document.createElement('div');
       host.id = HOST_ID;
       document.documentElement.appendChild(host);
     }
+    const previousVisibility = host.style.visibility;
+    host.style.visibility = 'hidden';
     const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
     shadow.replaceChildren();
     const style = document.createElement('style');
@@ -364,9 +369,9 @@
 
     const mirroredNavigation = readNavigationMirror();
     const navigationPreferencesReady = Promise.all([
-      SLINK.core.storage.get(NAVIGATION_STATE_STORAGE_KEY, null),
-      SLINK.core.storage.get(ACTIVE_MODULE_STORAGE_KEY, ''),
-      SLINK.core.storage.get(ACTIVE_MODULES_BY_GROUP_STORAGE_KEY, {})
+      readPreference(NAVIGATION_STATE_STORAGE_KEY, null),
+      readPreference(ACTIVE_MODULE_STORAGE_KEY, ''),
+      readPreference(ACTIVE_MODULES_BY_GROUP_STORAGE_KEY, {})
     ]).then(([storedNavigation, legacyActiveId, legacyByGroup]) => {
       if (navigationSelectionChanged) return;
       const stored = normalizeNavigationState(storedNavigation);
@@ -482,8 +487,9 @@
         setPosition({ left:box.left, top:box.top }, true);
       };
       head.addEventListener('pointerup', finish); head.addEventListener('pointercancel', finish);
-      void SLINK.core.storage.get(storageKey, null).then(position => { if (position) setPosition(position); });
+      const ready = readPreference(storageKey, null).then(position => { if (position) setPosition(position); });
       return Object.freeze({
+        ready,
         clamp(persist = false) {
           const box = element.getBoundingClientRect();
           setPosition({ left:box.left, top:box.top }, persist);
@@ -554,7 +560,7 @@
 
       const mirroredSize = readSizeMirror();
       if (mirroredSize) applySize(mirroredSize);
-      void SLINK.core.storage.get(MAIN_SIZE_STORAGE_KEY, null).then(storedValue => {
+      const ready = readPreference(MAIN_SIZE_STORAGE_KEY, null).then(storedValue => {
         const storedSize = normalizeSize(storedValue);
         const selected = storedSize && (!mirroredSize || storedSize.updatedAt >= mirroredSize.updatedAt) ? storedSize : mirroredSize;
         if (selected) applySize(selected);
@@ -577,6 +583,7 @@
       });
 
       return Object.freeze({
+        ready,
         reset() {
           preferredSize = null;
           element.style.removeProperty('width');
@@ -678,8 +685,9 @@
         if (moved) { moved = false; event.preventDefault(); return; }
         void setCollapsed(false);
       });
-      void SLINK.core.storage.get('ui.bubble.position', null).then(position => { if (position) setPosition(position); });
+      const ready = readPreference('ui.bubble.position', null).then(position => { if (position) setPosition(position); });
       return Object.freeze({
+        ready,
         reset() {
           bubble.style.removeProperty('left');
           bubble.style.removeProperty('top');
@@ -834,13 +842,16 @@
       const selection = views.has(preferredActiveId) ? preferredActiveId : views.has(preferredForSavedGroup) ? preferredForSavedGroup : '';
       if (selection) setActive(selection, false);
     });
-    void Promise.all([
-      SLINK.core.storage.get('ui.main.collapsed', false),
-      SLINK.core.storage.get(MINIMIZED_MODE_STORAGE_KEY, 'bubble')
+    const layoutPreferencesReady = Promise.all([
+      readPreference('ui.main.collapsed', false),
+      readPreference(MINIMIZED_MODE_STORAGE_KEY, 'bubble')
     ]).then(([collapsedValue, mode]) => {
       void setMinimizedMode(mode, false);
       void setCollapsed(Boolean(collapsedValue), false);
     });
+    const ready = Promise.all([navigationPreferencesReady, main.mover.ready, mainSizeMemory.ready, bubbleMover.ready, layoutPreferencesReady])
+      .catch(error => console.debug('[SLINK] Local layout restore:', error))
+      .then(() => { host.style.visibility = previousVisibility; });
     async function restore() {
       await Promise.all([
         SLINK.core.storage.remove('ui.main.position'),
@@ -859,6 +870,7 @@
     }
     return Object.freeze({
       host,
+      ready,
       createModuleView,
       dismissAlert,
       showAlert,
@@ -880,5 +892,6 @@
 
   SLINK.define('core', 'uiShell', Object.freeze({ createShell }));
 })(globalThis);
+
 
 

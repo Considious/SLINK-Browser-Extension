@@ -70,8 +70,10 @@ async function getPermissionSnapshot() {
     SLINK.core.storage.get('permissions.snapshot', null)
   ]);
   if (!leveling && !war && !access) return SLINK.core.permissions.normalizeSnapshot(stored || bootstrapPermissions());
-  const combined = SLINK.core.permissions.combineSnapshots(leveling, war, access, bootstrapPermissions());
-  await SLINK.core.storage.set('permissions.snapshot', combined);
+  const combined = SLINK.core.permissions.combineSnapshots(leveling, war, access, { ...bootstrapPermissions(), issuedAt:0 });
+  if (JSON.stringify(SLINK.core.permissions.normalizeSnapshot(stored || {})) !== JSON.stringify(combined)) {
+    await SLINK.core.storage.set('permissions.snapshot', combined);
+  }
   return combined;
 }
 
@@ -517,4 +519,5 @@ chrome.alarms.onAlarm.addListener(alarm => {
 });
 
 void initialize().catch(error => console.error('[SLINK] Service worker initialization:', error));
+
 
