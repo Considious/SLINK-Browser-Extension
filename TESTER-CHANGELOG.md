@@ -2,6 +2,12 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Approved stable quota hotfix — 26 October 2026
+
+At the owner's explicit request, the storage-quota fix was selectively published to extension **main 0.19.12**, commit **d1da2aa2248e2cc49ea85cbd091f1bb66b3b039f**. No other audit changes were merged. Stable's existing legacy player merge is retained, with migration collision inputs ordered by observation age so an old rollback copy does not replace a newer database observation. This compatibility path passed the same migration/retry unit tests and the real IndexedDB quota-recovery browser fixture against stable sources. Main's original player-intelligence regression and source syntax checks passed too.
+
+The installed Chrome Store extension needs the new package; a GitHub push does not update it immediately. Migration runs automatically when the updated worker starts. Do not clear data or reinstall. Tester Candidate 11 remains available and the remaining audit is not promoted. Candidate 11 notes below describe its original testing-only release before this explicit approval.
+
 ## Candidate 11 — 26 October 2026 — Player-cache storage migration (extension only)
 
 Tester extension **0.19.11.3 / Audit Test 11**. PDA stays Candidate 10. This storage change is on the testing branch only; main and the installed Chrome Store extension are not changed by it.
