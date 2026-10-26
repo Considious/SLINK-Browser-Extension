@@ -1,5 +1,15 @@
 # Audit test baseline and classification
 
+## Candidate 8 — 26 October 2026
+
+Current inventory **66/72 commands pass**. Another six original scripts now pass: PDA armory, reminders, module-activity, market-dom, travel-safety; extension permissions-sweep. Tests use the manifest runtime and actual functions/predicates, including PDA visibility rather than desktop focus, independent activity clocks, shared-capacity bounds, cooldown freshness, no-permission travel safety and exact/admin/denied module grants.
+
+Repairing the combined background harness exposed a real behavior defect: Weaver detail polling ignored per-item nextCheckAt when an unrelated watch changed. Both clients now filter to due consumers unless forced. New tests/weaver-due.test.mjs and PDA test-weaver-due.mjs cover cached, invalidated, forced, retry-delayed, shared manual/pricelist items. The original background request-count assertion was retained and succeeds past this section after the fix; it was not relaxed from four requests to six.
+
+Remaining six failures: extension Abroad travel-time contract, Company job-point contract, Target List source-pattern fixture, general Market source-pattern validation, combined background fixture; PDA overlay version/discovery fixture. Background listener registration/dispatch, initialization, crypto and storage-namespace problems are repaired. The long fixture now reaches Leveling: a real-clock run eventually reported FFScouter result not applied; the bounded inventory reports a 15-second leveling.cycle.prepare timeout. Neither establishes a production FF defect; controlled clock/limiter and current personal-stat fixtures are the next investigation. Do not remove its assertions or increase production budgets to make it pass.
+
+No original test removed/skipped. Production change is limited to redundant Weaver detail requests; saved data and gameplay formulas unchanged. Historical inventories below are not the current count.
+
 ## Candidate 7 — 26 October 2026
 
 Current complete inventory: **58/70** test/build commands pass. Six original failures are repaired: extension core.test.mjs, mugging.test.mjs, travel-safety.test.mjs; PDA test-mugging.mjs, test-racing.mjs, test-timestamps.mjs. They retain their safety/behavior assertions while using current source discovery and contracts. Newly reachable stale fixture expectations were corrected: backend-issued admin.* applies to any granted user, player IDs stay outside chat profile anchors, and a missing-unique alert requires a crime catalog/completion snapshot. No production permission, alert, time, FF or travel formula changed.

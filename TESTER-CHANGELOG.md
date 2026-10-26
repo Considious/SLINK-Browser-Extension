@@ -2,6 +2,18 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 8 — 26 October 2026 — Fewer redundant Market Watch requests
+
+Tester builds: extension **0.19.10.6 / Audit Test 8** and PDA **0.4.108-audit-test8**. Testing branches only; no main, worker deployment, settings migration, credentials, or theme changes.
+
+- Fixed a confirmed efficiency problem in both clients: editing or adding one Market Watch item no longer fetches Weaver details again for unrelated items whose next check is not due. Normal due checks still run. An explicit Refresh still refreshes all active targets. A manual watch and pricelist watch for the same item still share one detail request. Failed checks keep their retry delay.
+- Repaired another six original failing test scripts: PDA Armory, reminders, module activity, Market DOM and Travel Safety, plus the extension permission sweep. These now test actual runtime functions and registered module gates. PDA checks deliberately allow visible WebViews reporting hasFocus=false and stop after visibility/pagehide suspension. Armory retrieval stays user-triggered, double-click protected, and subject to whitelist/rank/level checks.
+- Background test discovery now dispatches through all registered listeners, joins initialization, supplies required crypto support, uses the actual storage namespace, and expects inactive Market polling to be paused. It exposes the redundant Weaver request defect above. This long combined fixture is **not green**: later Leveling/Fair Fight checks still need investigation with controlled time/budget fixtures. Its timeout is recorded, not hidden.
+
+**What to test:** save two Market Watch items, change the price of only one, and confirm the other watch retains its cached result until its next normal check. Use Refresh and confirm current results still load. Check a selected Weaver pricelist item, then an item shared with a manual watch. Let normal monitoring continue; do not test by clearing settings or corrupting caches. On PDA, try one armory recall while visible, then background the app before confirming; it must not continue clicking in the background. Confirm stacking and snoozed reminders still behave normally.
+
+**Automated results:** 66/72 test/build commands passed (previously 58/70). Six original failures remain: extension Abroad Stocks, background, Company, Target List integration, general validation; PDA overlay. New due-time regressions pass on both clients. No claim of measured production speed improvement, live-provider acceptance, physical Android testing, or completion of the remaining storage/lifecycle audit.
+
 ## Candidate 7 — 26 October 2026 — Cleaner Mugging panel and more reliable test checks
 
 Tester builds: extension **0.19.10.5 / Audit Test 7** and PDA **0.4.107-audit-test7**. This batch stays on `audit/test-foundation`; it does not change main or live worker settings.

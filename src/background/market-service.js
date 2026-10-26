@@ -258,7 +258,10 @@
   }
 
   async function pollWeaverTargets(currentSettings, allowed, current, force) {
-    const targets = weaverTargets(currentSettings, allowed, current); if (!targets.length) return;
+    const targets = weaverTargets(currentSettings, allowed, current).filter(target => force
+      || target.manual.some(watch => due(current.results[watch.uid]?.bazaar))
+      || (target.pricelist && due(current.pricelistResults?.[target.itemId]?.bazaar)));
+    if (!targets.length) return;
     let summary;
     try { summary = await ensureWeaverSummary(current, force, MARKET.WEAVER_SUMMARY_REFRESH_MS); }
     catch (error) {
