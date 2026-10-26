@@ -4,7 +4,27 @@
   if (global.__SLINK_EXTENSION_CONTENT_STARTED__) return;
   Object.defineProperty(global, '__SLINK_EXTENSION_CONTENT_STARTED__', { value:true });
   const SLINK = global.SLINK_EXTENSION;
-  const ui = SLINK.core.uiShell.createShell({ title:'SLINK', subtitle:'Shared Live Intelligence NetworK' });
+  const startupKeys = [
+    'ui.pagePanelHidden','ui.main.position','ui.bubble.position','ui.main.size','ui.main.collapsed','ui.main.minimizedMode',
+    'ui.main.navigation.v2','ui.main.activeModule','ui.main.activeModulesByGroup',
+    'permissions.snapshot','permissions.leveling','permissions.war','permissions.access',
+    SLINK.core.themes.STORAGE_KEY,SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY,SLINK.core.themes.CATALOG_STORAGE_KEY
+  ];
+  let startupValues = {};
+  try {
+    const stored = await chrome.storage.local.get(startupKeys.map(key => SLINK.core.storage.fullKey(key)));
+    startupValues = Object.fromEntries(startupKeys.filter(key => Object.hasOwn(stored, SLINK.core.storage.fullKey(key)))
+      .map(key => [key, stored[SLINK.core.storage.fullKey(key)]]));
+  } catch (error) { console.debug('[SLINK] Local startup preferences unavailable:', error); }
+  const products = ['permissions.leveling','permissions.war','permissions.access'].map(key => startupValues[key]).filter(Boolean);
+  const startupPermissions = SLINK.core.permissions.combineSnapshots(...(products.length ? products : [startupValues['permissions.snapshot']]));
+  try {
+    const catalog = startupValues[SLINK.core.themes.CATALOG_STORAGE_KEY]?.catalog;
+    if (catalog) SLINK.core.themes.installCatalog(catalog);
+  } catch (error) { console.debug('[SLINK] Cached theme catalog rejected:', error); }
+  const ui = SLINK.core.uiShell.createShell({ title:'SLINK', subtitle:'Shared Live Intelligence NetworK',
+    themeId:startupValues[SLINK.core.themes.STORAGE_KEY], permissions:startupPermissions, preferences:startupValues });
+  ui.setThemePanelOpacity(startupValues[SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY] ?? SLINK.core.themes.DEFAULT_PANEL_OPACITY);
   let initialized = false;
   let restarting = null;
   let apiLedgerSyncing = false;
@@ -18,7 +38,7 @@
   let claimGeneration = 0;
   let activityNeedsCleanup = false;
 
-  ui.setHidden(await SLINK.core.storage.get('ui.pagePanelHidden', false));
+  ui.setHidden(Boolean(startupValues['ui.pagePanelHidden']));
 
   async function modulePresentation(module) {
     if (module.id !== 'war') {
@@ -157,21 +177,20 @@
     if (global.chrome?.runtime?.id) void chrome.runtime.sendMessage({ channel:'slink-page-activity', type:'release' }).catch(() => {});
   }
 
+  function permissionAccessKey(value = {}) {
+    return JSON.stringify([Number(value.userId) || null,
+      [...new Set(value.scopes || [])].sort(), [...new Set(value.roles || [])].sort()]);
+  }
+
   async function reloadThemeAndPermissions() {
-    const [permissions, themeRecord] = await Promise.all([
+    // Theme revalidation may use the network; never put it on module startup's critical path.
+    void SLINK.core.messaging.send('themes.catalog').then(record => {
+      if (record?.catalog) SLINK.core.themes.installCatalog(record.catalog);
+    }).catch(error => console.debug('[SLINK] Theme refresh deferred:', error));
+    const [permissions, preferredTheme, panelOpacity] = await Promise.all([
       SLINK.core.messaging.send('permissions.get'),
-      SLINK.core.messaging.send('themes.catalog').catch(() => null)
-    ]);
-    if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
-    const [preferredTheme, panelOpacity] = await Promise.all([
-      SLINK.core.storage.get(
-        SLINK.core.themes.STORAGE_KEY,
-        SLINK.core.themes.DEFAULT_THEME_ID
-      ),
-      SLINK.core.storage.get(
-        SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY,
-        SLINK.core.themes.DEFAULT_PANEL_OPACITY
-      )
+      SLINK.core.storage.get(SLINK.core.themes.STORAGE_KEY, SLINK.core.themes.DEFAULT_THEME_ID),
+      SLINK.core.storage.get(SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY, SLINK.core.themes.DEFAULT_PANEL_OPACITY)
     ]);
     ui.setTheme(preferredTheme, permissions);
     ui.setThemePanelOpacity(panelOpacity);
@@ -229,7 +248,8 @@
       try { SLINK.core.themes.installCatalog(changes[catalogKey].newValue.catalog); }
       catch (error) { console.error('[SLINK] Rejected invalid cached theme catalog:', error); }
     }
-    if (changes[permissionsKey] && initialized && runtimeActive && modulesRunning) {
+    if (changes[permissionsKey] && initialized && runtimeActive && modulesRunning
+      && permissionAccessKey(changes[permissionsKey].oldValue) !== permissionAccessKey(changes[permissionsKey].newValue)) {
       void restartModules().catch(error => console.error('[SLINK] Could not apply refreshed permissions in place:', error));
       return;
     }
@@ -263,9 +283,9 @@
   });
 
   try {
-    await SLINK.core.messaging.send('content.ready', { url:global.location.href });
+    void SLINK.core.messaging.send('content.ready', { url:global.location.href }).catch(error => console.debug('[SLINK] Page registration deferred:', error));
+    await ui.ready;
     initialized = true;
-    await reloadThemeAndPermissions();
     await claimRuntimeActivity();
   } catch (error) {
     console.error('[SLINK] Content startup:', error);

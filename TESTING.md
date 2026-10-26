@@ -1,8 +1,8 @@
-# SLINK audit tester build — candidate 8
+# SLINK audit tester build — candidate 9 (extension startup hotfix)
 
 This is an early testing build, not the Chrome Web Store release. This audit batch does not change main; the separately approved Mugging hotfix is already on main. The full audit plan is not implemented yet.
 
-- Version: **0.19.10.6**, displayed as **0.19.10 Audit Test 8**.
+- Version: **0.19.11.1**, displayed as **0.19.11 Audit Test 9**. PDA remains Candidate 8.
 - Branch: `audit/test-foundation`.
 - [Download the tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip).
 - [One running tester changelog for extension and PDA](https://github.com/Considious/SLINK-Browser-Extension/blob/audit/test-foundation/TESTER-CHANGELOG.md).

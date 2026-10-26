@@ -2,6 +2,19 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Extension startup hotfix — 26 October 2026 — Candidate 9 integration
+
+Stable extension **0.19.11** and tester extension **0.19.11.1 / Audit Test 9** contain the same focused startup fix. PDA remains Candidate 8 and is unchanged. This main release is explicitly authorized by the owner; unrelated audit code is not promoted.
+
+- SLINK restores its saved layout and theme from local storage before showing the panel, instead of appearing on the wrong side in the default theme first.
+- A slow theme service or page-registration message no longer holds up the cached interface and module startup. Live theme refresh still happens separately; API-data freshness rules are unchanged.
+- Reading the same permissions no longer creates a new permission change. Renewing timestamps without changing grants does not restart all modules. Real grants, revocations, expired products and active-page ownership still apply.
+- There is no settings reset, extra login, lazy module download, new storage schema or theme-asset change. A full Torn navigation still creates a new content script, but it can reuse the existing extension data immediately rather than waiting on the theme network path.
+
+**What to test:** resize and move SLINK to the left, choose a theme and Alerts/Market/another module, then navigate between Torn pages and refresh. It should first appear in the saved location/size/theme, with the saved tab restored as modules mount. Try a slow/offline theme service: cached startup must still work. Switch tabs/windows: only the eligible Torn page should work actively. Leave an editor open during a routine permission renewal; it should not close or reset. A real permission removal should still remove access.
+
+**Verification:** new executable startup tests pass on stable and tester sources, including stalled theme/registration requests, batched local UI reads, permission write deduplication, real grant changes/expiry and worker suspension. A headless synthetic browser fixture passed two fresh navigations on each source line: every sampled visible frame had the saved theme identity, left position and width, while cached module content appeared despite permanently stalled theme/registration requests. The first fixture failures were missing local dependencies and an incomplete synthetic live-theme catalog/activity mock, corrected without relaxing production behavior. This is not an authenticated Torn session or a measured ten-second production speed claim. Existing focused activity, permissions, theme and form-commit checks pass; earlier baseline failures remain open.
+
 ## Candidate 8 — 26 October 2026 — Fewer redundant Market Watch requests
 
 Tester builds: extension **0.19.10.6 / Audit Test 8** and PDA **0.4.108-audit-test8**. Testing branches only; no main, worker deployment, settings migration, credentials, or theme changes.
