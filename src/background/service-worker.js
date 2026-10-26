@@ -23,6 +23,7 @@ importScripts(
   '../core/war.js',
   '../core/worker-client.js',
   '../core/torn-api-limiter.js',
+  'player-intelligence-store.js',
   'player-intelligence-service.js',
   'target-list-service.js',
   'theme-service.js',
@@ -167,6 +168,7 @@ let initializing = null;
 function initialize(reason = 'service-worker') {
   if (initializing) return initializing;
   initializing = (async () => {
+    await SLINK.services.playerIntelligenceStore.prepare();
     const recovery = await globalThis.SLINK_LOCAL_VAULT.restoreMissing();
     await ensureDefaultState();
     await ensureConnectionAlarm();
@@ -519,5 +521,6 @@ chrome.alarms.onAlarm.addListener(alarm => {
 });
 
 void initialize().catch(error => console.error('[SLINK] Service worker initialization:', error));
+
 
 

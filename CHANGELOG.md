@@ -1,3 +1,10 @@
+## 0.19.12 - 2026-10-26
+
+- Move the oversized player-intelligence cache out of Chrome storage.local into per-player IndexedDB records, recovering storage space for War and other modules.
+- Preserve cached records in a committed transaction before removing the old Chrome copy. Interrupted migrations and cleanup failures can retry without resetting settings, saved targets, notes, keys, or personal battle stats.
+- Write only changed player records rather than rewriting the entire cache. Recover the observation queue after a failed write.
+- Keep main's existing player-data behavior; no shared-provider, GUI, travel or other audit changes are included.
+
 ## 0.19.11 - 2026-10-26
 
 - Start from locally saved appearance/layout and permissions instead of waiting for a remote theme catalog on every Torn page.
@@ -740,6 +747,7 @@ This changelog covers the `0.18.x` release series. It focuses on user-visible be
 - Market Watch prices are sourced only from Torn's v2 Item Market API and Weaver's marketplace JSON API; the extension does not scrape Torn pages for listing data.
 - Watch configuration, item catalogs, and results remain in local extension storage. SLINK's permission service only authenticates the signed Market Watch tier.
 - Added the Weaver API host permission required for API-only Bazaar Watch requests.
+
 
 
 
