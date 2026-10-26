@@ -93,8 +93,8 @@ assert(manifest.content_scripts[0].js.includes('src/core/abroad-stocks.js'), 'Ab
 assert(manifest.content_scripts[0].js.includes('src/modules/abroad-stocks.js'), 'Abroad Stocks module is not loaded by the Torn content script.');
 
 const worker = fs.readFileSync(path.join(root, 'src/background/service-worker.js'), 'utf8');
-assert(worker.includes("importScripts('../core/abroad-stocks.js')"), 'Background worker does not load the Abroad Stocks core.');
-assert(worker.includes("importScripts('./abroad-stocks-service.js')"), 'Background worker does not load the Abroad Stocks service.');
+assert(worker.includes("'../core/abroad-stocks.js'"), 'Background worker does not load the Abroad Stocks core.');
+assert(worker.includes("'abroad-stocks-service.js'"), 'Background worker does not load the Abroad Stocks service.');
 assert(worker.includes('SLINK.services.abroadStocks.routes'), 'Background routes do not include Abroad Stocks.');
 
 console.log('Abroad Stocks validation passed.');

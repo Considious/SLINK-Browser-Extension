@@ -27,8 +27,8 @@ assert.equal(company.addictionPenalty({}), null);
 
 const snapshot = company.normalizeSnapshot(
   {
-    job:{ company_id:44, company_name:'Test Company', company_rating:10, position:'Director', days_in_company:90 },
-    jobpoints:{ companies:[{ company:{ id:44, name:'Test Company' }, points:321 }] }
+    job:{ type:'company', id:44, type_id:6, name:'Test Company', rating:10, position:'Director', days_in_company:90 },
+    jobpoints:{ companies:[{ company:{ id:6, name:'Gun Shop' }, points:321 },{ company:{id:44,name:'Unrelated company type'},points:999 }] }
   },
   {
     profile:{ id:44, name:'Test Company', rating:10, director:{ id:7, name:'Owner' } },
@@ -43,6 +43,10 @@ const snapshot = company.normalizeSnapshot(
 assert.equal(snapshot.director, true);
 assert.equal(snapshot.company.jobPoints, 321);
 assert.equal(snapshot.self.name, 'Owner');
+assert.equal(snapshot.company.typeId,6,'Job points are keyed by CompanyTypeId, not the specific company ID');
+const otherCompany=company.normalizeSnapshot({job:{type:'company',id:55,type_id:6},jobpoints:{companies:[{company:{id:6,name:'Gun Shop'},points:321}]}},{},7);
+assert.equal(otherCompany.company.jobPoints,321,'Moving to another company of the same type must retain the same point balance');
+assert.equal(company.normalizeSnapshot({job:{type:'company',id:44,type_id:7},jobpoints:{companies:[{company:{id:6},points:321}]}},{},7).company.jobPoints,null,'An unrelated company type must not supply the current point balance');
 
 const alerts = company.buildAlerts(snapshot, { addictionThreshold:2, directorThreshold:10 });
 assert.deepEqual(Array.from(alerts, alert => alert.id), ['company:addiction:self','company:addiction:8']);
@@ -51,6 +55,7 @@ assert.equal(alerts[1].reminder, 'Your addiction penalty is currently -15. Pleas
 const employeeSnapshot = company.normalizeSnapshot({}, { profile:{ director:{ id:7 } }, employees:[] }, 8);
 assert.equal(employeeSnapshot.director, false);
 assert.equal(company.buildAlerts(employeeSnapshot, {}).length, 0);
+assert.equal(company.buildAlerts({...snapshot,self:null}, {directorThreshold:10})[0]?.id,'company:addiction:8','A missing director roster row must not suppress other employee alerts');
 
 const ranked = company.rankTrainCandidates(snapshot.employees);
 assert.equal(ranked[0].id, 8);

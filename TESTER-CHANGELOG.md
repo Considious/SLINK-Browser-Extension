@@ -2,6 +2,23 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 10 — 26 October 2026 — Correct travel forecasts and safer Company alerts
+
+Tester builds: extension **0.19.11.2 / Audit Test 10**, PDA **0.4.109-audit-test10**. This batch is testing-branch-only; stable/main remains the separately approved startup hotfix.
+
+- Corrected Abroad Stocks travel estimates and therefore the suggested departure/reminder times. Private (WLT benefit) and Business Class had been reversed. UK, UAE and Switzerland standard times were outdated. Estimates now use the official Torn Wiki's displayed without-book values for all 11 destinations and four methods, rather than multiplying and rounding differently from Torn. Your chosen travel method and arrival buffer stay saved. Unknown provider countries still have no invented travel time. Book perks and Torn's flight-time variance are not modeled as precise personal ETA promises.
+- Fixed a Company alert crash when the current user has no employee entry in the returned roster. Other eligible director alerts and saved snoozes still work. This also protects callers that combine Company alerts with the general alert list.
+- Verified the job-point contract in Torn's current OpenAPI: balances are keyed by company TYPE, not the individual company ID. Corrected the test fixture; the production type-based lookup was not changed to an incorrect company-ID lookup. Added coverage for unrelated types and moving between companies of the same type.
+- Repaired the War/Outside Save Target integration test to execute actual save handlers. It checks the real IDs, tags, sources and busy-state release. Modernized old import/catalog/Market-markup assertions; the remaining general validator and PDA overlay checks still expose obsolete later assumptions and are not marked fixed.
+
+**What to test:** in Abroad Stocks, compare Mexico across the four travel methods (Standard 24m, airstrip 17m, Private/WLT 12m, Business 7m before your buffer). Check UK, UAE and Switzerland departure times as well. Existing departure watches should use corrected times when reevaluated; no settings reset or manual recreation is required. For Company, confirm a missing roster/self row does not stop the whole Alerts panel, while director reminders and snoozes still work. Save one War and one Outside target and confirm their stored source/tags.
+
+**Automated results:** 73/76 commands pass. Remaining failures: the long background Leveling timing/FF fixture, the general extension Market-flow source-pattern validator, and the PDA overlay source-pattern test. New regressions cover all 44 destination/method combinations on both clients, departure times/buffers/unknown destinations, and missing-self Company alerts. No authenticated Torn session or physical PDA acceptance is claimed.
+
+**502 report:** origin/module/URL/time not supplied, so the failing provider cannot yet be identified. Public Mugging health was inaccessible from the checking tool, not verified down. Cloudflare's documentation says a 502/504 may originate from the origin or Cloudflare; the text alone does not establish overload or a SLINK deployment defect. No speculative worker deployment, secret changes, cache clearing, API-key invalidation or new automatic retries were made. Need the affected module/page and time, with API keys redacted.
+
+Sources checked 26 October: [official travel table](https://wiki.torn.com/wiki/Travel), [Torn OpenAPI](https://www.torn.com/swagger/openapi.json) (UserCompany / UserCompanyPoints), [Cloudflare 502/504 guidance](https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-5xx-errors/error-502-504/).
+
 ## Extension startup hotfix — 26 October 2026 — Candidate 9 integration
 
 Stable extension **0.19.11** and tester extension **0.19.11.1 / Audit Test 9** contain the same focused startup fix. PDA remains Candidate 8 and is unchanged. This main release is explicitly authorized by the owner; unrelated audit code is not promoted.

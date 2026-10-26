@@ -10,7 +10,7 @@
     standard:'Standard',
     airstrip:'Private Island airstrip',
     business:'Business Class',
-    private:'Private Jet'
+    private:'Private (WLT benefit)'
   });
 
   function escapeHtml(value) {

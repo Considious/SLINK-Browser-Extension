@@ -1,5 +1,15 @@
 # Audit test baseline and classification
 
+## Candidate 10 — 26 October 2026
+
+Full inventory: **73/76** pass, including the startup hotfix regression and three new travel/company-safety commands. Original Company, Abroad Stocks and Target List integration scripts now pass. Company fixture used individual CompanyId where OpenAPI UserCompanyPoints.company.id is CompanyTypeId. Corrected the fixture (with unrelated-type negative coverage) rather than corrupting the existing type-based production lookup. Once that assertion was reached, the same script exposed an actual null-self alert crash; guarded it in extension and PDA with director/snooze regressions.
+
+Abroad's Mexico private-flight assertion exposed a real calculation bug. Verified official Torn Wiki Travel (26 October): Private is WLT, Business is faster; transport multipliers were swapped, and UK/UAE/Switzerland times were stale. Both clients now use the exact without-book destination/method table rather than rounding multipliers. New regression checks all 44 combinations plus buffers/departure/unknown-country behavior. The old background import assertion was repaired to match grouped imports; that original script passes without changing its expected Mexico private result.
+
+Target List integration now executes the actual War and Outside Save Target bindings. General validation now follows the shared catalog provider/current Market DOM markers; it still fails later at a historical quickPurchaseAnchor pattern. PDA overlay now discovers runtime via the manifest but fails later at the old launcher.hidden=false pattern. These are partial harness repairs, not green scripts. Background still times out at leveling.cycle.prepare in the bounded combined fixture.
+
+Remaining three failed scripts are unchanged in count and preserved in full: extension background.test.mjs, validate-extension.mjs; PDA test-overlay.mjs. Company/Abroad contract questions are resolved using https://www.torn.com/swagger/openapi.json and https://wiki.torn.com/wiki/Travel, not assumptions or relaxed assertions. No main publication or live worker change in this audit batch.
+
 ## Candidate 8 — 26 October 2026
 
 Current inventory **66/72 commands pass**. Another six original scripts now pass: PDA armory, reminders, module-activity, market-dom, travel-safety; extension permissions-sweep. Tests use the manifest runtime and actual functions/predicates, including PDA visibility rather than desktop focus, independent activity clocks, shared-capacity bounds, cooldown freshness, no-permission travel safety and exact/admin/denied module grants.

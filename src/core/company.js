@@ -114,7 +114,7 @@
     const settings = normalizeSettings(settingsValue);
     if (!settings.enabled || !snapshot) return [];
     const alerts = [];
-    if (snapshot.self?.addictionPenalty !== null && snapshot.self.addictionPenalty >= settings.addictionThreshold) {
+    if (snapshot.self && snapshot.self.addictionPenalty !== null && snapshot.self.addictionPenalty >= settings.addictionThreshold) {
       alerts.push({
         id:'company:addiction:self',
         type:'companyAddiction',

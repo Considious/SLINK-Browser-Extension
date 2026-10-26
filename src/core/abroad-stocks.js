@@ -11,14 +11,24 @@
     droqs:Object.freeze({ id:'droqs', label:'DroqsDB', url:'https://droqsdb.com/api/public/v1/export', enrichment:true })
   });
 
+  // Torn Wiki Travel, without book, verified 2026-10-26. Exact displayed times avoid multiplier rounding errors.
+  // https://wiki.torn.com/wiki/Travel — Private is WLT; Business Class is the faster ticket option.
   const COUNTRIES = Object.freeze([
-    ['arg','Argentina',158], ['can','Canada',39], ['cay','Cayman Islands',33],
-    ['chi','China',229], ['haw','Hawaii',127], ['jap','Japan',213],
-    ['mex','Mexico',24], ['sou','South Africa',282], ['swi','Switzerland',175],
-    ['uae','UAE',271], ['uni','United Kingdom',159]
-  ].map(([code,name,minutes]) => Object.freeze({ code, name, minutes })));
-
-  const TRAVEL_MULTIPLIERS = Object.freeze({ standard:1, airstrip:0.7, business:0.5, private:0.3 });
+    ["arg","Argentina",158,111,79,47],
+    ["can","Canada",39,27,19,12],
+    ["cay","Cayman Islands",33,23,17,10],
+    ["chi","China",229,160,114,69],
+    ["haw","Hawaii",127,89,63,38],
+    ["jap","Japan",213,149,107,64],
+    ["mex","Mexico",24,17,12,7],
+    ["sou","South Africa",282,197,141,85],
+    ["swi","Switzerland",166,116,83,50],
+    ["uae","UAE",257,180,128,77],
+    ["uni","United Kingdom",151,106,75,45]
+  ].map(([code,name,minutes,airstrip,privateMinutes,business]) => Object.freeze({
+    code,name,minutes,travelTimes:Object.freeze({standard:minutes,airstrip,private:privateMinutes,business})
+  })));
+  const TRAVEL_MULTIPLIERS = Object.freeze({ standard:1, airstrip:0.7, business:0.3, private:0.5 });
   const countryByCode = new Map(COUNTRIES.map(country => [country.code, country]));
   const countryByName = new Map(COUNTRIES.map(country => [key(country.name), country]));
 
@@ -299,8 +309,7 @@
   function travelMinutes(countryCode, method = 'standard', bufferMinutes = 0) {
     const country = countryByCode.get(String(countryCode || '').toLowerCase());
     if (!country) return null;
-    const multiplier = TRAVEL_MULTIPLIERS[method] ?? TRAVEL_MULTIPLIERS.standard;
-    return Math.ceil(country.minutes * multiplier) + Math.max(0, Number(bufferMinutes) || 0);
+    return (country.travelTimes[method] ?? country.travelTimes.standard) + Math.max(0, Number(bufferMinutes) || 0);
   }
 
   function departureAt(row, settings = {}) {
