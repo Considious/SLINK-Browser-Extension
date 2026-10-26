@@ -2,6 +2,21 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 11 — 26 October 2026 — Player-cache storage migration (extension only)
+
+Tester extension **0.19.11.3 / Audit Test 11**. PDA stays Candidate 10. This storage change is on the testing branch only; main and the installed Chrome Store extension are not changed by it.
+
+The owner’s storage-size table identifies the player-intelligence entry as the dominant record: **7,546,432 bytes**, versus much smaller War caches. Code review confirms that player observations accumulated indefinitely in one Chrome storage object, rewritten in full for each update. The shared Chrome quota can therefore reject a War write even though War is not the largest consumer.
+
+- Move cached player observations into per-player IndexedDB records, outside Chrome storage.local’s 10 MB budget. No unlimitedStorage permission or arbitrary deletion/eviction of player estimates is introduced.
+- Copy existing records and an import receipt in one transaction. Remove the old Chrome copy only after that entire transaction commits and the legacy copy still matches. Interrupted/failed migrations retain the old copy. Failed cleanup can retry without overwriting newer records; a changed rollback-era legacy copy is merged using the existing field-freshness rules.
+- Start migration before normal worker initialization writes. Single-player updates then write one record rather than rewriting the multi-megabyte blob. Existing whole-cache consumers still receive a complete map, and normal data freshness/permission/API-budget rules are unchanged.
+- Saved targets, notes, own battle stats, API keys, settings, snoozes and theme choices stay in their existing storage locations. No automatic cloud restore, logout or reset. Never uninstall or clear storage to test this.
+
+**What to test:** on a backed-up isolated tester profile, load a realistic existing player cache before startup, then update/start SLINK. In the extension worker console, the old slink.playerIntelligence.cache.v1 entry should disappear only after successful copying; IndexedDB slink-player-intelligence / players should contain the records. War should save its refreshed runtime without the quota error. Check known targets/estimates, saved notes and alert settings, then reload the worker and browser. New observations must not recreate the large Chrome entry. Do not import another backup or edit raw storage while migration is running; raw Chrome writes and IndexedDB are not a single cross-store transaction. Report database errors without deleting either copy.
+
+**Verification:** the full inventory is 74/77 passing; the same three unrelated baseline failures remain. New transaction-fault tests cover a synthetic 7.5 MB cache, exact-content hashes, recovery of a previously rejected War-sized write, per-player writes, persisted reopen, failed observation/queue recovery, interrupted transactions, cleanup failure and a changed legacy copy. A real headless-browser IndexedDB fixture independently passed exact 7.5 MB migration, unchanged settings/targets, quota recovery, new-page persistence, abort after request success and cleanup retry. Final migration safety changes were rechecked by the unit and real-browser fixtures. This is not yet validation on the affected installed extension; tester review/main promotion and Chrome distribution remain separate.
+
 ## Candidate 10 — 26 October 2026 — Correct travel forecasts and safer Company alerts
 
 Tester builds: extension **0.19.11.2 / Audit Test 10**, PDA **0.4.109-audit-test10**. This batch is testing-branch-only; stable/main remains the separately approved startup hotfix.

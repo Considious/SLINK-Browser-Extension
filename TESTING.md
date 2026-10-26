@@ -1,8 +1,8 @@
-# SLINK audit tester build — candidate 10
+# SLINK audit tester build — candidate 11 (extension storage migration)
 
 This is an early testing build, not the Chrome Web Store release. This audit batch does not change main; the separately approved Mugging hotfix is already on main. The full audit plan is not implemented yet.
 
-- Version: **0.19.11.2**, displayed as **0.19.11 Audit Test 10**. PDA is now Candidate 10.
+- Version: **0.19.11.3**, displayed as **0.19.11 Audit Test 11**. PDA remains Candidate 10.
 - Branch: `audit/test-foundation`.
 - [Download the tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip).
 - [One running tester changelog for extension and PDA](https://github.com/Considious/SLINK-Browser-Extension/blob/audit/test-foundation/TESTER-CHANGELOG.md).

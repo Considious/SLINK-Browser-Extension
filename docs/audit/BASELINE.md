@@ -1,5 +1,11 @@
 # Audit test baseline and classification
 
+## Candidate 11 — extension player-cache storage
+
+Full inventory 74/77 pass; same three outstanding baseline failures. New tests/player-intelligence-storage.test.mjs covers the migration and service with a transactional fault-injection IndexedDB fixture. It reproduces quota rejection with a 7.5 MB intelligence cache, verifies exact preservation by content hash, frees Chrome quota only after commit, and confirms a War-sized write then succeeds. Tests also cover per-record updates, reopen, stale rollback legacy merge, failed write queue recovery, migration abort after request success, cleanup failure/retry and detecting a legacy change before deletion. qa-player-intelligence-storage.cjs is a local real-browser fixture, not an installed-extension acceptance test; it independently validates the actual IndexedDB transaction semantics and quota simulation. Final targeted checks rerun after the last cleanup guard passed.
+
+No settings/target/cache-estimate eviction or new extension permission. Only the obsolete Chrome aggregate copy is removed after database commit. Raw simultaneous Chrome imports and IndexedDB do not share a global transaction; tester instructions require not editing/importing raw legacy cache during migration. Candidate remains testing-only pending review and explicit main promotion.
+
 ## Candidate 10 — 26 October 2026
 
 Full inventory: **73/76** pass, including the startup hotfix regression and three new travel/company-safety commands. Original Company, Abroad Stocks and Target List integration scripts now pass. Company fixture used individual CompanyId where OpenAPI UserCompanyPoints.company.id is CompanyTypeId. Corrected the fixture (with unrelated-type negative coverage) rather than corrupting the existing type-based production lookup. Once that assertion was reached, the same script exposed an actual null-self alert crash; guarded it in extension and PDA with director/snooze regressions.

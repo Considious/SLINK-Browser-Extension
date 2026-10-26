@@ -6,8 +6,11 @@
   const CACHE_KEY = 'playerIntelligence.cache.v1';
   const inFlight = new Map();
   let writeQueue = Promise.resolve();
+  const databaseStore = () => SLINK.services.playerIntelligenceStore?.available()
+    ? SLINK.services.playerIntelligenceStore : null;
 
   async function cacheMap() {
+    if (databaseStore()) return databaseStore().all();
     const stored = await SLINK.core.storage.get(CACHE_KEY, {});
     return stored && typeof stored === 'object' && !Array.isArray(stored)
       ? stored
@@ -21,13 +24,17 @@
     if (!playerId) throw new Error('A valid Torn player ID is required.');
     let record = null;
     const task = writeQueue.then(async () => {
-      const cache = await cacheMap();
-      record = CORE.mergeRecord(cache[String(playerId)], {
+      const store = databaseStore();
+      const cache = store ? null : await cacheMap();
+      record = CORE.mergeRecord(store ? await store.get(playerId) : cache[String(playerId)], {
         ...input,
         playerId
       });
-      cache[String(playerId)] = record;
-      await SLINK.core.storage.set(CACHE_KEY, cache);
+      if (store) await store.putMany({ [String(playerId)]:record });
+      else {
+        cache[String(playerId)] = record;
+        await SLINK.core.storage.set(CACHE_KEY, cache);
+      }
     });
     writeQueue = task.catch(() => undefined);
     await task;
@@ -39,6 +46,7 @@
     let cache = {};
     const task = writeQueue.then(async () => {
       cache = await cacheMap();
+      const changed = {};
       for (const input of Array.isArray(values) ? values : []) {
         const playerId = CORE.validPlayerId(
           input?.playerId ?? input?.player_id ?? input?.targetId ?? input?.id
@@ -48,9 +56,13 @@
           ...input,
           playerId
         });
+        changed[String(playerId)] = cache[String(playerId)];
         updated += 1;
       }
-      if (updated) await SLINK.core.storage.set(CACHE_KEY, cache);
+      if (updated) {
+        if (databaseStore()) await databaseStore().putMany(changed);
+        else await SLINK.core.storage.set(CACHE_KEY, cache);
+      }
     });
     writeQueue = task.catch(() => undefined);
     await task;
@@ -62,8 +74,7 @@
       input.playerId ?? input.player_id ?? input.targetId ?? input.id
     );
     if (!playerId) throw new Error('A valid Torn player ID is required.');
-    const cache = await cacheMap();
-    const record = cache[String(playerId)] || null;
+    const record = databaseStore() ? await databaseStore().get(playerId) : (await cacheMap())[String(playerId)] || null;
     return {
       record:record
         ? { ...record, status:CORE.effectiveStatus(record) }
@@ -90,8 +101,7 @@
       input.playerId ?? input.player_id ?? input.targetId ?? input.id
     );
     if (!playerId) throw new Error('A valid Torn player ID is required.');
-    const cache = await cacheMap();
-    const current = cache[String(playerId)] || null;
+    const current = databaseStore() ? await databaseStore().get(playerId) : (await cacheMap())[String(playerId)] || null;
     const decision = CORE.requestDecision(current, input);
     if (!decision.required) {
       return {
