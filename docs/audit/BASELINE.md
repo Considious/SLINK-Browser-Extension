@@ -1,5 +1,15 @@
 # Audit test baseline and classification
 
+## Candidate 7 — 26 October 2026
+
+Current complete inventory: **58/70** test/build commands pass. Six original failures are repaired: extension core.test.mjs, mugging.test.mjs, travel-safety.test.mjs; PDA test-mugging.mjs, test-racing.mjs, test-timestamps.mjs. They retain their safety/behavior assertions while using current source discovery and contracts. Newly reachable stale fixture expectations were corrected: backend-issued admin.* applies to any granted user, player IDs stay outside chat profile anchors, and a missing-unique alert requires a crime catalog/completion snapshot. No production permission, alert, time, FF or travel formula changed.
+
+PDA test-support/runtime.mjs discovers fragments in manifest order, checks launcher/package/runtime revision consistency and extracts functions with JavaScript parsing rather than historical indentation. Its new executable regression passes. Three already-working PDA scripts and the tester-channel test now use version consistency instead of literals that would fail on the next release.
+
+**Still failing (12):** extension abroad-stocks, background, company, permissions-sweep, target-list-integrations and validate-extension; PDA armory, market-dom, module-activity, overlay, reminders and travel-safety. Original classifications below remain the next-action guide for those scripts. All failures remain in the inventory; no test was deleted or skipped. Company job-point and Abroad travel-time disagreements remain unresolved contracts, not proven production defects. The next baseline batch should repair listener dispatch and remaining source discovery before deciding whether later assertions expose behavior defects.
+
+Historical entries below describe the earlier state, not the current pass count. Main received separately approved Mugging-only hotfixes; Candidate 7 itself is side-branch-only.
+
 Baseline source: extension 6c249c2384c8af236f236b73d4921d86d3aa1cf9 and SLINK-PDA 43cf003370750ab30dfd2945870ed7f9955d239e. Main is unchanged. Candidate 1 adds four executable regression scripts and a focused `test:audit` command per client.
 
 On 24 October 2026, all candidate test scripts were run individually against isolated local source copies. **39 of 57 scripts passed; 18 failed.** The failure inventory matches the independent audit.

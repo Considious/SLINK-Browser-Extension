@@ -2,6 +2,32 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 7 — 26 October 2026 — Cleaner Mugging panel and more reliable test checks
+
+Tester builds: extension **0.19.10.5 / Audit Test 7** and PDA **0.4.107-audit-test7**. This batch stays on `audit/test-foundation`; it does not change main or live worker settings.
+
+- Mugging now keeps only Last sync from the long contributor explanation. No API-budget commentary, upload-cadence text, pending-count block, or internal retry details in that paragraph. Before the first successful sync, there is no empty box. Contribution still works the same way.
+- Repaired six previously failing test scripts: extension Core, Mugging and Travel Safety; PDA Mugging, Racing and timestamp conversion. They now inspect the real code and compare current versions instead of demanding historical version numbers. Permission checks follow backend-granted admin.* access without a hard-coded owner; chat expectations keep player IDs outside the profile hyperlink. The Shoplifting alert fixture supplies the catalog/completion information the current alert logic requires.
+- Added reusable manifest-based PDA test discovery and a regression for it. Updated three existing PDA tests and the tester-channel test so future tester version bumps do not fail their historical version assumptions. No gameplay formulas, API keys, saved settings or theme assets changed.
+
+**What to test:** open Mugging in Torn, the extension dashboard and PDA. Confirm the former technical paragraph is gone, Last sync appears after successful reporting, and enabling/disabling Mugging or finding targets still works. Reopen SLINK and navigate Torn pages; settings, your selected tab, drafts and cached battle stats should behave as before. Continue the earlier combined test checklist below.
+
+**Automated result:** 58/70 test/build commands passed, up from 51/69. Six of the 18 baseline failures are repaired; 12 remain listed in docs/audit/BASELINE.md. Those remaining failures are not silently skipped or claimed fixed. Real Android/PDA and live Torn acceptance are still tester work; this test-maintenance batch does not establish native-storage safety or complete the audit.
+
+## Mugging interface cleanup request — included in Candidate 7
+
+Remove the contributor implementation explanation, API-budget details, inactivity rules, upload cadence, pending count, and retry diagnostics from the normal Mugging interface on extension and PDA. Keep only "Last sync" and its time when a successful sync exists. Do not show an empty placeholder before the first sync. Internal diagnostics and contributor behavior stay unchanged.
+
+Test: open Mugging on both clients and the extension dashboard; confirm only the last-sync line remains from that paragraph, no blank block appears before the first sync, and uploads still work. Included in Candidate 7, not pushed to main.
+
+## Urgent Mugging-only release to main — 25 October 2026
+
+At the owner's explicit request, the Mugging reliability changes were released separately from the audit work: extension **0.19.10** (825f733bd69b44fe1671eb8c4e08edc330bf609c), PDA **0.4.104** (8656cad32609565de81f571c540928f3024f96b8), and worker **0.6.2-client-report-safety** (f8581131f63b02173fdf5d51395fb95f1781bd52). All three source releases are on their respective main branches. Cloudflare activation and Chrome Store distribution are not established by these commits.
+
+What to test: enable Mugging, allow checks to accumulate, and confirm queued reports upload about five minutes apart while the client is running. During a temporary worker failure, reports should remain pending and retry after one to five minutes. Reopen SLINK and change Torn pages; saved settings and cached personal battle stats should remain intact. Unknown target stats must not become zero estimates. Where supplied by the worker, pool explanations should distinguish missing estimates, timed unavailability, mug cooldowns, and Fair Fight range exclusions.
+
+Only this urgent fix was promoted. The other audit changes remain on testing branches. Candidate 6 notes below describe the original candidate state before this release.
+
 ## Candidate 6 — 25 October 2026 — Mugging client-report reliability
 
 Testing builds: extension **0.19.10.4 / 0.19.10 Audit Test 6**, PDA **0.4.106-audit-test6**, on the existing audit/test-foundation installation links. Worker source candidate **0.6.2-client-report-safety-test** is on the separate SLINK-Cloudflare-Services branch **audit/mugging-reliability**. Main branches and the production worker are unchanged.

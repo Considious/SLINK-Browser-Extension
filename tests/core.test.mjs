@@ -41,6 +41,7 @@ const chrome = {
 };
 
 const context = vm.createContext({
+  AbortController,
   chrome,
   console,
   fetch: async input => ({
@@ -82,7 +83,8 @@ for (const file of [
 ]) load(context, file);
 
 const SLINK = context.SLINK_EXTENSION;
-assert(SLINK.VERSION === '0.18.78', 'Unexpected runtime version.');
+assert(SLINK.VERSION === JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8')).version, 'Runtime and manifest versions differ.');
+assert(SLINK.VERSION === JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version, 'Runtime and package versions differ.');
 assert((await SLINK.core.messaging.send('echo')).echoed === true, 'Runtime messaging did not return background data.');
 assert(SLINK.core.format.escapeHtml('<a>') === '&lt;a&gt;', 'HTML escaping failed.');
 assert(SLINK.core.format.attackLink('https://www.torn.com/page.php?sid=attack&user2ID=1') === '<a href="https://www.torn.com/page.php?sid=attack&amp;user2ID=1">【ATTACK】</a>', 'Shared attack-link formatter did not preserve Torn HTML and the bracketed label.');
@@ -130,7 +132,9 @@ assert(permissions.hasScope({ userId:3853023, scopes: ['admin.*'] }, 'admin.user
 assert(permissions.hasScope({ userId:3853023, scopes: ['admin.*'] }, 'slink.mugging'), 'Owner admin scope did not unlock Mugging.');
 assert(permissions.hasAllScopes({ userId:3853023, scopes: ['admin.*'] }, ['slink.mugging']), 'Owner admin scope did not satisfy module gating.');
 assert(!permissions.hasScope({ roles: ['admin'], scopes: ['slink.level'] }, 'admin.users'), 'Roles must not bypass signed scope checks.');
-assert(!permissions.hasScope({ userId:12, scopes:['admin.*'] }, 'admin.permissions'), 'A non-owner admin wildcard was trusted.');
+assert(permissions.hasScope({ userId:12, scopes:['admin.*'] }, 'admin.permissions'), 'Backend-issued admin wildcard was incorrectly restricted to a hard-coded owner.');
+assert(permissions.hasAllScopes({ userId:12, scopes:['admin.*'] }, ['slink.mugging','slink.qol.racing']), 'Admin wildcard must satisfy all feature gates.');
+assert(!permissions.hasScope({ userId:12, roles:['admin'], scopes:[] }, 'slink.mugging'), 'A role label without a granted scope must not unlock features.');
 const combinedPermissions = permissions.combineSnapshots(
   { userId:3853023, roles:['admin'], scopes:['admin.*','slink.level'], expiresAt:Date.now() + 100_000 },
   { userId:3853023, roles:['admin'], scopes:['admin.*','slink.war'], expiresAt:Date.now() + 200_000 }
@@ -238,7 +242,8 @@ const efficiencySnapshot = {
     battlestats:{ strength:{ modifiers:modifier }, defense:{ modifiers:modifier }, speed:{ modifiers:modifier }, dexterity:{ modifiers:modifier } }
   },
   stockCatalog:{ stocks:[{ id:7, name:'Collectible Industries', acronym:'COL', bonus:{ passive:false } }, { id:25, name:'West Side University', acronym:'WSU', bonus:{ passive:true } }] },
-  cluster:{ crimes:{ crimes:{ skill:100, uniques:[] } }, subcrimes:{ subcrimes:[{ id:44, name:'Jewelry Store' }] }, status:{ shoplifting:[{ id:44, status:[{ title:'Cameras', disabled:true }, { title:'Guard', disabled:true }] }] } }
+  crimeUniques:{ catalog:{ crimes:[{ id:4, name:'Shoplifting', unique_outcomes_count:60, unique_outcomes_ids:[20765] }] }, user:{ 4:{ crimes:{ skill:100, uniques:[] } } } },
+  cluster:{ crimes:{ crimes:{ skill:100, uniques:[] } }, status:{ shoplifting:{ jewelry_store:[{ title:'Three cameras', disabled:true }, { title:'One guard', disabled:true }] } } }
 };
 const efficiencyAlerts = SLINK.core.adhd.buildAlerts(efficiencySnapshot, adhdSettings);
 const waitingRaceSnapshot = {
@@ -294,7 +299,7 @@ const warCallout = SLINK.core.war.factionCallout({
   id:9001, name:'War Target', activity:'Online', statusState:'Hospital', statusDescription:'In hospital', lastActionRelative:'4 hours ago',
   statusUntil:Math.floor(Date.now() / 1000) + 600, battleStatsEstimate:2500000, fairFight:1.75
 });
-assert(warCallout.includes('<a href="https://www.torn.com/profiles.php?XID=9001">War Target [9001]</a>') && warCallout.includes('<a href="https://www.torn.com/page.php?sid=attack&amp;user2ID=9001">【ATTACK】</a>'), 'Faction-chat callout did not use HTML for every link or preserve the bracketed Attack label.');
+assert(warCallout.includes('<a href="https://www.torn.com/profiles.php?XID=9001">War Target</a> [9001]') && warCallout.includes('<a href="https://www.torn.com/page.php?sid=attack&amp;user2ID=9001">【ATTACK】</a>'), 'Faction-chat callout must keep the numeric ID outside the profile link and preserve the bracketed Attack label.');
 assert(warCallout.includes('Estimated BS: 2.5M'), 'Faction-chat callout omitted the estimated battle stats.');
 assert(warCallout.includes('TCT') && warCallout.includes('Status: Hospital / Online'), 'Faction-chat callout omitted current status or hospital release time.');
 assert(warCallout.includes('Status detail: In hospital') && !warCallout.includes('Last action') && !warCallout.includes('4 hours ago'), 'Faction-chat callout used stale last-action data instead of the current Torn status.');

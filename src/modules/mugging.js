@@ -213,7 +213,7 @@
             <label>Maximum rough FF<input id="mugging-max-ff" type="number" min="1" max="3" step=".1" value="${settings.maxFairFight}"></label>
             <label>Target count<input id="mugging-limit" type="number" min="1" max="100" step="1" value="${settings.limit}"></label>
             <button class="mugging-wide" id="mugging-find" type="button" ${busy ? 'disabled' : ''}>${busy ? 'Finding targets…' : 'Find targets'}</button>
-            <div class="mugging-note mugging-wide">Contributor checks use only spare shared Torn capacity, keep 10 calls/min reserved for interactive work, and never exceed 40 contribution calls/min. Mugging assignments stop after five minutes away, while low-priority contribution may continue independently. Results are deduplicated locally and synchronized to shared SLINK intelligence in acknowledged batches about every five minutes while this client is running. Pending: ${cache.contribution.pendingSync}${cache.contribution.lastSyncAt ? ` · Last sync ${escape(new Date(cache.contribution.lastSyncAt).toLocaleString())}` : ''}${cache.contribution.syncError ? ` · Sync retry pending: ${escape(cache.contribution.syncError)}` : ''}.</div>
+            ${cache.contribution.lastSyncAt ? `<div class="mugging-note mugging-wide">Last sync ${escape(new Date(cache.contribution.lastSyncAt).toLocaleString())}</div>` : ''}
             ${error ? `<div class="mugging-note mugging-wide">${escape(error)}</div>` : ''}
             ${notice ? `<div class="mugging-note mugging-wide">${escape(notice)}</div>` : ''}
           </div>
