@@ -2,6 +2,43 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 6 — 25 October 2026 — Mugging client-report reliability
+
+Testing builds: extension **0.19.10.4 / 0.19.10 Audit Test 6**, PDA **0.4.106-audit-test6**, on the existing audit/test-foundation installation links. Worker source candidate **0.6.2-client-report-safety-test** is on the separate SLINK-Cloudflare-Services branch **audit/mugging-reliability**. Main branches and the production worker are unchanged.
+
+IMPORTANT: installing a tester client does not deploy the backend patch. New backend exclusion counters, health telemetry, server protection against old clients and retry behavior require a separately approved worker deployment. Do not clear saved data, reactivate donated keys or run a production recovery job to test this candidate.
+
+### Keep valid estimates instead of replacing them with zero
+
+Both clients now send an unknown/zero/invalid estimate as unknown, not a real zero. The worker candidate also rejects zero estimates from older clients. It preserves the estimate's original observation time: checking a player's status does not make an old stat estimate fresh. A legacy estimate with no stat timestamp cannot replace an existing positive estimate. These changes protect the target state and the FF metadata shard.
+
+1. In an isolated tester installation, note a known target estimate. Allow ordinary status checks and a normal acknowledged report batch. The target must not lose its estimate merely because a status response contains no battle stats.
+2. Close/reopen SLINK and refresh Torn. Settings, API keys, target lists, FF filters and snoozes must remain unchanged.
+3. Recheck the shared own-battle-stat tests from Candidate 4. This patch concerns target estimates; it must not replace your own authenticated battle stats or change the FF formula/ceiling.
+
+### Share reports sooner, with bounded retries
+
+While the client is running, successful report batches now run about every five minutes instead of six hours. Temporary failures retain unacknowledged work and retry after one minute, backing off to at most five minutes. Empty queues do not upload or pretend a new delivery succeeded. The existing Torn API call budget/interactive reserve and report queue/batch limits remain unchanged. More frequent report uploads do increase Worker/R2 activity; no live quota validation is claimed.
+
+1. With Mugging enabled and a valid session, observe Pending and Last sync through a normal batch. Pending should decrease only after acknowledgement.
+2. If a real temporary connection failure occurs, Pending must remain and Sync retry pending must explain the problem. After recovery, batches should resume without waiting six hours.
+3. Switching pages or briefly backgrounding PDA must not reset settings. PDA cannot be expected to run checks while its app/runtime is suspended.
+4. Developer-only tests simulate delayed acknowledgements and newer observations for the same player; the older acknowledgement must not delete the newer report. Ordinary testers should not alter queues or expose credentials.
+
+### Worker-side changes and diagnostics (deployment gated)
+
+- Failed, missing and unusable FF responses remain pending. Retries respect the existing 25-target / ten-minute global limit; a failed attempt is not a successful 14-day refresh. Failed IDs rotate behind other pending work.
+- Client status reports now use the existing mug-transition/cooldown rules without donated Torn keys. First observations and repeated identical hospital states must not create new mug events.
+- Health separates accepted client-report counts/times from donated-key collector capacity and indicates whether an FF secret is configured. Counts start with the new instrumentation, not historical activity; accepted reports are not a count of unique active clients.
+- Estimate coverage reports how many state shards have new counters. Partial coverage is not a full-pool audit.
+- Find targets responses include exclusion counts. When supplied by the worker candidate, extension/PDA show a compact summary for missing estimates, hospital/jail timers, post-mug cooldowns and your FF range. Old workers omit it rather than displaying invented zeros.
+
+Test these server behaviors only in an approved test environment after deploying the candidate there. The production health version remains 0.6.1 until an explicit deployment occurs.
+
+Developer validation: **22 worker tests pass**. Both client report-safety tests cover unknown estimates, original stat timestamps, acknowledgement preservation, five-minute batching, one-minute retry and empty queues. All **26 focused commands** pass. Full client inventory: **51/69 scripts pass**, retaining the same 18 documented baseline failures. Synthetic Edge checks pass the Mugging summary at 390/1100px; no physical PDA or live provider behavior was claimed. A dated authenticated worker fixture was corrected to use a recent timestamp because its intentional observation-age clamp made the old October 6 fixture expire.
+
+Limits and next work: no automatic reconstruction of already-zeroed records and no mass requeue of legacy lost work. Recovery needs a separate, evidence-based plan. Clients still do not replace company catalog/discovery; FF fetching remains server-side and is independent of donated Torn capacity. This batch does not finish the broader audit or close the remaining native-storage tasks. Keep the earlier test checklist, and report build/platform/steps without keys or tokens.
+
 ## Candidate 5 — 25 October 2026 — dashboard parity, awaiting combined tester review
 
 Extension **0.19.10.3 / 0.19.10 Audit Test 5** on the same testing branch. PDA stays at **0.4.105-audit-test4**: this batch changes the standalone extension dashboard and its shared extension presenters, not the PDA launcher. Main and the Chrome Store release are unchanged. Test this newest extension together with the earlier entries below.
