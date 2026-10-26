@@ -1,3 +1,11 @@
+## 0.19.10 - 2026-10-25
+
+- Upload queued Mugging observations about every five minutes while the client runs, rather than every six hours.
+- Retry failed uploads after a bounded delay and preserve observations until their specific reports are acknowledged.
+- Do not send missing target estimates as zero or share observer-specific Fair Fight scores as target facts.
+- Preserve estimate observation times and display the worker's pool exclusion summary.
+- This urgent release does not include the audit/testing refactors or change saved settings.
+
 ## 0.18.97 - 2026-10-22
 
 - Detect cached theme catalogs created before independent brand and chat assets existed.
@@ -724,5 +732,6 @@ This changelog covers the `0.18.x` release series. It focuses on user-visible be
 - Market Watch prices are sourced only from Torn's v2 Item Market API and Weaver's marketplace JSON API; the extension does not scrape Torn pages for listing data.
 - Watch configuration, item catalogs, and results remain in local extension storage. SLINK's permission service only authenticates the signed Market Watch tier.
 - Added the Weaver API host permission required for API-only Bazaar Watch requests.
+
 
 

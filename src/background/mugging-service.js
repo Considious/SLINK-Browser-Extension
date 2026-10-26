@@ -19,7 +19,8 @@
   const INTERACTIVE_RESERVE = 10;
   const OWN_STATS_TTL_MS = 15 * 60_000;
   const ASSIGNMENT_REFRESH_MS = 5 * 60_000;
-  const SYNC_INTERVAL_MS = 6 * 60 * 60_000;
+  const SYNC_INTERVAL_MS = 5 * 60_000;
+  const SYNC_RETRY_MS = 60_000;
   const SYNC_BATCH_SIZE = 100;
   const SYNC_MAX_BATCHES = 5;
   let refreshing = null;
@@ -156,8 +157,9 @@
       level:Math.max(0, Number(record.level) || 0),
       bountyCount:Math.max(0, Math.trunc(Number(record.bountyCount) || 0)),
       bountyTotal:Math.max(0, Number(record.bountyTotal) || 0),
-      battleStatsEstimate:Number.isFinite(Number(record.battleStatsEstimate)) ? Number(record.battleStatsEstimate) : null,
-      fairFight:Number.isFinite(Number(record.fairFight)) ? Number(record.fairFight) : null
+      battleStatsEstimate:record.battleStatsEstimate != null && typeof record.battleStatsEstimate !== 'boolean' && Number.isFinite(Number(record.battleStatsEstimate)) && Number(record.battleStatsEstimate) > 0 ? Number(record.battleStatsEstimate) : null,
+      battle_stats_observed_at:Math.max(0, Number(record.fieldMeta?.battleStatsEstimate?.at ?? record.battleStatsCheckedAt) || 0),
+      fairFight:null // Observer-dependent values are not portable contributor intelligence.
     };
   }
 
@@ -166,7 +168,10 @@
     syncing = (async () => {
       const now = Date.now();
       const previous = await SLINK.core.storage.get(SYNC_KEY, {});
-      if (!force && now - Number(previous?.lastAttemptAt || 0) < SYNC_INTERVAL_MS) return previous;
+      const retryAt = Number(previous?.nextAttemptAt) || Number(previous?.lastAttemptAt || 0) + (previous?.error ? SYNC_RETRY_MS : SYNC_INTERVAL_MS);
+      if (!force && now < retryAt) return previous;
+      const queued = await SLINK.core.storage.get(PENDING_KEY, []);
+      if (!Array.isArray(queued) || !queued.length) return previous;
       const settings = await SLINK.core.storage.get(SETTINGS_KEY, {});
       if (settings?.enabled !== true) return previous;
       const session = await SLINK.services.permissionAccess.ensureSession(false, REQUIRED_SCOPE);
@@ -202,6 +207,8 @@
         const status = {
           lastAttemptAt:now,
           lastSuccessAt:Date.now(),
+          nextAttemptAt:now + SYNC_INTERVAL_MS,
+          consecutiveFailures:0,
           accepted,
           batches,
           pendingSync:Array.isArray(pending) ? pending.length : 0,
@@ -214,6 +221,8 @@
         const status = {
           ...previous,
           lastAttemptAt:now,
+          nextAttemptAt:now + Math.min(SYNC_INTERVAL_MS, SYNC_RETRY_MS * 2 ** Math.min(3, Number(previous.consecutiveFailures) || 0)),
+          consecutiveFailures:(Number(previous.consecutiveFailures) || 0) + 1,
           accepted:0,
           batches,
           pendingSync:Array.isArray(pending) ? pending.length : 0,
@@ -317,7 +326,8 @@
       pool:{
         total:Math.max(0, Number(value.pool?.total) || 0),
         estimable:Math.max(0, Number(value.pool?.estimable) || 0),
-        eligible:Math.max(0, Number(value.pool?.eligible) || 0)
+        eligible:Math.max(0, Number(value.pool?.eligible) || 0),
+        excluded:value.pool?.excluded && typeof value.pool.excluded === 'object' ? value.pool.excluded : null
       },
       targets:(Array.isArray(value.targets) ? value.targets : []).map(target => ({
         id:Math.max(0, Math.trunc(Number(target?.id ?? target?.playerId) || 0)),
@@ -426,4 +436,5 @@
     normalizeCache, refresh, reportForObservation, routes, runContribution, status, syncPending, touchActivity
   }));
 })(globalThis);
+
 
