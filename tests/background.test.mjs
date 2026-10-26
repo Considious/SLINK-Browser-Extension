@@ -7,6 +7,18 @@ import { webcrypto } from 'node:crypto';
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(testDirectory, '..');
 const workerDirectory = path.join(root, 'src', 'background');
+// Real limiter sleeps made this combined, network-free route fixture spend a
+// minute waiting for its own earlier scenarios. Keep production limiter logic;
+// advance its clock only once immediate promise work has finished. HTTP deadline
+// timers are cancelled normally by the immediate mocked fetch responses.
+let fixtureNow = globalThis.Date.now();
+class Date extends globalThis.Date {
+  constructor(...args) { super(...(args.length ? args : [fixtureNow])); }
+  static now() { return fixtureNow; }
+}
+function fixtureTimeout(callback, delay = 0, ...args) {
+  return setImmediate(() => { fixtureNow += Math.max(0, Number(delay) || 0); callback(...args); });
+}
 const values = new Map();
 const alarms = new Map();
 const claimRequestBodies = [];
@@ -140,6 +152,8 @@ let context;
 context = vm.createContext({
   crypto:webcrypto,
   TextEncoder,
+  AbortController,
+  Date,
   chrome,
   console,
   fetch: async (input, options = {}) => {
@@ -534,8 +548,8 @@ context = vm.createContext({
       requestMethod: options.method || 'GET'
     };
   },
-  setTimeout,
-  clearTimeout,
+  setTimeout:fixtureTimeout,
+  clearTimeout:clearImmediate,
   URL,
   URLSearchParams,
   importScripts(...relativePaths) {
@@ -919,7 +933,7 @@ const cachedStack = await send('adhd.status', { refreshIfDue:false });
 assert(cachedStack.data.settings.stackModeSince > 0, 'A cached low-energy reading disabled Stack mode.');
 assert(cachedStack.data.nextRefreshAt <= Date.now() + 5 * 60_000, 'Stack mode must keep checking energy at least every five minutes.');
 // The API fixture returns 100 energy; a NEW reading should end Stack mode.
-await new Promise(resolve => setTimeout(resolve, 2));
+fixtureNow += 2;
 const spentStack = await send('adhd.refresh');
 assert(spentStack.ok && spentStack.data.settings.stackModeSince === 0, 'Fresh energy below 150 did not end Stack mode.');
 assert(spentStack.data.activeAlerts.some(a => a.id === 'energyRefill'), 'Unused refill did not resume after spending energy.');

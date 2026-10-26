@@ -1,5 +1,15 @@
 # Audit test baseline and classification
 
+## Batch 12 — baseline closure, 26 October 2026
+
+Full local inventory **78/78 commands passed**. Added purchase-controls.test.mjs; repaired background.test.mjs, validate-extension.mjs and PDA test-overlay.mjs. Runtime/build versions unchanged; this batch changes only tests, test entry points and documentation.
+
+The general validator's eleven obsolete expectations used old Market function names/attributes, inline Faction Chat focus checks, removed Armory row decoration, direct dashboard module startup and old officer routes/admin-only module registration. Replaced with current contracts, executable purchase helper checks, maintained Armory retrieval and shared dashboard-host regressions. Native Armory restructuring remains explicitly forbidden, while the Recaller stays covered. PDA's seven obsolete expectations concerned chat-mode launcher visibility, legitimate landscape bar CSS, old Market markers/text and previously combined officer tabs. Retained all other static safety checks and added actual open/close and scope-isolation execution.
+
+Background fixture now supplies AbortController, previously missing from the VM despite production HTTP using it for FF requests. Its shared API limiter was also waiting in real time after earlier test routes filled the ledger. A fixture-only Date plus cancellable immediate timers advance simulated time after promise work, preserving production limiter/HTTP code and all route assertions. The fresh-energy test explicitly advances the same clock. FF local refinement, War estimates, Stack mode, timer and permissions assertions now execute and pass rather than stopping at timeouts. Dedicated limiter/backoff tests also remain passing.
+
+This is not a claim of live API correctness, physical PDA storage guarantees, real purchases or full audit completion. Remaining Phase 2/3 editor/lifecycle/native-device work, dashboard acceptance and owner-approved Phase 6 update policy are still open. Earlier counts below are historical.
+
 ## Candidate 11 — extension player-cache storage
 
 Full inventory 74/77 pass; same three outstanding baseline failures. New tests/player-intelligence-storage.test.mjs covers the migration and service with a transactional fault-injection IndexedDB fixture. It reproduces quota rejection with a 7.5 MB intelligence cache, verifies exact preservation by content hash, frees Chrome quota only after commit, and confirms a War-sized write then succeeds. Tests also cover per-record updates, reopen, stale rollback legacy merge, failed write queue recovery, migration abort after request success, cleanup failure/retry and detecting a legacy change before deletion. qa-player-intelligence-storage.cjs is a local real-browser fixture, not an installed-extension acceptance test; it independently validates the actual IndexedDB transaction semantics and quota simulation. Final targeted checks rerun after the last cleanup guard passed.

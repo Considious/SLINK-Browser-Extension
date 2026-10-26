@@ -2,6 +2,18 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Batch 12 — 26 October 2026 — regression checks repaired
+
+This is a **testing-branch-only test/documentation update**, not a new gameplay release. Install links and build versions stay the same: extension 0.19.11.3 / Audit Test 11, PDA 0.4.109 / Audit Test 10. No runtime, theme, settings, API keys or saved targets changed. No main branch or live worker update.
+
+- All three remaining baseline test failures are resolved. The full local inventory now passes **78/78 commands**, including the new purchase-control regression. This does not mean the entire audit or real-device acceptance testing is complete.
+- The extension validator now checks today's shared dashboard host, officer access routes and focus-guarded chat helper. It no longer demands the intentionally removed Armory row decorations. The working Armory Recaller is tested by executing its retrieval, confirmation, focus and recovery functions.
+- Added executable checks that SLINK Buy keeps its original button position while Torn opens purchase controls, recovers from stuck transitions, respects disabled/read-only inputs, and does not mistake Torn's temporarily disabled Buy button for a sold-out listing.
+- PDA checks now execute open/close behavior for bubble, bar and chat-button modes, verifying that the saved page survives, alerts remain counted, and the right launcher regains focus. Armory-only permissions are checked separately from full War officer access.
+- The combined background test now provides the browser cancellation API used by Fair Fight and advances simulated time instead of waiting for real rate-limit delays. Its existing Leveling, War, permissions, timers and Stack-mode assertions remain in place. No production limiter or Fair Fight formula was changed.
+
+**What testers should try:** keep using the existing tester builds. Switch between Alerts, Combat and Quality of Life, close/reopen and reload, and confirm the exact saved page returns. Try each minimize mode. On a harmless Market listing, verify highlighting and control placement without purchasing unwanted items. Officers should check the Recaller remains available; Armory-only access must not unlock War settings. Continue the earlier settings, quota-migration and draft-preservation tests below. These are manual acceptance checks, not claims that a real PDA device or authenticated Torn purchase was tested automatically.
+
 ## Approved stable quota hotfix — 26 October 2026
 
 At the owner's explicit request, the storage-quota fix was selectively published to extension **main 0.19.12**, commit **d1da2aa2248e2cc49ea85cbd091f1bb66b3b039f**. No other audit changes were merged. Stable's existing legacy player merge is retained, with migration collision inputs ordered by observation age so an old rollback copy does not replace a newer database observation. This compatibility path passed the same migration/retry unit tests and the real IndexedDB quota-recovery browser fixture against stable sources. Main's original player-intelligence regression and source syntax checks passed too.

@@ -1,5 +1,7 @@
 # SLINK audit tester build — candidate 11 (extension storage migration)
 
+26 October follow-up (Batch 12): testing-only regression/documentation updates now pass all 78 local test commands. No runtime/version change; use the same installer below. Main's quota hotfix was separately approved and published as 0.19.12; this branch still contains the unpromoted audit work. See the running changelog for the current manual test checklist. Automated checks do not replace real-device acceptance.
+
 This is an early testing build, not the Chrome Web Store release. This audit batch does not change main; the separately approved Mugging hotfix is already on main. The full audit plan is not implemented yet.
 
 - Version: **0.19.11.3**, displayed as **0.19.11 Audit Test 11**. PDA remains Candidate 10.
