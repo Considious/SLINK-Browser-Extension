@@ -1,5 +1,9 @@
 # Audit test baseline and classification
 
+## Candidate 27 — shared-provider field coverage and freshness
+
+Production provider tests on both platforms now execute concurrent consumers with different level requirements; valid stats without a level; forced newer stats followed by an older useful level; a newer partial catalog followed by older full prices; removed-ID non-resurrection; independent price/name timestamps; authoritative zero and object-keyed item IDs. Existing coalescing, credential isolation, write-failure recovery and partial-price checks remain. No UI or network transport was changed; this is not live API/device acceptance. Full inventory results are recorded in the handoff.
+
 ## Candidate 26 — main-first event hotfix follow-through
 
 Stable main received extension0.19.13 and PDA0.4.113 before tester changes. Targeted loader refusal/cache/mirror recovery and 10,000 attack mutations pass; actual Edge attack fixtures pass on both platforms. Tester retains native storage protocol2, activity grants and prior editors. Whitespace-only loader formatting (no compression/renaming) keeps the existing18KB limit; source-text extraction/checks now tolerate formatting while storage VM assertions remain unchanged. An initial full pass found seven whitespace-dependent fixtures, not seven storage failures; those were corrected and passed targeted reruns. Final combined inventory is recorded in the checkpoint. Physical PDA/event gameplay acceptance remains outstanding.

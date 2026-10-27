@@ -2,6 +2,20 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 27 — 27 October 2026 — shared stats and price freshness
+
+**Testing only:** extension0.19.13.2 /Audit Test27; PDA0.4.115 /audit-test27. Awaiting tester confirmation. Main is unchanged.
+
+A slow older reply can now fill a missing item price without replacing a newer price, rolling back an item name or bringing back an entry removed by a newer catalog. Missing prices stay distinguishable from a real zero. Shared personal stats no longer fail just because an otherwise valid reply lacks player level. Features that require level still report incomplete coverage; a retained older level keeps its real age instead of becoming falsely fresh. Different accounts remain separated. No formulas, settings keys, layout, permissions, theme assets or polling intervals changed.
+
+**Test on harmless records:**
+
+1. Open Money, Museums, Market and Abroad Stocks in turn; refresh and compare prices for the same item. A missing quote should not turn into a believable zero, and an available price should not revert when a slower response finishes.
+2. Refresh your battle stats through Mugging or Leveling, then switch between those pages and reload. Your newer authenticated stats should remain. Level-dependent features should report missing data if it cannot be established, not invent a level.
+3. Keep a settings/target draft open while another view refreshes. Text, selected page, theme and saved choices should remain unchanged. Repeat on PDA and the standalone extension dashboard.
+
+**Try to break it:** refresh two compatible modules close together, switch views before replies finish, temporarily interrupt connectivity, and reopen after recovery. Report candidate/platform, the module pair and which value changed backwards; never send keys. Controlled out-of-order/partial/zero/account/write-failure cases are developer tests, not a request to edit your saved data or API responses. Physical PDA/live API acceptance is still needed.
+
 ## Candidate 26 — 27 October 2026 — emergency event performance and connection recovery
 
 **Released to main FIRST:** extension0.19.13, PDA0.4.113. This tester follow-through is extension0.19.13.1 /Audit Test26 and PDA0.4.114 /audit-test26. No unrelated audit work was promoted.

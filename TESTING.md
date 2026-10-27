@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 26
+# SLINK audit tester build — candidate 27
+
+Extension0.19.13.2 /Audit Test27 and PDA0.4.115 /audit-test27 improve shared-provider partial/out-of-order response handling. No main promotion, UI redesign, setting-key migration, formula change or extra polling. Use the single TESTER-CHANGELOG.md for cross-module price/stats tests and retained earlier checks.
 
 Extension0.19.13.1 /Audit Test26 carries main's emergency attack-mutation and chat-context filtering while preserving tester lifecycle/storage/editor work. PDA0.4.114 carries refused-source recovery and immutable cache-first loading. Main received the isolated fix first as extension0.19.13 /PDA0.4.113. Use the single cumulative TESTER-CHANGELOG.md.
 
