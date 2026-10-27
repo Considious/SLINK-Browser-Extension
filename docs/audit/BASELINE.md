@@ -1,5 +1,11 @@
 # Audit test baseline and classification
 
+## Candidate 17 — Company preference autosave, 26 October 2026
+
+All 81/81 local commands pass. Existing company.test.mjs now executes the actual module controller with a bounded DOM/helper stub to isolate the own-ID field allowlist, settings-only acknowledgement, late-refresh generation fencing, stable editor mounting, retry indicator, real director-role loss and stopped-action policy. settings-queue.test.mjs executes the actual Company service/core with concurrent disjoint writes, rejection/recovery, normalized values, unknown-field retention and unchanged runtime. Its deliberately absent network/permission dependencies prove preference acknowledgement does not need a status/API refresh. Shared helper behavior remains covered by the existing Bounties/form-state tests.
+
+Local qa-company-autosave.cjs additionally executes actual Company module/core/shared helper in real Edge at 360px Shadow DOM overlay and 1000px dashboard with production module styles. Passed initial no-write/width-fit, numeric debounce, blank/no-op values, normalized/out-of-order replies, failure/retry, stable actual input identities during delayed refresh, committed-model no-op after stale response, cleanup flush and director-only control removal. All requests intercepted, synthetic values, isolated temporary browser. Not physical PDA or a real authenticated company acceptance test. Extension-only adoption: normal cleanup flush and abrupt-termination limitations follow AUTOSAVE.md; no claim of native PDA transactions or universal autosave.
+
 ## Candidate 16 — shared autosave/Bounties adoption, 26 October 2026
 
 All **81/81** existing commands pass with expanded assertions (not a new script-count increase). Core form-state exports a reusable allowlisted autosave controller: immediate toggles/selects, 600ms text/number debounce, blur/explicit flush, validated acknowledgements, per-field ordering/tickets, duplicate pending-value coalescing, status/retry, idempotent cleanup, best-effort page-hide flush and retained local-draft recovery on actual form mounts. Undefined/null model values do not cause startup default writes; blank/incomplete numbers do not become zero. Credentials/terms/actions are excluded by consumer allowlists. See AUTOSAVE.md for contract and limits.

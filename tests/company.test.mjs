@@ -64,3 +64,41 @@ assert.equal(company.normalizeSettings({ addictionThreshold:0, directorThreshold
 assert.equal(company.normalizeSettings({ addictionThreshold:0, directorThreshold:999, refreshMinutes:1 }).refreshMinutes, 5);
 
 console.log('company tests passed');
+
+// Execute the real module controller. The reusable autosave/DOM layer has its
+// own executable regression; this isolates Company response and layout policy.
+const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};};
+const elements=new Map();let editorWrites=0,mounts=0,stopCalls=0,options,definition,click,delayed=null;
+for(const key of ['overview','editor','director','notice','save-state','retry'])elements.set(`[data-company-${key}]`,{innerHTML:'',textContent:'',hidden:false});
+const editor=elements.get('[data-company-editor]');let editorHtml='';
+Object.defineProperty(editor,'innerHTML',{get:()=>editorHtml,set:value=>{editorHtml=value;editorWrites++;}});
+const root={innerHTML:'',querySelector:selector=>elements.get(selector),querySelectorAll:()=>[]};
+let confirmed={...company.DEFAULT_SETTINGS};let isDirector=true;
+const response=()=>({settings:{...confirmed},snapshot:{company:{id:99,name:'Synthetic'},director:isDirector,self:null,employees:[]},fetchedAt:Date.now()});
+const sent=[];
+const moduleApi={core:{company,format:{errorMessage:error=>error.message},formState:{autosave:config=>{options=config;return {busy:false,mount(){mounts++;},retry:async()=>{},stop:async()=>{stopCalls++;}};}},messaging:{async send(type,payload){
+ sent.push({type,payload});
+ if(type==='company.settings.save'){confirmed=company.normalizeSettings({...confirmed,...payload.settings});return {settings:{...confirmed}};}
+ if(delayed)return delayed.promise;
+ return response();
+}}},modules:{register:value=>{definition=value;}}};
+vm.runInNewContext(fs.readFileSync(new URL('../src/modules/company.js',import.meta.url),'utf8'),{SLINK_EXTENSION:moduleApi,console});
+const lifecycle=await definition.start({presentation:'dashboard',signal:{aborted:false},ui:{getContentElement:()=>root,setModuleStyles(){},setStatus(){}},listen:(node,type,fn)=>{click=fn;}});
+assert.equal(mounts,1);assert.equal(editorWrites,1);assert.match(editorHtml,/company-director-threshold/);assert.doesNotMatch(editorHtml,/Save alerts/);
+assert.deepEqual(Object.values(options.fields),['addictionThreshold','directorThreshold']);
+const beforeRefresh=response();delayed=deferred();
+await click({target:{closest:selector=>selector==='[data-company-refresh]'?{}:null}});
+const acknowledged=await options.save({addictionThreshold:25});
+options.onCommit({addictionThreshold:acknowledged.settings.addictionThreshold});
+delayed.resolve(beforeRefresh);delayed=null;await new Promise(resolve=>setImmediate(resolve));
+assert.equal(options.read('addictionThreshold'),25,'Late full refresh cannot undo confirmed preference settings');
+assert.equal(editorWrites,1,'Same-company refresh must not rebuild settings controls');
+assert.equal(mounts,1);assert.equal(options.select(acknowledged).addictionThreshold,25);
+options.onState({state:'failed'});assert.equal(elements.get('[data-company-retry]').hidden,false);
+options.onState({state:'saved'});assert.equal(elements.get('[data-company-retry]').hidden,true);
+isDirector=false;await click({target:{closest:selector=>selector==='[data-company-refresh]'?{}:null}});await new Promise(resolve=>setImmediate(resolve));
+assert.doesNotMatch(editorHtml,/company-director-threshold/);assert.equal(elements.get('[data-company-director]').innerHTML,'');
+assert.equal(editorWrites,2,'A genuine director-role change remounts only the editor layout');
+await lifecycle.stop();assert.equal(stopCalls,1);
+const afterStop=sent.length;await click({target:{closest:()=>({})}});assert.equal(sent.length,afterStop);
+console.log('Company module: allowlisted autosave, acknowledged response fencing, stable layout, retry status, director loss and stopped actions passed.');

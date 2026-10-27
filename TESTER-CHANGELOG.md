@@ -2,6 +2,16 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 17 — 26 October 2026 — Company alert thresholds save as you type
+
+**Extension tester only:** Company now saves your personal addiction-alert thresholds automatically. There is no Save alerts button. Typing is collected briefly before saving; leaving the field saves immediately. A small message confirms Saving/Saved, flags an unfinished number, or offers Retry after a failure. Director employee thresholds remain director-only.
+
+**Try this:** open Quality of Life → Company, change your threshold, wait for Saved, then switch modules and reopen. Change it again while pressing Refresh: the input should keep its value/focus instead of being rebuilt. Clear the number temporarily: it must not silently become zero. If you are a director, edit both thresholds quickly and confirm both survive reopening. Ordinary employees must not see the employee/director section. Refresh, profile links, Copy reminder/Fill chat and Send chat remain deliberate actions; changing a threshold must never send a message or refresh the roster.
+
+**Verification:** all 81 local extension/PDA commands pass, including expanded real Company controller and background mutation-owner regressions. Isolated real-browser checks passed at 360px Shadow DOM and 1000px dashboard using production module styles and synthetic replies: debounce/write count, blank numbers, newer/out-of-order responses, failed-save retry, actual input-node identity during refresh, stale-response fencing, cleanup flush and director visibility loss. Existing settings and unknown stored fields are preserved; no keys, targets, cloud recovery or storage-key migration.
+
+**Limits:** this batch does not change native PDA runtime/storage behavior, other editors, shared company policy, job-point API/formulas or company alert delivery. Physical-device/authenticated acceptance remains necessary. Normal cleanup flushes valid drafts; abrupt browser/process death before acknowledgement cannot guarantee unsubmitted typing. Main, workers and theme assets are unchanged.
+
 ## Candidate 16 — 26 October 2026 — Bounties personal settings autosave
 
 Extension tester **0.19.11.7 / Audit Test 16**, testing branch only. Main, PDA, workers and theme assets are unchanged. PDA remains 0.4.109 / Audit Test 10. This is the first consumer of the new shared autosave helper, not a claim that all settings throughout SLINK have been converted.

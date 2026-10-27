@@ -8,15 +8,21 @@
     runtime:'company.runtime.v1'
   });
   let refreshing = null;
+  let settingsQueue = Promise.resolve();
 
   async function settings() {
     return COMPANY.normalizeSettings(await SLINK.core.storage.get(KEYS.settings, {}));
   }
 
   async function saveSettings(value = {}) {
-    const next = COMPANY.normalizeSettings({ ...(await settings()), ...(value || {}) });
-    await SLINK.core.storage.set(KEYS.settings, next);
-    return publicStatus(false);
+    const operation = settingsQueue.catch(() => {}).then(async () => {
+      const previous = await SLINK.core.storage.get(KEYS.settings, {});
+      const next = { ...previous, ...COMPANY.normalizeSettings({ ...previous, ...(value || {}) }) };
+      await SLINK.core.storage.set(KEYS.settings, next);
+      return { settings:COMPANY.normalizeSettings(next) };
+    });
+    settingsQueue = operation;
+    return operation;
   }
 
   async function runtime() {

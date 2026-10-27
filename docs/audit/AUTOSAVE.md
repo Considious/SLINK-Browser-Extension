@@ -1,6 +1,8 @@
 # Shared preference autosave contract
 
-Candidate 16 introduces `SLINK.core.formState.autosave`. Bounties is the first consumer. This is an extension UI helper, not a native PDA transaction layer, cloud restore mechanism, replacement storage owner or permission bypass.
+Candidate 16 introduces `SLINK.core.formState.autosave`. Bounties is the first consumer; Candidate 17 adopts it for Company personal addiction-alert thresholds. This is an extension UI helper, not a native PDA transaction layer, cloud restore mechanism, replacement storage owner or permission bypass.
+
+Company's settings owner serializes read/merge/write operations, preserves unknown stored fields and returns only normalized settings after storage completion. It never refreshes the company/roster as a side effect of saving a preference. The UI submits one changed threshold, keeps its editor mounted across same-company/role refreshes and fences older full-status settings without freezing actual company or director-role updates. Director-only employee threshold visibility and explicit Refresh/chat actions remain unchanged. These are personal reminder thresholds, not shared company policy. Cleanup awaits the helper; page-hide/abrupt termination limitations below still apply.
 
 ```js
 const controller = SLINK.core.formState.autosave({
