@@ -4,6 +4,12 @@
   const SLINK = global.SLINK_EXTENSION;
   const ACTIVE_HEARTBEAT_MS = 60_000;
   const editorViews = new WeakMap();
+  const AUTO_FIELDS = Object.freeze({
+    'bounty-enabled':'enabled','bounty-minimum':'minimumReward','bounty-full-list':'scanFullList',
+    'bounty-min-ff':'minFF','bounty-max-ff':'maxFF','bounty-max-bs':'maxBattleStats',
+    'bounty-status-filter':'statusFilter','bounty-unknown':'includeUnknownEstimates','bounty-abroad':'includeAbroad',
+    'bounty-torn-rate':'tornCallsPerMinute','bounty-ff-rate':'ffBatchesPerMinute'
+  });
   const BOUNTY_PROFILE_INTENT_KEY = 'slink-extension:bounty-profile-intent:v1';
   const BOUNTY_PROFILE_INTENT_MS = 5 * 60_000;
   const MODULE_STYLES = `
@@ -87,6 +93,12 @@
       let heartbeatTimer = null;
       let countdownTimer = null;
       let visibilityObserver = null;
+      let autoSave = null;
+      let responseSequence = 0, appliedResponse = 0;
+      let mountedSettings = null, actionState = '', renderedResults = '';
+      let resumeAfterSave = false, restarting = false;
+      let scanDeferred = false;
+      let previewPending=false,previewTimer=null;
 
       context.ui.setTitle('SLINK Bounties');
       context.ui.setModuleStyles(MODULE_STYLES);
@@ -102,8 +114,70 @@
         const revision = settingsRevision;
         const value = await SLINK.core.messaging.send(type, payload);
         if (stopped || context.signal?.aborted) return;
-        current = revision === settingsRevision || !current
-          ? value : { ...value, settings:current.settings };
+        current = revision === settingsRevision || !current ? value : {
+          ...value, settings:current.settings,
+          runtime:{...value.runtime,candidates:current.runtime?.candidates||[],candidateCount:current.runtime?.candidateCount||0}
+        };
+        if(revision===settingsRevision&&value.runtime){previewPending=false;clearTimeout(previewTimer);previewTimer=null;}
+      }
+
+      async function savePatch(patch, deferScanRestart = true) {
+        const sequence = ++responseSequence;
+        settingsRevision++;
+        try { return { sequence, status:await SLINK.core.messaging.send('bounties.settings.save', {...patch,...(deferScanRestart ? {deferScanRestart:true} : {})}) }; }
+        finally { settingsRevision++; }
+      }
+
+      function adoptSaved(patch, response) {
+        if (stopped || context.signal?.aborted) return;
+        current = {...current,settings:{...current.settings,...patch}};
+        if (response.sequence >= appliedResponse) {
+          appliedResponse = response.sequence;
+          current = {...current,...(response.status.runtime?{runtime:response.status.runtime}:{}),configured:response.status.configured};
+          if(response.status.runtime){previewPending=false;clearTimeout(previewTimer);previewTimer=null;}
+          else previewPending=true;
+        }
+        if (Object.hasOwn(patch,'enabled')) resumeAfterSave = true;
+        render();
+      }
+
+      function autosaveState() {
+        if (stopped || context.signal?.aborted || !autoSave) return;
+        const status = autoSave.state();
+        const node = contentRoot.querySelector('#bounty-autosave-state');
+        const message=status.state === 'saving' ? 'Saving…' : status.state === 'failed' ? `Save failed: ${status.error}` : status.state === 'invalid' ? 'Not saved — enter a valid number.' : status.state === 'saved' ? 'Saved' : 'Settings save automatically';
+        if (node&&node.textContent!==message) node.textContent=message;
+        const retry = contentRoot.querySelector('#bounty-retry');
+        if (retry) retry.hidden = status.state !== 'failed';
+        if (!status.pending && resumeAfterSave) { resumeAfterSave=false;syncActivity(); }
+        else if (!status.pending && scanDeferred && !savingSettings) {scanDeferred=false;scheduleScan(1000);}
+        if(!status.pending&&previewPending&&!previewTimer&&moduleVisible()){
+          previewTimer=setTimeout(()=>{
+            previewTimer=null;
+            if(stopped||context.signal?.aborted||autoSave.busy)return;
+            previewPending=false;
+            void loadStatus('bounties.status').then(render).catch(error=>{localError=SLINK.core.format.errorMessage(error);render();});
+          },250);
+        }
+      }
+
+      async function toggleSettings() {
+        if (settingsOpen) {
+          try { await autoSave.flush(); }
+          catch (error) { localError=SLINK.core.format.errorMessage(error);render();return; }
+          for (const id of ['bounty-torn-key','bounty-ff-key']) {
+            const control = contentRoot.querySelector('#'+id);if (control) draftGuard?.cancel(control);
+          }
+        }
+        settingsOpen=!settingsOpen;localNotice='';render();
+      }
+
+      async function refreshWithSettings() {
+        if (busy || savingSettings || restarting) return;
+        restarting=true;render();
+        try {await autoSave.flush();await runScan(true);}
+        catch(error){localError=SLINK.core.format.errorMessage(error);}
+        finally{restarting=false;render();}
       }
 
       function moduleVisible() {
@@ -130,9 +204,10 @@
           <label class="wide bounty-check"><input id="bounty-full-list" type="checkbox" ${settings.scanFullList ? 'checked' : ''}><span>Scan the full list for bounty merits instead of stopping below the minimum</span></label>
           <label class="wide bounty-check"><input id="bounty-unknown" type="checkbox" ${settings.includeUnknownEstimates ? 'checked' : ''}><span>Show targets without FFScouter estimates</span></label>
           <label class="wide bounty-check"><input id="bounty-abroad" type="checkbox" ${settings.includeAbroad ? 'checked' : ''}><span>Show abroad, traveling, and hiding-out targets</span></label>
+          <div class="wide bounty-note"><span id="bounty-autosave-state" role="status" aria-label="Personal preference save status">Settings save automatically</span> <button id="bounty-retry" type="button" hidden>Retry save</button></div>
           <label class="wide">Torn public API key<input id="bounty-torn-key" type="password" autocomplete="off" placeholder="${settings.hasTornKey ? `Saved via ${escape(settings.tornKeySource)} — blank keeps it` : 'Required; blank uses Leveling key'}"></label>
           <label class="wide">FFScouter key<input id="bounty-ff-key" type="password" autocomplete="off" placeholder="${settings.hasFfKey ? `Saved via ${escape(settings.ffKeySource)} — blank keeps it` : 'Blank uses Leveling key'}"></label>
-          <div class="bounty-settings-actions"><button id="bounty-save" type="button" ${savingSettings ? 'disabled' : ''}>${savingSettings ? 'Saving…' : 'Save'}</button><button id="bounty-restart" type="button" ${busy || savingSettings ? 'disabled' : ''}>Restart scan</button></div>
+          <div class="bounty-settings-actions"><button id="bounty-save" type="button" ${savingSettings ? 'disabled' : ''}>${savingSettings ? 'Saving keys…' : 'Save API keys'}</button><button id="bounty-restart" type="button" ${busy || savingSettings || restarting ? 'disabled' : ''}>Restart scan</button></div>
         </div>`;
       }
 
@@ -169,30 +244,53 @@
         const runtime = current?.runtime || {};
         context.ui.setSubtitle(current?.settings?.enabled ? 'Live bounty API crawl' : 'Disabled');
         context.ui.setStatus(localError || runtime.lastError || localNotice || runtime.cycleStatus || 'Bounty Tracker ready.', localError || runtime.lastError ? 'error' : current?.configured ? 'ready' : 'normal');
+        const nextActionState = `${busy}:${settingsOpen}:${savingSettings}:${restarting}`;
+        if (actionState !== nextActionState) {
+        actionState = nextActionState;
         context.ui.setActions([
-          { id:'refresh', label:busy ? 'Working…' : 'Refresh', disabled:busy, onClick:() => runScan(true) },
-          { id:'settings', label:settingsOpen ? 'Close settings' : 'Settings', onClick:() => {
-            if (settingsOpen) draftGuard?.cancel(contentRoot.querySelector('.bounty-settings'));
-            settingsOpen = !settingsOpen; localNotice = ''; render();
-          } }
+          { id:'refresh', label:busy || restarting ? 'Working…' : 'Refresh', disabled:busy || savingSettings || restarting, onClick:refreshWithSettings },
+          { id:'settings', label:settingsOpen ? 'Close settings' : 'Settings', onClick:toggleSettings }
         ]);
+        }
+        const results = candidatesHtml(runtime.candidates || []);
+        if (mountedSettings === settingsOpen) {
+          for (const [id,value] of [['bounty-scanned',runtime.scannedRows],['bounty-total',runtime.uniqueTargets],['bounty-count',runtime.candidateCount]]) {
+            const node=contentRoot.querySelector('#'+id);const text=Number(value||0).toLocaleString();if(node&&node.textContent!==text)node.textContent=text;
+          }
+          if (results !== renderedResults) { contentRoot.querySelector('#bounty-results').innerHTML=results;renderedResults=results;bindEvents(false); }
+          updateNotes();autosaveState();updateCountdowns();return;
+        }
+        mountedSettings = settingsOpen;renderedResults=results;
         context.ui.setContentHtml(`
           <div class="bounty-summary">
-            <div class="bounty-stat"><b>${Number(runtime.scannedRows || 0).toLocaleString()}</b><span>Rows scanned</span></div>
-            <div class="bounty-stat"><b>${Number(runtime.uniqueTargets || 0).toLocaleString()}</b><span>Unique targets</span></div>
-            <div class="bounty-stat"><b>${Number(runtime.candidateCount || 0).toLocaleString()}</b><span>Matches</span></div>
+            <div class="bounty-stat"><b id="bounty-scanned">${Number(runtime.scannedRows || 0).toLocaleString()}</b><span>Rows scanned</span></div>
+            <div class="bounty-stat"><b id="bounty-total">${Number(runtime.uniqueTargets || 0).toLocaleString()}</b><span>Unique targets</span></div>
+            <div class="bounty-stat"><b id="bounty-count">${Number(runtime.candidateCount || 0).toLocaleString()}</b><span>Matches</span></div>
           </div>
-          ${!current?.settings?.enabled ? '<div class="bounty-note">Enable the tracker to begin. It runs while this tab is open and for five minutes after you leave it.</div>' : ''}
-          ${!current?.configured && current?.settings?.enabled ? '<div class="bounty-note">Add a Torn public key and FFScouter key. Existing Leveling keys are reused automatically.</div>' : ''}
-          ${(localError || runtime.lastError) ? `<div class="bounty-error">${escape(localError || runtime.lastError)}</div>` : ''}
+          <div class="bounty-note" id="bounty-disabled" hidden>Enable the tracker to begin. It runs while this tab is open and for five minutes after you leave it.</div>
+          <div class="bounty-note" id="bounty-configure" hidden>Add a Torn public key and FFScouter key. Existing Leveling keys are reused automatically.</div>
+          <div class="bounty-error" id="bounty-error" hidden></div>
           ${settingsOpen ? settingsHtml() : ''}
-          <div>${candidatesHtml(runtime.candidates || [])}</div>
+          <div id="bounty-results">${results}</div>
         `);
         bindEvents();
-        updateCountdowns();
+        updateNotes();autosaveState();updateCountdowns();
+        if(settingsOpen)autoSave?.mount();
       }
 
-      function bindEvents() {
+      function updateNotes() {
+        for (const [id,visible] of [['bounty-disabled',!current?.settings?.enabled],['bounty-configure',!current?.configured&&current?.settings?.enabled]]) {
+          const node=contentRoot.querySelector('#'+id);if(node)node.hidden=!visible;
+        }
+        const error=contentRoot.querySelector('#bounty-error');if(error){error.textContent=localError||current?.runtime?.lastError||'';error.hidden=!error.textContent;}
+        const save=contentRoot.querySelector('#bounty-save');if(save){save.disabled=savingSettings;save.textContent=savingSettings?'Saving keys…':'Save API keys';}
+        const restart=contentRoot.querySelector('#bounty-restart');if(restart)restart.disabled=busy||savingSettings||restarting;
+        for(const [id,has,source] of [['bounty-torn-key','hasTornKey','tornKeySource'],['bounty-ff-key','hasFfKey','ffKeySource']]){
+          const input=contentRoot.querySelector('#'+id);if(input)input.placeholder=current?.settings?.[has]?`Saved via ${current.settings[source]} — blank keeps it`:id==='bounty-torn-key'?'Required; blank uses Leveling key':'Blank uses Leveling key';
+        }
+      }
+
+      function bindEvents(bindSettings = true) {
         const root = context.ui.getContentElement();
         root.querySelectorAll('[data-bounty-profile-id]').forEach(link => {
           if(context.presentation!=='dashboard')link.addEventListener('click', () => rememberBountyProfileIntent(link.dataset.bountyProfileId));
@@ -237,45 +335,36 @@
             }
           });
         });
+        if (!bindSettings) return;
+        root.querySelector('#bounty-retry')?.addEventListener('click', () => { void autoSave.retry().catch(()=>{}); });
         root.querySelector('#bounty-save')?.addEventListener('click', async () => {
           if (savingSettings) return;
-          const ticket = draftGuard?.begin(root.querySelector('.bounty-settings'));
           const values = {
-            enabled:root.querySelector('#bounty-enabled')?.checked === true,
-            minimumReward:root.querySelector('#bounty-minimum')?.value,
-            scanFullList:root.querySelector('#bounty-full-list')?.checked === true,
-            minFF:root.querySelector('#bounty-min-ff')?.value,
-            maxFF:root.querySelector('#bounty-max-ff')?.value,
-            maxBattleStats:root.querySelector('#bounty-max-bs')?.value,
-            statusFilter:root.querySelector('#bounty-status-filter')?.value,
-            includeUnknownEstimates:root.querySelector('#bounty-unknown')?.checked === true,
-            includeAbroad:root.querySelector('#bounty-abroad')?.checked === true,
-            tornCallsPerMinute:root.querySelector('#bounty-torn-rate')?.value,
-            ffBatchesPerMinute:root.querySelector('#bounty-ff-rate')?.value,
             tornKey:root.querySelector('#bounty-torn-key')?.value || '',
             ffKey:root.querySelector('#bounty-ff-key')?.value || ''
           };
-          // Send only edited fields. A second window's unrelated settings must
-          // not be replaced by this editor's older, unchanged form values.
-          const payload = Object.fromEntries(Object.entries(values).filter(([key, value]) =>
-            key === 'tornKey' || key === 'ffKey'
-              ? String(value).trim() !== ''
-              : String(value) !== String(current?.settings?.[key])
-          ));
-          savingSettings = true; settingsRevision++; localError = ''; localNotice = ''; render();
+          const payload = Object.fromEntries(Object.entries(values).filter(([,value])=>String(value).trim()!==''));
+          if (!Object.keys(payload).length) {localNotice='No new API keys entered; saved keys were kept.';render();return;}
+          const tickets = Object.entries({'bounty-torn-key':'tornKey','bounty-ff-key':'ffKey'}).filter(([,key])=>Object.hasOwn(payload,key)).map(([id])=>({id,ticket:draftGuard?.begin(root.querySelector('#'+id))}));
+          savingSettings = true; localError = ''; localNotice = ''; render();
           try {
-            const saved = await SLINK.core.messaging.send('bounties.settings.save', payload);
-            const unchanged = ticket ? draftGuard.commit(ticket) : true;
+            const response = await savePatch(payload,false);
+            for (const {id,ticket} of tickets) {
+              const unchanged = ticket ? draftGuard.commit(ticket) : true;
+              if (unchanged&&!stopped&&!context.signal?.aborted) {const input=root.querySelector('#'+id);if(input)input.value='';}
+            }
             if (stopped || context.signal?.aborted) return;
-            current = saved;
-            localNotice = unchanged ? 'Settings saved.' : 'Settings saved. Newer edits are still unsaved.';
+            const metadata=Object.fromEntries(['hasTornKey','hasFfKey','tornKeySource','ffKeySource'].map(key=>[key,response.status.settings[key]]));
+            adoptSaved(metadata,response);localNotice='API keys saved.';
           } catch (error) { localError = SLINK.core.format.errorMessage(error); }
-          finally { settingsRevision++; savingSettings = false; render(); if (!stopped && !context.signal?.aborted) syncActivity(); }
+          finally { savingSettings = false;render();if(scanDeferred&&!autoSave.busy&&!stopped){scanDeferred=false;scheduleScan(1000);} }
         });
         root.querySelector('#bounty-restart')?.addEventListener('click', async () => {
-          if (busy || savingSettings) return;
-          try { await loadStatus('bounties.scan.reset'); render(); void runScan(true); }
+          if (busy || savingSettings || restarting) return;
+          restarting=true;
+          try { await autoSave.flush();await loadStatus('bounties.scan.reset');render();await runScan(true); }
           catch (error) { localError = SLINK.core.format.errorMessage(error); render(); }
+          finally {restarting=false;render();}
         });
       }
 
@@ -313,8 +402,10 @@
       }
 
       async function runScan(force) {
-        if (busy || savingSettings || stopped || context.signal?.aborted || !current?.settings?.enabled) return;
+        if (busy || stopped || context.signal?.aborted || !current?.settings?.enabled) return;
+        if (savingSettings || autoSave?.busy) {scanDeferred=true;return;}
         if (force && moduleVisible()) await touch();
+        if (stopped || context.signal?.aborted) return;
         if (!current?.active && !moduleVisible()) return;
         busy = true; localError = ''; render();
         try { await loadStatus('bounties.scan.batch', { forceRestart:force === true && current?.runtime?.completed === true }); }
@@ -329,6 +420,10 @@
         }
       }
 
+      autoSave = SLINK.core.formState.autosave({
+        root:contentRoot,fields:AUTO_FIELDS,read:key=>current?.settings?.[key],save:patch=>savePatch(patch),
+        select:response=>response.status.settings,onCommit:adoptSaved,onState:autosaveState
+      });
       await refreshStatus();
       const view = context.ui.getContentElement()?.closest('.module-view');
       if (view) {
@@ -339,12 +434,14 @@
       syncActivity();
 
       return Object.freeze({
-        stop() {
+        async stop() {
           stopped = true;
           clearTimeout(scanTimer);
           clearInterval(heartbeatTimer);
           clearInterval(countdownTimer);
+          clearTimeout(previewTimer);
           visibilityObserver?.disconnect();
+          await autoSave.stop();
         }
       });
     }

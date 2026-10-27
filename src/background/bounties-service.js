@@ -275,13 +275,19 @@
       await SLINK.core.storage.set(KEYS.settings, { ...stored, ...next });
       const scanShapeChanged = ['minimumReward', 'scanFullList']
         .some(key => JSON.stringify(next[key]) !== JSON.stringify(previous[key]));
-      if (!next.enabled || scanShapeChanged) await SLINK.core.storage.set(KEYS.runtime, next.enabled ? freshStart() : defaultRuntime());
+      if ((!next.enabled && (input.deferScanRestart !== true || previous.enabled)) || (scanShapeChanged && input.deferScanRestart !== true)) await SLINK.core.storage.set(KEYS.runtime, next.enabled ? freshStart() : defaultRuntime());
       if (next.enabled) await SLINK.core.storage.set(KEYS.activity, Date.now());
     });
     settingsQueue = task.catch(() => undefined);
     // Public presentation can require legacy-cache migration. Do not hold the
     // settings mutation queue on that unrelated work.
-    return task.then(() => publicStatus());
+    return task.then(async () => {
+      if (input.deferScanRestart !== true) return publicStatus();
+      // Preference writes acknowledge without reading the full player cache or
+      // rebuilding results. The UI coalesces that local read after editing.
+      const currentSettings=await settings(),keys=await credentials(currentSettings);
+      return {configured:Boolean(keys.tornKey&&(keys.ffKey||currentSettings.includeUnknownEstimates)),settings:publicSettings(currentSettings,keys)};
+    });
   }
 
   async function sharedStatuses() {
@@ -337,6 +343,10 @@
     return publicStatus();
   }
 
+  function publicSettings(currentSettings, keys) {
+    return {...currentSettings,tornKey:undefined,ffKey:undefined,hasTornKey:Boolean(keys.tornKey),hasFfKey:Boolean(keys.ffKey),tornKeySource:keys.tornSource,ffKeySource:keys.ffSource};
+  }
+
   async function publicStatus() {
     const [currentSettings, currentRuntime, fairFight, statuses, lastInteractionAt] = await Promise.all([
       settings(), runtime(), SLINK.core.storage.get(KEYS.fairFight, {}),
@@ -347,15 +357,7 @@
     return {
       configured:Boolean(keys.tornKey && (keys.ffKey || currentSettings.includeUnknownEstimates)),
       active:active(lastInteractionAt),
-      settings:{
-        ...currentSettings,
-        tornKey:undefined,
-        ffKey:undefined,
-        hasTornKey:Boolean(keys.tornKey),
-        hasFfKey:Boolean(keys.ffKey),
-        tornKeySource:keys.tornSource,
-        ffKeySource:keys.ffSource
-      },
+      settings:publicSettings(currentSettings,keys),
       runtime:{
         ...currentRuntime,
         targets:undefined,

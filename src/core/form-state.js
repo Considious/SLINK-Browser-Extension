@@ -280,6 +280,143 @@
     return api;
   }
 
-  SLINK.define('core', 'formState', Object.freeze({ protect, controlIdentity }));
+  function autosave({ root, fields, read, save, select = value => value, onCommit = () => {}, onState = () => {}, delay = 600 }) {
+    if (!root?.addEventListener || typeof read !== 'function' || typeof save !== 'function') throw new TypeError('Autosave needs a root, current-value reader and save function.');
+    const guard = protect(root.getRootNode?.() || root);
+    const dirty = new Map(), timers = new Map(), errors = new Map(), applied = new Map();
+    const requests = new Set();
+    let sequence = 0, revision = 0, stopped = false, saved = false;
+    let stopPromise = null;
+    const controlFor = id => root.querySelector('#'+cssEscape(id));
+    const same = (a,b) => String(a) === String(b);
+    const state = () => ({
+      state:timers.size || requests.size ? 'saving' : [...dirty.values()].some(row => !row.valid) ? 'invalid' : errors.size ? 'failed' : dirty.size ? 'unsaved' : saved ? 'saved' : 'idle',
+      pending:timers.size + requests.size,
+      error:[...errors.values()].at(-1)?.error || ''
+    });
+    const emit = () => { if (!stopped) onState(state()); };
+    function remember(control) {
+      if (!Object.hasOwn(fields,control?.id)) return null;
+      const key = fields[control?.id];
+      if (!key || !root.contains(control) || !control.matches?.('input, textarea, select')) return null;
+      const value = control.type === 'checkbox' ? control.checked : control.value;
+      const valid = control.type !== 'number' || (String(value).trim() !== '' && Number.isFinite(Number(value)));
+      const previous = dirty.get(control.id);
+      const row = previous && same(previous.value,value) && previous.valid === valid ? previous : { value, valid, revision:++revision };
+      dirty.set(control.id,row);
+      return row;
+    }
+    function clearTimer(id) { if (timers.has(id)) global.clearTimeout(timers.get(id)); timers.delete(id); }
+    function submit(id) {
+      clearTimer(id);
+      const row = dirty.get(id), control = controlFor(id), key = fields[id];
+      if (!row) return Promise.resolve();
+      if (!row.valid) { emit(); return Promise.reject(new Error('Enter a valid number before continuing.')); }
+      const ticket = control ? guard?.begin(control) : null;
+      const active = [...requests].filter(request => request.id === id);
+      const duplicate = [...active].reverse().find(request => same(request.value,row.value));
+      if (duplicate && duplicate === active.at(-1)) {
+        if (ticket) duplicate.tickets.push(ticket);
+        duplicate.revision = row.revision;
+        return duplicate.promise;
+      }
+      if (!active.length && same(row.value,read(key))) {
+        if (ticket) guard.commit(ticket);
+        dirty.delete(id);errors.delete(id);saved=true;emit();return Promise.resolve();
+      }
+      const request = { id, key, value:row.value, revision:row.revision, sequence:++sequence, tickets:ticket ? [ticket] : [] };
+      requests.add(request);
+      request.promise = (async () => {
+        try {
+          const response = await save({ [key]:row.value });
+          const values = select(response);
+          if (!values || !Object.hasOwn(values,key)) throw new Error('Settings save was not acknowledged.');
+          const acknowledged = values[key];
+          if (acknowledged === undefined || (control?.type === 'checkbox' && typeof acknowledged !== 'boolean')
+            || (control?.type === 'number' && (acknowledged === null || String(acknowledged).trim()==='' || !Number.isFinite(Number(acknowledged))))) throw new Error('Settings save returned an invalid value.');
+          let unchanged = !guard;
+          for (const captured of request.tickets) if (guard.commit(captured)) unchanged = true;
+          if (request.sequence >= (applied.get(id) || 0)) {
+            applied.set(id,request.sequence);
+            if (!stopped) onCommit({ [key]:values[key] },response);
+            if (!stopped && unchanged) {
+              const current = controlFor(id);
+              if (current?.type === 'checkbox') current.checked = values[key] === true;
+              else if (current && current.value !== String(values[key] ?? '')) current.value = String(values[key] ?? '');
+            }
+          }
+          if (dirty.get(id)?.revision === request.revision) dirty.delete(id);
+          if ((errors.get(id)?.sequence || 0) <= request.sequence) errors.delete(id);
+          saved=true;
+        } catch (error) {
+          if (request.sequence >= (applied.get(id) || 0)) errors.set(id,{sequence:request.sequence,error:String(error?.message || error)});
+          throw error;
+        } finally { requests.delete(request);emit(); }
+      })();
+      emit();
+      return request.promise;
+    }
+    function onInput(event) {
+      if (stopped || !Object.hasOwn(fields,event.target?.id) || event.target.type === 'checkbox' || event.target.tagName === 'SELECT') return;
+      const row = remember(event.target);if (!row) return;
+      clearTimer(event.target.id);
+      if (row.valid) {
+        const id = event.target.id;
+        timers.set(id,global.setTimeout(() => { timers.delete(id);void submit(id).catch(() => {}); },delay));
+      }
+      emit();
+    }
+    function onChange(event) {
+      if (stopped || !remember(event.target)) return;
+      void submit(event.target.id).catch(() => {});
+    }
+    function onBlur(event) {
+      if (stopped || !Object.hasOwn(fields,event.target?.id) || !dirty.has(event.target.id)) return;
+      void submit(event.target.id).catch(() => {});
+    }
+    async function flush() {
+      const writes = [...dirty.keys()].map(id => submit(id));
+      const results = await Promise.allSettled([...writes,...[...requests].map(request => request.promise)]);
+      const failed = results.find(result => result.status === 'rejected');
+      if (failed) throw failed.reason;
+      if (errors.size) throw new Error(state().error);
+    }
+    const onPageHide = () => { void flush().catch(() => {}); };
+    root.addEventListener('input',onInput);
+    root.addEventListener('change',onChange);
+    root.addEventListener('focusout',onBlur);
+    global.addEventListener?.('pagehide',onPageHide);
+    return Object.freeze({
+      flush, retry:flush, state,
+      mount() {
+        // Let the existing form guard restore retained local drafts first.
+        // This is not cloud recovery and never touches unregistered controls.
+        queueMicrotask(() => queueMicrotask(() => {
+          if (stopped) return;
+          for (const id of Object.keys(fields)) {
+            const control=controlFor(id);if(!control)continue;
+            const value=control.type==='checkbox'?control.checked:control.value;
+            const model=read(fields[id]);
+            if (model===undefined||model===null||same(value,model)) continue;
+            if (control.type==='checkbox'||control.tagName==='SELECT') onChange({target:control});
+            else onInput({target:control});
+          }
+        }));
+      },
+      get busy() { return timers.size > 0 || requests.size > 0; },
+      stop() {
+        if (stopPromise) return stopPromise;
+        const completion = flush();
+        stopped=true;
+        root.removeEventListener('input',onInput);root.removeEventListener('change',onChange);root.removeEventListener('focusout',onBlur);
+        global.removeEventListener?.('pagehide',onPageHide);
+        for (const id of [...timers.keys()]) clearTimer(id);
+        stopPromise = completion.catch(() => {});
+        return stopPromise;
+      }
+    });
+  }
+
+  SLINK.define('core', 'formState', Object.freeze({ protect, controlIdentity, autosave }));
 })(globalThis);
 
