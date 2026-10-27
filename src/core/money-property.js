@@ -132,13 +132,15 @@ function bankComparison(input, amount) {
 
   function normalizeSettings(value = {}) {
     const stockAlerts = value.stockAlerts && typeof value.stockAlerts === 'object' ? { ...value.stockAlerts } : {};
+    const number = (input, maximum, fallback) => input === null || input === undefined || String(input).trim() === '' || !Number.isFinite(Number(input))
+      ? fallback : Math.min(maximum, Math.max(0, Number(input)));
     return {
       enabled:value.enabled !== false,
       bankAmount:Math.min(BANK_AMOUNT_LIMIT,Math.max(0,Number(value.bankAmount ?? BANK_AMOUNT_LIMIT)||0)),
-      bankLeadHours:Math.min(168, Math.max(0, Number(value.bankLeadHours) || 2)),
-      rentalLeadDays:Math.min(30, Math.max(0, Number(value.rentalLeadDays) || 3)),
-      cashierLeadHours:Math.min(168, Math.max(0, Number(value.cashierLeadHours) || 24)),
-      upkeepThreshold:Math.max(0, Math.trunc(Number(value.upkeepThreshold) || 1_000_000)),
+      bankLeadHours:number(value.bankLeadHours, 168, 2),
+      rentalLeadDays:number(value.rentalLeadDays, 30, 3),
+      cashierLeadHours:number(value.cashierLeadHours, 168, 24),
+      upkeepThreshold:Math.trunc(number(value.upkeepThreshold, Infinity, 1_000_000)),
       loanReminder:value.loanReminder !== false,
       soundEnabled:value.soundEnabled === true,
       stockAlerts

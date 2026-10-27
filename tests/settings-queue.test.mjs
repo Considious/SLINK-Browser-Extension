@@ -136,4 +136,45 @@ await automatic;
 saved=records.get('abroadStocks.settings.v1');
 assert.equal(saved.travelMethod,'business','A delayed property response must not replace the manually selected travel method');
 assert.equal(saved.travelMethodExplicit,true);assert.equal(saved.travelDefault,'airstrip');assert.equal(saved.arrivalBufferMinutes,0);
-console.log('Settings queues: disjoint edits, failed writes/recovery, retained data, lean acknowledgements and delayed property/manual-choice isolation passed.');
+vm.runInContext(read('src/core/money-property.js'),context);
+vm.runInContext(read('src/background/money-property-service.js'),context);
+api.services.permissionAccess.ensureSession=async()=>({userId:1});
+api.core.permissions={hasScope:()=>true};
+const finance=api.services.moneyProperty.routes;
+const financeKey='money-property.settings.v1';
+records.set(financeKey,{bankAmount:1000000,bankLeadHours:2,rentalLeadDays:3,cashierLeadHours:24,upkeepThreshold:1000000,stockAlerts:{old:true},snoozedUntil:{'money-property:old':123},futureOption:'keep'});
+records.set('money-property.runtime.v2',{status:null,fetchedAt:42});
+const oldFinanceRuntime=structuredClone(records.get('money-property.runtime.v2'));
+await Promise.all([
+ finance['money-property.settings.save']({bankAmount:123456789,bankLeadHours:0}),
+ finance['money-property.stock-alert']({key:'one',enabled:true}),
+ finance['money-property.stock-alert']({key:'two',enabled:true}),
+ finance['money-property.snooze']({id:'money-property:bank',durationMs:300000})
+]);
+saved=records.get(financeKey);
+assert.equal(saved.bankAmount,123456789);assert.equal(saved.bankLeadHours,0);
+assert.deepEqual(saved.stockAlerts,{old:true,one:true,two:true});
+assert.equal(saved.snoozedUntil['money-property:old'],123);assert(saved.snoozedUntil['money-property:bank']>Date.now());assert.equal(saved.futureOption,'keep');
+assert.deepEqual(records.get('money-property.runtime.v2'),oldFinanceRuntime,'Preference saves must not rewrite the financial snapshot');
+const financeAck=await finance['money-property.settings.save']({rentalLeadDays:0,cashierLeadHours:0,upkeepThreshold:0,stockAlerts:{three:true}});
+assert.equal(financeAck.settings.rentalLeadDays,0);assert.equal(financeAck.settings.cashierLeadHours,0);assert.equal(financeAck.settings.upkeepThreshold,0);
+assert.equal(financeAck.settings.stockAlerts.one,true);assert.equal(financeAck.settings.stockAlerts.three,true);
+assert.deepEqual(Object.keys(financeAck),['settings']);
+fail=true;await assert.rejects(()=>finance['money-property.settings.save']({bankAmount:5}),/injected storage failure/);
+await finance['money-property.stock-alert']({key:'two',enabled:false});assert.equal(records.get(financeKey).bankAmount,123456789);assert.equal(records.get(financeKey).stockAlerts.two,false);
+// A blocked authorization is outside the local mutation queue: snoozes still save.
+let finishAuth,startAuth;const authPending=new Promise(resolve=>{finishAuth=resolve;});const authStarted=new Promise(resolve=>{startAuth=resolve;});
+api.services.permissionAccess.ensureSession=()=>{startAuth();return authPending;};
+const blockedFinanceSave=finance['money-property.settings.save']({bankAmount:100});await authStarted;
+await finance['money-property.snooze']({id:'money-property:while-auth',durationMs:60000});
+assert(records.get(financeKey).snoozedUntil['money-property:while-auth']>Date.now());
+// Later authorization can finish earlier, but same-preference intent stays FIFO.
+api.services.permissionAccess.ensureSession=async()=>({});
+const laterFinanceSave=finance['money-property.settings.save']({bankAmount:200});
+finishAuth({});await Promise.all([blockedFinanceSave,laterFinanceSave]);assert.equal(records.get(financeKey).bankAmount,200);
+api.services.permissionAccess.ensureSession=async()=>{throw Error('injected permission denial');};
+await assert.rejects(()=>finance['money-property.stock-alert']({key:'denied',enabled:true}),/permission denial/);
+assert.equal(records.get(financeKey).stockAlerts.denied,undefined);
+api.services.permissionAccess.ensureSession=async()=>({});
+await finance['money-property.settings.save']({bankAmount:3000000000});assert.equal(records.get(financeKey).bankAmount,2000000000);
+console.log('Settings queues: concurrent preferences/stock/snoozes, failure recovery, data retention, normalization, permission FIFO and unblocked local snoozes passed.');

@@ -86,3 +86,33 @@ const refreshed=await service.refresh(false);
 assert.equal(money.bankComparison(refreshed.status.bankPlanner,2e9).rows.length,5);
 assert.ok(!requests.some(url=>url.includes('/torn/bank')),'The extension must reuse bank rates within one hour.');
 console.log('money and property tests passed');
+
+for(const key of ['bankLeadHours','rentalLeadDays','cashierLeadHours','upkeepThreshold']) {
+  assert.equal(money.normalizeSettings({[key]:0})[key],0,'Zero is a configured reminder threshold, not a missing default');
+}
+assert.equal(money.normalizeSettings({bankLeadHours:null}).bankLeadHours,2);
+assert.equal(money.normalizeSettings({upkeepThreshold:''}).upkeepThreshold,1000000);
+
+// Execute the real module's status controller with delayed replies, separately
+// from the real-browser tests of its mounted controls/shared autosave helper.
+const moneyModule=fs.readFileSync(new URL('../src/modules/money-property.js',import.meta.url),'utf8');
+const loadStart=moneyModule.indexOf('      async function load('),loadEnd=moneyModule.indexOf("      context.listen(root,'click'",loadStart);
+assert(loadStart>=0&&loadEnd>loadStart);
+const moneyReads=[];
+const moneyController={busy:false,stopped:false,mounted:true,notice:'',settingsRevision:0,data:{settings:{bankAmount:100}},context:{signal:{aborted:false}},autosave:{busy:false},renders:0,statusUpdates:0,previews:0,
+ root:{querySelector:()=>({disabled:false})},SLINK:{core:{messaging:{send(type,payload){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});moneyReads.push({type,payload,resolve,reject});return promise;}},format:{errorMessage:error=>error.message}}},
+ ui:{setStatus(){moneyController.statusUpdates++;}},render(){if(!moneyController.stopped)moneyController.renders++;},schedulePreview(){moneyController.previews++;}};
+vm.createContext(moneyController);vm.runInContext(moneyModule.slice(loadStart,loadEnd),moneyController);
+const oldMoneyRead=moneyController.load(false,false);await moneyController.load(true);
+assert.equal(moneyReads.length,1,'Only one Money status request runs at a time');
+assert.equal(moneyReads[0].payload.refreshIfDue,false);
+moneyController.settingsRevision=2;moneyController.data.settings.bankAmount=999;
+moneyReads[0].resolve({settings:{bankAmount:100},status:{marker:'fresh snapshot'}});await oldMoneyRead;
+assert.equal(moneyController.data.settings.bankAmount,999);assert.equal(moneyController.data.status.marker,'fresh snapshot');
+const failedRead=moneyController.load(false,false);moneyReads.at(-1).reject(Error('synthetic status failure'));await failedRead;
+assert.equal(moneyController.notice,'synthetic status failure');assert.equal(moneyController.busy,false);
+const stoppedRead=moneyController.load(true);moneyController.stopped=true;
+const oldStatusUpdates=moneyController.statusUpdates,oldRenders=moneyController.renders;
+moneyReads.at(-1).resolve({settings:{bankAmount:1}});await stoppedRead;
+assert.equal(moneyController.statusUpdates,oldStatusUpdates);assert.equal(moneyController.renders,oldRenders);
+console.log('Money controller: zero defaults, cached-only preview, late-settings fence, failed-read recovery and stopped UI isolation passed.');

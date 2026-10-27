@@ -10,6 +10,31 @@
     bank:'money-property.bank.v1'
   });
   let refreshing = null;
+  let mutationQueue = Promise.resolve();
+  let preferenceQueue = Promise.resolve();
+
+  function mutateSettings(updater) {
+    const operation = mutationQueue.catch(() => {}).then(async () => {
+      const raw = await SLINK.core.storage.get(KEYS.settings, {});
+      const previous = { ...raw, ...CORE.normalizeSettings(raw), snoozedUntil:{ ...raw?.snoozedUntil } };
+      const next = updater(previous);
+      await SLINK.core.storage.set(KEYS.settings, next);
+      return next;
+    });
+    mutationQueue = operation;
+    return operation;
+  }
+
+  function authorizedPreference(write) {
+    // Start authorization promptly, but keep its network work outside the
+    // local record mutation queue. Preference intent order stays FIFO while
+    // independent snoozes can commit during an authentication wait.
+    const authorization = Promise.resolve().then(() => SLINK.services.permissionAccess.ensureSession(false, CORE.SCOPE));
+    void authorization.catch(() => {});
+    const operation = preferenceQueue.catch(() => {}).then(() => authorization).then(write);
+    preferenceQueue = operation;
+    return operation;
+  }
 
   async function settings() {
     const stored = await SLINK.core.storage.get(KEYS.settings, {});
@@ -140,37 +165,32 @@
     };
   }
 
-  async function saveSettings(input = {}) {
-    await SLINK.services.permissionAccess.ensureSession(false, CORE.SCOPE);
-    const previous = await settings();
-    const next = {
-      ...CORE.normalizeSettings({ ...previous, ...input }),
-      snoozedUntil:previous.snoozedUntil
-    };
-    await SLINK.core.storage.set(KEYS.settings, next);
-    const current = await runtime();
-    if (current.status) {
-      current.status.settings = CORE.normalizeSettings(next);
-      await SLINK.core.storage.set(KEYS.runtime, current);
-    }
-    return publicStatus(false);
+  function saveSettings(input = {}) {
+    const patch = { ...input, ...(input.stockAlerts ? {stockAlerts:{...input.stockAlerts}} : {}) };
+    return authorizedPreference(async () => {
+      const next = await mutateSettings(previous => ({
+        ...previous,
+        ...CORE.normalizeSettings({ ...previous, ...patch, stockAlerts:{ ...previous.stockAlerts, ...patch.stockAlerts } })
+      }));
+      return {settings:CORE.normalizeSettings(next)};
+    });
   }
 
-  async function toggleStockAlert(input = {}) {
-    const previous = await settings();
+  function toggleStockAlert(input = {}) {
     const key = String(input.key || '').trim();
     if (!key) throw new Error('Choose a stock benefit tier.');
-    previous.stockAlerts[key] = input.enabled !== false;
-    await SLINK.core.storage.set(KEYS.settings, previous);
-    return publicStatus(false);
+    const enabled = input.enabled !== false;
+    return authorizedPreference(async () => {
+      await mutateSettings(previous => ({ ...previous, stockAlerts:{ ...previous.stockAlerts, [key]:enabled } }));
+      return {settings:{['stock:' + key]:enabled}};
+    });
   }
 
   async function snooze(input = {}) {
-    const previous = await settings();
     const id = String(input.id || '');
     if (!id.startsWith('money-property:')) throw new Error('Unknown Money & Property alert.');
-    previous.snoozedUntil[id] = Date.now() + Math.min(86_400_000, Math.max(60_000, Number(input.durationMs) || 3_600_000));
-    await SLINK.core.storage.set(KEYS.settings, previous);
+    const until = Date.now() + Math.min(86_400_000, Math.max(60_000, Number(input.durationMs) || 3_600_000));
+    await mutateSettings(previous => ({ ...previous, snoozedUntil:{ ...previous.snoozedUntil, [id]:until } }));
     return publicStatus(false);
   }
 
