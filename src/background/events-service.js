@@ -8,6 +8,7 @@
     settings:'events.settings.v1'
   });
   let refreshing = null;
+  let selectionQueue = Promise.resolve();
 
   async function settings() {
     const stored = await SLINK.core.storage.get(KEYS.settings, {});
@@ -89,13 +90,18 @@
     };
   }
 
-  async function saveSelection(input = {}) {
-    await SLINK.services.permissionAccess.ensureSession(false, CORE.SCOPE);
-    const current = await runtime();
+  function saveSelection(input = {}) {
     const id = String(input.id || '');
-    if (id && !current.calendar?.events?.some(event => event.id === id)) throw new Error('Choose an event from the current Torn calendar.');
-    await SLINK.core.storage.set(KEYS.settings, { selectedId:id });
-    return publicStatus(false);
+    const authorization = Promise.resolve().then(() => SLINK.services.permissionAccess.ensureSession(false, CORE.SCOPE));
+    void authorization.catch(() => {});
+    const operation = selectionQueue.catch(() => {}).then(() => authorization).then(async () => {
+      const [current, previous] = await Promise.all([runtime(), SLINK.core.storage.get(KEYS.settings, {})]);
+      if (id && !current.calendar?.events?.some(event => event.id === id)) throw new Error('Choose an event from the current Torn calendar.');
+      await SLINK.core.storage.set(KEYS.settings, { ...previous, selectedId:id });
+      return { settings:{selectedId:id}, selected:CORE.selectEvent(current.calendar || {},id) };
+    });
+    selectionQueue = operation;
+    return operation;
   }
 
   const routes = Object.freeze({

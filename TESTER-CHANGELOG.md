@@ -2,6 +2,18 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 21 — 27 October 2026 — Events choice saving without rebuilding the picker
+
+**Extension tester only:** Events already saved choices on change; it now uses the shared acknowledged save path. The picker stays enabled and mounted while saving, supports rapid changes, and shows Saving/Saved or a retained failed choice with Retry. Ordered writes preserve the last choice even when permission checks finish out of order. Other stored Events fields are no longer discarded.
+
+**Stable guide:** refreshing the calendar cannot undo a newer selection. The same event picker, Refresh button and unchanged guide links remain in place. Calendar options update by ID, with changes deferred while you are focused on the picker or a save is pending. Published events genuinely removed from the calendar use the existing fallback; failed unavailable choices remain visibly unavailable until corrected. The existing next-event fallback and year-round Halloween guide remain available—no new date gate or forced default was added.
+
+**Try this:** open Quality of Life → Events. Select Halloween outside its published season and confirm the guide, including Cat in Hell, is readable. Rapidly select different events, wait for Saved, switch modules and reopen. Keep the picker focused during updates: it should not be disabled/recreated. Refresh while changing the selection and confirm your new choice wins. If a save fails, the choice must stay visible with Retry rather than silently reverting. Check the existing default when no valid saved selection exists. No need to reset storage or change live account data.
+
+**Verification:** 81/81 local extension/PDA commands pass. Actual service tests cover scoped authorization, selection order, unknown settings, invalid IDs, rejected storage/authentication recovery, lean acknowledgement and unchanged calendar runtime. Actual status-controller tests cover duplicate reads, newer selection versus delayed calendar, fresh calendar/permission metadata, failed reads and stopped-instance isolation. Real-browser checks passed at 360px Shadow DOM and 1000px dashboard using production module styles: width fit, no initial default writes, year-round guide/next-event behavior, enabled stable picker, rapid/out-of-order choices, failure/retry, guide-link identity, stale refresh, focused option deferral, new/removed calendar entries and awaited cleanup without late redraw.
+
+**Limits:** 0.19.11.12 / Audit Test 21, testing branch only. PDA remains Candidate 18. No main, worker, theme, credentials, calendar API endpoint, Halloween upgrade order, relic guidance or basket-helper layout changes. Selection saving uses the cached calendar; existing permission-session verification can still need the access service. Tests use synthetic data, not live-account/physical-device sign-off. Remaining editors/native PDA/lifecycle/performance work and final Chat additions are still pending.
+
 ## Candidate 20 — 27 October 2026 — Money & Property autosave and independent stock alerts
 
 **Extension tester only:** the bank comparison amount, reminder thresholds/options and individual stock affordability checkboxes save automatically. Numeric typing is briefly debounced; toggles save immediately. Saved means the local write was acknowledged. Invalid/failed drafts stay visible with status/Retry, and explicit Refresh waits for valid confirmed settings.

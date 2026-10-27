@@ -94,6 +94,31 @@
       let basketSignature = '';
       let activeBasket = null;
       let helperHidden = false;
+      let mounted = false;
+      let settingsRevision = 0;
+      let actionBusy = false;
+      let saveState = {state:'idle'};
+      let guideSignature = '';
+      const patchHtml = (node,html) => { if (node && node.innerHTML !== html) node.innerHTML = html; };
+      function showSaveState() {
+        if (stopped || context.signal?.aborted || !mounted) return;
+        root.querySelector('[data-events-save-state]').textContent = ({idle:'Event choices save automatically.',saving:'Saving…',saved:'Saved.',failed:'Event choice not saved. Retry your choice.',invalid:'Choose an event before continuing.',unsaved:'Choice not saved yet.'})[saveState.state] || '';
+        root.querySelector('[data-events-retry]').hidden = saveState.state !== 'failed';
+      }
+      const autosave = SLINK.core.formState.autosave({
+        root,fields:{'events-selected-id':'selectedId'},read:() => data?.selectedId,
+        async save(patch) {
+          settingsRevision++;
+          try {return await SLINK.core.messaging.send('events.selection.save',{id:patch.selectedId});}
+          finally {settingsRevision++;}
+        },
+        select:response => response.settings,
+        onCommit:(patch,response) => {
+          data = {...data,selectedId:patch.selectedId,selected:CORE.selectEvent(data?.calendar || {},patch.selectedId) || response.selected};
+          notice = '';render();
+        },
+        onState:state => {saveState = state;showSaveState();syncOptions();}
+      });
 
       ui.setModuleStyles(`
         .slink-events{display:grid;gap:10px}.slink-event-card{min-width:0;padding:11px;border:1px solid var(--slink-border-soft);border-radius:9px;background:var(--slink-bg-control)}
@@ -117,25 +142,55 @@
       }
 
       function render() {
-        if(context.signal?.aborted)return;
         if (stopped || context.signal?.aborted) return;
         const calendar = data?.calendar;
         const selected = data?.selected;
         if (!calendar?.events?.length || !selected) {
+          mounted = false;guideSignature = '';
           root.innerHTML = `<div class="slink-events"><article class="slink-event-card"><div class="slink-event-head"><div><strong>Torn Events</strong><small>Official Torn calendar data with personal start times when available.</small></div><button type="button" data-events-refresh>${busy ? 'Checking…' : 'Refresh'}</button></div><p>${escapeHtml(data?.lastError || 'Refresh to load Torn’s current event calendar.')}</p></article></div>`;
           return;
         }
-        root.innerHTML = `<div class="slink-events">
-          <article class="slink-event-card"><div class="slink-event-head"><div><strong>Torn Events</strong><small>Updated ${relativeTime(data.fetchedAt)} · every published event plus year-round preparation guides</small></div><button type="button" data-events-refresh>${busy ? 'Checking…' : 'Refresh'}</button></div>
-            ${data.lastError ? `<p>${escapeHtml(data.lastError)}</p>` : ''}${notice ? `<p>${escapeHtml(notice)}</p>` : ''}
-            <label class="slink-event-picker">Choose event<select data-events-select>${calendar.events.map(event => `<option value="${escapeHtml(event.id)}" ${event.id === selected.id ? 'selected' : ''}>${escapeHtml(event.name)} · ${event.guideOnly ? 'guide available year-round' : escapeHtml(event.state === 'unscheduled' ? 'schedule not published' : event.state)}</option>`).join('')}</select></label>
-          </article>
-          <article class="slink-event-card"><div class="slink-event-head"><div><strong>${escapeHtml(selected.name)}</strong><small class="slink-event-status">${escapeHtml(selected.state)}${selected.personalized ? ' · personalized Torn start time' : ''}</small></div><a href="${CORE.CALENDAR_URL}">Open Torn calendar</a></div>
-            <div class="slink-event-stats"><div class="slink-event-stat"><strong>${escapeHtml(dateTime(selected.startAt))}</strong><small>Starts${selected.startAt > Date.now() ? ' · ' + escapeHtml(countdown(selected.startAt)) : ''}</small></div><div class="slink-event-stat"><strong>${escapeHtml(dateTime(selected.endAt))}</strong><small>Ends</small></div><div class="slink-event-stat"><strong>${calendar.events.filter(event => !event.guideOnly).length}</strong><small>Events currently published</small></div></div>
-            ${selected.description ? `<p>${escapeHtml(selected.description)}</p>` : ''}
-          </article>
-          ${CORE.isHalloweenEvent(selected) ? halloweenGuideCard() : '<article class="slink-event-card slink-event-progress"><strong>Event guide in progress</strong><p>Event-specific preparation and SLINK best practices will be added here without guessing at unfinished guidance.</p></article>'}
-        </div>`;
+        if (!mounted) {
+          root.innerHTML = `<div class="slink-events"><article class="slink-event-card"><div class="slink-event-head"><div><strong>Torn Events</strong><small data-events-updated></small></div><button type="button" data-events-refresh>Refresh</button></div><p data-events-notice role="status"></p><label class="slink-event-picker">Choose event<select id="events-selected-id" data-events-select>${calendar.events.map(event => `<option value="${escapeHtml(event.id)}">${escapeHtml(event.name)} · ${event.guideOnly ? 'guide available year-round' : escapeHtml(event.state === 'unscheduled' ? 'schedule not published' : event.state)}</option>`).join('')}</select></label><div role="status"><span data-events-save-state></span> <button type="button" data-events-retry hidden>Retry</button></div></article><article class="slink-event-card"><div class="slink-event-head"><div><strong data-events-title></strong><small class="slink-event-status" data-events-state></small></div><a href="${CORE.CALENDAR_URL}">Open Torn calendar</a></div><div class="slink-event-stats" data-events-stats></div><p data-events-description></p></article><div data-events-guide></div></div>`;
+          root.querySelector('[data-events-select]').value = selected.id;
+          mounted = true;autosave.mount();
+        }
+        root.querySelector('[data-events-updated]').textContent = `Updated ${relativeTime(data.fetchedAt)} · every published event plus year-round preparation guides`;
+        const message = root.querySelector('[data-events-notice]');
+        message.textContent = notice || data.lastError || '';message.hidden = !message.textContent;
+        root.querySelector('[data-events-refresh]').disabled = busy || actionBusy;
+        root.querySelector('[data-events-title]').textContent = selected.name;
+        root.querySelector('[data-events-state]').textContent = selected.state + (selected.personalized ? ' · personalized Torn start time' : '');
+        patchHtml(root.querySelector('[data-events-stats]'),`<div class="slink-event-stat"><strong>${escapeHtml(dateTime(selected.startAt))}</strong><small>Starts${selected.startAt > Date.now() ? ' · ' + escapeHtml(countdown(selected.startAt)) : ''}</small></div><div class="slink-event-stat"><strong>${escapeHtml(dateTime(selected.endAt))}</strong><small>Ends</small></div><div class="slink-event-stat"><strong>${calendar.events.filter(event => !event.guideOnly).length}</strong><small>Events currently published</small></div>`);
+        const description = root.querySelector('[data-events-description]');description.textContent = selected.description || '';description.hidden = !description.textContent;
+        const signature = CORE.isHalloweenEvent(selected) ? 'halloween' : 'in-progress';
+        if (signature !== guideSignature) {
+          patchHtml(root.querySelector('[data-events-guide]'),signature === 'halloween' ? halloweenGuideCard() : '<article class="slink-event-card slink-event-progress"><strong>Event guide in progress</strong><p>Event-specific preparation and SLINK best practices will be added here without guessing at unfinished guidance.</p></article>');
+          guideSignature = signature;
+        }
+        syncOptions();showSaveState();
+      }
+
+      function syncOptions() {
+        if (!mounted || stopped || context.signal?.aborted) return;
+        const select = root.querySelector('[data-events-select]');
+        if (root.getRootNode()?.activeElement === select || document.activeElement === select || autosave.busy) return;
+        const existing = new Map([...select.options].map(option => [option.value,option]));
+        const current = select.value;
+        const present = new Set();
+        for (const event of data.calendar.events) {
+          present.add(event.id);
+          let option = existing.get(event.id);
+          if (!option) {option = document.createElement('option');option.value = event.id;select.append(option);}
+          option.disabled = false;
+          option.textContent = event.name + ' · ' + (event.guideOnly ? 'guide available year-round' : event.state === 'unscheduled' ? 'schedule not published' : event.state);
+        }
+        for (const [id,option] of existing) if (!present.has(id)) {
+          if (id === current && saveState.state === 'failed') {option.disabled = true;option.textContent = 'Previously selected event is no longer published';}
+          else option.remove();
+        }
+        if (present.has(current)) select.value = current;
+        else if (saveState.state !== 'failed') select.value = data.selected?.id || data.selectedId || '';
       }
 
       function renderBasketOverlay(snapshot) {
@@ -196,30 +251,36 @@
       }
 
       async function load(force = false) {
-        if (busy) return;
-        busy = true; notice = ''; render();
+        if (busy || stopped || context.signal?.aborted) return;
+        busy = true;notice = '';
+        if (mounted) root.querySelector('[data-events-refresh]').disabled = true;
+        else render();
+        const revision = settingsRevision;
         try {
-          data = await SLINK.core.messaging.send(force ? 'events.refresh' : 'events.status', { refreshIfDue:true });
+          const response = await SLINK.core.messaging.send(force ? 'events.refresh' : 'events.status', { refreshIfDue:true });
+          if (stopped || context.signal?.aborted) return;
+          const preserve = (revision !== settingsRevision || autosave.busy) && data?.selected;
+          data = {...response,...(preserve ? {selectedId:data.selectedId,selected:data.selected} : {})};
           ui.setStatus(data.lastError || 'Torn event calendar ready.', data.lastError ? 'error' : 'ready');
         } catch (error) {
+          if (stopped || context.signal?.aborted) return;
           notice = SLINK.core.format.errorMessage(error);
           ui.setStatus(notice, 'error');
         } finally { busy = false; render(); }
       }
 
-      context.listen(root, 'click', event => {
-        if (event.target.closest('[data-events-refresh]')) void load(true);
+      context.listen(root, 'click', async event => {
+        if (stopped || context.signal?.aborted) return;
+        if (event.target.closest('[data-events-retry]')) {void autosave.retry().catch(() => {});return;}
+        if (!event.target.closest('[data-events-refresh]') || busy || actionBusy) return;
+        actionBusy = true;render();
+        try {await autosave.flush();if (!stopped && !context.signal?.aborted) await load(true);}
+        catch (error) {notice = SLINK.core.format.errorMessage(error);}
+        finally {actionBusy = false;render();}
       });
 
-      context.listen(root, 'change', async event => {
-        const select = event.target.closest('[data-events-select]');
-        if (!select) return;
-        select.disabled = true;
-        try {
-          data = await SLINK.core.messaging.send('events.selection.save', { id:select.value });
-          notice = '';
-        } catch (error) { notice = SLINK.core.format.errorMessage(error); }
-        render();
+      context.listen(root,'focusout',event => {
+        if (event.target.matches('[data-events-select]')) queueMicrotask(syncOptions);
       });
 
       if(context.presentation!=='dashboard'){basketObserver = new MutationObserver(mutations => {
@@ -236,7 +297,7 @@
 
       await load(false);
       return {
-        stop() {
+        async stop() {
           stopped = true;
           basketObserver?.disconnect();
           if (basketScanTimer) global.clearTimeout(basketScanTimer);
@@ -244,6 +305,7 @@
           global.removeEventListener('popstate', scheduleBasketScan);
           document.getElementById(OVERLAY_ID)?.remove();
           document.getElementById(OVERLAY_STYLE_ID)?.remove();
+          await autosave.stop();
         }
       };
     }

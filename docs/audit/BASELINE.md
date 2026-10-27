@@ -1,5 +1,13 @@
 # Audit test baseline and classification
 
+## Candidate 21 — Events acknowledged selection/stable picker, 27 October 2026
+
+Final **81/81** commands pass. Expanded settings-queue.test.mjs runs actual Events core/service with scoped authorization, cached-calendar ID validation, same-field FIFO across out-of-order authorization completions, retained unknown settings, storage/authentication rejection/recovery, lean selected-event acknowledgement, legacy empty-selection reset to the existing next-event default, unchanged runtime and an explicit unexpected-calendar-HTTP failure stub. Initial runtime equality assertion compared VM/host prototypes; structuredClone of the compared record preserves the full value assertion without treating realm prototypes as data changes.
+
+events.test.mjs retains guide progression/relic/calendar tests and executes the actual extracted load controller: one active status request, newer selection-generation fence while allowing fresh calendar/permission metadata, failed-read recovery and stopped UI/status isolation. Service no longer writes a one-field replacement record or returns/rebuilds full public status to save one choice. Required feature authorization remains, with rejection-safe FIFO order.
+
+Local qa-events-autosave.cjs passed isolated real Edge at 360px Shadow DOM and 1000px dashboard with actual module/core/shared helper/styles: width fit, no initial selection write, next-event/year-round Halloween, Cat in Hell guidance, enabled stable picker, out-of-order/rapid choices, retained failure/retry, same unchanged guide link, delayed Refresh versus selection, focused native-option deferral, additional/removed events and awaited stop without late redraw. Native basket layout/upgrade logic was not modified; full physical-device/live-account acceptance remains separate. No main/PDA/workers/assets/API endpoint changes or new default policy.
+
 ## Candidate 20 — Money & Property autosave/stable controls, 27 October 2026
 
 Final **81/81** commands pass. settings-queue.test.mjs executes the actual Money core/service for concurrent disjoint preferences, stock toggles and snoozes; retained unknown fields/old snoozes; no financial-runtime rewrite; zero/bounds normalization; lean acknowledgements; failed-write recovery; and authorization denial/recovery. An explicit deferred authorization proves snoozes commit while a preference waits; a later authorization can resolve first without reversing preference intent order. Authorization is outside the local mutation queue, not removed. Existing feature scope is still required for preferences and now also stock toggles.
