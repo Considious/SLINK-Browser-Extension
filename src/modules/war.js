@@ -91,6 +91,8 @@
       let activeTab = 'targets';
       let stopped = false;
       let busy = false;
+      let savingWarSettings = false;
+      let settingsRevision = 0;
       let timer = null;
       let localError = '';
       let targetSort = 'availability';
@@ -129,6 +131,76 @@
       const shownAlerts = new Set();
       const shownRequestAlerts = new Set();
       const fullUi = context.presentation === 'full';
+      const contentRoot = context.ui.getContentElement();
+      const draftGuard = SLINK.core.formState?.protect(contentRoot.getRootNode?.() || contentRoot);
+
+      async function requestWarStatus(type, payload) {
+        const revision = settingsRevision;
+        const value = await SLINK.core.messaging.send(type, payload);
+        if ((stopped || context.signal?.aborted) && current) return current;
+        return revision === settingsRevision || !current ? value : {
+          ...value, settings:current.settings, sharedConfig:current.sharedConfig, terms:current.terms
+        };
+      }
+
+      function settingsTickets(ids) {
+        return ids.map(id => contentRoot.querySelector('#'+id)).filter(Boolean)
+          .map(control => draftGuard?.begin(control)).filter(Boolean);
+      }
+
+      function acknowledgeSettings(tickets) {
+        for (const ticket of tickets) draftGuard?.commit(ticket);
+      }
+
+      async function saveWarSettings() {
+        if (savingWarSettings || stopped || context.signal?.aborted) return;
+        const root = contentRoot;
+        // Capture every submitted value before the first asynchronous request.
+        const snapshot = {
+          displayMode:root.querySelector('#slink-war-display')?.value,
+          acceptTerms:root.querySelector('#slink-war-accept')?.checked === true,
+          officer:current?.session?.officer === true,
+          shared:{
+            mode:root.querySelector('#slink-war-mode')?.value,
+            idleMinutes:root.querySelector('#slink-war-idle')?.value,
+            insideHitCap:root.querySelector('#slink-war-inside-cap')?.value,
+            insideBlockMode:root.querySelector('#slink-war-inside-mode')?.value
+          },
+          sort:root.querySelector('#slink-war-sort')?.value || targetSort
+        };
+        const localPatch = {};
+        if (snapshot.displayMode !== current?.settings?.displayMode) localPatch.displayMode = snapshot.displayMode;
+        if (snapshot.acceptTerms) localPatch.acceptTerms = true;
+        const sharedChanged = snapshot.officer && Object.entries(snapshot.shared).some(([key,value]) =>
+          String(value) !== String(current?.sharedConfig?.[key] ?? (key === 'mode' ? current?.settings?.warMode || 'war' : key === 'insideBlockMode' ? 'warn' : 0))
+        );
+        const localTickets = settingsTickets(['slink-war-display','slink-war-accept']);
+        const sharedTickets = settingsTickets(['slink-war-mode','slink-war-idle','slink-war-inside-cap','slink-war-inside-mode']);
+        const sortTickets = settingsTickets(['slink-war-sort']);
+        savingWarSettings = true; settingsRevision++; localError = ''; render();
+        let localSaved = false;
+        try {
+          const localResponse = await SLINK.core.messaging.send('war.settings.save', localPatch);
+          acknowledgeSettings(localTickets);
+          localSaved = true;
+          if (stopped || context.signal?.aborted) return;
+          current = localResponse; settingsRevision++;
+          if (sharedChanged) {
+            if (current?.session?.officer !== true) throw new Error('Officer access is required to save the captured faction settings.');
+            const sharedResponse = await SLINK.core.messaging.send('war.config.save', snapshot.shared);
+            acknowledgeSettings(sharedTickets);
+            if (stopped || context.signal?.aborted) return;
+            current = sharedResponse; settingsRevision++;
+          } else acknowledgeSettings(sharedTickets);
+          targetSort = snapshot.sort;
+          acknowledgeSettings(sortTickets);
+        } catch (error) {
+          localError = (localSaved ? 'Local War settings saved; the remaining settings were not saved: ' : '') + SLINK.core.format.errorMessage(error);
+        } finally {
+          settingsRevision++; savingWarSettings = false;
+          if (!stopped && !context.signal?.aborted) render();
+        }
+      }
 
       if (fullUi) {
         context.ui.setTitle('SLINK War');
@@ -247,7 +319,7 @@
         if (recentMugResults.has(fingerprint)) return;
         recentMugResults.set(fingerprint, now);
         try {
-          current = await SLINK.core.messaging.send('war.mug.report', {
+          current = await requestWarStatus('war.mug.report', {
             victimId,
             victimName:result.victimName,
             amount:result.amount
@@ -886,7 +958,7 @@
         const shared = current?.sharedConfig || {};
         const officer = current?.session?.officer === true;
         const accepted = current?.terms?.accepted;
-        return `<div class="slink-war-settings">
+        return `<div class="slink-war-settings" data-ui-explicit-commit="true">
           <details class="slink-war-terms" ${accepted ? '' : 'open'}><summary>SLINK War data terms${accepted ? ' — accepted' : ''}</summary><p>${escape(current?.terms?.summary || 'Loading current terms...')}</p><a href="${escape(current?.terms?.documentUrl || '#')}" target="_blank" rel="noopener noreferrer">Read the complete terms</a>${accepted ? '<p>Current terms accepted.</p>' : '<label class="slink-war-agree"><input id="slink-war-accept" type="checkbox"><span>I agree to the current SLINK API & Data Terms.</span></label>'}</details>
           <div class="wide slink-war-note">API credentials and permission verification are managed once in the extension dashboard.</div>
           <label>Display mode<select id="slink-war-display"><option value="extension" ${settings.displayMode === 'extension' ? 'selected' : ''}>Extension only</option><option value="torn" ${settings.displayMode === 'torn' ? 'selected' : ''}>Fully in Torn</option><option value="hybrid" ${settings.displayMode === 'hybrid' ? 'selected' : ''}>Hybrid retal alerts</option></select></label>
@@ -896,12 +968,12 @@
           <label>Major-window inside gate<select id="slink-war-inside-mode" ${officer ? '' : 'disabled'}><option value="off" ${shared.insideBlockMode === 'off' ? 'selected' : ''}>Off</option><option value="warn" ${(shared.insideBlockMode || 'warn') === 'warn' ? 'selected' : ''}>Warning with override</option><option value="block" ${shared.insideBlockMode === 'block' ? 'selected' : ''}>Hard block</option></select></label>
           <div class="wide slink-war-note">${officer ? 'War mode, idle filtering, inside cap, and the major-window inside gate apply to everyone in your faction. The gate only activates in Termed mode.' : `Faction-wide mode is ${shared.mode === 'termed' ? 'Termed war' : 'Real war'}. A slink.war.officer may change it.`}</div>
           <label>Target sort<select id="slink-war-sort"><option value="availability" ${targetSort === 'availability' ? 'selected' : ''}>Availability</option><option value="fairFightDesc" ${targetSort === 'fairFightDesc' ? 'selected' : ''}>FF high to low</option><option value="fairFightAsc" ${targetSort === 'fairFightAsc' ? 'selected' : ''}>FF low to high</option></select></label>
-          <div class="slink-war-settings-actions"><button id="slink-war-save" type="button">Save War settings</button><button id="slink-war-clear" type="button">Clear War session</button></div>
+          <div class="slink-war-settings-actions"><button id="slink-war-save" type="button" ${savingWarSettings ? 'disabled' : ''}>${savingWarSettings ? 'Saving…' : 'Save War settings'}</button><button id="slink-war-clear" type="button" ${savingWarSettings ? 'disabled' : ''}>Clear War session</button></div>
         </div>`;
       }
 
       function render() {
-        if (!fullUi) return;
+        if (!fullUi || stopped || context.signal?.aborted) return;
         const root = context.ui.getContentElement();
         const preservedUi = SLINK.core.uiState?.capture(root);
         const snapshot = current?.runtime?.snapshot || {};
@@ -1060,27 +1132,27 @@
           const assigneeName = current?.session?.officer ? String(root.querySelector('#slink-war-assignee-name')?.value || '').trim() : '';
           button.disabled = true;
           try {
-            current = await SLINK.core.messaging.send('war.claims.update', { operation:'claim', targetId, targetName, assigneeId, assigneeName });
+            current = await requestWarStatus('war.claims.update', { operation:'claim', targetId, targetName, assigneeId, assigneeName });
             localError = '';
           } catch (error) { localError=SLINK.core.format.errorMessage(error); }
           render();
         });
         for (const button of root.querySelectorAll('[data-armory-request-resolve]')) button.addEventListener('click', async () => {
           try {
-            current = await SLINK.core.messaging.send('war.armory.request', { operation:'resolve', requestId:button.dataset.armoryRequestResolve });
+            current = await requestWarStatus('war.armory.request', { operation:'resolve', requestId:button.dataset.armoryRequestResolve });
             localError = '';
             render();
           } catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
         for (const button of root.querySelectorAll('[data-war-release]')) button.addEventListener('click', async () => {
-          try { current = await SLINK.core.messaging.send('war.claims.update', { operation:'release', targetId:Number(button.dataset.warRelease) }); localError=''; render(); }
+          try { current = await requestWarStatus('war.claims.update', { operation:'release', targetId:Number(button.dataset.warRelease) }); localError=''; render(); }
           catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
         root.querySelector('#slink-war-outside-refresh')?.addEventListener('click', async event => {
           const button = event.currentTarget;
           button.disabled = true;
           try {
-            current = await SLINK.core.messaging.send('war.outside.refresh', {
+            current = await requestWarStatus('war.outside.refresh', {
               minFF:root.querySelector('#slink-war-outside-min')?.value,
               maxFF:root.querySelector('#slink-war-outside-max')?.value
             });
@@ -1088,27 +1160,11 @@
           } catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
         root.querySelector('#slink-war-clear')?.addEventListener('click', async () => {
-          try { current = await SLINK.core.messaging.send('war.session.clear'); localError=''; render(); }
+          if (savingWarSettings) return;
+          try { current = await requestWarStatus('war.session.clear'); localError=''; render(); }
           catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
-        root.querySelector('#slink-war-save')?.addEventListener('click', async () => {
-          try {
-            current = await SLINK.core.messaging.send('war.settings.save', {
-              displayMode:root.querySelector('#slink-war-display')?.value,
-              acceptTerms:root.querySelector('#slink-war-accept')?.checked === true
-            });
-            if (current?.session?.officer) current = await SLINK.core.messaging.send('war.config.save', {
-              mode:root.querySelector('#slink-war-mode')?.value,
-              idleMinutes:root.querySelector('#slink-war-idle')?.value,
-              insideHitCap:root.querySelector('#slink-war-inside-cap')?.value,
-              insideBlockMode:root.querySelector('#slink-war-inside-mode')?.value
-            });
-            targetSort = root.querySelector('#slink-war-sort')?.value || targetSort;
-            localError = '';
-            render();
-            void runCycle(true);
-          } catch (error) { localError = SLINK.core.format.errorMessage(error); render(); }
-        });
+        root.querySelector('#slink-war-save')?.addEventListener('click', saveWarSettings);
         updateWarSendButtons();
       }
 
@@ -1209,18 +1265,21 @@
       }
 
       async function runCycle(force = false) {
-        if (busy || stopped) return;
+        if (busy || stopped || savingWarSettings || context.signal?.aborted) return;
+        const revision = settingsRevision;
         busy = true;
         if (fullUi) render();
         try {
-          current = await SLINK.core.messaging.send('war.status');
+          current = await requestWarStatus('war.status');
+          if (stopped || context.signal?.aborted || savingWarSettings) return;
           if (force || leader) {
-            current = await SLINK.core.messaging.send(
+            current = await requestWarStatus(
               warUiActive() ? 'war.cycle.prepare' : 'war.alerts.prepare',
               { manual:force }
             );
           }
-          localError = '';
+          if (stopped || context.signal?.aborted) return;
+          if (revision === settingsRevision) localError = '';
           await renderHybridAlerts();
           evaluateAlerts();
           renderInsideGateSurfaces();
@@ -1253,7 +1312,7 @@
         return leader;
       }
 
-      current = await SLINK.core.messaging.send('war.status');
+      current = await requestWarStatus('war.status');
       dismissedRetalMap = await dismissedRetals();
       activeTab = await SLINK.core.storage.get('ui.war.activeTab.v1', 'targets');
       const savedTargetFilters = await SLINK.core.storage.get('ui.war.targetFilters.v1', {});

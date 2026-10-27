@@ -1,12 +1,12 @@
-# SLINK audit tester build — candidate 14 (Mugging autosave protection)
+# SLINK audit tester build — candidate 15 (War settings acknowledgement)
 
-Current batch: Mugging per-field autosave acknowledgement, stable mounted controls and stale-response protection, shared by the Torn overlay and standalone extension dashboard. Includes the previous Bounties improvements. No PDA runtime update; no main promotion. All 80 local test commands pass, plus an isolated real-browser Mugging check at narrow/desktop widths. See the running changelog for manual tests and known remaining work.
+Current batch: captured War settings submissions, separate local/faction acknowledgements, retained failed/newer drafts and queued local setting writes. Includes previous Bounties and Mugging improvements. No PDA runtime update; no main promotion. All 81 local test commands pass, plus isolated browser settings-template/save-controller checks at narrow/desktop widths. See the running changelog for manual tests and limitations; faction writes are not cross-officer transactions.
 
 26 October follow-up (Batch 12): testing-only regression/documentation updates now pass all 78 local test commands. No runtime/version change; use the same installer below. Main's quota hotfix was separately approved and published as 0.19.12; this branch still contains the unpromoted audit work. See the running changelog for the current manual test checklist. Automated checks do not replace real-device acceptance.
 
 This is an early testing build, not the Chrome Web Store release. This audit batch does not change main; the separately approved Mugging hotfix is already on main. The full audit plan is not implemented yet.
 
-- Version: **0.19.11.5**, displayed as **0.19.11 Audit Test 14**. PDA remains Candidate 10.
+- Version: **0.19.11.6**, displayed as **0.19.11 Audit Test 15**. PDA remains Candidate 10.
 - Branch: `audit/test-foundation`.
 - [Download the tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip).
 - [One running tester changelog for extension and PDA](https://github.com/Considious/SLINK-Browser-Extension/blob/audit/test-foundation/TESTER-CHANGELOG.md).

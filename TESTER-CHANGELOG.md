@@ -2,6 +2,21 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 15 — 26 October 2026 — War settings save what you actually submitted
+
+Extension tester **0.19.11.6 / Audit Test 15**, testing branch only. Main, PDA and workers are unchanged. PDA remains 0.4.109 / Audit Test 10. This covers the Torn War settings save flow and the background local-settings owner also used by the extension dashboard; it does not claim all War/dashboard editors or PDA are finished.
+
+- War now captures all settings when you press Save. Editing a faction field while the first request is pending no longer changes that earlier submission. Newer edits remain available to save afterward.
+- Local settings/terms and faction settings are acknowledged separately. If local settings save but the faction request fails, the message explains the partial result; faction drafts remain intact. Confirmed terms do not stay as an old checked input. A second Save is blocked while the first is pending, and Clear session cannot interrupt that save.
+- Unchanged local fields are not resubmitted. Unchanged faction settings no longer trigger a faction-wide write. Officer access is checked again before the faction request; loss of access does not silently submit or mark those drafts saved.
+- Old cycle/action responses cannot roll confirmed settings, faction configuration or terms presentation backward. Runtime results and permission/session information still update normally. Pending local setting writes are serialized and recover after failure; terms/authentication/network waits do not block unrelated local commits. Blank key fields retain existing keys.
+
+**What to test:** in Torn's War Settings, change display mode and a faction setting if you are an officer. Press Save, then type a different faction value while it waits. The first submission should use the original values; the later edit should remain unsaved. Save again and confirm the returned validated values. Try double Save clicks, changing War sub-tabs during a save, and letting normal refreshes run. Regular members must not gain faction controls. If a save fails, read whether local settings succeeded and retry the retained faction edit. Never clear storage, remove keys or change live faction policy merely to manufacture an error; failure cases are covered automatically.
+
+**Verification:** **81/81** local extension/PDA commands pass. New regression executes the real save/revision helpers with delayed/failed replies, partial acknowledgement, newer typing, officer revocation, no-change saves and stopped-module isolation. It executes the actual background mutation function with concurrent disjoint edits, rejected writes/recovery, saved-key retention and blocked network continuations. Real-browser checks of the production settings template/save controller and core form guard passed at 360px Shadow DOM and 1000px document scope. These use fake responses, not a real authenticated faction or full War-page acceptance test.
+
+**Limits:** a local save plus a faction save are not one transaction. The faction endpoint still receives its existing full configuration snapshot when faction fields change; simultaneous edits by different officers are not made conflict-free by this update. General War rendering is still guarded/restored rather than fully converted to Mugging's stable-control rendering. This batch captures target sort consistently but does not change its existing reload-persistence policy. Remaining editor/PDA storage work continues separately.
+
 ## Candidate 14 — 26 October 2026 — Mugging autosave without rebuilding the controls
 
 Extension tester **0.19.11.5 / Audit Test 14**, testing branch only. Main, PDA and live workers are unchanged. PDA remains 0.4.109 / Audit Test 10. This batch covers the shared Mugging UI in the extension overlay and standalone dashboard; it does not claim every editor or PDA has been converted.
