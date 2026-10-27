@@ -2,6 +2,25 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 24 — 27 October 2026 — PDA storage completion and retention
+
+**PDA tester only, 0.4.111 / audit-test24.** SLINK now uses Torn PDA's app-backed storage when the installed app exposes it. Existing browser/GM data is kept and copied to native storage when missing there; no reset or automatic cloud restore is performed. Older apps without that API retain a browser-storage fallback, which does not provide native durability.
+
+Startup now keeps add-on/unknown settings rather than rebuilding only known ones. Settings, saved targets and protected credentials/session fields use captured changes so an unchanged older snapshot does not replace newer stored values. Target deletions and independent note/name edits are retained in the tested serialized-write paths.
+
+Target Save, source-panel Save Target, deletion and Access authentication completion now wait for write confirmation. A failed target save leaves its editor open; newer edits survive an older acknowledgement. Access shows a save failure and Retry when a write fails. Failed changes are retained for retry or a later successful save. UI choices and snoozes use the same acknowledged bridge. No new paid storage service or Torn API polling was added.
+
+**Try this, using the tester install only:**
+
+- Before updating, export a local backup. Update the same tester script in place (do not uninstall it), reload Torn, and confirm your API keys, disabled alerts, notes, target list, theme and last tab are retained.
+- Change a Chat/add-on setting, alert choice and theme. Save a target with a note. Navigate, close/reopen PDA and confirm all of them remain.
+- Edit a target and click Save, then type more while waiting. The newer draft should remain. Remove a target, navigate through other pages and confirm it does not reappear.
+- If Access reports an unsaved change, keep the page open, resolve the storage/app problem and use Retry. It must not claim the failed target save succeeded. Do not deliberately clear application data or uninstall PDA for testing.
+- On a PDA version with native storage, optionally clear only the app's browser cache after exporting a backup, then verify recovery. Native app-data deletion/uninstallation is not covered. On older PDA versions with no native API, browser-cache survival cannot be promised.
+- Exercise multiple open Torn pages, slow app transitions and background/resume. Report exact app version and steps if values revert.
+
+**Limits:** automated tests use real production functions with synthetic native/GM adapters, not a physical PDA installation. Torn PDA's documented store has no compare-and-swap transaction primitive, so simultaneous independent WebViews still need device/concurrency acceptance. This is not a claim that every module's old save message has been converted to awaited native acknowledgement, nor that abrupt app termination can never interrupt an in-flight write. The remaining lifecycle/provider/performance audit and final Chat expansion are still pending. Main and the extension runtime are unchanged.
+
 ## Candidate 23 — 27 October 2026 — Combined editor stability and autosave
 
 **Extension tester only:** the remaining Officer, existing Chat, Market, Merits, Leveling and War editor work is grouped into one update. Background updates retain the controls being edited. Personal Officer stock settings, Chat highlights, Market preferences, Merits choices, and Leveling poll/Fair Fight preferences save without a separate Save click. A failed preference save keeps the choice visible with Retry.
