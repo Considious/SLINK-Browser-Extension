@@ -61,7 +61,12 @@
       if(menu&&!menu.hidden)renderMenu();return record;
     }).catch(error=>{sharedRevision=null;console.warn('[SLINK] Chat buttons not synchronized:',error.message);return null;});
     addStyles();
-    observer = new MutationObserver(scheduleScan);
+    observer = new MutationObserver(mutations => {
+      if (!activity.eligible()) return;
+      if (menuChatRoot && !menuChatRoot.isConnected) closeMenu();
+      const selector = CHAT_ROOT_SELECTOR + ',' + CHAT_HEADER_DISCOVERY_SELECTOR + ',[data-testid="editor-root"]';
+      if (mutations.some(mutation => [...(mutation.addedNodes || [])].some(node => node.nodeType === 1 && (node.matches?.(selector) || node.querySelector?.(selector))))) scheduleScan();
+    });
     syncActivity();
   }
   window.addEventListener('slink-chat-enable', enable);

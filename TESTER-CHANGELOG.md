@@ -2,6 +2,18 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 26 — 27 October 2026 — emergency event performance and connection recovery
+
+**Released to main FIRST:** extension0.19.13, PDA0.4.113. This tester follow-through is extension0.19.13.1 /Audit Test26 and PDA0.4.114 /audit-test26. No unrelated audit work was promoted.
+
+- PDA can use a public source mirror when raw GitHub refuses a connection. Working cached startup does not wait for source downloads. Stable checks the manifest at most once per15minutes and applies discovered updates on a normal page load; the immutable tester pin uses its matching revision directly. Cold/update downloads use two workers, not all files at once.
+- Xanax decoration ignores unrelated attack/log text and skips energy searches without a Xanax button. Real clicks still check current energy. Extension chat-button discovery reacts to inserted contexts/headers, not every page mutation. Existing tester focused-page/profile/lifecycle ownership is retained.
+- No settings/key reset, permission/theme/asset changes, automatic recovery or added Torn API polling. Update the existing PDA script in place; never uninstall or clear data. Chrome packaged changes require its extension update.
+
+**Test:** navigate repeatedly with an existing cache, then interrupt internet and return to a normal Torn page. SLINK should use its valid cache, without blocking Torn. First-time startup cannot work if both source hosts are unavailable and no runtime is cached. Fight/refresh a rapidly changing page; unrelated combat text should no longer trigger Xanax scans. Open a real Xanax action above750energy and confirm the warning still uses current energy; Cancel must not use it. Switch windows/lock PDA/return and check controls resume and settings persist. Check custom chat triggers still appear when a new chat/newsletter opens.
+
+Production VM tests cover refused origins, fallback, offline cache retention, current-energy confirmation and10,000 irrelevant mutations. Real Edge MutationObservers passed on both platforms. This proves the fixed paths, not that every source of event lag is eliminated or physical PDA is certified.
+
 ## Candidate 25 — 27 October 2026 — background and page-return reliability
 
 **Extension 0.19.11.15 / Audit Test25; PDA 0.4.112 / audit-test25.** PDA page observers now pause when hidden and reconnect once on return. Queued old page scans and pending chat sends cannot replay after resume. Target polling restarts after pagehide instead of staying stopped. Same-build reuse keeps one activity owner. Hidden/zero-size viewport events no longer reset launcher position. Extension pause subscribers are isolated against one callback failing.

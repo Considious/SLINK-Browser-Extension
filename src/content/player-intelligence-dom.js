@@ -212,7 +212,7 @@
 
   function schedule() {
     clearTimeout(timer);
-    if (!activeProfile().active) return;
+    if (!activeProfile().active || !readIntent()) return;
     timer = setTimeout(() => void observeCurrentPage(), OBSERVE_DEBOUNCE_MS);
   }
 

@@ -1,5 +1,9 @@
 # Audit test baseline and classification
 
+## Candidate 26 — main-first event hotfix follow-through
+
+Stable main received extension0.19.13 and PDA0.4.113 before tester changes. Targeted loader refusal/cache/mirror recovery and 10,000 attack mutations pass; actual Edge attack fixtures pass on both platforms. Tester retains native storage protocol2, activity grants and prior editors. Whitespace-only loader formatting (no compression/renaming) keeps the existing18KB limit; source-text extraction/checks now tolerate formatting while storage VM assertions remain unchanged. An initial full pass found seven whitespace-dependent fixtures, not seven storage failures; those were corrected and passed targeted reruns. Final combined inventory is recorded in the checkpoint. Physical PDA/event gameplay acceptance remains outstanding.
+
 ## Candidate 25 — lifecycle follow-up, 27 October 2026
 
 Adds PDA test-page-resume.mjs to default/audit commands; extension activity-lifecycle covers subscriber fault isolation. Fixtures execute production timer/observer ownership, stale callbacks, hidden initial state, repeated resume, zero viewport and async send cancellation. Headless Edge checks use actual Chat/Events add-ons, real MutationObservers and retained Shadow DOM drafts at 360px and 1000px, with intercepted networking. Physical PDA acceptance remains required. Final inventory results are recorded in the implementation handoff.

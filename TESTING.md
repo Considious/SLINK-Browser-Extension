@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 25
+# SLINK audit tester build — candidate 26
+
+Extension0.19.13.1 /Audit Test26 carries main's emergency attack-mutation and chat-context filtering while preserving tester lifecycle/storage/editor work. PDA0.4.114 carries refused-source recovery and immutable cache-first loading. Main received the isolated fix first as extension0.19.13 /PDA0.4.113. Use the single cumulative TESTER-CHANGELOG.md.
 
 Extension 0.19.11.15 / Audit Test25 isolates activity subscribers so one failing callback cannot block the others from pausing. PDA 0.4.112 adds background/page-return fixes. Use the single TESTER-CHANGELOG.md for combined testing; main is unchanged. Previous editor/storage acceptance checks remain relevant.
 
