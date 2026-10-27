@@ -11,7 +11,10 @@
   }
   function changed() {
     generation += 1;
-    for (const subscriber of subscribers) subscriber(eligible());
+    for (const subscriber of subscribers) {
+      try { subscriber(eligible()); }
+      catch { global.console?.warn?.('[SLINK] Page activity subscriber failed.'); }
+    }
   }
   function setGranted(value) {
     if (granted === Boolean(value)) return;

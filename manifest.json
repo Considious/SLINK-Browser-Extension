@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SLINK Audit Test",
-  "version": "0.19.11.14",
-  "version_name": "0.19.11 Audit Test 23",
+  "version": "0.19.11.15",
+  "version_name": "0.19.11 Audit Test 25",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",

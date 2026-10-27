@@ -76,3 +76,15 @@ const resumed=transitionContext.applyRuntimeActivity(true);
 releasePermissions({});await Promise.all([starting,inactive,resumed]);
 assert.equal(contentStarts,1);assert.equal(contentStops,1,'A superseded pause still cleans invalidated workers before resuming.');
 console.log('Content transition queue: immediate revocation and rapid pause/resume recovery passed.');
+
+const pageEvents=new Map(),pageApi={core:{},define(group,key,value){this[group][key]=value;}};
+const pageScope=vm.createContext({console:{warn(){}},document:{visibilityState:'visible',hasFocus:()=>true,addEventListener:(type,fn)=>pageEvents.set(type,fn)},addEventListener:(type,fn)=>pageEvents.set(type,fn),SLINK_EXTENSION:pageApi});
+vm.runInContext(read('src/core/page-activity.js'),pageScope);
+let remainingSubscriberCalls=0;
+pageApi.core.pageActivity.subscribe(()=>{throw Error('broken subscriber');});
+pageApi.core.pageActivity.subscribe(()=>{remainingSubscriberCalls++;});
+pageApi.core.pageActivity.setGranted(true);const grantedToken=pageApi.core.pageActivity.token();
+pageEvents.get('pagehide')();assert.equal(pageApi.core.pageActivity.current(grantedToken),false);assert.equal(remainingSubscriberCalls,2,'One subscriber failure must not block other modules pausing');
+pageEvents.get('pageshow')();assert.equal(pageApi.core.pageActivity.eligible(),false,'Return alone must not restore the extension worker grant');
+pageApi.core.pageActivity.setGranted(true);pageScope.document.hasFocus=()=>false;assert.equal(pageApi.core.pageActivity.eligible(),false,'Extension focus requirements remain unchanged');
+console.log('Page activity fault isolation retains worker grant and desktop focus requirements.');

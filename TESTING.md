@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 23 (Combined editor phase)
+# SLINK audit tester build — candidate 25
+
+Extension 0.19.11.15 / Audit Test25 isolates activity subscribers so one failing callback cannot block the others from pausing. PDA 0.4.112 adds background/page-return fixes. Use the single TESTER-CHANGELOG.md for combined testing; main is unchanged. Previous editor/storage acceptance checks remain relevant.
 
 Current batch: stable Officer, existing Chat, Market, Merits, Leveling and War editors; field-level personal preference saves and retry; captured explicit actions; serialized local mutation owners; dashboard response fences; retained controls and duplicate-binding protection. Credentials/terms, contribution mode, advanced War/shared-policy saves, full Chat template saves, watch creation/removal and gameplay/message actions remain explicit. New Chat features and native PDA storage work are separate. Use the single running TESTER-CHANGELOG.md for the complete test checklist.
 

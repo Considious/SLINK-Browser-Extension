@@ -2,6 +2,22 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 25 — 27 October 2026 — background and page-return reliability
+
+**Extension 0.19.11.15 / Audit Test25; PDA 0.4.112 / audit-test25.** PDA page observers now pause when hidden and reconnect once on return. Queued old page scans and pending chat sends cannot replay after resume. Target polling restarts after pagehide instead of staying stopped. Same-build reuse keeps one activity owner. Hidden/zero-size viewport events no longer reset launcher position. Extension pause subscribers are isolated against one callback failing.
+
+Settings, credentials, storage keys, manual-only cloud recovery, permissions and theme assets are unchanged. Authorized background API policy is retained; this does not stop every network request while hidden.
+
+**Try this on tester builds:**
+
+- Update in place and reload once, without uninstalling or clearing data. Confirm disabled alerts, targets/notes, theme, last tab and launcher position remain.
+- Open Chat, Racing, Market or a profile; background/lock and return five times. No duplicate buttons/highlights or catch-up burst should appear; target checks should resume.
+- Keep a draft field open through those cycles. Text, open controls and selected page should remain. Rotate while backgrounded; launcher position should not reset.
+- If a confirmed custom chat message is waiting for Torn to enable Send, leave and return. It must not send on return. Reload/confirm explicitly if still wanted.
+- Extension: switch focused Torn tabs/windows; only the eligible page should scrape. PDA: visible pages should work without desktop-focus detection.
+
+Source tests and real headless Edge observers cover hidden startup, five return cycles, stale callbacks and retained draft controls at 360px/1000px. Physical PDA lock/unlock, process suspension/termination and independent WebViews still need acceptance. The full audit is not complete.
+
 ## Candidate 24 — 27 October 2026 — PDA storage completion and retention
 
 **PDA tester only, 0.4.111 / audit-test24.** SLINK now uses Torn PDA's app-backed storage when the installed app exposes it. Existing browser/GM data is kept and copied to native storage when missing there; no reset or automatic cloud restore is performed. Older apps without that API retain a browser-storage fallback, which does not provide native durability.

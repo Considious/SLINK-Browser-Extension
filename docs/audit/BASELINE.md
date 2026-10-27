@@ -1,5 +1,11 @@
 # Audit test baseline and classification
 
+## Candidate 25 — lifecycle follow-up, 27 October 2026
+
+Adds PDA test-page-resume.mjs to default/audit commands; extension activity-lifecycle covers subscriber fault isolation. Fixtures execute production timer/observer ownership, stale callbacks, hidden initial state, repeated resume, zero viewport and async send cancellation. Headless Edge checks use actual Chat/Events add-ons, real MutationObservers and retained Shadow DOM drafts at 360px and 1000px, with intercepted networking. Physical PDA acceptance remains required. Final inventory results are recorded in the implementation handoff.
+
+Final Candidate25 inventory: **85/85 passed (46 extension + 39 PDA/build)**. Both browser widths passed five repeated return cycles with no page errors, duplicated observers or lost draft control. A new macro test initially used a fragment-only extraction helper against an add-on; it was corrected to load the real add-on function range, retaining the stale-send assertion. No product failure was masked and no check was removed.
+
 ## Candidate 23 — combined extension editor phase, 27 October 2026
 
 Final **83/83** source commands pass: **46 extension + 37 PDA/build**. New editor-sweep.test.mjs executes Officer/Chat/Market/Merits owners for scoped/nested/disjoint merges, captured payloads, unknown-field retention, failed-write recovery, deletion and slot/pin behavior. editor-stability.test.mjs executes Leveling's captured authentication and separate preference owner, proving later preferences survive authentication completion, no credential/terms mutation from personal preference saves, and retry. It also executes dashboard response-generation/sequence fences, including preserving new access metadata and cached-only settled-save previews. Existing War per-field capture/partial-success tests remain; the target integration fixture now executes production duplicate-binding protection and binds twice to prove one click listener. One initial full-suite fixture lacked bindControl after the production binding change; the fixture was corrected, with no runtime error hidden or assertion removed. Final 83/83 passed after that fix.
