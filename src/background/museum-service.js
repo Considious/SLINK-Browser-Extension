@@ -98,19 +98,23 @@
   }
 
   async function addMarketWatch(payload = {}) {
+    const itemId = Math.trunc(Number(payload.itemId));
+    const maxPrice = Math.trunc(Number(payload.maxPrice));
+    const priority = String(payload.priority || 'normal');
+    if (!Number.isSafeInteger(itemId) || itemId < 1 || !Number.isSafeInteger(maxPrice) || maxPrice < 1) throw new Error('Choose a museum item and enter a positive maximum price.');
     await SLINK.services.permissionAccess.ensureSession(false, MUSEUM.SCOPE);
-    const itemId = Math.trunc(Number(payload.itemId) || 0);
-    const maxPrice = Math.trunc(Number(payload.maxPrice) || 0);
-    if (!itemId || !maxPrice) throw new Error('Choose a museum item and enter a maximum price.');
-    return SLINK.services.market.routes['market.watch.save']({
+    const result = await SLINK.services.market.routes['market.watch.save']({
       marketType:'item',
       itemId,
       maxPrice,
-      priority:String(payload.priority || 'normal'),
+      priority,
       enabled:true,
       marketEnabled:true,
       bazaarEnabled:false
     });
+    const watch = result?.settings?.watches?.find(row => row.marketType === 'item' && Number(row.itemId) === itemId && Number(row.maxPrice) === maxPrice);
+    if (!watch) throw new Error('Market Watch did not confirm this item and price. Check Market Watch before trying again.');
+    return {ok:true,itemId,maxPrice};
   }
 
   const routes = Object.freeze({
