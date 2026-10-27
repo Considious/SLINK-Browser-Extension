@@ -98,3 +98,25 @@ assert(worker.includes("'abroad-stocks-service.js'"), 'Background worker does no
 assert(worker.includes('SLINK.services.abroadStocks.routes'), 'Background routes do not include Abroad Stocks.');
 
 console.log('Abroad Stocks validation passed.');
+
+const strict=(await import('node:assert/strict')).default;
+const moduleSource=fs.readFileSync(path.join(root,'src/modules/abroad-stocks.js'),'utf8');
+const startLoad=moduleSource.indexOf('      async function load('),endLoad=moduleSource.indexOf('      try {await load(true);}',startLoad);
+strict(startLoad>=0&&endLoad>startLoad);
+const requests=[];
+const controller={context:{signal:{aborted:false}},stopped:false,status:{settings:{arrivalBufferMinutes:3}},settingsRevision:0,requestSequence:0,appliedSequence:0,pendingWatches:new Set(),autosave:{busy:false},renders:0,updates:0,
+ SLINK:{core:{messaging:{send(type,payload){let resolve;const promise=new Promise(done=>{resolve=done;});requests.push({type,payload,resolve});return promise;}}}},render(){controller.renders++;},updateStatus(){controller.updates++;}};
+vm.createContext(controller);vm.runInContext(moduleSource.slice(startLoad,endLoad),controller);
+const oldRead=controller.load(false);
+strict.equal(requests[0].type,'abroadStocks.status');strict.equal(requests[0].payload.refreshIfDue,false,'Preference preview must never force provider/Torn requests');
+controller.settingsRevision+=2;controller.status.settings.arrivalBufferMinutes=0;
+requests[0].resolve({settings:{arrivalBufferMinutes:3},rows:[{key:'fresh-row'}]});await oldRead;
+strict.equal(controller.status.settings.arrivalBufferMinutes,0);strict.equal(controller.status.rows[0].key,'fresh-row');
+const earlier=controller.load(false),later=controller.load(false);
+requests[2].resolve({settings:{arrivalBufferMinutes:0},rows:[{key:'newer'}]});await later;
+requests[1].resolve({settings:{arrivalBufferMinutes:0},rows:[{key:'older'}]});await earlier;
+strict.equal(controller.status.rows[0].key,'newer','Older status completion cannot undo a newer view response');
+controller.pendingWatches.add('one');const before=requests.length;await controller.load(true);strict.equal(requests.length,before);controller.pendingWatches.clear();
+const stoppedRead=controller.load(false);controller.stopped=true;const rendered=controller.renders;
+requests.at(-1).resolve({settings:{arrivalBufferMinutes:20}});await stoppedRead;strict.equal(controller.renders,rendered);
+console.log('Abroad controller: cached-only preview, newer settings/status fencing, watch guard and stopped-response isolation passed.');
