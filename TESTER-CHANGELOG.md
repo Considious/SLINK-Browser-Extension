@@ -2,6 +2,19 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 14 — 26 October 2026 — Mugging autosave without rebuilding the controls
+
+Extension tester **0.19.11.5 / Audit Test 14**, testing branch only. Main, PDA and live workers are unchanged. PDA remains 0.4.109 / Audit Test 10. This batch covers the shared Mugging UI in the extension overlay and standalone dashboard; it does not claim every editor or PDA has been converted.
+
+- Changing a Mugging filter now saves only that field, rather than resubmitting the other filters. Values and the enable checkbox are confirmed before changing the saved model. Failed saves leave the visible edit available to retry. An older reply cannot undo a newer confirmed choice.
+- Mugging's filter controls now stay mounted during saves and cache updates. Their actual input elements are no longer rebuilt on each update. Unchanged results and target buttons stay mounted too. Only confirmed normalization may change a submitted field, and typing made after that submission remains protected.
+- Both Find Targets buttons submit edited/pending fields, wait for confirmation and use the confirmed values. A double click while waiting does not start duplicate searches. If settings fail to save, no search starts—even if another field saved successfully meanwhile.
+- Older visibility/assignment responses cannot replace a newer assignment or own-stat display. Rapid enable/disable replies cannot reverse the latest confirmed checkbox state or start contributor work for an already superseded toggle. Completed work cannot redraw a stopped module.
+
+**What to test on both extension surfaces:** change one Mugging filter, then immediately edit another while saves finish. Try a target count above 100 and an FF value above 3; after confirmation they should show the allowed values, without touching a newer edit. Click each Find Targets button directly from a focused input. Try quick double clicks, rapid enable/disable toggles, refreshes, and switching away/back. Verify saved values survive page reload and existing target results/actions remain usable. Report a save error without clearing data or reauthenticating unnecessarily. Existing personal battle-stat sources, Fair Fight formula, permission gates, request budgets and credentials are unchanged.
+
+**Verification:** all **80/80** local extension/PDA test commands pass. New executable autosave test uses the actual module/form guard with failed, overlapping and out-of-order replies, per-field payloads, newer typing, normalized Find, duplicate clicks, failed Find plus unrelated successful edit, stale caches and stop isolation. It asserts one full editor mount and the same input object throughout updates. The real-browser fixture passed at 360px overlay Shadow DOM and 1000px dashboard document, including native blur events, immediate save acknowledgement, both Find buttons and unchanged target-button identity. Synthetic data only; no real profile, keys or API requests. Native PDA acceptance and remaining audit phases are still pending.
+
 ## Candidate 13 — 26 October 2026 — Bounties settings stay under your control
 
 Extension tester **0.19.11.4 / Audit Test 13**. Testing branch only: no main release, worker deployment or PDA runtime change. PDA remains 0.4.109 / Audit Test 10. This is the next partial editable-settings batch, not a claim that every editor has been converted.
