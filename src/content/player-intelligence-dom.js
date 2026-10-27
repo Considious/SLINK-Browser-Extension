@@ -212,18 +212,29 @@
 
   function schedule() {
     clearTimeout(timer);
+    if (!activeProfile().active || !readIntent()) return;
     timer = setTimeout(() => void observeCurrentPage(), OBSERVE_DEBOUNCE_MS);
+  }
+
+  function syncActivity() {
+    clearTimeout(timer);
+    observer?.disconnect();
+    if (!activeProfile().active || !observer) return;
+    observer.observe(global.document.documentElement, { childList:true, subtree:true });
+    schedule();
   }
 
   function start() {
     if (!global.document?.documentElement || observer) return;
     observer = new MutationObserver(schedule);
-    observer.observe(global.document.documentElement, { childList:true, subtree:true });
-    global.document.addEventListener('visibilitychange', schedule);
-    global.addEventListener('focus', schedule);
-    global.addEventListener('hashchange', schedule);
-    global.addEventListener('popstate', schedule);
-    schedule();
+    global.document.addEventListener('visibilitychange', syncActivity);
+    global.addEventListener('focus', syncActivity);
+    global.addEventListener('blur', syncActivity);
+    global.addEventListener('pageshow', syncActivity);
+    global.addEventListener('pagehide', () => { clearTimeout(timer); observer?.disconnect(); });
+    global.addEventListener('hashchange', syncActivity);
+    global.addEventListener('popstate', syncActivity);
+    syncActivity();
   }
 
   function stop() {
@@ -248,3 +259,4 @@
 
   if (global.document) start();
 })(globalThis);
+

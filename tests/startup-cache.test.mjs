@@ -40,11 +40,13 @@ const slink={core:{permissions:api.core.permissions,storage:{fullKey:key=>'slink
     if(type==='permissions.get')return product;
     return {};
   }}},modules:{startAll:async()=>{starts++;return {};},stopAll:async()=>{stops++;},invalidate(){}}};
-const doc={visibilityState:'visible',hasFocus:()=>true,addEventListener(){}};
+let focused=true;
+const activityEvents=new Map();
+const doc={visibilityState:'visible',hasFocus:()=>focused,addEventListener(){}};
 const chrome={storage:{local:{get:async keys=>{batchReads++;return Object.fromEntries(keys.filter(key=>Object.hasOwn(startup,key.slice(6))).map(key=>[key,startup[key.slice(6)]]));}},onChanged:{addListener:fn=>storageListeners.push(fn)}},
   runtime:{id:'fixture',sendMessage:async()=>({active:true}),onMessage:{addListener:fn=>runtimeListeners.push(fn)}}};
 const contentContext=vm.createContext({console,document:doc,chrome,SLINK_EXTENSION:slink,URL,location:{href:'https://www.torn.com/index.php'},
-  localStorage:{getItem:()=>null,setItem(){}},addEventListener(){},dispatchEvent(){},setInterval:()=>1,clearInterval(){},CustomEvent:class{}});
+  localStorage:{getItem:()=>null,setItem(){}},addEventListener:(type,fn)=>activityEvents.set(type,fn),dispatchEvent(){},setInterval:()=>1,clearInterval(){},CustomEvent:class{}});
 await vm.runInContext(read('src/content/content-script.js'),contentContext);
 assert.equal(starts,1,'A stalled theme service or registration message must not block cached module startup');
 assert.equal(batchReads,1,'Initial shell preferences should use one bounded storage batch');
@@ -60,4 +62,10 @@ await new Promise(resolve=>{
   runtimeListeners[0]({channel:'slink-page-activity',type:'active-state',active:false},null,resolve);
 });
 assert.equal(stops,1,'Inactive tabs must still pause workers');
+focused=false;activityEvents.get('focus')();await new Promise(resolve=>setTimeout(resolve,0));
+assert.equal(starts,1,'A visible but unfocused window must not start workers');
+focused=true;activityEvents.get('focus')();await new Promise(resolve=>setTimeout(resolve,0));assert.equal(starts,2);
+focused=false;activityEvents.get('blur')();await new Promise(resolve=>setTimeout(resolve,0));
+assert.equal(stops,2,'Window blur must release workers without destroying the retained shell');
 console.log('Cached startup, stalled remote services, batched UI preferences, permission write deduplication/expiry and activity suspension passed.');
+

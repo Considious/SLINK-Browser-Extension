@@ -136,7 +136,7 @@
   }
 
   async function claimRuntimeActivity() {
-    if (document.visibilityState !== 'visible' || !global.chrome?.runtime?.id) {
+    if (document.visibilityState !== 'visible' || document.hasFocus?.() !== true || !global.chrome?.runtime?.id) {
       await applyRuntimeActivity(false);
       return false;
     }
@@ -275,7 +275,9 @@
     else releaseRuntimeActivity();
   });
   global.addEventListener('focus', () => void claimRuntimeActivity());
+  global.addEventListener('blur', releaseRuntimeActivity);
   global.addEventListener('pageshow', () => void claimRuntimeActivity());
   global.addEventListener('pagehide', releaseRuntimeActivity);
 })(globalThis);
+
 

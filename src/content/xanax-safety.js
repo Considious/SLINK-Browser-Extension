@@ -16,6 +16,8 @@
     'a[data-role="use"][aria-label^="Xanax"]',
     `[data-id="${XANAX_ITEM_ID}"][title="Xanax"]`
   ].join(',');
+  const ENERGY_SELECTOR = '#barEnergy,[id*="barEnergy"],[data-stat="energy"],[data-testid*="energy" i],[aria-label*="energy" i],[class*="barEnergy"],a[href*="gym.php"]';
+  function activePage() { return document.visibilityState === 'visible' && document.hasFocus?.() === true; }
 
   function integer(value) {
     const parsed = Number(String(value ?? '').replace(/,/g, ''));
@@ -80,6 +82,7 @@
   }
 
   function handleXanaxUse(event) {
+    if (!activePage()) return;
     const action = xanaxAction(event.target);
     if (!action) return;
     const energy = currentEnergy();
@@ -90,12 +93,15 @@
     event.stopImmediatePropagation();
   }
 
-  let decorateScheduled = false;
+  let decorateTimer = null;
   function decorateXanaxActions() {
-    decorateScheduled = false;
+    decorateTimer = null;
+    if (!activePage()) return;
+    const actions = document.querySelectorAll(ACTION_SELECTOR);
+    if (!actions.length) return;
     const energy = currentEnergy();
     const guarded = energy !== null && energy > SAFE_ENERGY_LIMIT;
-    for (const action of document.querySelectorAll(ACTION_SELECTOR)) {
+    for (const action of actions) {
       action.toggleAttribute(WARNING_ATTRIBUTE, guarded);
       if (guarded) action.setAttribute('aria-description', `SLINK safety confirmation required. Current energy: ${energy}.`);
       else action.removeAttribute('aria-description');
@@ -103,9 +109,25 @@
   }
 
   function scheduleDecoration() {
-    if (decorateScheduled) return;
-    decorateScheduled = true;
-    global.requestAnimationFrame(decorateXanaxActions);
+    if (!activePage() || decorateTimer !== null) return;
+    decorateTimer = global.setTimeout(decorateXanaxActions, 200);
+  }
+
+  function relevantMutation(mutation) {
+    const target = mutation.target?.nodeType === 1 ? mutation.target : mutation.target?.parentElement;
+    if (target?.closest?.(ENERGY_SELECTOR + ',' + ACTION_SELECTOR)) return true;
+    if (mutation.type === 'characterData') return false;
+    return [...(mutation.addedNodes || [])].some(node => node.nodeType === 1 &&
+      (node.matches?.(ACTION_SELECTOR + ',' + ENERGY_SELECTOR) || node.querySelector?.(ACTION_SELECTOR + ',' + ENERGY_SELECTOR)));
+  }
+
+  function syncActivity() {
+    observer.disconnect();
+    global.clearTimeout(decorateTimer);
+    decorateTimer = null;
+    if (!activePage()) return;
+    observer.observe(document.documentElement, { childList:true, subtree:true, characterData:true });
+    scheduleDecoration();
   }
 
   const style = document.createElement('style');
@@ -114,12 +136,14 @@
   (document.head || document.documentElement).appendChild(style);
 
   document.addEventListener('click', handleXanaxUse, true);
-  const observer = new MutationObserver(scheduleDecoration);
-  observer.observe(document.documentElement, { childList:true, subtree:true, characterData:true });
-  scheduleDecoration();
-
-  global.addEventListener('pagehide', () => {
-    observer.disconnect();
-    document.removeEventListener('click', handleXanaxUse, true);
-  }, { once:true });
+  const observer = new MutationObserver(mutations => {
+    if (activePage() && mutations.some(relevantMutation)) scheduleDecoration();
+  });
+  document.addEventListener('visibilitychange', syncActivity);
+  global.addEventListener('focus', syncActivity);
+  global.addEventListener('blur', syncActivity);
+  global.addEventListener('pageshow', syncActivity);
+  global.addEventListener('pagehide', () => { observer.disconnect(); global.clearTimeout(decorateTimer); decorateTimer = null; });
+  syncActivity();
 })(globalThis);
+

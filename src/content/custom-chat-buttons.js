@@ -46,10 +46,29 @@
     enabled = true;
     addStyles();
     scanContexts();
-    observer = new MutationObserver(scheduleScan);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    observer = new MutationObserver(mutations => {
+      if (!activePage()) return;
+      if (menuChatRoot && !menuChatRoot.isConnected) closeMenu();
+      const selector = CHAT_ROOT_SELECTOR + ',' + CHAT_HEADER_DISCOVERY_SELECTOR + ',[data-testid="editor-root"]';
+      if (mutations.some(mutation => [...(mutation.addedNodes || [])].some(node => node.nodeType === 1 &&
+        (node.matches?.(selector) || node.querySelector?.(selector))))) scheduleScan();
+    });
+    syncActivity();
     window.addEventListener('hashchange', scheduleScan);
   }
+  function activePage() { return document.visibilityState === 'visible' && document.hasFocus?.() === true; }
+  function syncActivity() {
+    observer?.disconnect();
+    window.clearTimeout(scanTimer); scanTimer = null;
+    if (!enabled || !activePage()) return;
+    observer.observe(document.documentElement, { childList:true, subtree:true });
+    scheduleScan();
+  }
+  document.addEventListener('visibilitychange', syncActivity);
+  window.addEventListener('focus', syncActivity);
+  window.addEventListener('blur', syncActivity);
+  window.addEventListener('pageshow', syncActivity);
+  window.addEventListener('pagehide', () => { observer?.disconnect(); window.clearTimeout(scanTimer); scanTimer = null; });
   window.addEventListener('slink-chat-enable', enable);
 
   window.addEventListener('resize', () => {
@@ -272,7 +291,7 @@
   }
 
   function scheduleScan() {
-    if (scanTimer) window.clearTimeout(scanTimer);
+    if (!activePage() || scanTimer !== null) return;
     scanTimer = window.setTimeout(() => {
       scanTimer = null;
       scanContexts();
@@ -293,6 +312,7 @@
   }
 
   function scanContexts() {
+    if (!activePage()) return;
     const handledHeaders = new Set();
     document.querySelectorAll(CHAT_ROOT_SELECTOR).forEach((root) => {
       const header = chatHeader(root);
@@ -1039,4 +1059,5 @@
   globalThis.SLINK_CHAT_BUTTONS = Object.freeze({ enable, openEditor });
   window.addEventListener('slink-chat-open-editor', openEditor);
 })();
+
 
