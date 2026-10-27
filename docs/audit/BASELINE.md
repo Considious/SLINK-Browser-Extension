@@ -1,5 +1,13 @@
 # Audit test baseline and classification
 
+## Candidate 13 — Bounties explicit editor commits, 26 October 2026
+
+All **79/79** local commands passed after final source/version changes. Added bounties-editor.test.mjs; extended settings-queue.test.mjs to execute the actual Bounties service/public status. Module test loads real form-state/module code in a VM DOM fixture and executes registered handlers. Coverage: failed-save numeric/checkbox/password drafts, pending double-click coalescing, changed-only payloads, normalized successful values, typing during pending save, stale scan responses, explicit cancel, retained open editor across stop/resume and no stopped-instance redraw. Existing guard tests cover caret/selection/scroll behavior.
+
+Background queue now reads current storage within each serialized mutation, preserves unknown stored fields, retains blank keys, returns redacted normalized public settings and recovers after write rejection. Public status/migration stays outside the settings mutation queue. Concurrent scan-runtime writes are not made globally transactional by this patch. VM tests do not establish native PDA storage guarantees.
+
+qa-bounties-editor.cjs local isolated Playwright fixture additionally ran real MutationObserver/Shadow DOM/input/button behavior at 360px and 1000px. Initial restricted Edge launch failed; approved elevated temporary-profile run succeeded. No real API keys, user profile or network used. No theme/layout asset changes. Test-only core shell fixture is not full authenticated Torn acceptance. This candidate modifies only extension Bounties plus release metadata/tests/docs; PDA unchanged. Remaining editors and Phase 2/3 acceptance work remain open.
+
 ## Batch 12 — baseline closure, 26 October 2026
 
 Full local inventory **78/78 commands passed**. Added purchase-controls.test.mjs; repaired background.test.mjs, validate-extension.mjs and PDA test-overlay.mjs. Runtime/build versions unchanged; this batch changes only tests, test entry points and documentation.

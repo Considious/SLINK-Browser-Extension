@@ -2,6 +2,19 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 13 — 26 October 2026 — Bounties settings stay under your control
+
+Extension tester **0.19.11.4 / Audit Test 13**. Testing branch only: no main release, worker deployment or PDA runtime change. PDA remains 0.4.109 / Audit Test 10. This is the next partial editable-settings batch, not a claim that every editor has been converted.
+
+- Bounties now keeps your settings editor open after Save so you can see the saved values. Failed saves keep your typed values and checkboxes. Typing while a save is pending remains an unsaved draft rather than being overwritten by that earlier save.
+- Saved values are shown after validation (for example, FF batches/minute above 20 returns to 20). Saved API-key text leaves the input after acknowledgement; blank key fields still keep the existing keys. No saved credentials or settings are reset.
+- Save submits only changed fields. Concurrent changes to different Bounties settings are merged in the background, not written as competing full snapshots. A failed write does not break later saves. Older scan/activity responses cannot roll newly saved settings back.
+- Background refreshes do not close the editor. Pausing/resuming the retained module keeps its open editor and draft. Clicking Close settings is an explicit cancel of that editor's unsaved changes; reopening shows saved settings. A second Save click while one is pending does not submit twice.
+
+**What to test in both the Torn overlay and extension dashboard:** open Bounties settings, change several numbers and checkboxes, and let the scan update while you type. Save, reopen, refresh and switch pages: verify the saved settings persist. Enter 999 for FF batches/minute and Save; it should show 20, not keep a stale 999. Leave saved key fields blank and check the tracker remains configured. Close without saving and reopen; only those unsaved changes should be discarded. Resize and scroll while editing. If you use two windows, change different fields and save from each; one window's untouched fields must not undo the other's change. Do not clear storage, uninstall or expose real API keys to test failures.
+
+**Verification:** all **79/79** local extension/PDA commands pass. New executable module regression uses the real form guard and save handlers, delayed/failed acknowledgements, late scans, duplicate clicks, key drafts, normalization, cancel and stop/resume. Background regression executes the actual Bounties service with concurrent patch writes, injected storage failure/recovery, key retention/redaction and unknown saved-field preservation. A separate real-browser Shadow DOM interaction check passed at 360px and 1000px with fake data and blocked network. This is not physical PDA testing, a real Torn purchase or completion of the remaining editors/native-storage work.
+
 ## Batch 12 — 26 October 2026 — regression checks repaired
 
 This is a **testing-branch-only test/documentation update**, not a new gameplay release. Install links and build versions stay the same: extension 0.19.11.3 / Audit Test 11, PDA 0.4.109 / Audit Test 10. No runtime, theme, settings, API keys or saved targets changed. No main branch or live worker update.

@@ -16,6 +16,7 @@
   const PAGES_PER_BATCH = 2;
   let scanPromise = null;
   let budgetQueue = Promise.resolve();
+  let settingsQueue = Promise.resolve();
   let legacyStatusMigration = null;
 
   function defaultRuntime() {
@@ -261,20 +262,26 @@
     }
   }
 
-  async function saveSettings(input = {}) {
-    const previous = await settings();
-    const next = CORE.normalizeSettings({
-      ...previous,
-      ...input,
-      tornKey:input.clearTornKey ? '' : (String(input.tornKey || '').trim() || previous.tornKey),
-      ffKey:input.clearFfKey ? '' : (String(input.ffKey || '').trim() || previous.ffKey)
+  function saveSettings(input = {}) {
+    const task = settingsQueue.then(async () => {
+      const stored = await SLINK.core.storage.get(KEYS.settings, {});
+      const previous = CORE.normalizeSettings(stored);
+      const next = CORE.normalizeSettings({
+        ...previous,
+        ...input,
+        tornKey:input.clearTornKey ? '' : (String(input.tornKey || '').trim() || previous.tornKey),
+        ffKey:input.clearFfKey ? '' : (String(input.ffKey || '').trim() || previous.ffKey)
+      });
+      await SLINK.core.storage.set(KEYS.settings, { ...stored, ...next });
+      const scanShapeChanged = ['minimumReward', 'scanFullList']
+        .some(key => JSON.stringify(next[key]) !== JSON.stringify(previous[key]));
+      if (!next.enabled || scanShapeChanged) await SLINK.core.storage.set(KEYS.runtime, next.enabled ? freshStart() : defaultRuntime());
+      if (next.enabled) await SLINK.core.storage.set(KEYS.activity, Date.now());
     });
-    await SLINK.core.storage.set(KEYS.settings, next);
-    const scanShapeChanged = ['minimumReward', 'scanFullList']
-      .some(key => JSON.stringify(next[key]) !== JSON.stringify(previous[key]));
-    if (!next.enabled || scanShapeChanged) await SLINK.core.storage.set(KEYS.runtime, next.enabled ? freshStart() : defaultRuntime());
-    if (next.enabled) await SLINK.core.storage.set(KEYS.activity, Date.now());
-    return publicStatus();
+    settingsQueue = task.catch(() => undefined);
+    // Public presentation can require legacy-cache migration. Do not hold the
+    // settings mutation queue on that unrelated work.
+    return task.then(() => publicStatus());
   }
 
   async function sharedStatuses() {

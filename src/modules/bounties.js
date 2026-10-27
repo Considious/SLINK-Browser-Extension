@@ -3,6 +3,7 @@
 
   const SLINK = global.SLINK_EXTENSION;
   const ACTIVE_HEARTBEAT_MS = 60_000;
+  const editorViews = new WeakMap();
   const BOUNTY_PROFILE_INTENT_KEY = 'slink-extension:bounty-profile-intent:v1';
   const BOUNTY_PROFILE_INTENT_MS = 5 * 60_000;
   const MODULE_STYLES = `
@@ -77,6 +78,9 @@
       let current = null;
       let busy = false;
       let settingsOpen = false;
+      let savingSettings = false;
+      let settingsRevision = 0;
+      let localNotice = '';
       let stopped = false;
       let localError = '';
       let scanTimer = null;
@@ -86,6 +90,21 @@
 
       context.ui.setTitle('SLINK Bounties');
       context.ui.setModuleStyles(MODULE_STYLES);
+      const contentRoot = context.ui.getContentElement();
+      const retainedEditor = editorViews.get(contentRoot);
+      if (retainedEditor) settingsOpen = retainedEditor.settingsOpen;
+      contentRoot.dataset.uiExplicitCommit = 'true';
+      const draftGuard = SLINK.core.formState?.protect(contentRoot.getRootNode?.() || contentRoot);
+
+      // Scan/activity responses may have captured settings before a save. Keep
+      // their runtime results, but never let those old settings undo an ack.
+      async function loadStatus(type, payload) {
+        const revision = settingsRevision;
+        const value = await SLINK.core.messaging.send(type, payload);
+        if (stopped || context.signal?.aborted) return;
+        current = revision === settingsRevision || !current
+          ? value : { ...value, settings:current.settings };
+      }
 
       function moduleVisible() {
         const view = context.ui.getContentElement()?.closest('.module-view');
@@ -113,7 +132,7 @@
           <label class="wide bounty-check"><input id="bounty-abroad" type="checkbox" ${settings.includeAbroad ? 'checked' : ''}><span>Show abroad, traveling, and hiding-out targets</span></label>
           <label class="wide">Torn public API key<input id="bounty-torn-key" type="password" autocomplete="off" placeholder="${settings.hasTornKey ? `Saved via ${escape(settings.tornKeySource)} — blank keeps it` : 'Required; blank uses Leveling key'}"></label>
           <label class="wide">FFScouter key<input id="bounty-ff-key" type="password" autocomplete="off" placeholder="${settings.hasFfKey ? `Saved via ${escape(settings.ffKeySource)} — blank keeps it` : 'Blank uses Leveling key'}"></label>
-          <div class="bounty-settings-actions"><button id="bounty-save" type="button">Save</button><button id="bounty-restart" type="button">Restart scan</button></div>
+          <div class="bounty-settings-actions"><button id="bounty-save" type="button" ${savingSettings ? 'disabled' : ''}>${savingSettings ? 'Saving…' : 'Save'}</button><button id="bounty-restart" type="button" ${busy || savingSettings ? 'disabled' : ''}>Restart scan</button></div>
         </div>`;
       }
 
@@ -145,12 +164,17 @@
       }
 
       function render() {
+        if (stopped || context.signal?.aborted) return;
+        editorViews.set(contentRoot, { settingsOpen });
         const runtime = current?.runtime || {};
         context.ui.setSubtitle(current?.settings?.enabled ? 'Live bounty API crawl' : 'Disabled');
-        context.ui.setStatus(localError || runtime.lastError || runtime.cycleStatus || 'Bounty Tracker ready.', localError || runtime.lastError ? 'error' : current?.configured ? 'ready' : 'normal');
+        context.ui.setStatus(localError || runtime.lastError || localNotice || runtime.cycleStatus || 'Bounty Tracker ready.', localError || runtime.lastError ? 'error' : current?.configured ? 'ready' : 'normal');
         context.ui.setActions([
           { id:'refresh', label:busy ? 'Working…' : 'Refresh', disabled:busy, onClick:() => runScan(true) },
-          { id:'settings', label:settingsOpen ? 'Close settings' : 'Settings', onClick:() => { settingsOpen = !settingsOpen; render(); } }
+          { id:'settings', label:settingsOpen ? 'Close settings' : 'Settings', onClick:() => {
+            if (settingsOpen) draftGuard?.cancel(contentRoot.querySelector('.bounty-settings'));
+            settingsOpen = !settingsOpen; localNotice = ''; render();
+          } }
         ]);
         context.ui.setContentHtml(`
           <div class="bounty-summary">
@@ -214,7 +238,9 @@
           });
         });
         root.querySelector('#bounty-save')?.addEventListener('click', async () => {
-          const payload = {
+          if (savingSettings) return;
+          const ticket = draftGuard?.begin(root.querySelector('.bounty-settings'));
+          const values = {
             enabled:root.querySelector('#bounty-enabled')?.checked === true,
             minimumReward:root.querySelector('#bounty-minimum')?.value,
             scanFullList:root.querySelector('#bounty-full-list')?.checked === true,
@@ -229,15 +255,26 @@
             tornKey:root.querySelector('#bounty-torn-key')?.value || '',
             ffKey:root.querySelector('#bounty-ff-key')?.value || ''
           };
-          busy = true; localError = ''; render();
+          // Send only edited fields. A second window's unrelated settings must
+          // not be replaced by this editor's older, unchanged form values.
+          const payload = Object.fromEntries(Object.entries(values).filter(([key, value]) =>
+            key === 'tornKey' || key === 'ffKey'
+              ? String(value).trim() !== ''
+              : String(value) !== String(current?.settings?.[key])
+          ));
+          savingSettings = true; settingsRevision++; localError = ''; localNotice = ''; render();
           try {
-            current = await SLINK.core.messaging.send('bounties.settings.save', payload);
-            settingsOpen = false;
+            const saved = await SLINK.core.messaging.send('bounties.settings.save', payload);
+            const unchanged = ticket ? draftGuard.commit(ticket) : true;
+            if (stopped || context.signal?.aborted) return;
+            current = saved;
+            localNotice = unchanged ? 'Settings saved.' : 'Settings saved. Newer edits are still unsaved.';
           } catch (error) { localError = SLINK.core.format.errorMessage(error); }
-          finally { busy = false; render(); syncActivity(); }
+          finally { settingsRevision++; savingSettings = false; render(); if (!stopped && !context.signal?.aborted) syncActivity(); }
         });
         root.querySelector('#bounty-restart')?.addEventListener('click', async () => {
-          try { current = await SLINK.core.messaging.send('bounties.scan.reset'); render(); void runScan(true); }
+          if (busy || savingSettings) return;
+          try { await loadStatus('bounties.scan.reset'); render(); void runScan(true); }
           catch (error) { localError = SLINK.core.format.errorMessage(error); render(); }
         });
       }
@@ -250,20 +287,21 @@
       }
 
       async function refreshStatus() {
-        current = await SLINK.core.messaging.send('bounties.status');
-        if (!current.settings.enabled) settingsOpen = true;
+        await loadStatus('bounties.status');
+        if (!current) return;
+        if (!current.settings.enabled && !retainedEditor) settingsOpen = true;
         render();
       }
 
       async function touch() {
-        try { current = await SLINK.core.messaging.send('bounties.activity.touch'); }
+        try { await loadStatus('bounties.activity.touch'); }
         catch {}
       }
 
       function syncActivity() {
         clearInterval(heartbeatTimer);
         heartbeatTimer = null;
-        if (!moduleVisible() || !current?.settings?.enabled) return;
+        if (stopped || context.signal?.aborted || !moduleVisible() || !current?.settings?.enabled) return;
         void touch();
         heartbeatTimer = setInterval(() => void touch(), ACTIVE_HEARTBEAT_MS);
         void runScan(false);
@@ -275,11 +313,11 @@
       }
 
       async function runScan(force) {
-        if (busy || stopped || !current?.settings?.enabled) return;
+        if (busy || savingSettings || stopped || context.signal?.aborted || !current?.settings?.enabled) return;
         if (force && moduleVisible()) await touch();
         if (!current?.active && !moduleVisible()) return;
         busy = true; localError = ''; render();
-        try { current = await SLINK.core.messaging.send('bounties.scan.batch', { forceRestart:force === true && current?.runtime?.completed === true }); }
+        try { await loadStatus('bounties.scan.batch', { forceRestart:force === true && current?.runtime?.completed === true }); }
         catch (error) { localError = SLINK.core.format.errorMessage(error); }
         finally {
           busy = false; render();
