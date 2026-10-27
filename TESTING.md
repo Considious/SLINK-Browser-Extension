@@ -1,12 +1,12 @@
-# SLINK audit tester build — candidate 17 (Company personal-setting autosave)
+# SLINK audit tester build — candidate 18 (Racing persistence and highlighting)
 
-Current batch: Company addiction-alert thresholds adopt the shared preference-autosave helper. Numeric typing is debounced, failed/incomplete drafts are retained with Retry, and the actual editor stays mounted during same-company/role refreshes. Saves do not fetch the company or roster. Director-only visibility and explicit Refresh/chat actions are unchanged. Includes previous audit fixes; other editors still need conversion. No PDA runtime update or main promotion. See the running changelog for tests and limitations.
+Current batch: Racing nickname autosave and stable guide controls, with a serialized per-build background save owner. Existing completion progress and names remain in the same storage key. Visible-row highlighting and visibility-change recovery are corrected on extension and PDA. No automatic car clicks. Includes previous audit fixes; other editors/native PDA storage work remain. See the running changelog for tests and limitations.
 
 26 October follow-up (Batch 12): testing-only regression/documentation updates now pass all 78 local test commands. No runtime/version change; use the same installer below. Main's quota hotfix was separately approved and published as 0.19.12; this branch still contains the unpromoted audit work. See the running changelog for the current manual test checklist. Automated checks do not replace real-device acceptance.
 
 This is an early testing build, not the Chrome Web Store release. This audit batch does not change main; the separately approved Mugging hotfix is already on main. The full audit plan is not implemented yet.
 
-- Version: **0.19.11.8**, displayed as **0.19.11 Audit Test 17**. PDA remains Candidate 10.
+- Version: **0.19.11.9**, displayed as **0.19.11 Audit Test 18**. PDA highlight fix: **0.4.110 / 0.4.110-audit-test18**.
 - Branch: `audit/test-foundation`.
 - [Download the tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip).
 - [One running tester changelog for extension and PDA](https://github.com/Considious/SLINK-Browser-Extension/blob/audit/test-foundation/TESTER-CHANGELOG.md).
