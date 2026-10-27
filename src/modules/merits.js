@@ -55,54 +55,70 @@
         ui.setStatus(current.lastError || `Updated ${relativeTime(current.fetchedAt)} · automatic every ${current.settings?.refreshMinutes || 15} minutes`, current.lastError ? 'error' : current.fetchedAt ? 'ready' : 'normal');
       }
 
-      function render(status) {
-        current = status;
-        setStatus();
-        if (!status?.configured || !status?.permitted) {
-          ui.getContentElement().innerHTML = `<div class="slink-merit-unavailable">${escapeHtml(status?.lastError || 'Enable Efficiency and save your Torn API key in the extension dashboard.')}</div>`;
-          return;
+      const root = ui.getContentElement(), guard = SLINK.core.formState.protect(root.getRootNode());
+      const previousExplicit = root.dataset.uiExplicitCommit; root.dataset.uiExplicitCommit = 'true';
+      let mounted = false, settingsRevision = 0, requestSequence = 0;
+      const preferences = SLINK.core.formState.autosave({
+        root,fields:{'merits-view-filter':'filter','merits-view-refresh':'refreshMinutes'},read:key => current?.settings?.[key],
+        async save(patch) {settingsRevision++;try {return await SLINK.core.messaging.send('merits.settings.save',{...patch,preferenceOnly:true});} finally {settingsRevision++;}},
+        select:response => response.settings,
+        onCommit:patch => {current = {...current,settings:{...current?.settings,...patch}};void load(false);},
+        onState:state => {
+          if (stopped || !mounted) return;
+          root.querySelector('[data-merit-save-state]').textContent = ({idle:'Settings save automatically.',saving:'Saving…',saved:'Saved.',failed:'Not saved. Retry.',invalid:'Check your setting.',unsaved:'Changes not saved yet.'})[state.state] || '';
+          root.querySelector('[data-merit-retry]').hidden = state.state !== 'failed';
         }
-        const pinned = Array.isArray(status.pinned) ? status.pinned : [];
-        const goals = Array.isArray(status.goals) ? status.goals : [];
-        const unpinnedGoals = goals.filter(goal => !status.settings?.pinned?.includes(goal.key));
-        ui.getContentElement().innerHTML = `<div class="slink-merit-summary"><div><strong>${status.completedCount || 0}</strong><span>earned</span></div><div><strong>${goals.length}</strong><span>next goals</span></div><div><strong>${pinned.length}/3</strong><span>pinned farms</span></div></div>
-          <div class="slink-merit-controls"><label>Show<select data-merit-setting="filter"><option value="all">Honors + medals</option><option value="medal">Medals</option><option value="honor">Honors</option></select></label><label>Refresh<select data-merit-setting="refreshMinutes"><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option></select></label></div>
-          ${pinned.length ? `<div class="slink-merit-section-title"><strong>Active farms</strong><span>${pinned.length}/3</span></div><div class="slink-merit-list">${pinned.map(goal => cardMarkup(goal, status, true)).join('')}</div>` : ''}
-          <div class="slink-merit-section-title"><strong>Next milestones</strong><span>${goals.length}</span></div><div class="slink-merit-list">${unpinnedGoals.length ? unpinnedGoals.slice(0, 80).map(goal => cardMarkup(goal, status)).join('') : '<div class="slink-merit-unavailable">No other incomplete awards match this filter.</div>'}</div>`;
-        const filter = ui.getContentElement().querySelector('[data-merit-setting="filter"]');
-        const refresh = ui.getContentElement().querySelector('[data-merit-setting="refreshMinutes"]');
-        filter.value = status.settings?.filter || 'all';
-        refresh.value = String(status.settings?.refreshMinutes || 15);
+      });
+      function render(status) {
+        if (stopped || context.signal?.aborted) return;
+        current = status; setStatus();
+        if (!mounted) {
+          root.innerHTML = '<div class="slink-merit-summary"></div><div class="slink-merit-controls"><label>Show<select id="merits-view-filter" data-merit-setting="filter"><option value="all">Honors + medals</option><option value="medal">Medals</option><option value="honor">Honors</option></select></label><label>Refresh<select id="merits-view-refresh" data-merit-setting="refreshMinutes"><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option></select></label></div><div role="status"><span data-merit-save-state></span> <button type="button" data-merit-retry hidden>Retry</button></div><div data-merit-goals></div>';
+          root.querySelector('#merits-view-filter').value = status.settings?.filter || 'all';
+          root.querySelector('#merits-view-refresh').value = String(status.settings?.refreshMinutes || 15);
+          mounted = true; preferences.mount();
+        }
+        for (const [id,key] of [['merits-view-filter','filter'],['merits-view-refresh','refreshMinutes']]) {
+          const control = root.querySelector('#'+id); guard.hydrate(control,status.settings?.[key]);
+          control.disabled = !status.configured || !status.permitted;
+        }
+        const pinned = Array.isArray(status.pinned) ? status.pinned : [], goals = Array.isArray(status.goals) ? status.goals : [];
+        const unpinned = goals.filter(goal => !status.settings?.pinned?.includes(goal.key));
+        root.querySelector('.slink-merit-summary').innerHTML = '<div><strong>'+ (status.completedCount || 0) +'</strong><span>earned</span></div><div><strong>'+goals.length+'</strong><span>next goals</span></div><div><strong>'+pinned.length+'/3</strong><span>pinned farms</span></div>';
+        const html = !status.configured || !status.permitted ? '<div class="slink-merit-unavailable">'+escapeHtml(status.lastError || 'Enable Efficiency and save your Torn API key in the extension dashboard.')+'</div>'
+          : (pinned.length ? '<div class="slink-merit-section-title"><strong>Active farms</strong><span>'+pinned.length+'/3</span></div><div class="slink-merit-list">'+pinned.map(goal=>cardMarkup(goal,status,true)).join('')+'</div>' : '')
+          + '<div class="slink-merit-section-title"><strong>Next milestones</strong><span>'+goals.length+'</span></div><div class="slink-merit-list">'+(unpinned.length ? unpinned.slice(0,80).map(goal=>cardMarkup(goal,status)).join('') : '<div class="slink-merit-unavailable">No other incomplete awards match this filter.</div>')+'</div>';
+        const goalsRoot = root.querySelector('[data-merit-goals]');
+        if (goalsRoot.innerHTML !== html) goalsRoot.innerHTML = html;
       }
 
       async function load(refreshIfDue = true) {
-        try { render(await SLINK.core.messaging.send('merits.status', { refreshIfDue })); }
-        catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
+        const request = ++requestSequence, revision = settingsRevision;
+        try {
+          const status = await SLINK.core.messaging.send('merits.status',{refreshIfDue});
+          if (request !== requestSequence || stopped) return;
+          if (revision !== settingsRevision || preferences.busy) status.settings = {...status.settings,...current?.settings};
+          render(status);
+        } catch (error) {if (!stopped && request === requestSequence) ui.setStatus(SLINK.core.format.errorMessage(error),'error');}
       }
-
-      ui.getContentElement().addEventListener('click', async event => {
-        const button = event.target.closest('[data-merit-pin]');
-        if (!button) return;
-        button.disabled = true;
-        try { render(await SLINK.core.messaging.send('merits.pin', { key:button.dataset.meritPin })); }
-        catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
+      context.listen(root,'click',async event => {
+        const button = event.target.closest('[data-merit-pin],[data-merit-retry]'); if (!button || button.disabled || stopped) return;
+        if (button.matches('[data-merit-retry]')) {await preferences.flush().catch(()=>{});return;}
+        button.disabled = true; settingsRevision++;
+        try {await preferences.flush();await SLINK.core.messaging.send('merits.pin',{key:button.dataset.meritPin});await load(false);}
+        catch (error) {if (!stopped) ui.setStatus(SLINK.core.format.errorMessage(error),'error');}
+        finally {settingsRevision++;if (!stopped) button.disabled = false;}
       });
-      ui.getContentElement().addEventListener('change', async event => {
-        if (!event.target.matches('[data-merit-setting]')) return;
-        const payload = { [event.target.dataset.meritSetting]:event.target.value };
-        try { render(await SLINK.core.messaging.send('merits.settings.save', payload)); }
-        catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
-      });
-      ui.setActions([{ id:'refresh', label:'Refresh Merits', onClick:async event => {
+      ui.setActions([{id:'refresh',label:'Refresh Merits',onClick:async event => {
         event.currentTarget.disabled = true;
-        try { render(await SLINK.core.messaging.send('merits.refresh')); }
-        catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
-        finally { event.currentTarget.disabled = false; }
-      } }]);
+        try {await preferences.flush();await SLINK.core.messaging.send('merits.refresh');await load(false);}
+        catch (error) {if (!stopped) ui.setStatus(SLINK.core.format.errorMessage(error),'error');}
+        finally {if (!stopped) event.currentTarget.disabled = false;}
+      }}]);
       await load(false);
       apiTimer = global.setInterval(() => { if (!stopped) void load(true); }, 60_000);
       clockTimer = global.setInterval(() => { if (!stopped) setStatus(); }, 1_000);
-      return { stop() { stopped = true; if (apiTimer) global.clearInterval(apiTimer); if (clockTimer) global.clearInterval(clockTimer); } };
+      return { async stop() { stopped = true; await preferences.stop(); if (previousExplicit === undefined) delete root.dataset.uiExplicitCommit; else root.dataset.uiExplicitCommit = previousExplicit; if (apiTimer) global.clearInterval(apiTimer); if (clockTimer) global.clearInterval(clockTimer); } };
     }
   });
 })(globalThis);

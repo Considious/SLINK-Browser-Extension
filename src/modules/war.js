@@ -133,6 +133,37 @@
       const fullUi = context.presentation === 'full';
       const contentRoot = context.ui.getContentElement();
       const draftGuard = SLINK.core.formState?.protect(contentRoot.getRootNode?.() || contentRoot);
+      let editorShellMounted = false;
+      const boundEvents = new WeakMap();
+      function bindControl(node,type,handler) {
+        if (!node) return;
+        let events=boundEvents.get(node);if (!events) {events=new Set();boundEvents.set(node,events);}
+        if (events.has(type)) return;events.add(type);node.addEventListener(type,handler);
+      }
+      function patchWarBody(container,html) {
+        const template=document.createElement('template');template.innerHTML=html;
+        const old=new Map([...container.children].filter(node=>node.dataset.warEditor).map(node=>[node.dataset.warEditor,node]));
+        const scope=JSON.stringify([current?.session?.userId,current?.session?.factionId,current?.session?.officer===true,current?.terms?.accepted,current?.terms?.version,current?.terms?.sha256]);
+        const desired=[...template.content.children].map(node=>{
+          if (!node.dataset.warEditor) return node;
+          const previous=old.get(node.dataset.warEditor);
+          if (previous?.dataset.editorScope===scope) return previous;
+          const accept=previous?.querySelector('#slink-war-accept');if (accept) draftGuard?.cancel(accept);
+          node.dataset.editorScope=scope;return node;
+        });
+        const keep=new Set(desired);for (const node of [...container.children]) if (!keep.has(node)) node.remove();
+        desired.forEach((node,index)=>{if (container.children[index]!==node) container.insertBefore(node,container.children[index]||null);});
+        const shared=current?.sharedConfig || {},settings=current?.settings || {};
+        for (const [id,value] of [
+          ['slink-war-display',settings.displayMode],['slink-war-mode',shared.mode || settings.warMode],
+          ['slink-war-idle',shared.idleMinutes ?? settings.idleMinutes ?? 0],['slink-war-inside-cap',shared.insideHitCap || 0],
+          ['slink-war-inside-mode',shared.insideBlockMode || 'warn']
+        ]) if (value !== undefined) draftGuard?.hydrate?.(container.querySelector('#'+id),value);
+        for (const id of ['slink-war-save','slink-war-clear']) {
+          const node=container.querySelector('#'+id);if (node) node.disabled=savingWarSettings;
+        }
+        const save=container.querySelector('#slink-war-save');if (save) save.textContent=savingWarSettings?'Saving…':'Save War settings';
+      }
 
       async function requestWarStatus(type, payload) {
         const revision = settingsRevision;
@@ -688,7 +719,7 @@
       }
 
       function armoryHtml() {
-        if (!current?.session?.officer) return '<div class="slink-war-error">slink.war.officer permission is required.</div>';
+        if (!canUseArmoryRecaller()) return '<div class="slink-war-error">Armory Recaller permission is required.</div>';
         const onArmory = Boolean(activeArmoryTab());
         const members = armoryMemberRowsHtml();
         return `<div class="slink-war-armory">
@@ -743,7 +774,7 @@
       function assignmentControls() {
         if (!current?.session?.authenticated) return '';
         const officer = current.session.officer === true;
-        return `<div class="slink-war-settings slink-war-note"><label>Target Torn ID<input id="slink-war-claim-target-id" type="number" min="1" placeholder="Required"></label><label>Target name<input id="slink-war-claim-target-name" type="text" maxlength="80" placeholder="Optional"></label>${officer ? '<label>Assign to Torn ID<input id="slink-war-assignee-id" type="number" min="1" placeholder="Blank = yourself"></label><label>Assignee name<input id="slink-war-assignee-name" type="text" maxlength="80" placeholder="Optional"></label>' : ''}<div class="slink-war-settings-actions"><button id="slink-war-claim-submit" type="button">Claim med partner</button></div></div>`;
+        return `<div data-war-editor="assignment" class="slink-war-settings slink-war-note"><label>Target Torn ID<input id="slink-war-claim-target-id" type="number" min="1" placeholder="Required"></label><label>Target name<input id="slink-war-claim-target-name" type="text" maxlength="80" placeholder="Optional"></label>${officer ? '<label>Assign to Torn ID<input id="slink-war-assignee-id" type="number" min="1" placeholder="Blank = yourself"></label><label>Assignee name<input id="slink-war-assignee-name" type="text" maxlength="80" placeholder="Optional"></label>' : ''}<div class="slink-war-settings-actions"><button id="slink-war-claim-submit" type="button">Claim med partner</button></div></div>`;
       }
 
       function memberContext(member) {
@@ -755,7 +786,7 @@
         const locations = WAR.travelLocations(current?.runtime?.snapshot?.members || []);
         if (!locations.includes(targetFilters.location)) targetFilters.location = 'all';
         const locationOptions = ['<option value="all">All locations</option>', ...locations.map(location => `<option value="${escape(location)}" ${targetFilters.location === location ? 'selected' : ''}>${escape(location)}</option>`)].join('');
-        return `<div class="slink-war-settings slink-war-note"><label>Minimum FF<input id="slink-war-filter-min" type="number" min="0" step="0.1" value="${targetFilters.minFF}"></label><label>Maximum FF<input id="slink-war-filter-max" type="number" min="0" step="0.1" value="${targetFilters.maxFF}"></label><label>Status<select id="slink-war-filter-status"><option value="all" ${targetFilters.status === 'all' ? 'selected' : ''}>All statuses</option><option value="okay" ${targetFilters.status === 'okay' ? 'selected' : ''}>Okay only</option><option value="notOkay" ${targetFilters.status === 'notOkay' ? 'selected' : ''}>Not okay only</option></select></label><label>Abroad<select id="slink-war-filter-abroad"><option value="all" ${targetFilters.abroad === 'all' ? 'selected' : ''}>Show all targets</option><option value="hide" ${targetFilters.abroad === 'hide' ? 'selected' : ''}>Hide abroad</option><option value="only" ${targetFilters.abroad === 'only' ? 'selected' : ''}>Abroad only</option></select></label><label ${targetFilters.abroad === 'only' ? '' : 'hidden'}>Location<select id="slink-war-filter-location">${locationOptions}</select></label><label>Sort<select id="slink-war-filter-sort"><option value="availability" ${targetSort === 'availability' ? 'selected' : ''}>Availability</option><option value="fairFightDesc" ${targetSort === 'fairFightDesc' ? 'selected' : ''}>FF high to low</option><option value="fairFightAsc" ${targetSort === 'fairFightAsc' ? 'selected' : ''}>FF low to high</option></select></label></div>`;
+        return `<div data-war-editor="target-filters" class="slink-war-settings slink-war-note"><label>Minimum FF<input id="slink-war-filter-min" type="number" min="0" step="0.1" value="${targetFilters.minFF}"></label><label>Maximum FF<input id="slink-war-filter-max" type="number" min="0" step="0.1" value="${targetFilters.maxFF}"></label><label>Status<select id="slink-war-filter-status"><option value="all" ${targetFilters.status === 'all' ? 'selected' : ''}>All statuses</option><option value="okay" ${targetFilters.status === 'okay' ? 'selected' : ''}>Okay only</option><option value="notOkay" ${targetFilters.status === 'notOkay' ? 'selected' : ''}>Not okay only</option></select></label><label>Abroad<select id="slink-war-filter-abroad"><option value="all" ${targetFilters.abroad === 'all' ? 'selected' : ''}>Show all targets</option><option value="hide" ${targetFilters.abroad === 'hide' ? 'selected' : ''}>Hide abroad</option><option value="only" ${targetFilters.abroad === 'only' ? 'selected' : ''}>Abroad only</option></select></label><label ${targetFilters.abroad === 'only' ? '' : 'hidden'}>Location<select id="slink-war-filter-location">${locationOptions}</select></label><label>Sort<select id="slink-war-filter-sort"><option value="availability" ${targetSort === 'availability' ? 'selected' : ''}>Availability</option><option value="fairFightDesc" ${targetSort === 'fairFightDesc' ? 'selected' : ''}>FF high to low</option><option value="fairFightAsc" ${targetSort === 'fairFightAsc' ? 'selected' : ''}>FF low to high</option></select></label></div>`;
       }
       function targetShareKey(member) {
         return `war:target:${Number(member?.id) || 0}`;
@@ -864,7 +895,7 @@
       function outsideCards() {
         const settings = current?.settings || {};
         const members = WAR.sortMembers(current?.runtime?.outsideTargets || [], Date.now(), 'fairFightAsc');
-        const controls = `<div class="slink-war-settings"><label>Minimum FF<input id="slink-war-outside-min" type="number" min="1" max="3" step="0.1" value="${Number(settings.outsideMinFF) || 1}"></label><label>Maximum FF<input id="slink-war-outside-max" type="number" min="1" max="3" step="0.1" value="${Number(settings.outsideMaxFF) || 3}"></label><div class="slink-war-settings-actions"><button id="slink-war-outside-refresh" type="button">Poll up to 50 outside targets</button></div></div>`;
+        const controls = `<div data-war-editor="outside-filters" class="slink-war-settings"><label>Minimum FF<input id="slink-war-outside-min" type="number" min="1" max="3" step="0.1" value="${Number(settings.outsideMinFF) || 1}"></label><label>Maximum FF<input id="slink-war-outside-max" type="number" min="1" max="3" step="0.1" value="${Number(settings.outsideMaxFF) || 3}"></label><div class="slink-war-settings-actions"><button id="slink-war-outside-refresh" type="button">Poll up to 50 outside targets</button></div></div>`;
         const message = current?.runtime?.outsideError
           ? `<div class="slink-war-error">${escape(current.runtime.outsideError)}</div>`
           : !members.length ? '<div class="slink-war-empty">Choose a Fair Fight range and poll FFScouter for outside targets.</div>' : '';
@@ -958,7 +989,7 @@
         const shared = current?.sharedConfig || {};
         const officer = current?.session?.officer === true;
         const accepted = current?.terms?.accepted;
-        return `<div class="slink-war-settings" data-ui-explicit-commit="true">
+        return `<div data-war-editor="settings" class="slink-war-settings" data-ui-explicit-commit="true">
           <details class="slink-war-terms" ${accepted ? '' : 'open'}><summary>SLINK War data terms${accepted ? ' — accepted' : ''}</summary><p>${escape(current?.terms?.summary || 'Loading current terms...')}</p><a href="${escape(current?.terms?.documentUrl || '#')}" target="_blank" rel="noopener noreferrer">Read the complete terms</a>${accepted ? '<p>Current terms accepted.</p>' : '<label class="slink-war-agree"><input id="slink-war-accept" type="checkbox"><span>I agree to the current SLINK API & Data Terms.</span></label>'}</details>
           <div class="wide slink-war-note">API credentials and permission verification are managed once in the extension dashboard.</div>
           <label>Display mode<select id="slink-war-display"><option value="extension" ${settings.displayMode === 'extension' ? 'selected' : ''}>Extension only</option><option value="torn" ${settings.displayMode === 'torn' ? 'selected' : ''}>Fully in Torn</option><option value="hybrid" ${settings.displayMode === 'hybrid' ? 'selected' : ''}>Hybrid retal alerts</option></select></label>
@@ -999,53 +1030,59 @@
         const retals = visibleRetals();
         const armoryRequestCount = armoryOfficer ? (snapshot.itemRequests || []).length : 0;
         const tabBar = `<div class="slink-war-subtabs">${tabs.map(tab => `<button class="slink-war-subtab" data-war-tab="${tab}" aria-selected="${activeTab === tab}"><span>${tab[0].toUpperCase()}${tab.slice(1)}</span>${tab === 'armory' && armoryRequestCount ? `<span class="nav-alert-count" aria-label="${armoryRequestCount} active Armory requests">${armoryRequestCount > 99 ? '99+' : armoryRequestCount}</span>` : ''}</button>`).join('')}</div>`;
-        const content = activeTab === 'armory'
-          ? `${tabBar}<div>${body}</div>`
-          : `${tabBar}<div class="slink-war-summary"><div class="slink-war-stat"><b>${Number(stats.attacks) || 0}</b><span>Attacks</span></div><div class="slink-war-stat"><b>${Number(stats.warAttacks) || 0}${insideCap ? `/${insideCap}` : ''}</b><span>War / cap</span></div><div class="slink-war-stat"><b>${Number(stats.mugs) || 0}</b><span>Mugs</span></div><div class="slink-war-stat"><b>${chain}</b><span>Chain</span></div></div><div class="slink-war-note slink-war-report"><span>${mugSummary}</span><button id="slink-war-copy-report" type="button">Copy report</button></div>${itemRequestCards()}${retals.length ? `<div class="slink-war-note"><strong>Active retals</strong>${retalCards()}</div>` : ''}${localError ? `<div class="slink-war-error">${escape(localError)}</div>` : ''}<div>${body}</div>`;
-        context.ui.setContentHtml(content);
+        if (!editorShellMounted) {
+          root.innerHTML='<div data-war-tabs></div><div data-war-overview></div><div data-war-body></div>';
+          editorShellMounted=true;
+        }
+        const tabsRoot=root.querySelector('[data-war-tabs]');
+        if (tabsRoot.innerHTML!==tabBar) tabsRoot.innerHTML=tabBar;
+        const overview=root.querySelector('[data-war-overview]');
+        const overviewHtml=activeTab==='armory'?'':`<div class="slink-war-summary"><div class="slink-war-stat"><b>${Number(stats.attacks) || 0}</b><span>Attacks</span></div><div class="slink-war-stat"><b>${Number(stats.warAttacks) || 0}${insideCap ? `/${insideCap}` : ''}</b><span>War / cap</span></div><div class="slink-war-stat"><b>${Number(stats.mugs) || 0}</b><span>Mugs</span></div><div class="slink-war-stat"><b>${chain}</b><span>Chain</span></div></div><div class="slink-war-note slink-war-report"><span>${mugSummary}</span><button id="slink-war-copy-report" type="button">Copy report</button></div>${itemRequestCards()}${retals.length ? `<div class="slink-war-note"><strong>Active retals</strong>${retalCards()}</div>` : ''}${localError ? `<div class="slink-war-error">${escape(localError)}</div>` : ''}`;
+        if (overview.innerHTML!==overviewHtml) overview.innerHTML=overviewHtml;
+        patchWarBody(root.querySelector('[data-war-body]'),body);
         bindEvents();
         SLINK.core.uiState?.restore(context.ui.getContentElement(), preservedUi);
       }
 
       function bindEvents() {
         const root = context.ui.getContentElement();
-        for (const button of root.querySelectorAll('[data-war-tab]')) button.addEventListener('click', () => {
+        for (const button of root.querySelectorAll('[data-war-tab]')) bindControl(button,'click', () => {
           activeTab = button.dataset.warTab;
           void SLINK.core.storage.set('ui.war.activeTab.v1', activeTab);
           render();
         });
-        root.querySelector('#slink-armory-mode')?.addEventListener('change', async event => {
+        bindControl(root.querySelector('#slink-armory-mode'),'change', async event => {
           armoryMode = event.currentTarget.value;
           await SLINK.core.storage.set('war.armory.mode.v1', armoryMode);
           render();
         });
-        root.querySelector('#slink-armory-retrieve')?.addEventListener('click', () => void retrieveArmoryItem());
-        root.querySelector('#slink-armory-next')?.addEventListener('click', nextArmoryPage);
-        root.querySelector('[data-armory-time]')?.addEventListener('input', event => {
+        bindControl(root.querySelector('#slink-armory-retrieve'),'click', () => void retrieveArmoryItem());
+        bindControl(root.querySelector('#slink-armory-next'),'click', nextArmoryPage);
+        bindControl(root.querySelector('[data-armory-time]'),'input', event => {
           armoryTimestampValue = event.currentTarget.value;
           WAR.updateArmoryTimestamp(root, armoryTimestampValue);
         });
-        root.querySelector('[data-armory-copy]')?.addEventListener('click', async () => {
+        bindControl(root.querySelector('[data-armory-copy]'),'click', async () => {
           const result = WAR.discordTimestamp(armoryTimestampValue);
           if (!result) return;
           const message = root.querySelector('[data-armory-time-message]');
           try { await navigator.clipboard.writeText(result.code); message.textContent = 'Copied — paste into Discord.'; }
           catch { root.querySelector('[data-armory-code]')?.select(); message.textContent = 'Select and copy the timestamp above.'; }
         });
-        root.querySelector('#slink-armory-members')?.addEventListener('click', async event => {
+        bindControl(root.querySelector('#slink-armory-members'),'click', async event => {
           event.currentTarget.disabled = true;
           try { if (await ensureArmoryMembers(false)) armorySetStatus(`Loaded ${armoryMembers.length} faction members.`, 'success'); }
           catch (error) { armorySetStatus(SLINK.core.format.errorMessage(error), 'error'); }
         });
         bindArmoryMemberCheckboxes(root);
-        root.querySelector('.slink-war-armory-manager')?.addEventListener('toggle', event => { armoryWhitelistOpen = event.currentTarget.open; });
-        root.querySelector('#slink-armory-search')?.addEventListener('input', event => {
+        bindControl(root.querySelector('.slink-war-armory-manager'),'toggle', event => { armoryWhitelistOpen = event.currentTarget.open; });
+        bindControl(root.querySelector('#slink-armory-search'),'input', event => {
           armorySearch = event.currentTarget.value;
           renderArmoryMemberList(root);
         });
-        root.querySelector('#slink-armory-select-shown')?.addEventListener('click', () => void setShownArmoryMembers(true));
-        root.querySelector('#slink-armory-clear-shown')?.addEventListener('click', () => void setShownArmoryMembers(false));
-        root.querySelector('#slink-war-copy-report')?.addEventListener('click', async event => {
+        bindControl(root.querySelector('#slink-armory-select-shown'),'click', () => void setShownArmoryMembers(true));
+        bindControl(root.querySelector('#slink-armory-clear-shown'),'click', () => void setShownArmoryMembers(false));
+        bindControl(root.querySelector('#slink-war-copy-report'),'click', async event => {
           const button = event.currentTarget;
           button.disabled = true;
           try {
@@ -1062,7 +1099,7 @@
         });
         const members = new Map([...(current?.runtime?.snapshot?.members || []), ...(current?.runtime?.outsideTargets || [])].map(member => [Number(member.id), member]));
         const retals = new Map((current?.runtime?.snapshot?.retals || []).map(retal => [String(retal.attackId), retal]));
-        for (const button of root.querySelectorAll('[data-war-save-target]')) button.addEventListener('click', async () => {
+        for (const button of root.querySelectorAll('[data-war-save-target]')) bindControl(button,'click', async () => {
           const targetId = Number(button.dataset.warSaveTarget);
           const source = button.dataset.warSaveSource === 'outside' ? 'outside-targets' : 'war';
           const rows = source === 'war' ? (current?.runtime?.snapshot?.members || []) : (current?.runtime?.outsideTargets || []);
@@ -1104,13 +1141,13 @@
             }, 1400);
           }
         });
-        for (const button of root.querySelectorAll('[data-war-copy]')) button.addEventListener('click', () => void copyCallout(members.get(Number(button.dataset.warCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
-        for (const button of root.querySelectorAll('[data-war-send]')) button.addEventListener('click', () => void sendCallout(members.get(Number(button.dataset.warSend)), button));
-        for (const button of root.querySelectorAll('[data-war-retal-copy]')) button.addEventListener('click', () => void copyRetal(retals.get(String(button.dataset.warRetalCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
-        for (const button of root.querySelectorAll('[data-war-retal-send]')) button.addEventListener('click', () => void sendRetal(retals.get(String(button.dataset.warRetalSend)), button));
-        for (const button of root.querySelectorAll('[data-war-retal-dismiss]')) button.addEventListener('click', () => void dismissRetal(retals.get(String(button.dataset.warRetalDismiss))));
-        for (const link of root.querySelectorAll('[data-war-attack]')) link.addEventListener('click', event => void handleAttackLink(event, Number(link.dataset.warAttack)));
-        for (const id of ['slink-war-filter-min', 'slink-war-filter-max', 'slink-war-filter-status', 'slink-war-filter-abroad', 'slink-war-filter-location', 'slink-war-filter-sort']) root.querySelector(`#${id}`)?.addEventListener('change', async () => {
+        for (const button of root.querySelectorAll('[data-war-copy]')) bindControl(button,'click', () => void copyCallout(members.get(Number(button.dataset.warCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
+        for (const button of root.querySelectorAll('[data-war-send]')) bindControl(button,'click', () => void sendCallout(members.get(Number(button.dataset.warSend)), button));
+        for (const button of root.querySelectorAll('[data-war-retal-copy]')) bindControl(button,'click', () => void copyRetal(retals.get(String(button.dataset.warRetalCopy)), button).catch(error => { localError=SLINK.core.format.errorMessage(error); render(); }));
+        for (const button of root.querySelectorAll('[data-war-retal-send]')) bindControl(button,'click', () => void sendRetal(retals.get(String(button.dataset.warRetalSend)), button));
+        for (const button of root.querySelectorAll('[data-war-retal-dismiss]')) bindControl(button,'click', () => void dismissRetal(retals.get(String(button.dataset.warRetalDismiss))));
+        for (const link of root.querySelectorAll('[data-war-attack]')) bindControl(link,'click', event => void handleAttackLink(event, Number(link.dataset.warAttack)));
+        for (const id of ['slink-war-filter-min', 'slink-war-filter-max', 'slink-war-filter-status', 'slink-war-filter-abroad', 'slink-war-filter-location', 'slink-war-filter-sort']) bindControl(root.querySelector(`#${id}`),'change', async () => {
           targetFilters = {
             minFF:Math.max(0, Number(root.querySelector('#slink-war-filter-min')?.value) || 0),
             maxFF:Math.max(0, Number(root.querySelector('#slink-war-filter-max')?.value) || 3),
@@ -1122,7 +1159,7 @@
           await SLINK.core.storage.set('ui.war.targetFilters.v1', { ...targetFilters, sort:targetSort });
           render();
         });
-        root.querySelector('#slink-war-claim-submit')?.addEventListener('click', async event => {
+        bindControl(root.querySelector('#slink-war-claim-submit'),'click', async event => {
           const button = event.currentTarget;
           const targetId = Number(root.querySelector('#slink-war-claim-target-id')?.value) || 0;
           if (!targetId) { localError='Enter the med-out target Torn ID.'; render(); return; }
@@ -1137,18 +1174,18 @@
           } catch (error) { localError=SLINK.core.format.errorMessage(error); }
           render();
         });
-        for (const button of root.querySelectorAll('[data-armory-request-resolve]')) button.addEventListener('click', async () => {
+        for (const button of root.querySelectorAll('[data-armory-request-resolve]')) bindControl(button,'click', async () => {
           try {
             current = await requestWarStatus('war.armory.request', { operation:'resolve', requestId:button.dataset.armoryRequestResolve });
             localError = '';
             render();
           } catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
-        for (const button of root.querySelectorAll('[data-war-release]')) button.addEventListener('click', async () => {
+        for (const button of root.querySelectorAll('[data-war-release]')) bindControl(button,'click', async () => {
           try { current = await requestWarStatus('war.claims.update', { operation:'release', targetId:Number(button.dataset.warRelease) }); localError=''; render(); }
           catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
-        root.querySelector('#slink-war-outside-refresh')?.addEventListener('click', async event => {
+        bindControl(root.querySelector('#slink-war-outside-refresh'),'click', async event => {
           const button = event.currentTarget;
           button.disabled = true;
           try {
@@ -1159,12 +1196,12 @@
             localError = ''; render();
           } catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
-        root.querySelector('#slink-war-clear')?.addEventListener('click', async () => {
+        bindControl(root.querySelector('#slink-war-clear'),'click', async () => {
           if (savingWarSettings) return;
           try { current = await requestWarStatus('war.session.clear'); localError=''; render(); }
           catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
-        root.querySelector('#slink-war-save')?.addEventListener('click', saveWarSettings);
+        bindControl(root.querySelector('#slink-war-save'),'click', saveWarSettings);
         updateWarSendButtons();
       }
 

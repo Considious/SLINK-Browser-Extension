@@ -4,7 +4,7 @@ import vm from 'node:vm';
 
 const read=file=>fs.readFileSync(new URL('../'+file,import.meta.url),'utf8');
 const moduleSource=read('src/modules/war.js'),serviceSource=read('src/background/war-service.js');
-assert(moduleSource.includes("addEventListener('click', saveWarSettings)"),'The production Save button must use the tested controller');
+assert(moduleSource.includes("bindControl(root.querySelector('#slink-war-save'),'click', saveWarSettings)"),'The production Save button must use the tested controller with duplicate binding protection');
 assert(moduleSource.includes('data-ui-explicit-commit="true"'),'War settings must opt out of guessed click-based draft release');
 assert.doesNotMatch(moduleSource,/current\s*=\s*await\s+SLINK\.core\.messaging\.send/,'Status-returning actions must use the settings-revision fence');
 function extract(source,name,indent) {

@@ -2,7 +2,7 @@
   'use strict';
 
   const SLINK = globalThis.SLINK_EXTENSION;
-  SLINK.core.formState?.protect(document);
+  const editorGuard = SLINK.core.formState?.protect(document);
   const byId = id => document.getElementById(id);
   let system = null;
   let leveling = null;
@@ -10,6 +10,7 @@
   let access = null;
   let adhd = null;
   let market = null;
+  let savingMarketWatch = false;
   let dollarBazaars = null;
   let muggingSettings = null;
   let contribution = null;
@@ -32,6 +33,42 @@
   let warTargetFilters = { minFF:1, maxFF:3, status:'all', abroad:'all', location:'all', sort:'availability' };
   const warLeaderClientId = `war-dashboard:${globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
   const INSIDE_WINDOWS = Object.freeze([[0, 100], [200, 250], [450, 500], [950, 1000], [2350, 2500], [4850, 5000], [9900, 10000]]);
+
+  const editorRequests = {
+    market:{version:0,sequence:0,applied:0,pending:0,timer:null},
+    merits:{version:0,sequence:0,applied:0,pending:0,timer:null}
+  };
+  function scheduleEditorStatus(kind) {
+    const state=editorRequests[kind];clearTimeout(state.timer);
+    state.timer=setTimeout(async()=>{
+      if (state.pending) return;
+      try {
+        const value=await requestEditorStatus(kind,kind+'.status',{refreshIfDue:false});
+        if (kind==='market') {market=value;renderMarket();} else {merits=value;renderMerits();}
+      } catch (error) {
+        const node=byId(kind==='market'?'market-message':'merits-error');node.textContent=errorText(error);node.hidden=false;
+      }
+    },25);
+  }
+  async function saveEditorPreference(kind,patch) {
+    const state=editorRequests[kind];state.pending++;state.version++;
+    try {return await SLINK.core.messaging.send(kind+'.settings.save',{...patch,preferenceOnly:true});}
+    finally {state.pending--;state.version++;scheduleEditorStatus(kind);}
+  }
+  async function requestEditorStatus(kind,type,payload) {
+    const state=editorRequests[kind],mutation=type!==kind+'.status';
+    if (mutation) {state.pending++;state.version++;}
+    const version=state.version,sequence=++state.sequence;
+    try {
+      const value=await SLINK.core.messaging.send(type,payload);
+      const current=kind==='market'?market:merits;
+      if (sequence<state.applied && current) return current;
+      state.applied=sequence;
+      return version===state.version || !current ? value : {...value,settings:current.settings};
+    } finally {
+      if (mutation) {state.pending--;state.version++;scheduleEditorStatus(kind);}
+    }
+  }
 
   function setBusy(button, busy) {
     if (button) button.disabled = Boolean(busy);
@@ -538,6 +575,7 @@
   }
 
   function resetMarketWatchForm() {
+    editorGuard.cancel(byId('market-watch-form'));
     byId('market-watch-form').reset();
     byId('market-watch-uid').value = '';
     byId('market-watch-type').value = 'item';
@@ -567,6 +605,7 @@
     byId('market-watch-item-id').value = item?.id || '';
     byId('market-watch-item-meta').textContent = item ? marketItemLabel(item) : 'Choose a Torn item from the suggestions.';
     byId('market-item-suggestions').hidden = true;
+    editorGuard.noteEdit(byId('market-watch-form'));
   }
 
   function renderMarketSuggestions(query = '') {
@@ -607,6 +646,35 @@
         : market.fetchedAt ? `API watches last updated ${relativeTime(market.fetchedAt)}.` : 'Add a watch, then refresh.';
   }
 
+  // Price refreshes patch read-only copy, not the checkbox a person is using.
+  function patchMarketRows(container, rows) {
+    const old = new Map([...container.children].map(node => [node.dataset.editorRow || '', node]));
+    const desired = rows.map(next => {
+      const key = next.dataset.editorRow || '';
+      const node = old.get(key); old.delete(key);
+      if (!node) return next;
+      const input = node.querySelector('input'), incoming = next.querySelector('input');
+      if (input && incoming) {
+        editorGuard.hydrate(input, incoming.checked);
+        if (!input.dataset.pending) input.disabled = incoming.disabled;
+        const copy = node.classList.contains('market-weaver-item') ? node.querySelector('span') : node.firstElementChild;
+        const incomingCopy = next.classList.contains('market-weaver-item') ? next.querySelector('span') : next.firstElementChild;
+        if (copy.innerHTML !== incomingCopy.innerHTML) copy.innerHTML = incomingCopy.innerHTML;
+      } else if (node.textContent !== next.textContent) node.textContent = next.textContent;
+      return node;
+    });
+    for (const node of old.values()) { editorGuard.cancel(node); node.remove(); }
+    desired.forEach((node, index) => { if (container.children[index] !== node) container.insertBefore(node, container.children[index] || null); });
+  }
+
+  function retryMarketToggle(input) {
+    const holder=input.parentElement;
+    if (holder.querySelector('[data-market-retry-toggle]')) return;
+    const retry=document.createElement('button');retry.type='button';retry.textContent='Retry';retry.dataset.marketRetryToggle='true';
+    retry.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if (!input.disabled) input.dispatchEvent(new Event('change',{bubbles:true}));});
+    holder.append(retry);
+  }
+
   function renderMarket() {
     if (!market) return;
     const settings = SLINK.core.market.normalizeSettings(market.settings || {});
@@ -623,24 +691,24 @@
     renderSharedApiUsage(system?.tornApiUsage || market.tornApiUsage);
     byId('market-error').textContent = market.lastError || '';
     byId('market-error').hidden = !market.lastError;
-    byId('market-show-in-torn').checked = settings.showInTorn;
-    byId('market-quick-buy').checked = settings.quickBuyEnabled;
-    byId('market-alert-sound').checked = settings.soundEnabled;
-    byId('market-listed-items').checked = settings.listedItemsEnabled;
-    byId('market-weaver-pricelist').checked = settings.weaverPricelistEnabled;
-    byId('market-weaver-source-order').value = settings.weaverSourceOrder;
+    editorGuard.hydrate(byId('market-show-in-torn'), settings.showInTorn);
+    editorGuard.hydrate(byId('market-quick-buy'), settings.quickBuyEnabled);
+    editorGuard.hydrate(byId('market-alert-sound'), settings.soundEnabled);
+    editorGuard.hydrate(byId('market-listed-items'), settings.listedItemsEnabled);
+    editorGuard.hydrate(byId('market-weaver-pricelist'), settings.weaverPricelistEnabled);
+    editorGuard.hydrate(byId('market-weaver-source-order'), settings.weaverSourceOrder);
     const priceList = market.weaverPricelist || {};
     byId('market-weaver-pricelist-status').textContent = priceList.lastError
       ? `Weaver sync issue: ${priceList.lastError}`
       : priceList.fetchedAt
         ? `${Number(priceList.itemCount || 0).toLocaleString()} prices imported · ${settings.weaverActiveItemIds.length} selected · synced ${relativeTime(priceList.fetchedAt)}.`
         : settings.weaverPricelistEnabled ? 'Weaver price list will sync on refresh.' : 'Weaver price list is off.';
-    if (!byId('market-watch-uid').value) byId('market-watch-priority').value = settings.lastPriority;
-    byId('market-watch-save').disabled = !market.permitted || watches.length >= SLINK.core.market.SAVED_WATCH_LIMIT && !byId('market-watch-uid').value;
+    if (!byId('market-watch-uid').value) editorGuard.hydrate(byId('market-watch-priority'), settings.lastPriority);
+    byId('market-watch-save').disabled = savingMarketWatch || !market.permitted || watches.length >= SLINK.core.market.SAVED_WATCH_LIMIT && !byId('market-watch-uid').value;
     const watchList = byId('market-watch-list');
-    watchList.replaceChildren(...(watches.length ? watches.map(watch => {
+    patchMarketRows(watchList, watches.length ? watches.map(watch => {
       const item = catalog.find(row => Number(row.id) === Number(watch.itemId));
-      const row = document.createElement('article'); row.className = 'market-watch-card';
+      const row = document.createElement('article'); row.className = 'market-watch-card'; row.dataset.editorRow = watch.uid;
       const copy = document.createElement('div');
       const title = document.createElement('strong'); title.textContent = watch.marketType === 'points' ? 'Points Market' : `${watch.label || item?.name || `Item ${watch.itemId}`} [${watch.itemId}]`;
       const sources = watch.marketType === 'points' ? 'Points Market · every 30s' : `${watch.marketEnabled ? 'Item Market' : ''}${watch.marketEnabled && watch.bazaarEnabled ? ' + ' : ''}${watch.bazaarEnabled ? 'Weaver Bazaar' : ''}`;
@@ -648,25 +716,25 @@
       copy.append(title, detail);
       const actions = document.createElement('div'); actions.className = 'row-actions';
       const enabled = document.createElement('label'); enabled.className = 'toggle';
-      const enabledInput = document.createElement('input'); enabledInput.type = 'checkbox'; enabledInput.checked = watch.enabled; enabledInput.dataset.marketWatchEnabled = watch.uid;
+      const enabledInput = document.createElement('input'); enabledInput.type = 'checkbox'; enabledInput.id = 'market-watch-active-' + watch.uid; enabledInput.checked = watch.enabled; enabledInput.disabled = !market.permitted; enabledInput.dataset.marketWatchEnabled = watch.uid;
       enabled.append(enabledInput, document.createTextNode('Active'));
       const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'small secondary'; edit.dataset.marketEdit = watch.uid; edit.textContent = 'Edit';
       const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'small danger'; remove.dataset.marketRemove = watch.uid; remove.textContent = 'Remove';
       actions.append(enabled, edit, remove); row.append(copy, actions); return row;
-    }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:market.permitted ? 'No watches yet.' : 'No Market Watch tier is active.' })]));
+    }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:market.permitted ? 'No watches yet.' : 'No Market Watch tier is active.' })]);
     const importedItems = Array.isArray(priceList.items) ? priceList.items : [];
     const selectedWeaverIds = new Set(settings.weaverActiveItemIds);
     const activeManualIds = new Set(watches.filter(watch => watch.enabled && watch.marketType === 'item').map(watch => Number(watch.itemId)));
     const weaverList = byId('market-weaver-item-list');
-    weaverList.replaceChildren(...(importedItems.length ? importedItems.map(price => {
-      const row = document.createElement('label'); row.className = 'market-weaver-item';
-      const input = document.createElement('input'); input.type = 'checkbox'; input.dataset.marketWeaverItem = String(price.itemId); input.checked = selectedWeaverIds.has(Number(price.itemId)); input.disabled = !market.permitted;
+    patchMarketRows(weaverList, importedItems.length ? importedItems.map(price => {
+      const row = document.createElement('label'); row.className = 'market-weaver-item'; row.dataset.editorRow = String(price.itemId);
+      const input = document.createElement('input'); input.type = 'checkbox'; input.id = 'market-weaver-active-' + price.itemId; input.dataset.marketWeaverItem = String(price.itemId); input.checked = selectedWeaverIds.has(Number(price.itemId)); input.disabled = !market.permitted;
       const copy = document.createElement('span');
       const title = document.createElement('strong'); title.textContent = `${price.name || `Item ${price.itemId}`} [${price.itemId}]`;
       const detail = document.createElement('small');
       detail.textContent = `$${Number(price.buyPrice || 0).toLocaleString()}${Number(price.bulkBuyPrice) > 0 ? ` · bulk $${Number(price.bulkBuyPrice).toLocaleString()} at ${Number(price.bulkThreshold || 0).toLocaleString()}+` : ''}${activeManualIds.has(Number(price.itemId)) ? ' · shares its SLINK item slot' : ''}`;
       copy.append(title, detail); row.append(input, copy); return row;
-    }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:priceList.fetchedAt ? 'No active Weaver prices were returned.' : 'Sync your Weaver price list to choose monitored items.' })]));
+    }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:priceList.fetchedAt ? 'No active Weaver prices were returned.' : 'Sync your Weaver price list to choose monitored items.' })]);
     byId('market-weaver-clear-active').disabled = !settings.weaverActiveItemIds.length;
     const dealList = byId('market-deal-list');
     dealList.replaceChildren(...(deals.length ? deals.map(deal => {
@@ -679,7 +747,7 @@
       const link = document.createElement('a'); link.className = 'button small'; link.href = deal.href; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'Open & highlight';
       const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'small secondary'; dismiss.textContent = 'Dismiss 5m';
       dismiss.title = 'Hide this exact Market Watch deal for five minutes';
-      dismiss.addEventListener('click', async () => { market = await SLINK.core.messaging.send('market.deal.dismiss', { dismissKey:deal.dismissKey }); renderMarket(); });
+      dismiss.addEventListener('click', async () => { market = await requestEditorStatus('market','market.deal.dismiss', { dismissKey:deal.dismissKey }); renderMarket(); });
       actions.append(link, dismiss); card.append(copy, actions); return card;
     }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:market.fetchedAt ? 'No watched listing is currently below its target.' : 'Refresh after adding a watch.' })]));
     updateMarketClock();
@@ -782,8 +850,8 @@
     byId('merits-next').textContent = Number(merits.goals?.length || 0).toLocaleString('en-US');
     byId('merits-pinned').textContent = `${merits.pinned?.length || 0}/${SLINK.core.merits.TRACK_LIMIT}`;
     renderSharedApiUsage(system?.tornApiUsage || merits.tornApiUsage);
-    byId('merits-filter').value = merits.settings?.filter || 'all';
-    byId('merits-refresh-minutes').value = String(merits.settings?.refreshMinutes || 15);
+    editorGuard.hydrate(byId('merits-filter'), merits.settings?.filter || 'all');
+    editorGuard.hydrate(byId('merits-refresh-minutes'), merits.settings?.refreshMinutes || 15);
     byId('merits-error').textContent = merits.lastError || '';
     byId('merits-error').hidden = !merits.lastError;
     updateMeritsClock();
@@ -820,13 +888,13 @@
     byId('leveling-role').textContent = runtime.contributorOnly || runtime.idle ? 'API contributor' : runtime.collector ? 'API collector' : leveling?.configured ? 'Standby device' : 'Setup required';
     byId('leveling-status').textContent = runtime.cycleStatus || 'Ready';
     const settings = leveling?.settings || {};
-    byId('poll-seconds').value = settings.pollSeconds || 300;
-    byId('min-ff').value = settings.minFF || 1;
-    byId('max-ff').value = settings.maxFF || 3;
-    byId('contributor-only').checked = settings.contributorOnly === true;
+    editorGuard.hydrate(byId('poll-seconds'),settings.pollSeconds || 300);
+    editorGuard.hydrate(byId('min-ff'),settings.minFF || 1);
+    editorGuard.hydrate(byId('max-ff'),settings.maxFF || 3);
+    editorGuard.hydrate(byId('contributor-only'),settings.contributorOnly === true);
     byId('zero-contribution-row').hidden = !hasScope('admin.*');
-    byId('zero-contribution').checked = hasScope('admin.*') && Number(settings.apiContributionLimit) === 0;
-    byId('page-panel').checked = Boolean(system?.levelingInTorn);
+    editorGuard.hydrate(byId('zero-contribution'),hasScope('admin.*') && Number(settings.apiContributionLimit) === 0);
+    editorGuard.hydrate(byId('page-panel'),Boolean(system?.levelingInTorn));
     if (runtime.lastError) showError('leveling-error', runtime.lastError); else clearError('leveling-error');
   }
 
@@ -1281,17 +1349,20 @@
   }
 
   async function refresh() {
+    const editorVersions={market:editorRequests.market.version,merits:editorRequests.merits.version};
     const [status, terms, themeRecord, statsStatus, meritsStatus, marketStatus, dollarStatus, savedMuggingSettings] = await Promise.all([
       SLINK.core.messaging.send('system.status'),
       SLINK.core.messaging.send('contribution.terms').catch(() => null),
       SLINK.core.messaging.send('themes.catalog', { force:true }).catch(() => null),
       SLINK.core.messaging.send('playerStats.status', { refreshIfStale:false }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null })),
-      SLINK.core.messaging.send('merits.status', { refreshIfDue:false }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), goals:[], pinned:[], settings:SLINK.core.merits.defaultSettings() })),
-      SLINK.core.messaging.send('market.status', { refreshIfDue:false }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), opportunities:[], settings:SLINK.core.market.defaultSettings(), catalog:{ items:[] } })),
+      requestEditorStatus('merits','merits.status', { refreshIfDue:false }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), goals:[], pinned:[], settings:SLINK.core.merits.defaultSettings() })),
+      requestEditorStatus('market','market.status', { refreshIfDue:false }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), opportunities:[], settings:SLINK.core.market.defaultSettings(), catalog:{ items:[] } })),
       SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:false }).catch(error => ({ bazaars:[], fetchedAt:0, nextRefreshAt:0, lastError:errorText(error) })),
       SLINK.core.storage.get('mugging.settings.v1', {})
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
+    if (editorVersions.market!==editorRequests.market.version && market) marketStatus.settings=market.settings;
+    if (editorVersions.merits!==editorRequests.merits.version && merits) meritsStatus.settings=merits.settings;
     system = status; leveling = status.leveling; war = status.war; access = status.access; adhd = status.adhd; market = marketStatus; dollarBazaars = dollarStatus; muggingSettings = savedMuggingSettings || {}; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus; merits = meritsStatus;
     system.tornApiUsage = await SLINK.core.messaging.send('tornApi.usage').catch(() => status.tornApiUsage);
     dismissedRetals = await SLINK.core.storage.get('war.dismissedRetals.v1', {});
@@ -1445,7 +1516,19 @@
   }
   byId('reset-position').addEventListener('click', event => restoreTornGui(event.currentTarget));
   byId('war-reset-position').addEventListener('click', event => restoreTornGui(event.currentTarget));
-  byId('refresh-targets').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { leveling = await SLINK.core.messaging.send('leveling.activity.touch'); const result = await SLINK.core.messaging.send('leveling.cycle.prepare',{contribute:false}); leveling = result.status; renderLeveling(); renderTargets(); } catch (error) { showError('leveling-error', error); } finally { setBusy(button, false); } });
+  const levelingPreferencesRoot=byId('poll-seconds').closest('.settings-grid');
+  levelingPreferencesRoot.dataset.uiExplicitCommit='true';
+  const levelingSaveState=document.createElement('span');levelingSaveState.role='status';
+  const levelingRetry=document.createElement('button');levelingRetry.type='button';levelingRetry.textContent='Retry';levelingRetry.hidden=true;
+  levelingPreferencesRoot.append(levelingSaveState,levelingRetry);
+  const levelingPreferences=SLINK.core.formState.autosave({
+    root:levelingPreferencesRoot,fields:{'poll-seconds':'pollSeconds','min-ff':'minFF','max-ff':'maxFF'},read:key=>leveling?.settings?.[key],
+    save:patch=>SLINK.core.messaging.send('leveling.preferences.save',patch),select:response=>response.settings,
+    onCommit:patch=>{leveling={...leveling,settings:{...leveling?.settings,...patch}};},
+    onState:state=>{levelingSaveState.textContent=({idle:'Poll and Fair Fight preferences save automatically.',saving:'Saving…',saved:'Preferences saved.',failed:'Preferences not saved. Retry.',invalid:'Enter valid poll seconds and Fair Fight values.',unsaved:'Preferences not saved yet.'})[state.state]||'';levelingRetry.hidden=state.state!=='failed';}
+  });
+  levelingPreferences.mount();levelingRetry.addEventListener('click',()=>{void levelingPreferences.flush().catch(()=>{});});
+  byId('refresh-targets').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { await levelingPreferences.flush();leveling = await SLINK.core.messaging.send('leveling.activity.touch'); const result = await SLINK.core.messaging.send('leveling.cycle.prepare',{contribute:false}); leveling = result.status; renderLeveling(); renderTargets(); } catch (error) { showError('leveling-error', error); } finally { setBusy(button, false); } });
   byId('war-refresh').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { war = await SLINK.core.messaging.send('war.cycle.prepare',{forceOpponentRefresh:true,manual:true}); renderWar(); renderTargets(); } catch (error) { showError('war-error', error); } finally { setBusy(button, false); } });
   byId('war-open-armory').addEventListener('click', async () => {
     await SLINK.core.storage.set('ui.war.requestedTab', 'armory');
@@ -1519,7 +1602,7 @@
   });
   byId('market-refresh').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-error').hidden = true;
-    try { market = await SLINK.core.messaging.send('market.refresh'); renderMarket(); }
+    try { market = await requestEditorStatus('market','market.refresh'); renderMarket(); }
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
     finally { setBusy(button, false); }
   });
@@ -1531,19 +1614,19 @@
   });
   byId('market-permissions-refresh').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-error').hidden = true;
-    try { market = await SLINK.core.messaging.send('market.permissions.refresh'); renderMarket(); }
+    try { market = await requestEditorStatus('market','market.permissions.refresh'); renderMarket(); }
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
     finally { setBusy(button, false); }
   });
   byId('market-weaver-pricelist-sync').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-message').textContent = 'Syncing your Weaver price list…';
-    try { market = await SLINK.core.messaging.send('market.weaver.pricelist.sync'); byId('market-message').textContent = 'Weaver price list synced.'; renderMarket(); }
+    try { market = await requestEditorStatus('market','market.weaver.pricelist.sync'); byId('market-message').textContent = 'Weaver price list synced.'; renderMarket(); }
     catch (error) { byId('market-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
   });
   byId('market-load-items').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-message').textContent = 'Loading Torn’s item catalog…';
-    try { market = await SLINK.core.messaging.send('market.catalog', { force:true }); byId('market-message').textContent = `${market.catalog?.items?.length || 0} API items loaded.`; renderMarket(); }
+    try { market = await requestEditorStatus('market','market.catalog', { force:true }); byId('market-message').textContent = `${market.catalog?.items?.length || 0} API items loaded.`; renderMarket(); }
     catch (error) { byId('market-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
   });
@@ -1570,7 +1653,10 @@
   });
   byId('market-watch-form').addEventListener('submit', async event => {
     event.preventDefault();
-    const button = byId('market-watch-save'); setBusy(button, true); byId('market-message').textContent = '';
+    const button = byId('market-watch-save'); if (button.disabled || savingMarketWatch) return;
+    savingMarketWatch=true;
+    const ticket = editorGuard.begin(byId('market-watch-form'));
+    setBusy(button, true); byId('market-message').textContent = '';
     try {
       const marketType = byId('market-watch-type').value === 'points' ? 'points' : 'item';
       if (marketType === 'item' && !byId('market-watch-market').checked && !byId('market-watch-bazaar').checked) throw new Error('Select Item Market, Weaver Bazaar, or both.');
@@ -1583,7 +1669,8 @@
         }
         if (!item) throw new Error('Choose an item from the Torn API suggestions.');
       }
-      market = await SLINK.core.messaging.send('market.watch.save', {
+      market = await requestEditorStatus('market','market.watch.save', {
+        requireExisting:Boolean(byId('market-watch-uid').value),
         uid:byId('market-watch-uid').value || `watch-${globalThis.crypto?.randomUUID?.() || Date.now()}`,
         marketType,
         itemId:item?.id || 0,
@@ -1595,29 +1682,38 @@
         enabled:byId('market-watch-enabled').checked
       });
       const savedName = marketType === 'points' ? 'Points Market' : item.name;
-      resetMarketWatchForm(); byId('market-message').textContent = `${savedName} watch saved.`; renderMarket();
+      if (editorGuard.commit(ticket)) resetMarketWatchForm(); byId('market-message').textContent = `${savedName} watch saved.`; renderMarket();
     } catch (error) { byId('market-message').textContent = errorText(error); }
-    finally { setBusy(button, false); }
+    finally { savingMarketWatch=false;renderMarket(); }
   });
   byId('market-watch-cancel').addEventListener('click', resetMarketWatchForm);
-  byId('market-settings-save').addEventListener('click', async event => {
-    const button = event.currentTarget; setBusy(button, true);
-    try {
-      market = await SLINK.core.messaging.send('market.settings.save', {
-        showInTorn:byId('market-show-in-torn').checked,
-        quickBuyEnabled:byId('market-quick-buy').checked,
-        soundEnabled:byId('market-alert-sound').checked,
-        listedItemsEnabled:byId('market-listed-items').checked,
-        weaverPricelistEnabled:byId('market-weaver-pricelist').checked,
-        weaverSourceOrder:byId('market-weaver-source-order').value
-      });
-      await SLINK.core.storage.set('ui.modules.market.showInTorn', byId('market-show-in-torn').checked);
-      if (byId('market-show-in-torn').checked) await SLINK.core.storage.set('ui.pagePanelHidden', false);
-      byId('market-message').textContent = 'Market settings saved locally. Refreshing sources…';
-      market = await SLINK.core.messaging.send('market.refresh'); renderMarket();
-    } catch (error) { byId('market-message').textContent = errorText(error); }
-    finally { setBusy(button, false); }
+  const marketSettingsRoot = byId('market-show-in-torn').closest('.market-global-settings');
+  marketSettingsRoot.dataset.uiExplicitCommit = 'true';
+  byId('market-watch-form').dataset.uiExplicitCommit = 'true';
+  byId('market-watch-list').dataset.uiExplicitCommit = 'true';
+  byId('market-weaver-item-list').dataset.uiExplicitCommit = 'true';
+  const marketSettingsState = document.createElement('span'); marketSettingsState.role = 'status';
+  const marketSettingsRetry = byId('market-settings-save'); marketSettingsRetry.textContent = 'Retry';
+  marketSettingsRetry.hidden = true; marketSettingsRetry.before(marketSettingsState);
+  const marketPreferences = SLINK.core.formState.autosave({
+    root:marketSettingsRoot, fields:{"market-show-in-torn":"showInTorn","market-quick-buy":"quickBuyEnabled","market-alert-sound":"soundEnabled","market-listed-items":"listedItemsEnabled","market-weaver-pricelist":"weaverPricelistEnabled","market-weaver-source-order":"weaverSourceOrder"},
+    read:key => market?.settings?.[key],
+    save:patch => saveEditorPreference('market',patch),
+    select:response => response.settings,
+    onCommit:patch => {
+      market = {...market,settings:{...market?.settings,...patch}};
+      if (Object.hasOwn(patch,'showInTorn')) {
+        void SLINK.core.storage.set('ui.modules.market.showInTorn', patch.showInTorn).catch(error => {marketSettingsState.textContent = errorText(error);});
+        if (patch.showInTorn) void SLINK.core.storage.set('ui.pagePanelHidden', false).catch(error => {marketSettingsState.textContent = errorText(error);});
+      }
+    },
+    onState:state => {
+      marketSettingsState.textContent = ({idle:'Settings save automatically.',saving:'Saving…',saved:'Saved.',failed:'Settings not saved. Retry.',invalid:'Check this setting.',unsaved:'Changes not saved yet.'})[state.state] || '';
+      marketSettingsRetry.hidden = state.state !== 'failed';
+    }
   });
+  marketPreferences.mount();
+  marketSettingsRetry.addEventListener('click', () => {void marketPreferences.flush().catch(() => {});});
   byId('market-watch-list').addEventListener('click', async event => {
     const edit = event.target.closest('[data-market-edit]');
     const remove = event.target.closest('[data-market-remove]');
@@ -1625,63 +1721,80 @@
       const watch = market?.settings?.watches?.find(row => row.uid === edit.dataset.marketEdit); if (!watch) return;
       byId('market-watch-uid').value = watch.uid; byId('market-watch-type').value = watch.marketType || 'item'; byId('market-watch-price').value = watch.maxPrice; byId('market-watch-priority').value = watch.priority; byId('market-watch-enabled').checked = watch.enabled; byId('market-watch-market').checked = watch.marketEnabled; byId('market-watch-bazaar').checked = watch.bazaarEnabled; byId('market-watch-save').disabled = false;
       if (watch.marketType !== 'points') selectMarketItem(marketCatalog().find(item => Number(item.id) === Number(watch.itemId)) || { id:watch.itemId, name:watch.label });
-      syncMarketWatchType(); byId('market-watch-price').focus();
+      syncMarketWatchType(); editorGuard.noteEdit(byId('market-watch-form')); byId('market-watch-price').focus();
     }
     if (remove) {
       const watch = market?.settings?.watches?.find(row => row.uid === remove.dataset.marketRemove); if (!watch || !confirm(`Remove the ${watch.label} watch?`)) return;
       setBusy(remove, true);
-      try { market = await SLINK.core.messaging.send('market.watch.remove', { uid:watch.uid }); byId('market-message').textContent = `${watch.label} removed.`; renderMarket(); }
+      try { market = await requestEditorStatus('market','market.watch.remove', { uid:watch.uid }); byId('market-message').textContent = `${watch.label} removed.`; renderMarket(); }
       catch (error) { byId('market-message').textContent = errorText(error); setBusy(remove, false); }
     }
   });
   byId('market-watch-list').addEventListener('change', async event => {
     const input = event.target.closest('[data-market-watch-enabled]'); if (!input) return;
     const watch = market?.settings?.watches?.find(row => row.uid === input.dataset.marketWatchEnabled); if (!watch) return;
-    input.disabled = true; byId('market-message').textContent = '';
+    const ticket = editorGuard.begin(input), enabled = input.checked;
+    input.disabled = true; input.dataset.pending = 'true'; byId('market-message').textContent = '';
     try {
-      market = await SLINK.core.messaging.send('market.watch.save', { ...watch, enabled:input.checked });
-      byId('market-message').textContent = `${watch.label} is now ${input.checked ? 'active' : 'saved but inactive'}.`;
+      market = await requestEditorStatus('market','market.watch.toggle', { uid:watch.uid, enabled });
+      editorGuard.commit(ticket);
+      input.parentElement.querySelector('[data-market-retry-toggle]')?.remove();
+      byId('market-message').textContent = `${watch.label} is now ${enabled ? 'active' : 'saved but inactive'}.`;
       renderMarket();
-    } catch (error) { byId('market-message').textContent = errorText(error); renderMarket(); }
+    } catch (error) { byId('market-message').textContent = errorText(error);retryMarketToggle(input); }
+    finally {delete input.dataset.pending; input.disabled = !market?.permitted;}
   });
   byId('market-weaver-item-list').addEventListener('change', async event => {
     const input = event.target.closest('[data-market-weaver-item]'); if (!input) return;
     const itemId = Math.trunc(Number(input.dataset.marketWeaverItem) || 0);
     const checked = input.checked;
     if (!(itemId > 0)) { renderMarket(); return; }
-    input.disabled = true; byId('market-message').textContent = '';
+    const ticket = editorGuard.begin(input); input.disabled = true; input.dataset.pending = 'true'; byId('market-message').textContent = '';
     try {
-      market = await SLINK.core.messaging.send('market.weaver.selection.toggle', { itemId, checked });
+      market = await requestEditorStatus('market','market.weaver.selection.toggle', { itemId, checked });
+      editorGuard.commit(ticket);
+      input.parentElement.querySelector('[data-market-retry-toggle]')?.remove();
       byId('market-message').textContent = `${checked ? 'Activated' : 'Paused'} this Weaver item · ${market.settings?.weaverActiveItemIds?.length || 0} selected.`;
       renderMarket();
-    } catch (error) { byId('market-message').textContent = errorText(error); renderMarket(); }
+    } catch (error) { byId('market-message').textContent = errorText(error);retryMarketToggle(input); }
+    finally {delete input.dataset.pending; input.disabled = !market?.permitted;}
   });
   byId('market-weaver-clear-active').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-message').textContent = '';
-    try { market = await SLINK.core.messaging.send('market.weaver.selection.save', { itemIds:[] }); byId('market-message').textContent = 'All Weaver prices are saved but inactive.'; renderMarket(); }
+    try { market = await requestEditorStatus('market','market.weaver.selection.save', { itemIds:[] }); byId('market-message').textContent = 'All Weaver prices are saved but inactive.'; renderMarket(); }
     catch (error) { byId('market-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
   });
   byId('merits-refresh').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('merits-error').hidden = true;
-    try { merits = await SLINK.core.messaging.send('merits.refresh'); renderMerits(); }
+    try { merits = await requestEditorStatus('merits','merits.refresh'); renderMerits(); }
     catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
     finally { setBusy(button, false); }
   });
-  for (const select of [byId('merits-filter'), byId('merits-refresh-minutes')]) select.addEventListener('change', async () => {
-    try {
-      merits = await SLINK.core.messaging.send('merits.settings.save', {
-        filter:byId('merits-filter').value,
-        refreshMinutes:byId('merits-refresh-minutes').value
-      });
-      renderMerits();
-    } catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
+  const meritsSettingsRoot = byId('merits-filter').closest('.merits-controls');
+  meritsSettingsRoot.dataset.uiExplicitCommit = 'true';
+  const meritsSaveState = document.createElement('span'); meritsSaveState.role = 'status';
+  const meritsRetry = document.createElement('button'); meritsRetry.type = 'button'; meritsRetry.textContent = 'Retry'; meritsRetry.hidden = true;
+  meritsSettingsRoot.append(meritsSaveState,meritsRetry);
+  const meritsPreferences = SLINK.core.formState.autosave({
+    root:meritsSettingsRoot,fields:{'merits-filter':'filter','merits-refresh-minutes':'refreshMinutes'},read:key => merits?.settings?.[key],
+    save:patch => saveEditorPreference('merits',patch),
+    select:response => response.settings,
+    onCommit:patch => {
+      merits = {...merits,settings:{...merits?.settings,...patch}};
+    },
+    onState:state => {
+      meritsSaveState.textContent = ({idle:'Settings save automatically.',saving:'Saving…',saved:'Saved.',failed:'Settings not saved. Retry.',invalid:'Check your setting.',unsaved:'Changes not saved yet.'})[state.state] || '';
+      meritsRetry.hidden = state.state !== 'failed';
+    }
   });
+  meritsPreferences.mount();
+  meritsRetry.addEventListener('click',()=>{void meritsPreferences.flush().catch(()=>{});});
   for (const list of [byId('merits-pinned-list'), byId('merits-goal-list')]) list.addEventListener('click', async event => {
     const button = event.target.closest('[data-merit-pin]');
     if (!button) return;
     setBusy(button, true);
-    try { merits = await SLINK.core.messaging.send('merits.pin', { key:button.dataset.meritPin }); renderMerits(); }
+    try { merits = await requestEditorStatus('merits','merits.pin', { key:button.dataset.meritPin }); renderMerits(); }
     catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
   });
   byId('adhd-save-settings').addEventListener('click', async event => {
@@ -1807,12 +1920,12 @@
   }, 30_000);
   setInterval(async () => {
     if (!merits?.configured||visiblePage()!=='alerts'||efficiencyActive!=='merits') return;
-    try { merits = await SLINK.core.messaging.send('merits.status', { refreshIfDue:true }); renderMerits(); }
+    try { merits = await requestEditorStatus('merits','merits.status', { refreshIfDue:true }); renderMerits(); }
     catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
   }, 60_000);
   setInterval(async () => {
     if (!market?.configured || !market?.permitted||visiblePage()!=='alerts'||efficiencyActive!=='market') return;
-    try { market = await SLINK.core.messaging.send('market.status', { refreshIfDue:true }); renderMarket(); }
+    try { market = await requestEditorStatus('market','market.status', { refreshIfDue:true }); renderMarket(); }
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
   }, 30_000);
   setInterval(async () => {

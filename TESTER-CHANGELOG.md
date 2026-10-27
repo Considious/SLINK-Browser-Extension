@@ -2,6 +2,24 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 23 — 27 October 2026 — Combined editor stability and autosave
+
+**Extension tester only:** the remaining Officer, existing Chat, Market, Merits, Leveling and War editor work is grouped into one update. Background updates retain the controls being edited. Personal Officer stock settings, Chat highlights, Market preferences, Merits choices, and Leveling poll/Fair Fight preferences save without a separate Save click. A failed preference save keeps the choice visible with Retry.
+
+**Actions stay deliberate:** authentication/terms, contribution-mode consent, shared faction-role policy, the advanced War settings form, saving a full Chat message-template collection, watch creation/removal, purchases and sending messages still require their own explicit action. New Chat image/GIF/mini-profile/shortcut features are not included. Native PDA storage changes are not included.
+
+**Try to break it:**
+
+- Officers: change two item thresholds quickly, change OC checks to 0 (manual only), then reopen. Each value must remain independent. Each role checkbox must act independently. Shared role assignments must not submit until Save. Edit another checkbox while that request is waiting; the newer choice must remain.
+- Chat: edit a term, its color and enabled switch. Add/remove another term without losing the first field's text or focus. Save a message template, then keep typing while waiting; the newer text must remain.
+- Market: edit watch A and click Save, then begin editing watch B while A is waiting. A's acknowledgement must not clear B's form. Background updates must not re-enable the in-flight Save button. Watch/Weaver checkboxes must act individually and stay mounted. Retry a failed toggle without having to change its desired value. A delayed edit must not recreate a watch that was removed.
+- Merits: change the filter and refresh interval quickly, and pin different goals. Refresh must retain the actual dropdown controls. Each setting and pin must remain saved.
+- Leveling: change poll seconds and Fair Fight limits without authenticating again. Try an empty/invalid number, then correct it. Type a newer API key while an explicit authentication request is waiting; the newer draft must not disappear. Later authentication completion must not write an older poll/FF snapshot over your saved choices.
+- War: leave Settings, target filters, or med-partner assignment fields open while status updates occur. The controls should stay in place, remain singly bound, and retain your drafts. Shared settings still use explicit Save. Confirm a successful clamped value is displayed only for the submitted field; newer typing must remain. Losing officer access must remove/disable officer-only controls.
+- Across the editors: repeat in a narrow Torn panel and the extension dashboard, then close/reopen and change Torn pages. A failed save must not be shown as saved. Old replies must not undo newer choices. Preferences must not force a provider refresh for every click.
+
+**Data safety:** existing storage keys and saved records are retained, including unknown/legacy fields where these owners merge records. No settings reset, API-key deletion, automatic cloud restore, production deployment or theme-asset change is part of this batch. Physical-device/native-PDA durability and the broader audit remain separate acceptance work.
+
 ## Candidate 22 — 27 October 2026 — Museum panels and price drafts stay put
 
 **Extension tester only:** Museums now retains each set panel, price field and button through inventory refreshes and watch actions. Open/closed sets, focus and typed maximum prices are not rebuilt from current market values. Read-only owned counts and prices still update. Existing editors remain in place if you gain enough inventory while viewing them; newly opening a completed item keeps the previous no-editor default. Genuinely removed item/set rows are removed.

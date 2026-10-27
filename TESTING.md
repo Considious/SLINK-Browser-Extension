@@ -1,12 +1,12 @@
-# SLINK audit tester build — candidate 22 (Museum interaction stability)
+# SLINK audit tester build — candidate 23 (Combined editor phase)
 
-Current batch: Museum set panels, price inputs and buttons stay mounted during inventory updates and explicit watch actions. Positive whole-price validation happens before submission; only a confirmed item/price releases its own submitted draft, never newer typing or other panels. Duplicate actions from this view are blocked while pending, failures retain inputs, and authoritative missing rows/sets are removed. Prices remain action drafts: typing or Refresh never creates a watch. Includes previous audit fixes; broader Market/Abroad writers and native PDA work remain. See the running changelog for tests and limitations.
+Current batch: stable Officer, existing Chat, Market, Merits, Leveling and War editors; field-level personal preference saves and retry; captured explicit actions; serialized local mutation owners; dashboard response fences; retained controls and duplicate-binding protection. Credentials/terms, contribution mode, advanced War/shared-policy saves, full Chat template saves, watch creation/removal and gameplay/message actions remain explicit. New Chat features and native PDA storage work are separate. Use the single running TESTER-CHANGELOG.md for the complete test checklist.
 
 26 October follow-up (Batch 12): testing-only regression/documentation updates now pass all 78 local test commands. No runtime/version change; use the same installer below. Main's quota hotfix was separately approved and published as 0.19.12; this branch still contains the unpromoted audit work. See the running changelog for the current manual test checklist. Automated checks do not replace real-device acceptance.
 
 This is an early testing build, not the Chrome Web Store release. This audit batch does not change main; the separately approved Mugging hotfix is already on main. The full audit plan is not implemented yet.
 
-- Version: **0.19.11.13**, displayed as **0.19.11 Audit Test 22**. PDA remains **0.4.110 / 0.4.110-audit-test18**.
+- Version: **0.19.11.14**, displayed as **0.19.11 Audit Test 23**. PDA remains **0.4.110 / 0.4.110-audit-test18**.
 - Branch: `audit/test-foundation`.
 - [Download the tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip).
 - [One running tester changelog for extension and PDA](https://github.com/Considious/SLINK-Browser-Extension/blob/audit/test-foundation/TESTER-CHANGELOG.md).

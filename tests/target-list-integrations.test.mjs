@@ -24,13 +24,17 @@ assert.match(war, /targetList\.add/);
 const start=war.indexOf("        for (const button of root.querySelectorAll('[data-war-save-target]'))");
 const end=war.indexOf("        for (const button of root.querySelectorAll('[data-war-copy]'))",start);
 assert(start>=0&&end>start,'War Save Target binding boundaries are missing');
+const bindStart=war.indexOf('      function bindControl('),bindEnd=war.indexOf('\n      }',bindStart)+8;
+assert(bindStart>=0&&bindEnd>bindStart,'Production duplicate-binding guard is missing');
 for(const [kind,expectedSource,tag]of [['war','war','War'],['outside','outside-targets','Target']]){
- let click,payload;
- const button={dataset:{warSaveTarget:'42',warSaveSource:kind},textContent:'Save Target',isConnected:true,addEventListener:(type,fn)=>{assert.equal(type,'click');click=fn;}};
+ let click,payload,bindings=0;
+ const button={dataset:{warSaveTarget:'42',warSaveSource:kind},textContent:'Save Target',isConnected:true,addEventListener:(type,fn)=>{assert.equal(type,'click');click=fn;bindings++;}};
  const member={id:42,name:'Target',statusState:'Okay',battleStatsEstimate:500000,fairFight:2};
  const context=vm.createContext({root:{querySelectorAll:()=>[button]},current:{runtime:{snapshot:{members:[member]},outsideTargets:[member]},activeWar:{warId:'war-test'}},
  SLINK:{core:{messaging:{send:async(type,data)=>{assert.equal(type,'targetList.add');payload=data;}},format:{errorMessage:String}}},setTimeout:fn=>fn()});
- vm.runInContext("let localError='';"+war.slice(start,end),context);
+ vm.runInContext("let localError='';const boundEvents=new WeakMap();"+war.slice(bindStart,bindEnd)+war.slice(start,end),context);
+ vm.runInContext(war.slice(start,end),context);
+ assert.equal(bindings,1,'A retained target action must not acquire duplicate click handlers');
  await click();
  assert.equal(payload.source,expectedSource);
  assert.equal(payload.tags[0],tag);

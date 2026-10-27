@@ -13,6 +13,14 @@
   });
   let refreshing = null;
   let stockRefreshing = null;
+  let settingsQueue = Promise.resolve();
+  let preferenceQueue = Promise.resolve();
+  function mutateStockSettings(updater){
+    const operation=settingsQueue.catch(()=>{}).then(async()=>{
+      const previous=await SLINK.core.storage.get(KEYS.settings,{});
+      const next=updater(previous||{});await SLINK.core.storage.set(KEYS.settings,next);return next;
+    });settingsQueue=operation;return operation;
+  }
 
   async function accessKey() {
     const [access,leveling,war] = await Promise.all([
@@ -66,29 +74,28 @@
   async function saveRuntime(changes){const next={...(await runtime()),...changes};await SLINK.core.storage.set(KEYS.runtime,next);return next;}
   async function stockSettings(){
     const value=await SLINK.core.storage.get(KEYS.settings,{});
+    return normalizeStockSettings(value);
+  }
+  function normalizeStockSettings(value={}){
     return {
       armory:{checksPerDay:Math.min(24,Math.max(0,Math.trunc(Number.isFinite(Number(value?.armory?.checksPerDay))?Number(value.armory.checksPerDay):4))),soundEnabled:value?.armory?.soundEnabled!==false,thresholds:CORE.normalizeThresholds(value?.armory?.thresholds,CORE.ARMORY_ITEMS)},
       oc:{checksPerDay:Math.min(24,Math.max(0,Math.trunc(Number(value?.oc?.checksPerDay)||0))),soundEnabled:value?.oc?.soundEnabled!==false,thresholds:CORE.normalizeThresholds(value?.oc?.thresholds,CORE.OC_ITEMS)},
       snoozedUntil:value?.snoozedUntil&&typeof value.snoozedUntil==='object'?value.snoozedUntil:{}
     };
   }
-  async function saveStockSettings(input={}){
-    const previous=await stockSettings();
-    const next={
-      armory:{
-        checksPerDay:Object.hasOwn(input?.armory||{},'checksPerDay')?Math.min(24,Math.max(0,Math.trunc(Number(input.armory.checksPerDay)||0))):previous.armory.checksPerDay,
-        soundEnabled:Object.hasOwn(input?.armory||{},'soundEnabled')?input.armory.soundEnabled!==false:previous.armory.soundEnabled,
-        thresholds:CORE.normalizeThresholds(input?.armory?.thresholds??previous.armory.thresholds,CORE.ARMORY_ITEMS)
-      },
-      oc:{
-        checksPerDay:Object.hasOwn(input?.oc||{},'checksPerDay')?Math.min(24,Math.max(0,Math.trunc(Number(input.oc.checksPerDay)||0))):previous.oc.checksPerDay,
-        soundEnabled:Object.hasOwn(input?.oc||{},'soundEnabled')?input.oc.soundEnabled!==false:previous.oc.soundEnabled,
-        thresholds:CORE.normalizeThresholds(input?.oc?.thresholds??previous.oc.thresholds,CORE.OC_ITEMS)
-      },
-      snoozedUntil:previous.snoozedUntil
-    };
-    await SLINK.core.storage.set(KEYS.settings,next);
-    return stockStatus(false);
+  function saveStockSettings(input={}){
+    const kinds=['armory','oc'].filter(kind=>Object.hasOwn(input,kind));
+    const patch=Object.fromEntries(kinds.map(kind=>[kind,{...input[kind],...(input[kind]?.thresholds?{thresholds:{...input[kind].thresholds}}:{})}]));
+    const authorization=Promise.resolve().then(()=>Promise.all(kinds.map(kind=>session(kind==='armory'?CORE.ARMORY_SCOPE:CORE.OC_SCOPE))));void authorization.catch(()=>{});
+    const operation=preferenceQueue.catch(()=>{}).then(()=>authorization).then(async()=>{
+      const next=await mutateStockSettings(previous=>{
+        const merged={...previous};
+        for(const kind of ['armory','oc'])merged[kind]={...previous[kind],...patch[kind],thresholds:{...previous[kind]?.thresholds,...patch[kind]?.thresholds}};
+        const normalized=normalizeStockSettings(merged);
+        for(const kind of ['armory','oc'])merged[kind]={...merged[kind],...normalized[kind],thresholds:{...merged[kind].thresholds,...normalized[kind].thresholds}};
+        return merged;
+      });return {settings:normalizeStockSettings(next)};
+    });preferenceQueue=operation;return operation;
   }
   async function stockRuntime(){return {inventory:[],points:0,armoryShortages:[],ocShortages:[],missingCrimeItems:[],lastArmoryCheckAt:0,lastOcCheckAt:0,armoryError:'',ocError:'',itemCatalog:[],itemCatalogAt:0,...(await SLINK.core.storage.get(KEYS.stockRuntime,{}))};}
   async function saveStockRuntime(changes){const next={...(await stockRuntime()),...changes};await SLINK.core.storage.set(KEYS.stockRuntime,next);return next;}
@@ -174,6 +181,8 @@
     if(refreshIfDue&&((armoryAllowed&&due(current.lastArmoryCheckAt,config.armory.checksPerDay))||(ocAllowed&&due(current.lastOcCheckAt,config.oc.checksPerDay)))){
       try{return await refreshStock('all',false);}catch{}
     }
+    if(current.lastArmoryCheckAt)current.armoryShortages=CORE.shortages(CORE.ARMORY_ITEMS,config.armory.thresholds,current.inventory,current.points);
+    if(current.lastOcCheckAt)current.ocShortages=CORE.shortages(CORE.OC_ITEMS,config.oc.thresholds,current.inventory,current.points);
     return {settings:config,runtime:current,access:{armory:armoryAllowed,oc:ocAllowed,admin:adminAllowed}};
   }
   async function refresh(force=false){
@@ -221,7 +230,8 @@
   }
   async function snooze(input={}){
     const id=String(input.id||'');if(!['factionArmory','factionOcStock','factionOcMissing'].includes(id))throw new Error('Unknown officer alert.');
-    const config=await stockSettings();config.snoozedUntil[id]=Date.now()+Math.min(DAY_MS,Math.max(60_000,Number(input.durationMs)||60*60_000));await SLINK.core.storage.set(KEYS.settings,config);return {ok:true};
+    const until=Date.now()+Math.min(DAY_MS,Math.max(60_000,Number(input.durationMs)||60*60_000));
+    await mutateStockSettings(previous=>({...previous,snoozedUntil:{...previous.snoozedUntil,[id]:until}}));return {ok:true};
   }
   async function verify(input={}){
     const memberId=Number(input.memberId);if(!Number.isInteger(memberId)||memberId<=0)throw new Error('A valid faction member is required.');
@@ -243,8 +253,9 @@
     return {factionId,roles,users,memberCount:members.length,scopes};
   }
   async function saveOfficerAccess(input={}){
+    const assignments=structuredClone(input.assignments||{});
     const current=await session(CORE.ADMIN_SCOPE),factionId=Number(current.factionId)||0;if(!factionId)throw new Error('Your authenticated Torn account is not in a faction.');
-    await workerRequest(`/api/admin/factions/${factionId}/officer-access`,{method:'POST',headers:{'Content-Type':'application/json'},body:{assignments:input.assignments||{}}},CORE.ADMIN_SCOPE);
+    await workerRequest(`/api/admin/factions/${factionId}/officer-access`,{method:'POST',headers:{'Content-Type':'application/json'},body:{assignments}},CORE.ADMIN_SCOPE);
     await SLINK.services.permissionAccess.ensureSession(true,CORE.ADMIN_SCOPE);return officerAccessStatus();
   }
   async function publicStatus(refreshIfDue=true){

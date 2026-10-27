@@ -40,6 +40,31 @@
 
   let cyclePromise = null;
   let authenticatingPromise = null;
+  let settingsQueue = Promise.resolve();
+  let authenticationQueue = Promise.resolve();
+  const preferenceVersions = {pollSeconds:0,minFF:0,maxFF:0};
+
+  function mutateSettings(update) {
+    const operation = settingsQueue.catch(() => {}).then(async () => {
+      const previous = await settings();
+      const next = update(previous);
+      await SLINK.core.storage.set(KEYS.settings,next);
+      return {previous,next};
+    });
+    settingsQueue = operation;
+    return operation;
+  }
+
+  async function savePreferences(input = {}) {
+    const patch = {};
+    for (const key of Object.keys(preferenceVersions)) if (Object.hasOwn(input,key)) {
+      if (input[key] === '' || input[key] === null || !Number.isFinite(Number(input[key]))) throw new Error('Enter a valid Leveling preference.');
+      patch[key] = clamp(input[key],key === 'pollSeconds' ? 60 : 1,key === 'pollSeconds' ? 300 : 3);
+    }
+    for (const key of Object.keys(patch)) preferenceVersions[key]++;
+    const {next} = await mutateSettings(previous => ({...previous,...patch}));
+    return {settings:{pollSeconds:next.pollSeconds,minFF:next.minFF,maxFF:next.maxFF}};
+  }
   let localLeader = { tabId: null, expiresAt: 0 };
 
   function clamp(value, minimum, maximum) {
@@ -748,26 +773,19 @@
     };
   }
 
-  async function saveSettings(input = {}) {
-    const previous = await settings();
-    const requestedContributionLimit = Object.prototype.hasOwnProperty.call(input, 'apiContributionLimit')
-      ? (Number(input.apiContributionLimit) === 0 ? 0 : DEFAULT_API_CONTRIBUTION_LIMIT)
-      : previous.apiContributionLimit;
-    const next = {
-      tornKey: input.clearTornKey ? '' : (String(input.tornKey || '').trim() || previous.tornKey),
-      ffKey: input.clearFfKey ? '' : (String(input.ffKey || '').trim() || previous.ffKey),
-      pollSeconds: clamp(input.pollSeconds || previous.pollSeconds, 60, 300),
-      apiContributionLimit: previous.apiContributionLimit,
-      contributorOnly: Object.prototype.hasOwnProperty.call(input, 'contributorOnly')
-        ? input.contributorOnly === true
-        : previous.contributorOnly,
-      minFF: clamp(input.minFF || previous.minFF, 1, 3),
-      maxFF: clamp(input.maxFF || previous.maxFF, 1, 3)
-    };
+  function saveSettings(input = {}) {
+    const captured = {...input}, versions = {...preferenceVersions};
+    const operation = authenticationQueue.catch(() => {}).then(() => saveAuthentication(captured,versions));
+    authenticationQueue = operation;
+    return operation;
+  }
+
+  async function saveAuthentication(input, versions) {
+    const before = await settings();
     if (
-      next.contributorOnly &&
-      !previous.contributorOnly &&
-      previous.tornKey &&
+      input.contributorOnly === true &&
+      !before.contributorOnly &&
+      before.tornKey &&
       await acceptedCurrentTerms()
     ) {
       try {
@@ -777,7 +795,22 @@
         });
       } catch {}
     }
-    await SLINK.core.storage.set(KEYS.settings, next);
+
+    const {previous,next} = await mutateSettings(previous => {
+      const next = {
+        ...previous,
+        tornKey:input.clearTornKey ? '' : (String(input.tornKey || '').trim() || previous.tornKey),
+        ffKey:input.clearFfKey ? '' : (String(input.ffKey || '').trim() || previous.ffKey),
+        contributorOnly:Object.hasOwn(input,'contributorOnly') ? input.contributorOnly === true : previous.contributorOnly
+      };
+      for (const key of Object.keys(preferenceVersions)) if (Object.hasOwn(input,key) && versions[key] === preferenceVersions[key]) {
+        next[key] = clamp(input[key] || previous[key],key === 'pollSeconds' ? 60 : 1,key === 'pollSeconds' ? 300 : 3);
+      }
+      return next;
+    });
+    const requestedContributionLimit = Object.prototype.hasOwnProperty.call(input, 'apiContributionLimit')
+      ? (Number(input.apiContributionLimit) === 0 ? 0 : DEFAULT_API_CONTRIBUTION_LIMIT)
+      : previous.apiContributionLimit;
     if (input.acceptTerms === true) {
       const terms = await fetchTerms(true);
       await SLINK.core.storage.set(KEYS.acceptedTerms, {
@@ -815,7 +848,7 @@
         await SLINK.core.storage.set(KEYS.lastInteractionAt, Date.now());
         await syncUserDemand(true);
       }
-      await SLINK.core.storage.set(KEYS.settings, next);
+      await mutateSettings(previous => ({...previous,apiContributionLimit:next.apiContributionLimit}));
     }
     return publicStatus();
   }
@@ -1086,6 +1119,7 @@
       'leveling.status': publicStatus,
       'leveling.terms': () => fetchTerms(true),
       'leveling.settings.save': saveSettings,
+      'leveling.preferences.save': savePreferences,
       'leveling.activity.touch': touchActivity,
       'leveling.session.clear': async () => {
         await clearSession();

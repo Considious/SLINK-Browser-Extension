@@ -262,6 +262,15 @@
 
     const api = Object.freeze({
       begin, commit, cancel, isCurrent,
+      noteEdit(element) {
+        for (const control of element?.matches?.(CONTROL_SELECTOR) ? [element] : element?.querySelectorAll?.(CONTROL_SELECTOR) || []) remember(control);
+      },
+      hydrate(control, value, property = control?.type === 'checkbox' || control?.type === 'radio' ? 'checked' : 'value') {
+        if (!control || dirty.has(controlIdentity(control, root)) || control === (root.activeElement || document.activeElement)) return false;
+        const next = property === 'checked' ? Boolean(value) : String(value ?? '');
+        if (control[property] !== next) control[property] = next;
+        return true;
+      },
       clear(element = root) { clearScope(element); },
       restore,
       stop() {
