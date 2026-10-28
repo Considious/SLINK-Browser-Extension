@@ -2,6 +2,24 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 32 — 27 October 2026 — Extension onboarding alerts and refresh stability
+
+**Extension tester only: 0.19.13.5 / Audit Test 32.** PDA remains Candidate 31 (0.4.117); main/stable is unchanged. This finishes the extension-side onboarding/Verified/snooze/dismiss permission and refresh work in the planned audit update. No Chat feature expansion, new permission scope, settings reset, or theme change is included.
+
+Faction new-member reminders are now hidden unless the current user has `slink.war.officer` or `admin.*`; a cached alert no longer leaks to users without that access. Snoozed reminders disappear until their snooze expires. Dismiss requires officer access and is tied to the member's join timestamp, so a later rejoin is a new reminder. When an officer verifies equipment, other officers stop seeing that reminder, while `admin.*` keeps it until the admin verification step. Both dashboard and Torn alert controls report action errors rather than silently failing.
+
+On the standalone dashboard, Efficiency alert settings no longer have their input/checkbox nodes rebuilt on every status render. Untouched controls follow saved settings; a locally edited control remains as edited until Save succeeds or the user changes it. On Torn, the 15-second timer refresh leaves the alert panel and its buttons in place when the visible data has not changed.
+
+**Install and test only in an isolated extension profile:** load/update the branch candidate, confirm the displayed version is 0.19.13.5, and leave the store extension disabled in that profile. Keep the stable/PDA script separate. Do not change real faction grants just to test; use already-authorized or test accounts.
+
+1. As a user without officer access, open Alerts with a cached new-member record available: the onboarding alert and its actions must not appear. Confirm unrelated alerts still behave as before.
+2. As an officer, open a new-member reminder and snooze it. Refresh the dashboard and wait through a status refresh; it must remain hidden until the snooze expires. Dismiss another reminder, then simulate a later join timestamp; only the dismissed join stays hidden.
+3. Have an officer verify a harmless/test member. The reminder should disappear for officers but remain for `admin.*`, labeled for admin verification. Complete the admin verification only on a test record if available.
+4. In dashboard Alert settings, change several checkboxes and an input without saving, then refresh status or wait for background updates. Your edits must remain. Save and verify they persist after a reload. Trigger a denied/stale officer action if available; the error should be visible and the controls usable again.
+5. In the Torn Alerts panel, note a snooze button, then leave it idle through several unchanged 15-second refreshes. It should stay in place and clickable. A meaningful status change may update the list; an unchanged refresh must not replace those controls.
+
+**Automated evidence:** all listed extension test files passed, including the actual-module 15-second refresh identity fixture, dashboard dirty-control/checkbox identity fixture, onboarding exact/admin/denied/snooze/verified/dismiss service tests, full permission sweep, provider account/coverage/freshness checks, and the 10,000 unrelated attack-mutation performance regression (zero rescans). The complete `validate-extension` check passes for Manifest V3 0.19.13.5. Node was used directly because npm is unavailable on this workstation. Live faction-worker behavior and real Chrome installation remain tester acceptance; source tests do not establish live backend state. Remaining whole-audit acceptance is recorded in the plan, especially physical PDA and cross-client/live grants. Chat remains the next planned update after audit closure, not part of this build.
+
 ## Candidate 31 — 27 October 2026 — PDA durable saves and revision identity
 
 **PDA tester only: 0.4.117 / audit-test31.** This is the next PDA implementation block on `audit/test-foundation`; it does not change the extension build, stable/main, permissions, or backend. Chat expansion is not part of this candidate. The launcher now identifies the runtime from the content digest carried by the live manifest instead of separately synchronized runtime-version strings. It fetches the runtime fragments and startup add-ons as separate files at startup; the 17,554-byte launcher is not the full application. Current external source totals are 665,039 bytes of runtime fragments plus 131,396 bytes of startup add-ons (796,435 bytes total). Those are measured sizes, not an asserted PDA limit. The PDA documentation reviewed does not state a maximum userscript size.
@@ -635,4 +653,3 @@ Follow-ups: none received yet. Keep dated tester reports and retest results unde
 ## Reporting a problem
 
 Include the tester version, your device/platform, what you clicked, what you expected and what happened instead. A screenshot or recording can help. Never include an API key or login token. Use a harmless test target or isolated test profile for checks involving saved records; do not delete important data to test a change.
-

@@ -25,6 +25,7 @@
       let timer = null;
       let clockTimer = null;
       let current = null;
+      let lastRenderSignature = null;
 
       ui.setModuleStyles(`
         .slink-adhd-summary{display:grid;grid-template-columns:repeat(3,minmax(0,110px));justify-content:start;align-items:start;gap:5px;width:100%;min-width:0;max-width:100%}
@@ -70,6 +71,13 @@
         if (element) element.textContent = `${event.detail.count || 0}/${event.detail.limit || 60}`;
       }
 
+      async function runAlertAction(button, action) {
+        button.disabled = true;
+        try { await action(); }
+        catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
+        finally { if (button.isConnected) button.disabled = false; }
+      }
+
       function render(status) {
         current = status;
         ui.setThemeHealth?.(status?.life?.current, status?.life?.maximum);
@@ -77,6 +85,21 @@
         ui.setAlertCount('adhd', alerts.length, { group:'efficiency', label:'active Efficiency reminders' });
         updateStatus();
         const root = ui.getContentElement();
+        const signature = JSON.stringify({
+          alerts, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
+          life:status?.life, configured:status?.configured, lastError:status?.lastError
+        });
+        if (signature === lastRenderSignature) {
+          const summary = root.querySelector('.slink-adhd-summary');
+          const cells = summary?.querySelectorAll('strong') || [];
+          if (cells[0]) cells[0].textContent = String(alerts.length);
+          if (cells[1]) cells[1].textContent = String(status?.city?.bought ?? '—');
+          const apiUsage = cells[2];
+          if (apiUsage) apiUsage.textContent = `${status?.tornApiUsage?.count || 0}/${status?.tornApiUsage?.limit || 60}`;
+          ui.setBubbleAlert('adhd', alerts.length, 'adhd');
+          return;
+        }
+        lastRenderSignature = signature;
         root.replaceChildren();
         const summary = document.createElement('div');
         summary.className = 'slink-adhd-summary';
@@ -151,41 +174,41 @@
           }
           for (const [label, durationMs] of [['Snooze 5m', 5 * 60_000], ['Snooze 1h', 60 * 60_000]]) {
             const snooze = document.createElement('button'); snooze.type = 'button'; snooze.textContent = label;
-            snooze.addEventListener('click', async () => {
+            snooze.addEventListener('click', () => runAlertAction(snooze, async () => {
               render(await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }));
-            });
+            }));
             links.append(snooze);
           }
           if (alert.id === 'cityItem') {
             const done = document.createElement('button'); done.type = 'button'; done.textContent = 'Bought — hide today';
-            done.addEventListener('click', async () => render(await SLINK.core.messaging.send('adhd.city.acknowledge')));
+            done.addEventListener('click', () => runAlertAction(done, async () => render(await SLINK.core.messaging.send('adhd.city.acknowledge'))));
             links.append(done);
           }
           if (alert.id === 'googlePlayPoints') {
             const done = document.createElement('button'); done.type = 'button'; done.textContent = 'Claimed — remind in 7 days';
-            done.addEventListener('click', async () => render(await SLINK.core.messaging.send('adhd.google-play-points.acknowledge')));
+            done.addEventListener('click', () => runAlertAction(done, async () => render(await SLINK.core.messaging.send('adhd.google-play-points.acknowledge'))));
             links.append(done);
           }
           if (['disposalUnique', 'arsonUnique'].includes(alert.id)) {
             const checked = document.createElement('button'); checked.type = 'button'; checked.textContent = 'Checked today';
-            checked.addEventListener('click', async () => render(await SLINK.core.messaging.send('adhd.crime-unique.acknowledge', { id:alert.id })));
+            checked.addEventListener('click', () => runAlertAction(checked, async () => render(await SLINK.core.messaging.send('adhd.crime-unique.acknowledge', { id:alert.id }))));
             links.append(checked);
           }
           if (alert.kind === 'faction-onboarding') {
             const verified = document.createElement('button'); verified.type = 'button';
-            verified.textContent = alert.viewerIsAdmin ? 'Admin verified' : 'Verified';
+            verified.textContent = alert.viewerIsAdmin ? 'Admin verify' : 'Verified';
             verified.title = alert.viewerIsAdmin && alert.officerVerifiedAt
               ? 'An officer already verified this member; confirm the administrator check'
               : 'Confirm weapon, armor, and Pepper Spray were checked';
-            verified.addEventListener('click', async () => {
+            verified.addEventListener('click', () => runAlertAction(verified, async () => {
               await SLINK.core.messaging.send('faction.onboarding.verify', { memberId:alert.memberId });
               await load(false);
-            });
+            }));
             const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.textContent = 'Dismiss';
-            dismiss.addEventListener('click', async () => {
+            dismiss.addEventListener('click', () => runAlertAction(dismiss, async () => {
               await SLINK.core.messaging.send('faction.onboarding.dismiss', { memberId:alert.memberId, joinedAt:alert.joinedAt });
               await load(false);
-            });
+            }));
             links.append(verified, dismiss);
           }
           card.append(title, detail, links); list.append(card);

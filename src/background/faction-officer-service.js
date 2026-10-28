@@ -206,14 +206,20 @@
   async function dismissed(){const value=await SLINK.core.storage.get(KEYS.dismissed,{});return value&&typeof value==='object'?value:{};}
   function alertId(row){return `factionOnboarding:${Number(row.user_id)}:${Number(row.joined_at)||0}`;}
   async function activeAlerts(refreshIfDue=true){
-    const [current,hidden,adhdSettings,stock]=await Promise.all([status(refreshIfDue),dismissed(),SLINK.core.storage.get('adhd.settings.v1',{}),stockStatus(refreshIfDue)]);
+    const [allowed,adminAllowed,current,hidden,adhdSettings,stock]=await Promise.all([
+      has(CORE.OFFICER_SCOPE),has(CORE.ADMIN_SCOPE),status(refreshIfDue),dismissed(),
+      SLINK.core.storage.get('adhd.settings.v1',{}),stockStatus(refreshIfDue)
+    ]);
     const settings=SLINK.core.adhd.normalizeSettings(adhdSettings);const now=Date.now();const alerts=[];
-    if(settings.enabled.factionOnboarding!==false){
-      alerts.push(...(Array.isArray(current.alerts)?current.alerts:[]).filter(row=>Number(hidden[row.user_id])!==Number(row.joined_at)).map(row=>{
+    if(allowed&&settings.enabled.factionOnboarding!==false){
+      alerts.push(...(Array.isArray(current.alerts)?current.alerts:[])
+        .filter(row=>Number(hidden[row.user_id])!==Number(row.joined_at))
+        .filter(row=>adminAllowed||!Number(row.officer_verified_at))
+        .map(row=>{
         const id=alertId(row);const level=Math.max(0,Number(row.level)||0);const position=String(row.position||'Member');
         const checklist=[...(level>0&&level<15?['proficiency weapon']:[]),'armor','20 Pepper Spray','20 Morphine',...(position.toLowerCase().includes('recruit')?['4 Xanax only if stacking and still recruit']:[])];
-        return {id,settingId:'factionOnboarding',kind:'faction-onboarding',memberId:Number(row.user_id),joinedAt:Number(row.joined_at)||0,active:Number(settings.snoozedUntil[id]||0)<=now,title:`New faction member: ${row.user_name} [${row.user_id}]`,detail:`${position}${level?` · Level ${level}`:''} · Check: ${checklist.join('; ')}.`,tone:'urgent',links:[['Profile',`https://www.torn.com/profiles.php?XID=${row.user_id}`]],viewerIsAdmin:current.viewerIsAdmin===true,officerVerifiedAt:Number(row.officer_verified_at)||0,soundEnabled:settings.soundEnabled.factionOnboarding===true};
-      }));
+        return {id,settingId:'factionOnboarding',kind:'faction-onboarding',memberId:Number(row.user_id),joinedAt:Number(row.joined_at)||0,active:Number(settings.snoozedUntil[id]||0)<=now,title:`New faction member: ${row.user_name} [${row.user_id}]`,detail:`${position}${level?` · Level ${level}`:''}${Number(row.officer_verified_at)?' · Officer verified; awaiting admin confirmation':''} · Check: ${checklist.join('; ')}.`,tone:'urgent',links:[['Profile',`https://www.torn.com/profiles.php?XID=${row.user_id}`]],viewerIsAdmin:adminAllowed,officerVerifiedAt:Number(row.officer_verified_at)||0,soundEnabled:settings.soundEnabled.factionOnboarding===true};
+      }).filter(alert=>alert.active));
     }
     const sr=stock.runtime,ss=stock.settings;
     if(stock.access.armory&&sr.armoryShortages?.length&&Number(ss.snoozedUntil.factionArmory||0)<=now){
@@ -239,6 +245,7 @@
     await saveRuntime({fetchedAt:Date.now(),nextRefreshAt:Date.now()+REFRESH_MS,alerts:Array.isArray(response?.alerts)?response.alerts:[],viewerIsAdmin:response?.viewer_is_admin===true,factionId:Number(response?.faction_id)||0,lastError:''});return response;
   }
   async function dismiss(input={}){
+    await session(CORE.OFFICER_SCOPE);
     const memberId=Number(input.memberId),joinedAt=Number(input.joinedAt)||0;if(!Number.isInteger(memberId)||memberId<=0)throw new Error('A valid faction member is required.');
     const value=await dismissed();value[memberId]=joinedAt;await SLINK.core.storage.set(KEYS.dismissed,value);return {ok:true,memberId,joinedAt};
   }

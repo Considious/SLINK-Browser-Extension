@@ -30,6 +30,7 @@
   let dismissedRetals = {};
   let pendingCustomSoundDataUrl = null;
   let soundClaiming = false;
+  const adhdSettingsDirty = new Set();
   let warTargetFilters = { minFF:1, maxFF:3, status:'all', abroad:'all', location:'all', sort:'availability' };
   const warLeaderClientId = `war-dashboard:${globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
   const INSIDE_WINDOWS = Object.freeze([[0, 100], [200, 250], [450, 500], [950, 1000], [2350, 2500], [4850, 5000], [9900, 10000]]);
@@ -454,6 +455,72 @@
     return `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m ago`;
   }
 
+  function markAdhdSettingDirty(key) { adhdSettingsDirty.add(key); }
+
+  function setAdhdControl(id, value, property='value', key=id) {
+    if (adhdSettingsDirty.has(key)) return;
+    const element = byId(id);
+    if (element) element[property] = value;
+  }
+
+  function renderAdhdToggleRows(container, definitions, settings, kind) {
+    const signature = definitions.map(item => item.id).join('|');
+    if (container.dataset.slinkRowsSignature !== signature) {
+      const rows = definitions.map(definition => {
+        const row = document.createElement('div'); row.className = 'adhd-alert-toggle';
+        const label = document.createElement('span');
+        const visible = document.createElement('input'); visible.type = 'checkbox';
+        const sound = document.createElement('input'); sound.type = 'checkbox';
+        if (kind === 'city') {
+          visible.dataset.cityVisibleId = definition.id;
+          sound.dataset.citySoundId = definition.id;
+        } else {
+          visible.dataset.alertVisibleId = definition.id;
+          sound.dataset.alertSoundId = definition.id;
+        }
+        visible.addEventListener('change', () => markAdhdSettingDirty(`${kind}:visible:${definition.id}`));
+        sound.addEventListener('change', () => markAdhdSettingDirty(`${kind}:sound:${definition.id}`));
+        row.append(label, visible, sound);
+        return row;
+      });
+      container.replaceChildren(...rows);
+      container.dataset.slinkRowsSignature = signature;
+    }
+    definitions.forEach((definition, index) => {
+      const row = container.children[index];
+      if (!row) return;
+      const [label, visible, sound] = row.children;
+      const progress = kind === 'alert' ? (adhd?.crimeUniques || []).find(entry => entry.id === definition.id) : null;
+      const suffix = progress?.total ? ` · ${progress.completed}/${progress.total} · skill ${Math.floor(progress.skill || 0)}` : '';
+      label.textContent = kind === 'city' ? `${definition.label} · ${definition.shop}` : `${definition.label}${suffix}`;
+      if (kind === 'city') {
+        const id = `cityStock:${definition.id}`;
+        visible.title = `Show ${definition.label}`;
+        sound.title = `Sound for ${definition.label}`;
+        if (!adhdSettingsDirty.has(`city:visible:${definition.id}`)) visible.checked = settings.cityStockAlerts[definition.id] === true && settings.enabled[id] !== false;
+        if (!adhdSettingsDirty.has(`city:sound:${definition.id}`)) sound.checked = settings.soundEnabled[id] === true;
+      } else {
+        visible.title = definition.mode === 'tracking' ? `Keep ${definition.label} progress updated` : `Show ${definition.label}`;
+        sound.title = definition.mode === 'tracking' ? 'Progress-only tracker; no time-sensitive sound is generated.' : `Sound for ${definition.label}`;
+        sound.disabled = definition.mode === 'tracking';
+        if (!adhdSettingsDirty.has(`alert:visible:${definition.id}`)) visible.checked = settings.enabled[definition.id] !== false;
+        if (!adhdSettingsDirty.has(`alert:sound:${definition.id}`)) sound.checked = definition.mode !== 'tracking' && settings.soundEnabled[definition.id] === true;
+      }
+    });
+  }
+
+  async function runAdhdAction(button, action) {
+    setBusy(button, true);
+    try {
+      await action();
+      byId('adhd-settings-message').textContent = '';
+    } catch (error) {
+      byId('adhd-settings-message').textContent = errorText(error);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   function renderAdhd() {
     const permitted = adhd?.permitted === true;
     const configured = adhd?.configured === true;
@@ -477,32 +544,17 @@
     byId('adhd-city-done').textContent = adhd?.city?.complete ? 'City cap complete for today' : 'I hit 100 — hide city alerts today';
 
     const settings = SLINK.core.adhd.normalizeSettings(adhd?.settings || {});
-    byId('adhd-medical-hours').value = settings.medicalThresholdHours;
-    byId('adhd-booster-hours').value = settings.boosterThresholdHours;
-    byId('adhd-landing-minutes').value = settings.landingLeadMinutes;
-    byId('adhd-addiction-threshold').value = settings.playerAddictionThreshold;
-    byId('adhd-sound-choice').value = settings.soundChoice;
+    setAdhdControl('adhd-medical-hours', settings.medicalThresholdHours);
+    setAdhdControl('adhd-booster-hours', settings.boosterThresholdHours);
+    setAdhdControl('adhd-landing-minutes', settings.landingLeadMinutes);
+    setAdhdControl('adhd-addiction-threshold', settings.playerAddictionThreshold);
+    setAdhdControl('adhd-sound-choice', settings.soundChoice);
     const customSound = pendingCustomSoundDataUrl === null ? settings.customSoundDataUrl : pendingCustomSoundDataUrl;
     byId('adhd-custom-sound-state').textContent = customSound ? 'Custom audio saved locally.' : 'No custom audio uploaded.';
-    byId('adhd-show-in-torn').checked = Boolean(system?.adhdInTorn);
-    byId('adhd-open-new-tab').checked = settings.openLinksInNewTab === true;
-    byId('adhd-alert-toggles').replaceChildren(...SLINK.core.adhd.ALERT_DEFINITIONS.map(definition => {
-      const row = document.createElement('div'); row.className = 'adhd-alert-toggle';
-      const progress = (adhd?.crimeUniques || []).find(entry => entry.id === definition.id);
-      const suffix = progress?.total ? ` · ${progress.completed}/${progress.total} · skill ${Math.floor(progress.skill || 0)}` : '';
-      const label = document.createElement('span'); label.textContent = `${definition.label}${suffix}`;
-      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.dataset.alertVisibleId = definition.id; visible.checked = settings.enabled[definition.id] !== false; visible.title = definition.mode === 'tracking' ? `Keep ${definition.label} progress updated` : `Show ${definition.label}`;
-      const sound = document.createElement('input'); sound.type = 'checkbox'; sound.dataset.alertSoundId = definition.id; sound.checked = definition.mode !== 'tracking' && settings.soundEnabled[definition.id] === true; sound.disabled = definition.mode === 'tracking'; sound.title = definition.mode === 'tracking' ? 'Progress-only tracker; no time-sensitive sound is generated.' : `Sound for ${definition.label}`;
-      row.append(label, visible, sound); return row;
-    }));
-    byId('adhd-city-stock-toggles').replaceChildren(...SLINK.core.adhd.CITY_SHOP_TARGETS.map(target => {
-      const id = `cityStock:${target.id}`;
-      const row = document.createElement('div'); row.className = 'adhd-alert-toggle';
-      const label = document.createElement('span'); label.textContent = `${target.label} · ${target.shop}`;
-      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.dataset.cityVisibleId = target.id; visible.checked = settings.cityStockAlerts[target.id] === true && settings.enabled[id] !== false; visible.title = `Show ${target.label}`;
-      const sound = document.createElement('input'); sound.type = 'checkbox'; sound.dataset.citySoundId = target.id; sound.checked = settings.soundEnabled[id] === true; sound.title = `Sound for ${target.label}`;
-      row.append(label, visible, sound); return row;
-    }));
+    setAdhdControl('adhd-show-in-torn', Boolean(system?.adhdInTorn), 'checked');
+    setAdhdControl('adhd-open-new-tab', settings.openLinksInNewTab === true, 'checked');
+    renderAdhdToggleRows(byId('adhd-alert-toggles'), SLINK.core.adhd.ALERT_DEFINITIONS, settings, 'alert');
+    renderAdhdToggleRows(byId('adhd-city-stock-toggles'), SLINK.core.adhd.CITY_SHOP_TARGETS, settings, 'city');
     const list = byId('adhd-alert-list');
     const reminderControls = SLINK.core.adhd.reminderControls(settings,
       async action => { adhd = await SLINK.core.messaging.send('adhd.reminder.control', { action }); renderAdhd(); },
@@ -525,39 +577,39 @@
         }
         for (const [label, durationMs] of [['Snooze 5m', 5 * 60_000], ['Snooze 1h', 60 * 60_000]]) {
           const snooze = document.createElement('button'); snooze.type = 'button'; snooze.className = 'small secondary'; snooze.textContent = label;
-          snooze.addEventListener('click', async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }); renderAdhd(); });
+          snooze.addEventListener('click', () => runAdhdAction(snooze, async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }); renderAdhd(); }));
           actions.append(snooze);
         }
         if (alert.id === 'googlePlayPoints') {
           const claimed = document.createElement('button'); claimed.type = 'button'; claimed.className = 'small secondary'; claimed.textContent = 'Claimed — remind in 7 days';
-          claimed.addEventListener('click', async () => {
+          claimed.addEventListener('click', () => runAdhdAction(claimed, async () => {
             adhd = await SLINK.core.messaging.send('adhd.google-play-points.acknowledge');
             renderAdhd();
-          });
+          }));
           actions.append(claimed);
         }
         if (['disposalUnique', 'arsonUnique'].includes(alert.id)) {
           const checked = document.createElement('button'); checked.type = 'button'; checked.className = 'small secondary'; checked.textContent = 'Checked today';
-          checked.addEventListener('click', async () => {
+          checked.addEventListener('click', () => runAdhdAction(checked, async () => {
             adhd = await SLINK.core.messaging.send('adhd.crime-unique.acknowledge', { id:alert.id });
             renderAdhd();
-          });
+          }));
           actions.append(checked);
         }
         if (alert.kind === 'faction-onboarding') {
           const verified = document.createElement('button'); verified.type = 'button'; verified.className = 'small secondary';
-          verified.textContent = alert.viewerIsAdmin ? 'Admin verified' : 'Verified';
-          verified.addEventListener('click', async () => {
+          verified.textContent = alert.viewerIsAdmin ? 'Admin verify' : 'Verified';
+          verified.addEventListener('click', () => runAdhdAction(verified, async () => {
             await SLINK.core.messaging.send('faction.onboarding.verify', { memberId:alert.memberId });
             adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:false });
             renderAdhd();
-          });
+          }));
           const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'small secondary'; dismiss.textContent = 'Dismiss';
-          dismiss.addEventListener('click', async () => {
+          dismiss.addEventListener('click', () => runAdhdAction(dismiss, async () => {
             await SLINK.core.messaging.send('faction.onboarding.dismiss', { memberId:alert.memberId, joinedAt:alert.joinedAt });
             adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:false });
             renderAdhd();
-          });
+          }));
           actions.append(verified, dismiss);
         }
         card.append(copy, actions); return card;
@@ -1797,6 +1849,14 @@
     try { merits = await requestEditorStatus('merits','merits.pin', { key:button.dataset.meritPin }); renderMerits(); }
     catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
   });
+  for (const [id, key] of [
+    ['adhd-medical-hours','adhd-medical-hours'],['adhd-booster-hours','adhd-booster-hours'],
+    ['adhd-landing-minutes','adhd-landing-minutes'],['adhd-addiction-threshold','adhd-addiction-threshold'],
+    ['adhd-sound-choice','adhd-sound-choice'],['adhd-open-new-tab','adhd-open-new-tab'],
+    ['adhd-show-in-torn','adhd-show-in-torn']
+  ]) {
+    for (const eventName of ['input','change']) byId(id).addEventListener(eventName, () => markAdhdSettingDirty(key));
+  }
   byId('adhd-save-settings').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('adhd-settings-message').textContent = '';
     try {
@@ -1830,6 +1890,7 @@
       if (byId('adhd-show-in-torn').checked) await SLINK.core.storage.set('ui.pagePanelHidden', false);
       system.adhdInTorn = byId('adhd-show-in-torn').checked;
       pendingCustomSoundDataUrl = null;
+      adhdSettingsDirty.clear();
       byId('adhd-settings-message').textContent = 'Efficiency alert settings saved locally.';
       renderAdhd();
     } catch (error) { byId('adhd-settings-message').textContent = errorText(error); }
