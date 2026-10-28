@@ -69,7 +69,10 @@ console.log('company tests passed');
 // own executable regression; this isolates Company response and layout policy.
 const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};};
 const elements=new Map();let editorWrites=0,mounts=0,stopCalls=0,options,definition,click,delayed=null;
-for(const key of ['overview','editor','director','notice','save-state','retry'])elements.set(`[data-company-${key}]`,{innerHTML:'',textContent:'',hidden:false});
+for(const key of ['overview','editor','director','notice','save-state','retry','copy-fallback'])elements.set(`[data-company-${key}]`,{innerHTML:'',textContent:'',hidden:false,dataset:{}});
+const directorList={children:[],contains:()=>false},rankCount={textContent:''},directorNode=elements.get('[data-company-director]');
+directorNode.querySelector=selector=>selector==='[data-company-employees]'?directorList:rankCount;
+directorNode.replaceChildren=()=>{directorNode.innerHTML='';};
 const editor=elements.get('[data-company-editor]');let editorHtml='';
 Object.defineProperty(editor,'innerHTML',{get:()=>editorHtml,set:value=>{editorHtml=value;editorWrites++;}});
 const root={innerHTML:'',querySelector:selector=>elements.get(selector),querySelectorAll:()=>[]};
@@ -82,7 +85,7 @@ const moduleApi={core:{company,format:{errorMessage:error=>error.message},formSt
  if(delayed)return delayed.promise;
  return response();
 }}},modules:{register:value=>{definition=value;}}};
-vm.runInNewContext(fs.readFileSync(new URL('../src/modules/company.js',import.meta.url),'utf8'),{SLINK_EXTENSION:moduleApi,console});
+vm.runInNewContext(fs.readFileSync(new URL('../src/modules/company.js',import.meta.url),'utf8'),{SLINK_EXTENSION:moduleApi,console,document:{activeElement:null}});
 const lifecycle=await definition.start({presentation:'dashboard',signal:{aborted:false},ui:{getContentElement:()=>root,setModuleStyles(){},setStatus(){}},listen:(node,type,fn)=>{click=fn;}});
 assert.equal(mounts,1);assert.equal(editorWrites,1);assert.match(editorHtml,/company-director-threshold/);assert.doesNotMatch(editorHtml,/Save alerts/);
 assert.deepEqual(Object.values(options.fields),['addictionThreshold','directorThreshold']);

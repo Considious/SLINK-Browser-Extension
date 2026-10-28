@@ -2,6 +2,23 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 29 — 27 October 2026 — Company and Officer actions/results
+
+**Extension tester only:0.19.13.4 /Audit Test29.** PDA stays0.4.115/audit-test27; main is unchanged. Awaiting tester confirmation.
+
+Officers now shows the actual restock amounts and missing OC items, not just counts. Separate Copy buttons use the same report wording as alerts; armory access does not expose OC-only reports. Failed checks label retained results as older data. Company uses retained employee controls during refresh. Its dashboard Copy reminder works through a shared clipboard helper, with selectable manual text if copying is blocked. Unknown Company values no longer display as a made-up zero.
+
+On Torn, Company Send chat now requires a reminder explicitly loaded with Fill chat. If you edit that draft, switch company, or already sent it, Send refuses instead of overwriting/reloading your text. It never automatically sends from the dashboard.
+
+**Test with harmless data:**
+
+1. In Officers, configure a threshold and run the appropriate manual check. Confirm the displayed item/current/target values and missing member/item/crime details match the results. Copy the list into a harmless draft and check its text; do not send it merely for testing.
+2. With armory-only access, confirm OC results/copy are absent. With OC access, check both OC stock and assigned missing-item reports. If the latest check fails, any copied retained report must clearly say it is older data. Never alter important grants solely to test this.
+3. As your company director, use Copy reminder on the dashboard. If clipboard access fails, select and copy the readonly reminder below it. Regular employees must not see director reminders. Refresh while copying; employee buttons and threshold fields should retain their identity and your settings.
+4. On Torn, open an employee chat and click Fill chat. Edit its text, then click Send chat: SLINK must refuse and preserve your edited draft. A fresh Fill followed by Send is an explicit real message, so use only a consenting test recipient if you test that step. A second Send must require a fresh Fill.
+
+**Try to break it:** clipboard denied, delayed copy plus refresh, director/access removal, repeated clicks and a narrow window. Do not expose API keys. Synthetic browser checks passed at360px Torn panel/1000px dashboard, alongside the existing Company autosave and Officer/Chat editor checks. No saved-data keys, permission scopes, theme assets, API polling or backend endpoints changed. PDA/live faction acceptance remains separate, and the whole parity phase is not yet complete.
+
 ## Candidate 28 — 27 October 2026 — dashboard and Torn toolbar actions
 
 **Extension tester only:0.19.13.3 /Audit Test28.** PDA stays0.4.115 /audit-test27; main is unchanged. Awaiting tester confirmation.

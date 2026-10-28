@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 28
+# SLINK audit tester build — candidate 29
+
+Extension0.19.13.4 /Audit Test29 adds readable Officer restock/missing-item lists and manual copy, shared clipboard fallback, retained Company employee controls and a Fill-before-Send private reminder safeguard. Missing Company values remain unavailable, not invented zero. PDA remains0.4.115/audit-test27 and main is unchanged. Use the single TESTER-CHANGELOG.md for the action/access/draft checklist.
 
 Extension0.19.13.3 /Audit Test28 fixes shared toolbar click handling on the standalone dashboard and Torn shell, including stable clicked-button access across awaits, pending-click exclusion, failure recovery and revoked actions. The frozen shell API now works through lifecycle guards. Officer Recaller handoff uses extension tab creation and reports rejection. PDA stays0.4.115 /audit-test27; main is unchanged. See the single TESTER-CHANGELOG.md.
 

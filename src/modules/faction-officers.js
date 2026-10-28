@@ -12,6 +12,7 @@
       const ui=context.ui,root=ui.getContentElement();
       let current=null,access=null,busy=false,stopped=false,accessSaving=false,settingsRevision=0,accessFaction=null,notice='',previewTimer=null;
       const controllers=new Map();
+      const copying=new Set();
       const priorExplicit=root.dataset.uiExplicitCommit;root.dataset.uiExplicitCommit='true';
       const guard=SLINK.core.formState.protect(root.getRootNode?.()||root);
       root.innerHTML='<div class="slink-fo-stack"><p data-fo-notice role="status"></p><div data-fo-slot="recaller"></div><div data-fo-slot="armory"></div><div data-fo-slot="oc"></div><div data-fo-slot="access"></div></div>';
@@ -24,6 +25,8 @@
       function mountThresholds(kind){
         const defs=current.definitions[kind],config=current.settings[kind],holder=slot(kind);
         holder.innerHTML='<section class="slink-fo-card" data-fo-section="'+kind+'"><div class="slink-fo-head"><div><h3>'+(kind==='oc'?'Organized crime supplies':'Faction armory thresholds')+'</h3><p>'+(kind==='oc'?'Tracks OC stock and checks active assigned slots for missing required items.':'One consolidated alert lists every configured item below target.')+'</p></div><label>Checks/day <input id="fo-'+kind+'-frequency" type="number" min="0" max="24" step="1" data-fo-frequency="'+kind+'" value="'+config.checksPerDay+'"></label></div><p class="slink-fo-note"></p><div class="slink-fo-grid">'+defs.map(def=>'<label class="slink-fo-item"><span>'+escape(def.name)+'</span><input id="fo-'+kind+'-threshold-'+escape(def.key)+'" type="number" min="0" step="1" data-fo-threshold="'+kind+'" data-fo-key="'+escape(def.key)+'" value="'+(config.thresholds[def.key]||0)+'"></label>').join('')+'</div><div class="slink-fo-controls"><label><input id="fo-'+kind+'-sound" type="checkbox" data-fo-sound="'+kind+'" '+(config.soundEnabled?'checked':'')+'> Alert sound</label><button type="button" data-fo-action="run-'+kind+'">Run '+(kind==='oc'?'OC':'armory')+' check now</button><span data-fo-save-state role="status"></span><button type="button" data-fo-action="retry-'+kind+'" hidden>Retry</button></div><div class="slink-fo-results"></div></section>';
+        holder.querySelector('.slink-fo-results').innerHTML='<p data-fo-result-summary></p><pre data-fo-restock></pre><button type="button" data-fo-action="copy-'+kind+'">Copy restock list</button>'+(kind==='oc'?'<pre data-fo-missing></pre><button type="button" data-fo-action="copy-missing">Copy missing-item list</button>':'')+'<p><a href="'+CORE.ARMORY_URL+'">Open faction armory</a>'+(kind==='oc'?' · <a href="'+CORE.CRIMES_URL+'">Open organized crimes</a>':'')+'</p><label data-fo-copy-fallback hidden>Copy manually<textarea readonly rows="4" data-fo-copy-text style="width:100%;min-width:0;box-sizing:border-box"></textarea></label>';
+        holder.querySelectorAll('pre').forEach(node=>{node.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:6px 0';});
         const fields={};
         fields['fo-'+kind+'-frequency']='checksPerDay';fields['fo-'+kind+'-sound']='soundEnabled';
         for(const def of defs)fields['fo-'+kind+'-threshold-'+def.key]='threshold:'+def.key;
@@ -62,7 +65,13 @@
           if(!controllers.has(kind))mountThresholds(kind);
           const runtime=current.runtime,holder=slot(kind),last=kind==='armory'?runtime.lastArmoryCheckAt:runtime.lastOcCheckAt,error=kind==='armory'?runtime.armoryError:runtime.ocError,rows=kind==='armory'?runtime.armoryShortages:runtime.ocShortages;
           setText(holder.querySelector('.slink-fo-note'),(kind==='oc'?'Set 0 for manual checks only. ':'')+'Torn inventory is cached for one hour. Last check: '+(last?new Date(last).toLocaleString():'never')+'.');
-          setText(holder.querySelector('.slink-fo-results'),error?'Error: '+error:(rows?.length||0)+' stock thresholds below target'+(kind==='oc'?' · '+(runtime.missingCrimeItems?.length||0)+' active crime slots missing items':'')+'.');
+          setText(holder.querySelector('[data-fo-result-summary]'),error?'Error: '+error+' Last available results are shown below.':(rows?.length||0)+' stock thresholds below target'+(kind==='oc'?' · '+(runtime.missingCrimeItems?.length||0)+' active crime slots missing items':'')+'.');
+          const restock=holder.querySelector('[data-fo-restock]');setText(restock,rows?.length?CORE.restockMessage(kind==='armory'?'Restock Needed:':'OC Restock Needed:',rows):'');restock.hidden=!rows?.length;
+          const copy=holder.querySelector('[data-fo-action="copy-'+kind+'"]');copy.hidden=!rows?.length;copy.disabled=copying.has(kind);
+          if(kind==='oc'){
+            const missing=runtime.missingCrimeItems||[],detail=holder.querySelector('[data-fo-missing]');setText(detail,missing.length?CORE.missingCrimeMessage(missing):'');detail.hidden=!missing.length;
+            const button=holder.querySelector('[data-fo-action="copy-missing"]');button.hidden=!missing.length;button.disabled=copying.has('missing');
+          }
           holder.querySelector('[data-fo-action="run-'+kind+'"]').disabled=busy;
         }
         renderAccess();
@@ -97,6 +106,24 @@
       context.listen(root,'click',async event=>{
         if(!allowed())return;const button=event.target.closest('[data-fo-action]');if(!button)return;const action=button.dataset.foAction;
         if(action==='save-access'){void saveAccess();return;}
+        if(['copy-armory','copy-oc','copy-missing'].includes(action)){
+          const target=action.slice(5),kind=target==='missing'?'oc':target;
+          if(!current?.access?.[kind]||copying.has(target))return;
+          const runtime=current.runtime,rows=target==='missing'?runtime.missingCrimeItems:kind==='armory'?runtime.armoryShortages:runtime.ocShortages;
+          if(!rows?.length)return;
+          const error=kind==='armory'?runtime.armoryError:runtime.ocError;
+          const text=(error?'Last available results; latest check failed.\n':'')+(target==='missing'?CORE.missingCrimeMessage(rows):CORE.restockMessage(kind==='armory'?'Restock Needed:':'OC Restock Needed:',rows));
+          copying.add(target);button.disabled=true;
+          try{
+            const copied=await SLINK.core.clipboard.copyText(text);
+            if(!allowed()||!current.access[kind])return;
+            const holder=slot(kind),fallback=holder.querySelector('[data-fo-copy-fallback]');fallback.hidden=copied;
+            if(!copied)holder.querySelector('[data-fo-copy-text]').value=text;
+            notice=copied?'List copied. Paste it manually where needed.':'Copy blocked. Select and copy the list below.';
+          }catch(error){if(allowed())notice=SLINK.core.format.errorMessage(error);}
+          finally{copying.delete(target);if(allowed())render();}
+          return;
+        }
         if(action.startsWith('retry-')){void controllers.get(action.slice(6))?.retry().catch(()=>{});return;}
         if(action==='open-recaller'){if(!current?.access?.armory)return;try{await SLINK.core.storage.set('ui.war.requestedTab','armory');if(!allowed())return;global.dispatchEvent(new CustomEvent('slink:open-armory-recaller'));await ui.navigateTo?.('war');}catch(error){if(allowed()){notice=SLINK.core.format.errorMessage(error);render();}}return;}
         if(action.startsWith('run-')&&!busy){const kind=action.slice(4);try{await controllers.get(kind)?.flush();if(allowed()&&current.access[kind])await load(false,kind);}catch(error){if(allowed()){notice=SLINK.core.format.errorMessage(error);render();}}}

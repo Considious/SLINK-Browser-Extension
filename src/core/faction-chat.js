@@ -107,20 +107,7 @@
   }
 
   async function copyText(text) {
-    try {
-      if (global.navigator?.clipboard?.writeText) {
-        await global.navigator.clipboard.writeText(text);
-        return true;
-      }
-    } catch {}
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
-    document.body.append(textarea);
-    textarea.select();
-    const copied = document.execCommand('copy');
-    textarea.remove();
-    return copied;
+    return SLINK.core.clipboard.copyText(text);
   }
 
   async function prime(value, options = {}) {
@@ -196,6 +183,7 @@
   }
 
   SLINK.define('core', 'factionChat', Object.freeze({
+    isSendButton,
     clearPrimed,
     isPrimed,
     prime,

@@ -223,7 +223,7 @@
       alerts.push({id:'factionOcStock',kind:'faction-oc-stock',title:'Organized crime supplies need restocking',detail:`${sr.ocShortages.length} configured OC ${sr.ocShortages.length===1?'item is':'items are'} below target.`,tone:'urgent',links:[['Faction Armory',CORE.ARMORY_URL]],shareText:CORE.restockMessage('OC Restock Needed:',sr.ocShortages),soundEnabled:ss.oc.soundEnabled});
     }
     if(stock.access.oc&&sr.missingCrimeItems?.length&&Number(ss.snoozedUntil.factionOcMissing||0)<=now){
-      const message=['OC Items Missing:',...sr.missingCrimeItems.map(row=>`${row.userName} [${row.userId}] — ${row.itemName} for ${row.crimeName}`)].join('\n');
+      const message=CORE.missingCrimeMessage(sr.missingCrimeItems);
       alerts.push({id:'factionOcMissing',kind:'faction-oc-missing',title:'Active organized crimes are missing items',detail:`${sr.missingCrimeItems.length} assigned ${sr.missingCrimeItems.length===1?'slot is':'slots are'} missing a required item.`,tone:'urgent',links:[['Faction Armory',CORE.ARMORY_URL],['Organized Crimes',CORE.CRIMES_URL]],shareText:message,soundEnabled:ss.oc.soundEnabled});
     }
     return alerts.filter(alert=>alert.active!==false);

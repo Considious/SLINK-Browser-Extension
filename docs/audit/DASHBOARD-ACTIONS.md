@@ -1,4 +1,4 @@
-# Dashboard action parity checkpoint — Candidate 28
+# Dashboard action parity checkpoint — Candidate 29
 
 This is an implementation map, not a second tester changelog. Use TESTER-CHANGELOG.md for user steps. Main is unchanged and physical/live acceptance remains required.
 
@@ -10,9 +10,10 @@ This is an implementation map, not a second tester changelog. Use TESTER-CHANGEL
 | Hidden/revoked/disposed module action | Host permission/visibility plus lifecycle check | Lifecycle check plus visible toolbar | Exact/admin/denied and disposed-callback tests; browser revocation |
 | Frozen shell UI API | Dashboard API remains guarded | Frozen API supported by facade | Real shell browser caught/fixed invariant failure |
 | Officer Armory Recaller | Explicitly opens faction-armory tab, never retrieves automatically | Existing War-tab navigation | Real adapter tabs.create call; actual Officer callback awaits/reports failure |
-| Company director reminder | Existing Copy reminder plus profile/message links | Existing deliberate fill/send workflow | Unchanged this batch; full live action confirmation still pending |
+| Company director reminder | Copy reminder, clipboard fallback/manual text and profile/message links | Fill then explicit Send; edited/unprimed/wrong-company draft is not sent | Production handler tests and real360px/1000px modules; live acceptance pending |
+| Officer restock/missing OC items | Detailed reports, scoped manual Copy and armory/crime links | Same module controls | Actual callbacks, clipboard failures, access removal and stable controls tested |
 | Bounties/Mugging/Target List | Existing shared hosted modules | Existing shared modules | Earlier candidate tests retained; not an exhaustive new live-data review |
 
 No new permission or backend grant is introduced. Recaller use still requires the existing officer/Armory/admin access and its native Torn-page workflow. Dashboard configuration must not scrape Torn or auto-click controls on another tab. No window resizing, selected-page policy, theme assets, settings keys or API polling changed.
 
-Continue with actual Company copy/open behavior, Officer check/copy/results, remaining native-only handoffs, live backend permission dispositions and full standalone-dashboard action parity. Do not mark the entire parity phase complete from this map.
+Company and Officer copy/results now have executable browser coverage, not just static presence checks. Continue remaining native-only handoffs, onboarding verification/alerts parity, live backend permission dispositions and full standalone-dashboard action parity. No ordinary employee receives director controls merely through admin.*; the authenticated company snapshot must identify that user as director. Do not mark the entire parity phase complete from this map.
