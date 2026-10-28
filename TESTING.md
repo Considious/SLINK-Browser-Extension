@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 27
+# SLINK audit tester build — candidate 28
+
+Extension0.19.13.3 /Audit Test28 fixes shared toolbar click handling on the standalone dashboard and Torn shell, including stable clicked-button access across awaits, pending-click exclusion, failure recovery and revoked actions. The frozen shell API now works through lifecycle guards. Officer Recaller handoff uses extension tab creation and reports rejection. PDA stays0.4.115 /audit-test27; main is unchanged. See the single TESTER-CHANGELOG.md.
 
 Extension0.19.13.2 /Audit Test27 and PDA0.4.115 /audit-test27 improve shared-provider partial/out-of-order response handling. No main promotion, UI redesign, setting-key migration, formula change or extra polling. Use the single TESTER-CHANGELOG.md for cross-module price/stats tests and retained earlier checks.
 

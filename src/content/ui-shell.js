@@ -733,7 +733,7 @@
         button.type = 'button';
         button.textContent = String(action.label || 'Action');
         if (action.href) button.addEventListener('click', () => global.open(String(action.href), '_blank', 'noopener'));
-        else if (typeof action.onClick === 'function') button.addEventListener('click', event => void action.onClick(event));
+        else if (typeof action.onClick === 'function') SLINK.modules.bindAction(button,action,{onError:error=>console.error('[SLINK] Alert action:',error)});
         buttons.push(button);
       }
       alert.actions.replaceChildren(...buttons);
@@ -800,7 +800,7 @@
           for (const definition of definitions || []) {
             const button = document.createElement('button'); button.type = 'button'; button.textContent = String(definition.label || 'Action'); button.disabled = Boolean(definition.disabled);
             if (definition.id) button.dataset.action = String(definition.id);
-            if (typeof definition.onClick === 'function') button.addEventListener('click', event => void definition.onClick(event));
+            if (typeof definition.onClick === 'function') SLINK.modules.bindAction(button,definition,{active:()=>!element.hidden&&document.visibilityState==='visible',onError:error=>api.setStatus(SLINK.core.format.errorMessage(error),'error')});
             actions.append(button);
           }
         },

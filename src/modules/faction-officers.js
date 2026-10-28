@@ -98,7 +98,7 @@
         if(!allowed())return;const button=event.target.closest('[data-fo-action]');if(!button)return;const action=button.dataset.foAction;
         if(action==='save-access'){void saveAccess();return;}
         if(action.startsWith('retry-')){void controllers.get(action.slice(6))?.retry().catch(()=>{});return;}
-        if(action==='open-recaller'){if(!current?.access?.armory)return;try{await SLINK.core.storage.set('ui.war.requestedTab','armory');if(!allowed())return;global.dispatchEvent(new CustomEvent('slink:open-armory-recaller'));ui.navigateTo?.('war');}catch(error){if(allowed()){notice=SLINK.core.format.errorMessage(error);render();}}return;}
+        if(action==='open-recaller'){if(!current?.access?.armory)return;try{await SLINK.core.storage.set('ui.war.requestedTab','armory');if(!allowed())return;global.dispatchEvent(new CustomEvent('slink:open-armory-recaller'));await ui.navigateTo?.('war');}catch(error){if(allowed()){notice=SLINK.core.format.errorMessage(error);render();}}return;}
         if(action.startsWith('run-')&&!busy){const kind=action.slice(4);try{await controllers.get(kind)?.flush();if(allowed()&&current.access[kind])await load(false,kind);}catch(error){if(allowed()){notice=SLINK.core.format.errorMessage(error);render();}}}
       });
       await load(true);

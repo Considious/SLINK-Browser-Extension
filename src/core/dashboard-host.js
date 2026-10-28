@@ -26,7 +26,7 @@
           for(const action of actions){
             const button=document.createElement('button');button.type='button';button.textContent=action.label;
             button.disabled=Boolean(action.disabled);button.dataset.hostAction=action.id||'';
-            button.addEventListener('click',()=>{if(current())Promise.resolve().then(()=>action.onClick?.()).catch(error=>this.setStatus(SLINK.core.format.errorMessage(error),'error'));});
+            SLINK.modules.bindAction(button,action,{active:current,onError:error=>this.setStatus(SLINK.core.format.errorMessage(error),'error')});
             holder.append(button);
           }
         },
@@ -35,9 +35,11 @@
           if(!style){style=document.createElement('style');style.id='slink-dashboard-module-'+id;document.head.append(style);}
           style.textContent=String(css||'');
         },
-        navigateTo(id) {
+        async navigateTo(id) {
           if(!current()||id!=='war')return;
-          global.open('https://www.torn.com/factions.php?step=your#/tab=armoury','_blank','noopener');
+          const url='https://www.torn.com/factions.php?step=your#/tab=armoury';
+          if(global.chrome?.tabs?.create) return global.chrome.tabs.create({url,active:true});
+          if(!global.open(url,'_blank','noopener')) throw new Error('Could not open Torn. Use the Open faction armory link and open the Recaller there.');
         }
       };
     }

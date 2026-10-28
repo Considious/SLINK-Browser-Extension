@@ -1,5 +1,9 @@
 # Audit test baseline and classification
 
+## Candidate 28 — dashboard/Torn action contract
+
+New action-binding.test.mjs executes production helper and dashboard adapter: immediate user gesture invocation, captured event target/currentTarget, duplicate exclusion, sync/async error recovery, disposed callbacks, a frozen UI API, exact/admin/denied host access and actual Officer callback rejection. Existing dashboard parity assertions remain. Actual headless Edge loads the real dashboard host and Torn shell, including the frozen shell API, at360px and1000px: native event lifetime, async retry, retained draft identity and revoked actions pass. The first browser run exposed the genuine frozen-target Proxy invariant violation; the production facade was corrected, not the fixture weakened. No PDA or authenticated Torn/device acceptance claimed. Remaining action-by-action parity is not certified by this batch.
+
 ## Candidate 27 — shared-provider field coverage and freshness
 
 Production provider tests on both platforms now execute concurrent consumers with different level requirements; valid stats without a level; forced newer stats followed by an older useful level; a newer partial catalog followed by older full prices; removed-ID non-resurrection; independent price/name timestamps; authoritative zero and object-keyed item IDs. Existing coalescing, credential isolation, write-failure recovery and partial-price checks remain. No UI or network transport was changed; this is not live API/device acceptance. Full inventory results are recorded in the handoff.

@@ -2,6 +2,21 @@
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
+## Candidate 28 — 27 October 2026 — dashboard and Torn toolbar actions
+
+**Extension tester only:0.19.13.3 /Audit Test28.** PDA stays0.4.115 /audit-test27; main is unchanged. Awaiting tester confirmation.
+
+The dashboard now passes the actual click to shared toolbar actions. Both extension surfaces keep the clicked button available while a request is pending, block a repeated click on that same pending action, and recover from a failure. Disposed/revoked module actions cannot run from retained old buttons. Real-browser testing also found/fixed a lifecycle error with the Torn shell's frozen API. Officer Recaller handoff opens an extension-created Torn tab, and reports failed navigation instead of silently relying on a delayed popup. It does not retrieve any items automatically.
+
+**Test:**
+
+1. Open a permitted module on the extension dashboard. Use Refresh/Find targets/Add target/Settings as applicable; repeat on the Torn panel. Buttons should work without currentTarget/undefined errors.
+2. During a slow request, try the same button again. The pending button should not start another copy. After an error, retry should remain possible. Keep a harmless draft open and confirm it is not replaced.
+3. With officer Armory permission or admin.*, open Officers then Open Armory Recaller. It should open the faction armory, ready for the existing manual Recaller workflow. No automatic retrieval. If opening fails, the page should show a useful error and retain the Open faction armory link.
+4. Switch modules/windows during a pending action and return. Old action controls must not act after their module is stopped or access is revoked. Your page selection, theme, panel size and other settings should remain.
+
+**Try to break it:** double-click, delayed reply, deliberate offline/retry, narrow window and permission removal in an isolated tester profile. Do not change important shared officer grants merely to run a test. Report candidate, module, surface and steps, without API keys. Real browser checks passed for both surfaces at360px/1000px; live Torn/backend permission and physical PDA acceptance remain separate. This does not complete every dashboard-parity item.
+
 ## Candidate 27 — 27 October 2026 — shared stats and price freshness
 
 **Testing only:** extension0.19.13.2 /Audit Test27; PDA0.4.115 /audit-test27. Awaiting tester confirmation. Main is unchanged.

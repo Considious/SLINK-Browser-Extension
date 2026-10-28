@@ -8,6 +8,29 @@
   const running = new Map();
   let generation = 0;
 
+  function bindAction(button, action, { active = () => true, onError = error => console.error('[SLINK] Action:', error) } = {}) {
+    let pending = false;
+    const listener = event => {
+      if (pending || button.disabled || !active() || typeof action.onClick !== 'function') return;
+      const target = event.target;
+      const captured = new Proxy(event, { get(source, key) {
+        if (key === 'currentTarget') return button;
+        if (key === 'target') return target;
+        const value = Reflect.get(source, key, source);
+        return typeof value === 'function' ? value.bind(source) : value;
+      } });
+      pending = true;
+      button.disabled = true;
+      const release = () => { pending = false; button.disabled = Boolean(action.disabled); };
+      try {
+        // Invoke within the original user gesture, not a deferred microtask.
+        Promise.resolve(action.onClick(captured)).catch(error => { if (active()) onError(error); }).finally(release);
+      } catch (error) { release(); if (active()) onError(error); }
+    };
+    button.addEventListener('click', listener);
+    return () => button.removeEventListener('click', listener);
+  }
+
   function lifecycle(context) {
     const controller = new AbortController();
     const callbacks = [];
@@ -17,11 +40,17 @@
       target.addEventListener(type, guarded, options);
       callbacks.push(() => target.removeEventListener(type, guarded, options));
     };
-    const ui = context.ui && new Proxy(context.ui, { get(target, key) {
+    // The real shell freezes its API. Proxy an empty facade so guarded methods
+    // do not violate JavaScript's non-configurable-property invariants.
+    const ui = context.ui && new Proxy({}, { get(_facade, key) {
+      const target = context.ui;
       const value = target[key];
       if (typeof value !== 'function') return value;
       return (...args) => {
         if (/^(?:set|render|update)/.test(String(key)) && !active()) return;
+        if (key === 'setActions') args[0] = (args[0] || []).map(action => ({ ...action,
+          onClick:(...events) => { if (active()) return action.onClick?.(...events); }
+        }));
         return value.apply(target, args);
       };
     } });
@@ -177,6 +206,7 @@
   }
 
   SLINK.define('modules', 'register', register);
+  SLINK.define('modules', 'bindAction', bindAction);
   SLINK.define('modules', 'list', list);
   SLINK.define('modules', 'canAccess', canAccess);
   SLINK.define('modules', 'lifecycle', lifecycle);
