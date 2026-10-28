@@ -1,5 +1,28 @@
 # SLINK tester changelog
 
+## Combined acceptance pass — Candidates 31 and 32 (no new code build)
+
+This is the planned Update 3 acceptance pass, not another install/version. Use the latest testing-branch candidates only: **PDA 0.4.117 / Candidate 31** and **extension 0.19.13.5 / Candidate 32**. Main/stable is unchanged. Do not install an older candidate, run stable and tester copies together, uninstall SLINK, clear app data, or change important live faction grants for this test. Back up settings first and use a harmless sample target if a target action is needed.
+
+### One combined test session
+
+1. **Install/startup and saved data:** In an isolated Chrome profile, load Candidate 32; in PDA, update the existing Candidate 31 script in place. Confirm the displayed build on each. Check your current alert choices, API credentials, targets/notes, theme, last-used page/tab, panel size and alert snoozes. Navigate away/back and reload; values must remain and no blank/empty shell or repeated authentication prompt should appear. Do not paste keys into a report.
+2. **Extension dashboard and Torn panel:** Use the same account in both surfaces. Open Alerts and a few ordinary modules, change harmless settings, and keep a form/draft open while a normal refresh occurs. Controls and drafts must not reset or close. Snooze/dismiss an available reminder and verify the action result. Wait through several unchanged 15-second Torn status refreshes; alert controls must remain usable. A stale/denied officer action should show an error and remain retryable.
+3. **PDA persistence and recovery:** Make one harmless settings change and, if appropriate, add/edit/remove a clearly disposable sample target. Wait for save acknowledgement before leaving. Navigate, background the app, return, and reload; acknowledged changes must remain, failed/interrupted changes must not claim success or erase unrelated data, and refreshed battle stats must not revert to an older value. After one successful startup, briefly test cached startup without network; the last-known-good runtime should still open. Restore connectivity afterward. Do not intentionally corrupt storage or test a cold first install with all source hosts blocked.
+4. **Page ownership and return behavior:** On Chrome, open Torn in multiple tabs/windows and switch focus repeatedly. Only the focused active Torn page should perform DOM reading; returning should reuse the panel, retain the selected view and size, and resume once without duplicate controls. In PDA, background/switch page and return; DOM readers should pause/resume without duplicate work. Repeat normal navigation to confirm it does not restart into a different/default module.
+5. **Permission and account separation:** Without changing real grants, test with accounts/roles that already have the relevant exact permission, faction officer grant, `admin.*`, or no grant. Confirm each receives only its allowed controls; admin retains the documented admin override, and denied/cached data does not expose restricted actions. If you have a safe second account, confirm its stats/settings do not bleed into the first account. If no suitable account/role is available, mark this item NOT TESTED; source tests cannot prove the live grant configuration.
+6. **Usability/performance:** On ordinary use, repeat page changes, a few refreshes, and one harmless action. Note whether the panel flickers/reboots, lags Torn interactions, jumps position, changes theme, or causes duplicate alerts/actions. Do not infer performance from one background/API timer. Report device/browser, approximate viewport, exact candidate and surface.
+
+### What developer checks establish—and what they do not
+
+The full declared source/fixture inventories for PDA Candidate 31 and extension Candidate 32 passed. Coverage includes supported migration and non-destructive storage recovery, failed writes/retries, loader/cache recovery, account and shared-data freshness, form/control retention, page ownership/resume, extension standalone-dashboard/Torn action parity and permissions, and a 10,000-unrelated-mutation check with zero DOM rescans. Those are automated test results. They do **not** certify a physical PDA installation, a real authenticated Torn session, actual faction grant propagation, a production worker/backend response, or device performance. Update 3 remains open until the manual results below are reviewed and any evidenced corrections are completed in one complete batch.
+
+### Tester result template
+
+Reply with one line for each check: `PDA / Extension dashboard / Torn panel — PASS, FAIL, or NOT TESTED — exact step and expected vs actual`. Include candidate version, device/OS or browser, and screenshots/log text if useful. Never include API keys, session tokens, or other people's private data. If something fails, stop before repeating a potentially destructive action and report the first reproducible failure.
+
+**Current status:** automated checks pass; physical PDA, real Chrome/Torn behavior, and live faction/backend acceptance are pending. No new code build is implied by this checklist. Chat expansion remains the next planned work only after Update 3 is closed.
+
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
 
 ## Candidate 32 — 27 October 2026 — Extension onboarding alerts and refresh stability
