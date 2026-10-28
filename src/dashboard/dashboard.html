@@ -2,6 +2,8 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SLINK Dashboard</title><link rel="stylesheet" href="dashboard.css"><link rel="stylesheet" href="host.css"></head>
 <body>
+  <script src="../core/chat-giphy.js"></script>
+  <script src="../core/chat-giphy-ui.js"></script>
   <header class="topbar slink-surface"><div class="brand"><span>SL</span><div><h1>SLINK Dashboard</h1><p>Shared Live Intelligence NetworK</p></div></div><div class="top-actions"><span id="connection" class="badge">Checking</span><a class="button secondary" href="https://www.torn.com/" target="_blank" rel="noopener noreferrer">Open Torn</a><button id="refresh-all" type="button">Refresh</button></div></header>
   <nav class="dashboard-tabs" aria-label="SLINK pages"><button class="dashboard-tab active" data-page-tab="workspace" type="button"><span>Combat</span><span class="nav-alert-count" data-alert-count="combat" hidden></span></button><button class="dashboard-tab" data-page-tab="alerts" type="button"><span>Efficiency</span><span class="nav-alert-count" data-alert-count="efficiency" hidden></span></button><button id="quality-tab" class="dashboard-tab" data-page-tab="quality" type="button"><span>Quality of Life</span><span class="nav-alert-count" data-alert-count="quality" hidden></span></button><button id="admin-tab" class="dashboard-tab" data-page-tab="admin" type="button" hidden>Permissions</button><button id="diagnostics-tab" class="dashboard-tab" data-page-tab="diagnostics" type="button" hidden>Diagnostics</button></nav>
   <main>

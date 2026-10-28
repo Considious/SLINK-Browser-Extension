@@ -1,5 +1,24 @@
 # SLINK tester changelog
 
+## Candidate 33 — 28 October 2026 — GIPHY API integration
+
+**Testing branches only: extension 0.19.13.6 and PDA 0.4.118. Main/stable is unchanged.** Quality of Life → Chat now contains the direct-API GIF picker. It is optional and initially off. Choose SLINK's shared application key or your own GIPHY API key. The owner expressly approved publishing the shared application key; it is visible client-side and has shared provider limits. Your own saved key is not echoed by the settings service. PDA cloud backups exclude that key and restoring a settings backup preserves the existing local key.
+
+The picker searches only when you press Search, Trending, Enter, or Next results. It shows still thumbnails, with explicit Play / pause and Copy link controls. Paste the copied link into Torn chat and send it yourself. Clipboard-denied environments show a selectable link instead. Nothing sends a message automatically. Requests go directly to GIPHY from the client; no Cloudflare proxy, persistent search/media cache, background search, automatic key rotation, or mixed-provider results. Provider timeouts, rejected keys and rate limits show a bounded error rather than a retry loop. Settings save automatically, show failed saves, and offer Retry. The original custom-button/highlight settings are preserved. Attribution uses GIPHY's supplied artwork; the picker credits Carol [4021053]'s original script as inspiration.
+
+### Test together on the extension dashboard, Torn panel, and PDA
+
+1. Update the existing tester install in place; do not uninstall or clear data. Open Quality of Life → Chat. Confirm prior macros, highlight settings and unrelated data remain. Turn Enable GIPHY on, navigate away/back and reload; the setting must persist.
+2. Search for a harmless term, try Trending and Next results. Confirm no search runs just because you open the page or type. Still previews should not animate until Play is pressed. Switch tabs/background PDA or scroll the picker out of view; playing previews must pause. Return and play again manually.
+3. Copy a link, paste it into a harmless chat draft and confirm nothing sends without your own Send action. If copying is blocked, use the selectable link shown beneath the picker.
+4. Select My own GIPHY API key, enter your key, and wait for Saved. Reload; the field should be empty/masked with a saved-key placeholder, while the custom mode still works. Switch back to the integrated option: your own saved key should remain until Remove saved key is clicked. Do not put keys in reports.
+5. Disable the picker, refresh and navigate: it must remain disabled. Other Chat controls should still work. Rapidly change key mode/toggle while searching; older results must not replace the changed state. Keep a key/search field focused during ordinary GUI updates: the field/node must remain intact.
+6. If the shared key is genuinely rate limited, it should show that error, not switch keys or keep retrying. Do not intentionally exhaust it. Developer failure-injection fixtures cover denied access, rejected keys, quota, network errors and failed storage writes.
+
+**Evidence:** 97/97 declared automated source/fixture commands pass across both repositories. The new picker passed headless-browser interaction, autosave/retry and layout checks at 360px and 1000px for both packaged copies. One live Search and one Trending request using the supplied key each returned 12 results with usable stills, MP4s and share URLs. Physical PDA/native networking and authenticated Torn chat acceptance still need testers; desktop fixtures are not device certification.
+
+**Scope / what is still separate:** this is the requested direct-API backend/key-option/picker integration. Inline chat image/GIF embedding, quick replies, the large emoji picker and slash-text shortcuts are not implemented by this candidate. The mini-profile proposal is not enabled. The original audit's live/device acceptance also remains open; this entry does not declare it complete. No provider key upgrade or paid plan was requested or activated.
+
 ## Combined acceptance pass — Candidates 31 and 32 (no new code build)
 
 This is the planned Update 3 acceptance pass, not another install/version. Use the latest testing-branch candidates only: **PDA 0.4.117 / Candidate 31** and **extension 0.19.13.5 / Candidate 32**. Main/stable is unchanged. Do not install an older candidate, run stable and tester copies together, uninstall SLINK, clear app data, or change important live faction grants for this test. Back up settings first and use a harmless sample target if a target action is needed.
@@ -24,6 +43,29 @@ Reply with one line for each check: `PDA / Extension dashboard / Torn panel — 
 **Current status:** automated checks pass; physical PDA, real Chrome/Torn behavior, and live faction/backend acceptance are pending. No new code build is implied by this checklist. Chat expansion remains the next planned work only after Update 3 is closed.
 
 This is the single running changelog for the entire audit implementation, covering the extension and PDA. It explains what changed, what to test and how to try to break it. New builds and tester follow-ups will be added here; earlier entries will remain available.
+
+## Combined acceptance pass — Candidates 31 and 32 (no new code build)
+
+This is the planned Update 3 acceptance pass, not another install/version. Use the latest testing-branch candidates only: **PDA 0.4.117 / Candidate 31** and **extension 0.19.13.5 / Candidate 32**. Main/stable is unchanged. Do not install an older candidate, run stable and tester copies together, uninstall SLINK, clear app data, or change important live faction grants for this test. Back up settings first and use a harmless sample target if a target action is needed.
+
+### One combined test session
+
+1. **Install/startup and saved data:** In an isolated Chrome profile, load Candidate 32; in PDA, update the existing Candidate 31 script in place. Confirm the displayed build on each. Check your current alert choices, API credentials, targets/notes, theme, last-used page/tab, panel size and alert snoozes. Navigate away/back and reload; values must remain and no blank/empty shell or repeated authentication prompt should appear. Do not paste keys into a report.
+2. **Extension dashboard and Torn panel:** Use the same account in both surfaces. Open Alerts and a few ordinary modules, change harmless settings, and keep a form/draft open while a normal refresh occurs. Controls and drafts must not reset or close. Snooze/dismiss an available reminder and verify the action result. Wait through several unchanged 15-second Torn status refreshes; alert controls must remain usable. A stale/denied officer action should show an error and remain retryable.
+3. **PDA persistence and recovery:** Make one harmless settings change and, if appropriate, add/edit/remove a clearly disposable sample target. Wait for save acknowledgement before leaving. Navigate, background the app, return, and reload; acknowledged changes must remain, failed/interrupted changes must not claim success or erase unrelated data, and refreshed battle stats must not revert to an older value. After one successful startup, briefly test cached startup without network; the last-known-good runtime should still open. Restore connectivity afterward. Do not intentionally corrupt storage or test a cold first install with all source hosts blocked.
+4. **Page ownership and return behavior:** On Chrome, open Torn in multiple tabs/windows and switch focus repeatedly. Only the focused active Torn page should perform DOM reading; returning should reuse the panel, retain the selected view and size, and resume once without duplicate controls. In PDA, background/switch page and return; DOM readers should pause/resume without duplicate work. Repeat normal navigation to confirm it does not restart into a different/default module.
+5. **Permission and account separation:** Without changing real grants, test with accounts/roles that already have the relevant exact permission, faction officer grant, `admin.*`, or no grant. Confirm each receives only its allowed controls; admin retains the documented admin override, and denied/cached data does not expose restricted actions. If you have a safe second account, confirm its stats/settings do not bleed into the first account. If no suitable account/role is available, mark this item NOT TESTED; source tests cannot prove the live grant configuration.
+6. **Usability/performance:** On ordinary use, repeat page changes, a few refreshes, and one harmless action. Note whether the panel flickers/reboots, lags Torn interactions, jumps position, changes theme, or causes duplicate alerts/actions. Do not infer performance from one background/API timer. Report device/browser, approximate viewport, exact candidate and surface.
+
+### What developer checks establish—and what they do not
+
+The full declared source/fixture inventories for PDA Candidate 31 and extension Candidate 32 passed. Coverage includes supported migration and non-destructive storage recovery, failed writes/retries, loader/cache recovery, account and shared-data freshness, form/control retention, page ownership/resume, extension standalone-dashboard/Torn action parity and permissions, and a 10,000-unrelated-mutation check with zero DOM rescans. Those are automated test results. They do **not** certify a physical PDA installation, a real authenticated Torn session, actual faction grant propagation, a production worker/backend response, or device performance. Update 3 remains open until the manual results below are reviewed and any real defect is corrected in one complete batch.
+
+### Tester result template
+
+Reply with one line for each check: `PDA / Extension dashboard / Torn panel — PASS, FAIL, or NOT TESTED — exact step and expected vs actual`. Include candidate version, device/OS or browser, and screenshots/log text if useful. Never include API keys, session tokens, or other people's private data. If something fails, stop before repeating a potentially destructive action and report the first reproducible failure.
+
+**Current status:** automated checks pass; physical PDA, real Chrome/Torn behavior, and live faction/backend acceptance are pending. No new code build is implied by this checklist. Chat expansion remains the next planned work only after Update 3 is closed.
 
 ## Candidate 32 — 27 October 2026 — Extension onboarding alerts and refresh stability
 

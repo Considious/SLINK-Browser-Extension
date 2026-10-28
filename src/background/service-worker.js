@@ -31,6 +31,7 @@ importScripts(
   'target-list-service.js',
   'theme-service.js',
   'permission-service.js',
+  '../core/chat-giphy.js',
   'chat-config-service.js',
   'faction-officer-service.js',
   'travel-safety-service.js',
@@ -570,4 +571,3 @@ chrome.alarms.onAlarm.addListener(alarm => {
 });
 
 void initialize().catch(error => console.error('[SLINK] Service worker initialization:', error));
-

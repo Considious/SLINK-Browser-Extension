@@ -3,6 +3,11 @@
   const SLINK=global.SLINK_EXTENSION, KEY='qol.chat.macros.v1', SCOPE='slink.qol.chat';
   const scopes=new Set(['faction','private','newsletter','both','faction_newsletter','private_newsletter','all']);
   let queue=Promise.resolve();
+  const giphy=global.SLINK_GIPHY?.createClient({
+    read:()=>SLINK.core.storage.get('qol.chat.giphy.v1',{}),
+    write:value=>SLINK.core.storage.set('qol.chat.giphy.v1',value),
+    authorize, request:global.SLINK_GIPHY.request
+  });
   const HIGHLIGHTS_KEY='qol.chat.highlights.v1';
   const colors=new Set(['yellow','orange','red','pink','purple','blue','cyan','green','lime','white']);
   let highlightQueue=Promise.resolve();
@@ -43,6 +48,9 @@
   function update(task){const next=queue.catch(()=>{}).then(task);queue=next;return next;}
   async function read(){return await SLINK.core.storage.get(KEY,{revision:0,macros:[],legacyImported:false});}
   const routes={
+    'chat.giphy.get':()=>giphy.get(),
+    'chat.giphy.patch':changes=>giphy.patch(changes),
+    'chat.giphy.search':input=>giphy.search(input),
     async 'chat.highlights.get'(){await authorize();await highlightQueue.catch(()=>{});const stored=await SLINK.core.storage.get(HIGHLIGHTS_KEY,{});return {...stored,highlights:highlightRows(stored)};},
     'chat.highlights.add':input=>updateHighlights(input,'add'),
     'chat.highlights.patch':input=>updateHighlights(input,'patch'),

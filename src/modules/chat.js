@@ -103,6 +103,8 @@
       ui.setModuleStyles('.slink-chat-stack{display:grid;gap:9px}.slink-chat-card{min-width:0;padding:9px;border:1px solid var(--slink-border-soft);border-radius:8px;background:var(--slink-bg-control)}.slink-chat-card h3{margin:0 0 4px}.slink-chat-card p{margin:3px 0 8px;color:var(--slink-muted)}.slink-chat-row{display:grid;grid-template-columns:minmax(100px,1fr) minmax(85px,110px) auto auto;gap:6px;align-items:center;margin-top:6px}.slink-chat-row input[type=text],.slink-chat-row select,[data-macro-id] input:not([type=checkbox]),[data-macro-id] textarea,[data-macro-id] select{box-sizing:border-box;width:100%;min-width:0;padding:6px;border:1px solid var(--slink-border-soft);border-radius:5px;background:var(--slink-bg);color:var(--slink-text)}[data-macro-id] label{display:grid;gap:4px;margin:6px 0}[data-macro-id] textarea{min-height:100px}.slink-chat-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.slink-chat-actions button{padding:5px 8px}.slink-chat-token{font-family:monospace;color:var(--slink-accent)}@media(max-width:430px){.slink-chat-row{grid-template-columns:minmax(0,1fr) 95px auto}.slink-chat-row label{grid-column:1/-1}}');
       ui.setContentHtml('<div class="slink-chat-stack"><section class="slink-chat-card"><h3>Custom chat buttons</h3><p>Custom buttons keep the existing two-click load/send flow. Sending always needs your click.</p><button type="button" data-chat-manage>Manage custom buttons</button><p>Tokens: {{page_link}}, {{page_link:Label}}, {{page_url}}, {{page_title}}. Links are quoted before sending.</p></section><section class="slink-chat-card"><h3>Highlight chat terms</h3><p>Terms, colors and toggles save automatically on this device.</p><div data-chat-rows></div><button type="button" data-chat-add>Add term</button></section><p data-chat-notice role="status"></p></div>');
       for(const row of highlightRecord.highlights||[])addHighlight(row);
+      const giphyPanel=global.SLINK_GIPHY_PANEL?.();
+      if(giphyPanel)root.querySelector('.slink-chat-stack').append(giphyPanel.host);
       if(dashboard){
         root.querySelector('[data-chat-manage]').hidden=true;
         const editor=document.createElement('section');editor.className='slink-chat-card';editor.dataset.macroEditor='';
@@ -152,7 +154,7 @@
       if(!dashboard){observer=new MutationObserver(mutations => { if (hasActiveHighlights() && mutations.some(mutationContainsChatMessage)) scheduleScan(); });
       observer.observe(document.body,{childList:true,subtree:true});
       if (hasActiveHighlights()) scanHighlights();}
-      return {async stop(){stopped=true;observer?.disconnect();observer=null;clearTimeout(scanTimer);await Promise.all([...rows.values()].map(record=>record.controller.stop()));if(priorExplicit===undefined)delete root.dataset.uiExplicitCommit;else root.dataset.uiExplicitCommit=priorExplicit;if(!dashboard)global.dispatchEvent(new CustomEvent('slink-chat-disable'));}};
+      return {async stop(){stopped=true;observer?.disconnect();observer=null;clearTimeout(scanTimer);await Promise.all([...rows.values()].map(record=>record.controller.stop()));await giphyPanel?.stop();if(priorExplicit===undefined)delete root.dataset.uiExplicitCommit;else root.dataset.uiExplicitCommit=priorExplicit;if(!dashboard)global.dispatchEvent(new CustomEvent('slink-chat-disable'));}};
     }
   });
 })(globalThis);

@@ -1,9 +1,10 @@
 {
   "name": "slink-browser-extension",
-  "version": "0.19.13.5",
+  "version": "0.19.13.6",
   "private": true,
   "description": "Chrome-first SLINK browser extension with Combat, Efficiency, and Quality of Life tools.",
   "scripts": {
+    "test:giphy": "node tests/chat-giphy.test.mjs",
     "test:officer-company-actions": "node tests/officer-company-actions.test.mjs && node tests/company.test.mjs && node tests/faction-chat.test.mjs",
     "test:actions": "node tests/action-binding.test.mjs && node tests/dashboard-parity.test.mjs && node tests/faction-onboarding-alerts.test.mjs && node tests/dashboard-alert-render.test.mjs && node tests/adhd-refresh-stability.test.mjs",
     "test:performance-hotfix": "node tests/dom-performance.test.mjs",
