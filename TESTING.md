@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 34
+# SLINK audit tester build — candidate 35
+
+Current builds: extension **0.19.13.8**, PDA **0.4.120**. Quality of Life → Chat's existing optional media picker now has GIFs/Stickers tabs, one query field and separate GIPHY/ChatSticker sections. No automatic sending. See Candidate 35 in the single TESTER-CHANGELOG.md. Earlier version notes below are historical; main/stable remains untouched.
 
 Current combined builds: extension **0.19.13.7** and PDA **0.4.119**. Optional Torn-page theming is included and initially off. Enable “Apply my SLINK theme to Torn” beside the existing theme controls. Use Candidate 34 at the top of TESTER-CHANGELOG.md for downloads, setup and the combined page checklist. Older entries below describe prior work; main/stable is unchanged.
 
