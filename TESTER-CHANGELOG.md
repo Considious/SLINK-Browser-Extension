@@ -1,5 +1,45 @@
 # SLINK tester changelog
 
+## Candidate 34 — 28 October 2026 — Torn-page themes
+
+**Testing branches only: extension 0.19.13.7 and PDA 0.4.119. Main/stable is unchanged.** This publishes the previously local theme work after the owner authorized the testing-branch push. The earlier LOCAL ONLY notes below are historical; Candidate 34 is the installable combined build.
+
+### Download and enable
+
+- Extension ZIP: https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip — extract, then load/update the folder in chrome://extensions with Developer mode. Use an isolated Chrome profile, or disable the stable SLINK extension while testing. This is not a Chrome Web Store release.
+- PDA script: https://raw.githubusercontent.com/Considious/Torn-Scripts/audit/test-foundation/SLINK-PDA/SLINK_PDA_Dashboard.user.js — update your existing AUDIT TEST installation in place; keep stable SLINK disabled. Do not uninstall or clear application data. Back up important settings first.
+- Enable **Apply my SLINK theme to Torn** in the **Theme Torn pages** controls beside the existing theme selector: extension dashboard Themes, or PDA's Themes/recovery section. The new feature starts OFF, so installing alone will not recolor Torn.
+
+The page styling follows your selected, permission-resolved SLINK theme. Existing image files are used unchanged. Options control the page background, supplied frame/textures, health artwork, optional experimental chat styling and panel color opacity. Textured panel artwork remains opaque; turn textures off to see through panel backgrounds. Settings autosave with retry feedback. The previous GIPHY API picker remains included.
+
+### One combined test pass
+
+1. Confirm the version, saved theme, API credentials, alert choices, targets/notes and last-used SLINK tab after updating. Enable Torn-page theming, change to an unlocked theme, navigate and reload. Both the choice and opt-in must persist; existing controls/settings must not reset.
+2. Review Crimes hub, Shoplifting and Bootlegging. Neutral panels/headings should follow the palette; security, notoriety/progress indicators, maximum-level cards and native action states should remain meaningful. Other crime pages reuse the shared structure; report an actual mismatch rather than collecting all pages in advance.
+3. Review Travel Agency: panel backgrounds, flight-method dropdown and inventory/departure sections. Selected/unavailable choices, map imagery and Travel controls must remain native and readable. Do not take a flight solely to test styling.
+4. On a naturally visited attack page or existing attack log, check readability without performing a test attack. Health/damage, weapon glows, outcome colors and log event colors must remain intact. Styling must not rearrange or trigger an action.
+5. Enable the optional chat styling. Check Company, Faction, private chats, Settings and the private-chat list. Notes should work if available and be safely absent otherwise. Button order is not used for matching. Unread badges, status indicators, message drafts and native send/minimize controls must remain usable. Global/Trade/Abroad chats were not individually supplied and are not certified from the provided captures.
+6. Toggle background/textures/chat independently; drag opacity; open a draft, wait through ordinary updates and resize. Text must not fade with panel color opacity, fields must not reset, and no whole-page blur or image desaturation should appear. Disable the entire option: Torn's own styling must return without a page reload.
+7. Switch active tabs/windows and background/resume PDA. Look for flicker, lag, stuck styling or duplicated controls. Start with other whole-page theme scripts disabled, then report any specific coexistence issue. Do not remove saved data or expose keys in reports.
+
+**Developer evidence:** all 99 declared automated checks pass. Eight theme/viewport browser fixtures, 28 sanitized supplied-DOM cases and actual extension-shell/PDA-runtime smoke tests passed. Captures covered hub, Shoplifting, Bootlegging, Travel, Attack/Logs and Chat at phone/desktop widths. Source scripts/requests were blocked and private text stripped in the capture harness. Those fixtures do not include Torn's original stylesheet bundles and do not certify live Torn appearance, native PDA/CSP/network behavior or physical-device performance. That is what the tester pass must establish.
+
+No new permission migration, worker deployment, generated artwork, page scraping or API polling accompanies this build. Only the existing testing branches are updated.
+
+## LOCAL ONLY — 28 October 2026 — Optional Torn-page themes (not published)
+
+**Follow-up: supplied pages are now combined.** Crimes hub, Shoplifting, Bootlegging, Travel, Attack/Logs and Chat use shared stable-root rules derived from the actual captures. Optional Notes and chat button order do not control matching. Page-specific additions change only neutral background/text colors, not native geometry or actions. All 99 source checks, 28 sanitized supplied-DOM cases, eight theme/viewport fixtures and both actual adapter smoke tests pass. No more blanket HTML collection is requested; live Torn/physical PDA appearance remains the next acceptance step. This follow-up is still local only, with no commits/pushes or version bump.
+
+No commit, push, release, candidate number, or installed version change. Existing testing links still install Candidate 33, not these local changes. The owner asked to hold all commits.
+
+A local opt-in “Theme Torn pages” section now appears beside the existing theme controls: extension dashboard Themes, and PDA's Themes/recovery section. It follows the selected permission-resolved SLINK theme rather than maintaining another theme picker. Options cover the page background, supplied frame/panel textures, supplied health artwork, experimental chat styling and panel color opacity. The whole feature defaults off. Settings autosave with failure/retry feedback; extension field patches serialize in the worker across pages. No input, checkbox or native Torn panel is rebuilt by the styling engine.
+
+The engine uses a scoped neutral CSS-variable map adapted from Verified-Madgod's Theme Hub plus original SLINK page/image integration. It does not import their runtime or generated hardcoded-color override file. It uses the existing validated image assets unchanged; panel artwork is CSS nine-sliced to keep ornament edges clear of content. Textures remain opaque: turn them off to use see-through panel color backgrounds. No new image files, global blur, image desaturation, API calls, whole-page scraping or polling were added. Static styles may remain in background tabs, while the narrowly scoped repair observer pauses when the page is inactive and stops after repeated conflicts.
+
+Developer checks: 99/99 source/test commands; eight synthetic browser cases (Halloween/Gothic, extension/PDA engine copies, 380/1100px) covering control identity/drafts, toggles, native actions, semantic colors, opacity, disabling/restoration, save failure/retry, background/resume and 10,000 unrelated mutations. Actual extension shell and concatenated PDA runtime smoke tests verify opt-in wiring, saved changes and disabling. Supplied artwork screenshots were visually reviewed. Native PDA launcher remains 17,585 bytes, with additional code loaded as external fragments at startup—not appended to the installed launcher.
+
+This is not full live-Torn coverage or physical-device certification. See TORN-THEME-LOCAL-REVIEW.md beside the local audit documents for screenshots, known limits and the exact inspection list. Test in an isolated profile first when publication is authorized. Disable any other whole-Torn theming script during initial review. Existing SLINK-only themes and gameplay controls must continue to work with this option off.
+
 ## Candidate 33 — 28 October 2026 — GIPHY API integration
 
 **Testing branches only: extension 0.19.13.6 and PDA 0.4.118. Main/stable is unchanged.** Quality of Life → Chat now contains the direct-API GIF picker. It is optional and initially off. Choose SLINK's shared application key or your own GIPHY API key. The owner expressly approved publishing the shared application key; it is visible client-side and has shared provider limits. Your own saved key is not echoed by the settings service. PDA cloud backups exclude that key and restoring a settings backup preserves the existing local key.

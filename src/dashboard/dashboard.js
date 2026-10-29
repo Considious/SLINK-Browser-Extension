@@ -1236,7 +1236,17 @@
     byId('torn-chat-minimize').checked = tornMinimizedMode === 'chat';
   }
 
+  let tornPageSettingsPanel=null;
+  function mountTornPageThemeSettings(){
+    if(tornPageSettingsPanel||!globalThis.SLINK_TORN_THEME)return;
+    const container=byId('theme-options')?.parentElement;if(!container)return;
+    tornPageSettingsPanel=SLINK_TORN_THEME.mountSettings(container,{
+      read:()=>SLINK.core.messaging.send('themes.torn.get'),
+      patch:changes=>SLINK.core.messaging.send('themes.torn.patch',changes)
+    });
+  }
   async function applySavedTheme() {
+    mountTornPageThemeSettings();
     const [preferred, storedOpacity, storedMinimizedMode] = await Promise.all([
       SLINK.core.storage.get(
         SLINK.core.themes.STORAGE_KEY,

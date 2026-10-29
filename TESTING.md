@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 32
+# SLINK audit tester build — candidate 34
+
+Current combined builds: extension **0.19.13.7** and PDA **0.4.119**. Optional Torn-page theming is included and initially off. Enable “Apply my SLINK theme to Torn” beside the existing theme controls. Use Candidate 34 at the top of TESTER-CHANGELOG.md for downloads, setup and the combined page checklist. Older entries below describe prior work; main/stable is unchanged.
 
 Extension 0.19.13.5 / Audit Test 32 closes the extension onboarding-alert access and refresh-state regressions. PDA remains 0.4.117 / audit-test31. Main/stable is unchanged. Use the single cumulative TESTER-CHANGELOG.md for the install, action, permission and break-it checklist; no new Chat features are included.
 

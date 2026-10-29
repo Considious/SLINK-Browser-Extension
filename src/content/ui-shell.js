@@ -156,6 +156,9 @@
     let chatButtonAlertCount = 0;
     let chatButtonTheme = null;
     let themeHealth = { current:100, maximum:100 };
+    let tornThemeSettings=options.preferences?.['ui.tornTheme.v1']||{};
+    const tornPageTheme=global.SLINK_TORN_THEME?.create({document,activity:SLINK.core.pageActivity});
+    function setTornThemeSettings(value){tornThemeSettings=value||{};tornPageTheme?.update({settings:tornThemeSettings});}
     let minimizedMode = 'bubble';
 
     function setThemePanelOpacity(value) {
@@ -173,11 +176,14 @@
       chatButtonTheme = theme;
       SLINK.core.themes.applyHealthToElement(host, theme, themeHealth.current, themeHealth.maximum);
       applyChatButtonTheme(chatButton, theme);
+      tornPageTheme?.update({theme,settings:tornThemeSettings,assetCss:{...SLINK.core.themes.assetVariables(theme),...SLINK.core.themes.healthAssetVariables(theme,themeHealth.current,themeHealth.maximum)}});
       return theme;
     }
 
     function setThemeHealth(current, maximum) {
       themeHealth = { current:Number(current), maximum:Number(maximum) };
+      const theme=chatButtonTheme||SLINK.core.themes.get();
+      tornPageTheme?.update({assetCss:{...SLINK.core.themes.assetVariables(theme),...SLINK.core.themes.healthAssetVariables(theme,current,maximum)}});
       return SLINK.core.themes.applyHealthToElement(host, chatButtonTheme || SLINK.core.themes.DEFAULT_THEME_ID, current, maximum);
     }
     setTheme(options.themeId || SLINK.core.themes.DEFAULT_THEME_ID, options.permissions || {});
@@ -879,6 +885,7 @@
       setTheme,
       setThemeHealth,
       setThemePanelOpacity,
+      setTornThemeSettings,
       setMinimizedMode,
       setCollapsed,
       setHidden(value) { hidden = Boolean(value); refreshShell(); },

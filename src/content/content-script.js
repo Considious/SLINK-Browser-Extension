@@ -8,7 +8,7 @@
     'ui.pagePanelHidden','ui.main.position','ui.bubble.position','ui.main.size','ui.main.collapsed','ui.main.minimizedMode',
     'ui.main.navigation.v2','ui.main.activeModule','ui.main.activeModulesByGroup',
     'permissions.snapshot','permissions.leveling','permissions.war','permissions.access',
-    SLINK.core.themes.STORAGE_KEY,SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY,SLINK.core.themes.CATALOG_STORAGE_KEY
+    SLINK.core.themes.STORAGE_KEY,SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY,SLINK.core.themes.CATALOG_STORAGE_KEY,'ui.tornTheme.v1'
   ];
   let startupValues = {};
   try {
@@ -256,6 +256,7 @@
     if (changes[themePanelOpacityKey]) {
       ui.setThemePanelOpacity(changes[themePanelOpacityKey].newValue);
     }
+    if(changes[SLINK.core.storage.fullKey('ui.tornTheme.v1')])ui.setTornThemeSettings?.(changes[SLINK.core.storage.fullKey('ui.tornTheme.v1')].newValue);
     if (changes[themeKey] || changes[catalogKey]) {
       void Promise.all([
         SLINK.core.storage.get(SLINK.core.themes.STORAGE_KEY, SLINK.core.themes.DEFAULT_THEME_ID),

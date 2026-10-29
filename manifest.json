@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SLINK Audit Test",
-  "version": "0.19.13.6",
-  "version_name": "0.19.13 Audit Test 33",
+  "version": "0.19.13.7",
+  "version_name": "0.19.13 Audit Test 34",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -91,6 +91,9 @@
         "src/core/themes.js",
         "src/core/messaging.js",
         "src/core/page-activity.js",
+        "src/core/torn-theme-variables.js",
+        "src/core/torn-theme-pages.js",
+        "src/core/torn-theme.js",
         "src/content/player-intelligence-dom.js",
         "src/core/faction-chat.js",
         "src/core/abroad-stocks.js",

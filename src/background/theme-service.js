@@ -4,6 +4,22 @@
   const SLINK = global.SLINK_EXTENSION;
   const MAX_AGE_MS = 15 * 60 * 1000;
   let loading = null;
+  let tornSettingsQueue=Promise.resolve();
+  const TORN_SETTINGS_KEY='ui.tornTheme.v1';
+  function patchTornSettings(input={}){
+    const captured={...input};
+    const task=tornSettingsQueue.catch(()=>{}).then(async()=>{
+      const previous=await SLINK.core.storage.get(TORN_SETTINGS_KEY,{}),next={...previous};
+      for(const [name,value]of Object.entries(captured)){
+        if(['enabled','background','frames','ornaments','chat'].includes(name)){
+          if(typeof value!=='boolean')throw Error('Use an on/off value for Torn theme options.');next[name]=value;
+        }else if(name==='opacity'){
+          const number=Number(value);if(!Number.isFinite(number))throw Error('Use an opacity from 0 to 100.');next[name]=Math.max(0,Math.min(100,Math.round(number)));
+        }else throw Error('Unknown Torn theme option.');
+      }
+      await SLINK.core.storage.set(TORN_SETTINGS_KEY,next);return next;
+    });tornSettingsQueue=task;return task;
+  }
 
   function catalogHasCurrentAssets(catalog) {
     return Array.isArray(catalog?.themes) && catalog.themes.every(theme => {
@@ -56,6 +72,8 @@
   SLINK.define('services', 'themes', Object.freeze({
     load,
     routes:Object.freeze({
+      'themes.torn.get':async()=>{await tornSettingsQueue.catch(()=>{});return SLINK.core.storage.get(TORN_SETTINGS_KEY,{});},
+      'themes.torn.patch':patchTornSettings,
       'themes.catalog': payload => load(payload?.force === true),
       'themes.refresh': () => load(true)
     })
