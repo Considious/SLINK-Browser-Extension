@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 35
+# SLINK audit tester build — candidate 36
+
+Current builds: extension **0.19.13.9**, PDA **0.4.121**. Open a native Torn private, faction or company chat and click **✦** in its header, beside minimize. The menu now offers **Custom buttons / GIFs / Stickers**. QOL → Chat remains available for configuration. See Candidate 36 in the single tester changelog. Main/stable remains untouched.
 
 Current builds: extension **0.19.13.8**, PDA **0.4.120**. Quality of Life → Chat's existing optional media picker now has GIFs/Stickers tabs, one query field and separate GIPHY/ChatSticker sections. No automatic sending. See Candidate 35 in the single TESTER-CHANGELOG.md. Earlier version notes below are historical; main/stable remains untouched.
 

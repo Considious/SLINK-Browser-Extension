@@ -1,5 +1,23 @@
 # SLINK tester changelog
 
+## Candidate 36 — 29 October 2026 — Chat tools inside Torn's chat windows
+
+**Testing only: extension 0.19.13.9 and PDA 0.4.121. Main/stable is unchanged.** Open a Torn chat window, then click **✦ beside its minimize control**. The popup now has **Custom buttons / GIFs / Stickers**. You do not have to navigate to SLINK's QOL → Chat tab first; that page remains the settings/editor view.
+
+- [Download the extension tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip). Extract and update/load the folder in Chrome Developer mode; keep stable disabled or use another browser profile.
+- [Install/update the PDA tester script](https://raw.githubusercontent.com/Considious/Torn-Scripts/audit/test-foundation/SLINK-PDA/SLINK_PDA_Dashboard.user.js). Update the existing AUDIT TEST script in place; do not uninstall or clear settings.
+
+### Test this / try to break it
+
+1. Leave SLINK on a different tab (for example Alerts), open a private/faction/company Torn chat and find ✦ next to minimize. Click it: all three tool tabs should be reachable. It must not minimize/drag the chat accidentally or insert controls into Notes/Settings. If another standalone custom-buttons script is installed, disable that duplicate while testing.
+2. Custom buttons should list only their configured destination presets. First click loads the message; the second click on the same preset sends. Edit the draft before confirmation: it should disarm rather than send changed text. Private/faction templates must not leak into each other's destinations. Existing template scopes remain faction/private/newsletter; company gets media access, not a newly broadened private-template scope.
+3. Click GIFs/Stickers directly in the popup. Enable the optional picker if needed; saved shared/custom keys and existing settings are reused. Search, preview, Next results and Copy link work as in Candidate 35. Paste into the desired Torn chat and manually send; choosing/copying media must never send a message automatically. GIPHY/ChatSticker keep separate grids and independent failures. No media request occurs simply from opening the custom-buttons menu.
+4. Keep a partially typed media search, wait through normal updates or a custom-preset settings update, switch tools and reopen. The picker/input must not be rebuilt by macro updates. Switch GIFs/Stickers rapidly while settings/search responses are slow: the last selection should win.
+5. Close the popup with Escape/outside tap, minimize/close the native chat, reopen it, background/resume PDA, and change the active browser tab. Search/playback should pause when inactive. Controls/styles must not multiply, and an old pending custom send must not fire after returning. Existing active/focused extension and visible-PDA rules remain.
+6. At phone/desktop widths, check popup scrolling, all three tool tabs, bottom actions and native chat controls. QOL → Chat settings remain accessible and unrelated SLINK layout/tab/size/theme/data must be unchanged. Global/Trade/Abroad windows were not individually supplied/certified; report actual mismatches if found.
+
+Developer evidence includes both platform copies against sanitized header/composer elements from the supplied Torn chat capture, at 360/1100px: private/faction/company entry, exclusion of Notes/Settings, scoped templates, two-click native send, media copying without autosend, retained search inputs through macro updates, viewport bounds, idempotent styles/controls and activity suspend/resume. Actual images/network were blocked in these fixtures. This is not physical PDA/live Torn certification. Candidate 35's provider/key/privacy tests remain in the regression suite.
+
 ## Candidate 35 — 29 October 2026 — Stickers in the chat media picker
 
 **Testing only: extension 0.19.13.8 and PDA 0.4.120. Main/stable is unchanged.** In Quality of Life → Chat, the existing optional picker now has **GIFs / Stickers** buttons and one shared search box. Existing enabled choices, integrated/custom GIPHY keys and other SLINK settings stay in place. No migration or reset. Enable the picker if you have not used it before.

@@ -1,5 +1,13 @@
 # Shared chat media picker — Audit Test 35
 
+## Audit Test 36 — actual Torn chat-window entry
+
+Open an ordinary Torn private/faction/company chat and click the **✦** in the header, next to minimize. The retained popup offers Custom buttons / GIFs / Stickers. QOL → Chat stays as the configuration/editor surface. This uses the same media client, settings, attribution, provider sections and manual Copy link → paste → send pipeline; it does not create a second media provider or automatically fill/send a message. No provider request occurs until the user chooses GIFs/Stickers. Settings refresh when opening media, but concurrent edits and the retained search node are not replaced. Closing, backgrounding or switching back to Custom buttons suspends media/search work.
+
+Current Torn IDs from the supplied capture are recognized: numeric private IDs, `faction`, `company`, plus the older faction-/private- IDs. Numeric private chats are no longer mistaken for faction chats merely because their header contains an arrow. Notes and Settings are excluded. Existing custom-template destination scopes are unchanged: faction, private and newsletter; this update does not reinterpret private templates as company messages. Company has the media entry, but no newly invented company-template scope. Global/Trade/Abroad windows were not separately captured/certified. A concrete mismatch can be reviewed without collecting every page again.
+
+The macro renderer now updates only its own sub-container, never replacing the media picker or its input. Activity gating prevents an inactive/revoked extension runner from opening/sending via stale controls; PDA continues using its page-activity generation checks for a pending send. Scoped popup overflow/width keeps all controls reachable on phone/desktop. No unrelated shell/theming/storage change or backend migration. Automated shared-helper checks and four sanitized supplied-header/composer browser cases cover both platform copies at 360/1100px, destination filtering, two-click native send, media copy without autosend, retained drafts through macro updates, viewport bounds and background/resume. Physical PDA/live Torn acceptance remains required.
+
 Quality of Life → Chat uses the existing optional picker, storage keys, chat permission and manual Copy link/paste/send workflow. No new message sender, automatic send, chat-history scraper, observer, cloud service or background poll was added. Existing GIF sharing still copies the GIPHY permalink; stickers copy the provider's usable image URL through the very same selection control. Native Torn/third-party rendering of a pasted image URL must be confirmed by testers; SLINK does not claim to add inline chat rendering in this update.
 
 ## Provider adapters
