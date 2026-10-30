@@ -1,5 +1,30 @@
 # SLINK tester changelog
 
+## Candidate 38 — 30 October 2026 — Optional Fair Fight chat bubbles
+
+**Testing only: extension 0.19.13.11 / PDA 0.4.123.** Enable **Quality of Life → Chat → Fair Fight in chat**. It defaults OFF and saves immediately. The extension dashboard page has the same setting. Existing Chat permission/faction grants and admin.* apply; no new permission or migration.
+
+Independent SLINK code/CSS: no FF Scouter V2 GPL renderer, helpers, React, polling or stylesheet was copied/adapted. Its authors are acknowledged as the visual reference, not as authors of SLINK code. The small rounded bubbles display FF beside visible native sender/profile links, not inside their text. Existing profile navigation/long-press and manual message sending are unchanged. Values above 3 remain real values, not clamped. N/A means no usable score. † identifies fallback data; desktop hover/accessibility text supplies source and age. This is not the external FFScouter script's full interactive tooltip.
+
+Uses saved FFScouter credentials and the existing shared HTTP/circuit/public-backup path. Current provider results win; matching observer/stat-context player-intelligence FF is an additional fallback. No stale FF from another account or older own-stat context is reused. Existing public-BSS backup computes a personal FF locally or returns N/A. No extra Torn stat/profile calls. The shared remote backup remains undeployed/disabled as explained in Candidate 37.
+
+Visible players are deduplicated in batches up to 200, with at least five seconds between chat batches (event-driven, at most 12/minute). A bounded temporary result cache (five-minute success / ten-minute missing) avoids repeated chat lookup traffic. No polling timers. Chat-root mutations, intersection visibility and the existing active runner govern work. Background/inactive clients remove their own badges and stop DOM observation; in-flight results are fenced. Detached/recycled link identities are cleaned, and names, anchors, listeners and composer drafts are never replaced.
+
+Verification: all 110 declared client validation commands passed. Four isolated browser cases (both platform engines, 360/1000px) passed layout, original link/listener/draft preservation, recycled IDs, inactive shutdown, preference off/on and chat-root replacement. Saved-key/admin/expired-session adapter tests pass. Physical PDA and actual Torn/other-script coexistence remain acceptance work.
+
+### Test this / try to break it
+
+1. Update in place. Confirm keys, alerts/snoozes, targets, theme, last page/size and chat media/custom buttons are preserved. The new option must initially be off.
+2. Enable it in QOL → Chat (or extension dashboard). Check sender names and profile links in faction, company and private chats. Global/trade/abroad channels need live acceptance too. Repeated references to one player should share results; attack/non-profile/external links should not gain bubbles.
+3. Check short/long names, phone/desktop widths, very large FF and unknown players. Link text remains unchanged and usable, chat drafts stay put, and bubbles should not cover controls. No automatic mini-profile opening or sending.
+4. With an isolated provider outage, verify honest †/source/age or N/A. Do not revoke a key as an outage test: invalid credentials are not disguised as successful backup. Change accounts or update own stats: old observer-bound intelligence must not be used for the new context.
+5. Scroll/recycle entries, close/reopen chats, replace the chat root, switch tabs/windows and background PDA. There must be no duplicate badges, stale player assignments or inactive DOM/API scanning. Resume should restore badges without rewriting chat messages.
+6. Toggle off/on, reload, and verify the preference persists. Test with standalone FFScouter/TornTools enabled for coexistence; SLINK uses its own classes and does not modify their controls. Physical PDA/native bridge and live Torn remain tester acceptance, not claimed by fixture tests.
+
+**Follow-up for the owner:** choose/apply a SLINK license and review third-party license/notice obligations. No license decision is included in this update.
+
+Downloads: [Extension ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip) · [PDA installer](https://raw.githubusercontent.com/Considious/Torn-Scripts/audit/test-foundation/SLINK-PDA/SLINK_PDA_Dashboard.user.js).
+
 ## Candidate 37 — 30 October 2026 — Passive public Fair Fight backup
 
 **Testing only: extension 0.19.13.10 and PDA 0.4.122. Main/stable is unchanged.** The Fair Fight chat badge idea is saved for later in `docs/FF-CHAT-FOLLOWUP.md`; this update builds its fallback foundation, not the badge itself.

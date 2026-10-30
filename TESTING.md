@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 37
+# SLINK audit tester build — candidate 38
+
+Current builds: extension **0.19.13.11**, PDA **0.4.123**. Enable **Quality of Life → Chat → Fair Fight in chat** (initially OFF). This independent implementation uses the existing saved key and shared FF/intelligence/public-backup services, without extra Torn requests. The same setting is available on the extension dashboard. See Candidate 38 in TESTER-CHANGELOG.md for the combined test checklist and live-device limitations. Older version notes below are historical; main/stable remains unchanged.
 
 Current builds: extension **0.19.13.10**, PDA **0.4.122**. Passive public BSS backup captures existing FFScouter results into a separate local IndexedDB, with optional authenticated batched backend contribution/fallback and a separate snapshot worker. Backend migration/deployment/feature activation have NOT been run; local caching works independently. No new chat badge, scans, Torn API calls, key resets or automatic restores. See Candidate 37 in TESTER-CHANGELOG.md and the Cloudflare testing-branch FF-BACKUP.md for exact rollout/usage limits.
 
@@ -54,4 +56,5 @@ Follow the linked changelog for step-by-step test and break-it instructions. Thi
 
 Run `npm run test:audit` for the focused candidate checks. They cover the actual dashboard imports, exact-grant access, revocation, Recaller navigation, intelligence queue recovery and Racing behavior, together with selected existing domain tests.
 
-The full script inventory currently reports 49 passing and 18 failing scripts across both clients (67 total). The failures are inherited from the pre-audit baseline. See `docs/audit/BASELINE.md`; do not represent the full suite as green.
+Historical pre-repair baseline: 49 passing and 18 failing scripts (67 total), recorded in `docs/audit/BASELINE.md`. This is not the current result. Candidate 38 passes all 110 declared client validation commands; four isolated browser cases also pass. Physical PDA/live Torn acceptance is separate.
+

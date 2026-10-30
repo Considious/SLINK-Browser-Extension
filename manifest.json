@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SLINK Audit Test",
-  "version": "0.19.13.10",
-  "version_name": "0.19.13 Audit Test 37",
+  "version": "0.19.13.11",
+  "version_name": "0.19.13 Audit Test 38",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -110,6 +110,8 @@
         "src/core/bounties.js",
         "src/content/xanax-safety.js",
         "src/content/custom-chat-buttons.js",
+        "src/core/chat-ff.js",
+        "src/content/chat-ff.js",
         "src/core/chat-giphy.js",
         "src/core/chat-giphy-ui.js",
         "src/content/ui-shell.js",

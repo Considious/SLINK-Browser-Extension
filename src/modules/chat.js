@@ -105,6 +105,12 @@
       for(const row of highlightRecord.highlights||[])addHighlight(row);
       const giphyPanel=global.SLINK_GIPHY_PANEL?.();
       if(giphyPanel)root.querySelector('.slink-chat-stack').append(giphyPanel.host);
+      const ffConfig=await SLINK.core.messaging.send('chat.ff.get');
+      if(!allowed())return {stop(){}};
+      const ffPanel=document.createElement('section');ffPanel.className='slink-chat-card';
+      ffPanel.innerHTML='<h3>Fair Fight in chat</h3><label><input type="checkbox" data-chat-ff-toggle> Show Fair Fight bubbles beside chat names and profile links</label><p>Uses your saved FFScouter key and SLINK backup. † marks a cached backup; hover for its source and age. No automatic profile opening.</p><span role="status" data-chat-ff-state></span>';
+      root.querySelector('.slink-chat-stack').append(ffPanel);const ffToggle=ffPanel.querySelector('input');ffToggle.checked=ffConfig.enabled;
+      ffToggle.addEventListener('change',()=>{const value=ffToggle.checked;ffPanel.querySelector('[data-chat-ff-state]').textContent='Saving…';void SLINK.core.messaging.send('chat.ff.patch',{enabled:value}).then(()=>{if(allowed())ffPanel.querySelector('[data-chat-ff-state]').textContent='Saved.';}).catch(error=>{if(allowed())ffPanel.querySelector('[data-chat-ff-state]').textContent=SLINK.core.format.errorMessage(error);});});
       if(dashboard){
         root.querySelector('[data-chat-manage]').hidden=true;
         const editor=document.createElement('section');editor.className='slink-chat-card';editor.dataset.macroEditor='';
