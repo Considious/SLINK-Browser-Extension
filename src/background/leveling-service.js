@@ -402,7 +402,7 @@
           fairFight: finiteNumberOrNull(row?.fair_fight),
           bsEstimate: finiteNumberOrNull(row?.bs_estimate),
           source: String(row?.source || 'FFScouter').slice(0, 100),
-          checkedAt: now
+          checkedAt: row?.backup?Number(row.last_updated)*1000:now
         };
       }
       for (const id of ids) {
@@ -417,13 +417,13 @@
     return targets.map(target => {
       const cached = cache[String(target.id)] || {};
       const refined = finiteNumberOrNull(cached.fairFight);
-      const estimated = estimateFairFight(target.total_stats, battleStats);
+      const estimated = String(cached.source||'').startsWith('SLINK Backup')?null:estimateFairFight(target.total_stats, battleStats);
       const fairFight = refined ?? estimated;
       return {
         ...target,
         fair_fight: fairFight,
         fair_fight_estimated: refined === null && estimated !== null,
-        fair_fight_source: refined !== null ? cached.source : (estimated !== null ? 'Local estimate' : ''),
+        fair_fight_source: String(cached.source||'').startsWith('SLINK Backup')?cached.source:refined !== null ? cached.source : (estimated !== null ? 'Local estimate' : ''),
         fair_fight_stale:refined !== null && now - Number(cached.checkedAt || 0) >= FF_CACHE_MS,
         fair_fight_checked_at:Number(cached.checkedAt) || 0,
         bs_estimate: finiteNumberOrNull(cached.bsEstimate) ?? finiteNumberOrNull(target.total_stats),

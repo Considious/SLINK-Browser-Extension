@@ -193,7 +193,7 @@
         return targets.map(target => {
           const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(target.id)}`;
           const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(target.id)}`;
-          const fairFight = finiteFairFight(target.fair_fight, target.fair_fight_estimated) + (target.fair_fight_stale ? ' (cached estimate)' : '');
+          const fairFight = finiteFairFight(target.fair_fight, target.fair_fight_estimated) + (String(target.fair_fight_source||'').startsWith('SLINK Backup')?' ('+escape(target.fair_fight_source)+')':target.fair_fight_stale ? ' (cached estimate)' : '');
           return `
             <article class="leveling-target">
               <div class="leveling-target-head">

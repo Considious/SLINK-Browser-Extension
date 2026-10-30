@@ -38,6 +38,10 @@
   const ffRetryAt = new Map();
   async function requestJson(capabilityName, input, options = {}) {
     if (capabilityName !== 'ffscouter') return requestJsonRaw(capabilityName, input, options);
+    if(global.SLINK_FF_BACKUP_CLIENT&&/\/get-(stats|targets)$/.test(new URL(input).pathname))return global.SLINK_FF_BACKUP_CLIENT.run(input,async()=>{
+      const controller=new AbortController();let timer;
+      try{return await Promise.race([requestJsonRaw(capabilityName,input,{...options,signal:controller.signal}),new Promise((_,reject)=>{timer=global.setTimeout(()=>{controller.abort();reject(Error('FFScouter timed out.'));},5000);})]);}finally{global.clearTimeout(timer);}
+    });
     const audience = validateUrl(capabilityName, input).searchParams.get('key') || '';
     if (Date.now() < (ffRetryAt.get(audience) || 0)) {
       const error = new Error('FFScouter is temporarily unavailable; cached estimates or N/A are being used.');

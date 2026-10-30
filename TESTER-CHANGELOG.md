@@ -1,5 +1,42 @@
 # SLINK tester changelog
 
+## Candidate 37 — 30 October 2026 — Passive public Fair Fight backup
+
+**Testing only: extension 0.19.13.10 and PDA 0.4.122. Main/stable is unchanged.** The Fair Fight chat badge idea is saved for later in `docs/FF-CHAT-FOLLOWUP.md`; this update builds its fallback foundation, not the badge itself.
+
+- [Extension tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip).
+- [PDA tester installer](https://raw.githubusercontent.com/Considious/Torn-Scripts/audit/test-foundation/SLINK-PDA/SLINK_PDA_Dashboard.user.js).
+- [Backend implementation/deployment/usage notes](https://github.com/Considious/SLINK-Cloudflare-Services/blob/audit/test-foundation/workers/contribution/FF-BACKUP.md).
+
+### What changes
+
+SLINK quietly keeps public BSS estimates from FFScouter requests it already makes. FFScouter remains primary; no random-player scans, extra Torn requests or new private-stat refreshes are added. Separate IndexedDB storage avoids the extension's Chrome local-storage quota and does not touch settings/API keys. Backup records never contain personal FF scores, keys, private stats or spies. Your own authenticated local BSS is used to derive a personal fallback score; if unavailable, show N/A rather than guessing.
+
+If FFScouter fails, locally known public estimates are used first. Only missing requested players can be looked up remotely. Backup results include source/age and are retained locally; missing results have a short negative cache. A lightweight circuit reduces repeated provider failures and later probes recovery. Existing missing/cached/N/A handling stays available when both services fail. A stalled/failed backup write cannot indefinitely hold up a successful primary result.
+
+Automated verification: 107/107 client validation commands and 17/17 backend tests pass. Both client copies also pass real-browser IndexedDB reload, conditional acknowledgement and unrelated-settings preservation checks. Physical PDA/live Cloudflare acceptance remains open.
+
+### Important backend status
+
+The contribution/lookup routes, migration and separate R2 snapshot runner are committed as SOURCE to the Cloudflare testing branch, NOT deployed. Their switches default OFF. No production D1 schema, R2 bucket, secrets or main branch was changed. Clients use the existing contribution-service origin; until the new routes are deliberately enabled there, remote backup attempts fail quietly and retain queued records. Fully isolated external staging requires separately configuring a client origin and matching existing session validation; it is not provisioned by these commits. Automated tests exercise the actual client wrappers, SQLite route code and real IndexedDB; they do not constitute a live Cloudflare/native PDA deployment.
+
+Uploads are deduplicated, acknowledged batches up to 200, triggered by 100 queued rows or an hour of normal activity. No new polling/shutdown upload. There is a 15-minute minimum attempt gap and five attempts/day/client. Failed uploads keep the queue. The backend has a conservative default 20,000 newer-candidate/day shared write budget and 1,000 submissions/day/signed user; queued excess waits. Existing unrelated services still share account allowances.
+
+### Test this / try to break it
+
+1. Update in place without clearing settings. Confirm API keys, alert choices/snoozes, target lists, theme, tabs/sizing and Candidate 36's actual chat-window tools remain unchanged. There should be no new normal-user infrastructure text.
+2. Use normal War/Leveling/Bounties lookups. Successful live FFScouter results should remain preferred. Visit the same targets repeatedly: this must not cause one upload per player or extra Torn requests. Ordinary successful complete responses cause no backup lookup.
+3. After a successful normal lookup has populated the new cache, simulate blocking FFScouter in an isolated browser test session (do not revoke your key or flood the provider). Known targets should show source-labeled SLINK Backup results. Their age must refer to FFScouter's timestamp, not the current page load. If current authenticated private BSS is unavailable, FF is N/A rather than another user's score. Existing module ceilings still apply.
+4. Reload and revisit during the simulated outage. Local estimates/queued contributions should persist independently of settings; there must be no whole-database download. Unknown targets remain unknown if remote routes are not deployed. Never use the same unknown target to generate repeated test traffic.
+5. When backend staging is deliberately configured, use the documented migration/routes. A lookup for 100 targets with 67 local should request only the 33 missing. Returned records should persist locally; misses should suppress repeat lookups ten minutes. One provider miss must not mark the whole service down. Healthy FFScouter recovery must override backup data.
+6. Test failed uploads, interrupted acknowledgements and quota responses: newer queued records must remain, and ordinary UI/live FF lookups must continue working. Invalid/revoked FF keys must remain authentication errors, not a silently fabricated backup success.
+7. Backend maintainers: verify old/equal timestamps cannot overwrite newer rows, duplicate contributors collapse to one player row, private/premium fields and oversized/invalid payloads are rejected, anonymous access is rejected and admin status is not available to ordinary users. A signed authorized client can still submit fabricated values; this is bounded validation/quota protection, not claimed cryptographic attestation.
+8. Enable the separate snapshot runner only after test D1/R2 bindings are ready. Check daily gzip output and 14-day prefix-isolated retention. Snapshot failure must not affect live lookups or existing collection jobs. Large snapshot CPU/memory on Workers Free remains an actual staging acceptance check, not an assumed guarantee.
+
+Developer evidence: shared engine/unit tests for passive capture, privacy, timestamp dedupe, 500 records in 200/200/100 batches, conditional acknowledgements, negative caching, outage/recovery and fail-safe quota/stalled storage; actual extension/PDA HTTP wrappers; real IndexedDB reload/queue/settings-isolation tests for both platform copies; SQLite tests for actual JSON SQL upserts/lookup/auth/quota behavior and gzip snapshots/retention/R2 failure. Physical PDA, live Cloudflare deployment/CPU metrics and broad device/UI acceptance remain open. Existing server-side Mugging raw responses never delivered to a client are not secretly crawled or intercepted.
+
+Usage example: 100 active users × 500 useful public estimates/day → roughly 300–500 upload attempts/day with 100–200/batch, plus possible CORS preflights; the default server cap admits at most 20,000 newer candidate rows/day plus quota overhead, not the full potential 50,000 submissions. Batching reduces requests/transactions, not per-row D1 billing. Complete healthy responses need zero backup reads. One daily snapshot of N rows adds about N D1 reads and one R2 put plus cleanup. Shared free quotas and CPU still need measured headroom; no paid service was enabled and no zero-cost guarantee is made.
+
 ## Candidate 36 — 29 October 2026 — Chat tools inside Torn's chat windows
 
 **Testing only: extension 0.19.13.9 and PDA 0.4.121. Main/stable is unchanged.** Open a Torn chat window, then click **✦ beside its minimize control**. The popup now has **Custom buttons / GIFs / Stickers**. You do not have to navigate to SLINK's QOL → Chat tab first; that page remains the settings/editor view.

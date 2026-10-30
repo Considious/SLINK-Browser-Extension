@@ -51,7 +51,8 @@
       battleStatsEstimate:SLINK.core.format.finiteEstimate(member?.battleStatsEstimate ?? member?.battle_stats_estimate ?? member?.bs_estimate),
       fairFightStale:Boolean(member?.fairFightStale),
       fairFightCheckedAt:Number(member?.fairFightCheckedAt) || 0,
-      fairFightWarning:String(member?.fairFightWarning || '')
+      fairFightWarning:String(member?.fairFightWarning || ''),
+      backupSource:String(member?.backupSource||'')
     };
   }
 

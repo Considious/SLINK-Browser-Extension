@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 36
+# SLINK audit tester build — candidate 37
+
+Current builds: extension **0.19.13.10**, PDA **0.4.122**. Passive public BSS backup captures existing FFScouter results into a separate local IndexedDB, with optional authenticated batched backend contribution/fallback and a separate snapshot worker. Backend migration/deployment/feature activation have NOT been run; local caching works independently. No new chat badge, scans, Torn API calls, key resets or automatic restores. See Candidate 37 in TESTER-CHANGELOG.md and the Cloudflare testing-branch FF-BACKUP.md for exact rollout/usage limits.
 
 Current builds: extension **0.19.13.9**, PDA **0.4.121**. Open a native Torn private, faction or company chat and click **✦** in its header, beside minimize. The menu now offers **Custom buttons / GIFs / Stickers**. QOL → Chat remains available for configuration. See Candidate 36 in the single tester changelog. Main/stable remains untouched.
 

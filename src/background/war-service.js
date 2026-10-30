@@ -613,9 +613,10 @@
         returned.add(id);
         const value = fairFightValue(row), battleStatsEstimate = battleStatsValue(row);
         if (value !== null || battleStatsEstimate !== null) cache[id] = {
-          ...cache[id], value:value ?? cache[id]?.value ?? null,
+          ...cache[id], value:row?.backup?value:value ?? cache[id]?.value ?? null,
           battleStatsEstimate:battleStatsEstimate ?? cache[id]?.battleStatsEstimate ?? null,
-          checkedAt:value !== null ? now : Number(cache[id]?.checkedAt) || 0
+          checkedAt:row?.backup ? Number(row.last_updated)*1000 : value !== null ? now : Number(cache[id]?.checkedAt) || 0,
+          backupSource:row?.backup?String(row.source):''
         };
       }
       for (const id of targets) if (!returned.has(id) && !cache[id]) cache[id] = { value:null, checkedAt:now };
@@ -627,11 +628,12 @@
     await SLINK.core.storage.set(KEYS.ffCache, cache);
     return values.map(member => ({
       ...member,
-      fairFight:fairFightValue({ fairFight:cache[member.id]?.value }) ?? fairFightValue(member),
+      fairFight:cache[member.id]?.backupSource?fairFightValue({fairFight:cache[member.id]?.value}):fairFightValue({ fairFight:cache[member.id]?.value }) ?? fairFightValue(member),
       battleStatsEstimate:battleStatsValue(cache[member.id]) ?? battleStatsValue(member),
       fairFightCheckedAt:Number(cache[member.id]?.checkedAt) || Number(member.fairFightCheckedAt) || 0,
       fairFightStale:Boolean(warning || now - Number(cache[member.id]?.checkedAt || 0) > 5 * 60_000),
-      fairFightWarning:warning
+      fairFightWarning:warning,
+      backupSource:String(cache[member.id]?.backupSource||'')
     }));
   }
 

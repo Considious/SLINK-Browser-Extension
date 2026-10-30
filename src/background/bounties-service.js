@@ -163,7 +163,7 @@
           fairFight:Number.isFinite(fairFight) && fairFight > 0 ? fairFight : null,
           bsEstimate:Number.isFinite(bsEstimate) && bsEstimate > 0 ? bsEstimate : null,
           source:String(row?.source || 'FFScouter').slice(0, 100),
-          checkedAt:now
+          checkedAt:row?.backup?Number(row.last_updated)*1000:now
         };
       }
       for (const id of chunk) {

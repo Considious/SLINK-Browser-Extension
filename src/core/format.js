@@ -45,6 +45,8 @@
 
   function fairFightLabel(value) {
     const score = fairFightNumber(value?.fairFight ?? value?.fair_fight);
+    const backup=String(value?.backupSource||value?.estimateSource||value?.fair_fight_source||'');
+    if(backup.startsWith('SLINK Backup'))return `${score===null?'N/A — unverified':score.toFixed(2)} (${backup})`;
     if (score === null) return 'N/A — unverified';
     return `${score.toFixed(2)}${value?.fairFightStale || value?.fair_fight_stale ? ' (cached estimate)' : ''}`;
   }
