@@ -3,6 +3,7 @@
 ## What changed
 
 - **Saved settings:** improved PDA saving for themes and chat preferences, while keeping existing settings and keys. Other saved-data protections remain in place.
+- **Access verification:** retrying with the same key and current terms no longer clears still-valid access before the replacement login succeeds. PDA sign-in errors now identify the failed step and response status without exposing your key. The reported member-only unreadable-response issue remains under investigation.
 - **Forms and checkboxes:** background updates should no longer close editors, erase typing or change unrelated selections.
 - **Autosave:** many personal settings now save as you change them, with a warning and retry option if saving fails.
 - **Loading and performance:** improved page loading, reduced unnecessary checking, and better recovery after switching tabs or returning to PDA.
@@ -23,6 +24,7 @@
 Please try the checks that apply to you, on PDA or the extension.
 
 - [ ] **Settings stay saved:** change a few alert choices, leave SLINK, change pages and restart the app/browser. Confirm those choices remain.
+- [ ] **Access retries:** verify your existing saved key. If a request fails, still-valid access should remain unless the key or policy changed, or the service explicitly rejected access. If PDA shows an unreadable sign-in response again, report the complete new error message; do not send a private API key.
 - [ ] **Alerts behave correctly:** try Enable all, Disable all and individual checkboxes. The selected boxes, enabled count and actual alerts should agree. Snoozed alerts should stay snoozed after refreshing.
 - [ ] **Acknowledgements stick:** mark city purchases complete and check that the reminder stays dismissed for the day. Completed crime uniques should not be reported as missing.
 - [ ] **Editors stay open:** type in a target or settings field while SLINK refreshes. Your text, cursor, checkboxes and open sections should not reset. Try an invalid target ID, then correct it without re-entering your notes.

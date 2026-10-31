@@ -115,6 +115,7 @@
           })
         });
       } catch (error) {
+        if ([401,403].includes(Number(error?.status)) && error?.code !== 'SLINK_INVALID_JSON') await clearSession();
         if (error?.status === 428) {
           await clearSession();
           const refreshedTerms = await fetchTerms(true);
@@ -173,11 +174,13 @@
       tornKey:input.clearTornKey ? '' : sharedLocalKey
     };
     await SLINK.core.storage.set(KEYS.settings, next);
+    let policyChanged = false;
     if (input.acceptTerms === true) {
       const terms = await fetchTerms(true);
+      policyChanged = !await acceptedCurrentTerms(terms);
       await SLINK.core.storage.set(KEYS.acceptedTerms, { version:terms.version, sha256:terms.sha256, acceptedAt:Date.now() });
     }
-    if (next.tornKey !== previous.tornKey || next.enabled !== previous.enabled || input.acceptTerms === true) await clearSession();
+    if (next.tornKey !== previous.tornKey || next.enabled !== previous.enabled || policyChanged) await clearSession();
     if (next.enabled && next.tornKey) await ensureSession(true);
     return status();
   }
