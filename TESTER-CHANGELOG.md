@@ -1,4 +1,133 @@
-# SLINK tester changelog
+# SLINK testing changelog and checklist
+
+## Start here
+
+This is the combined test list for the current testing build. You only need the newest build—not 40 separate installs.
+
+- **Extension:** 0.19.14.2 — Audit Test 40
+- **PDA:** 0.4.126
+- **Testing branch:** audit/test-foundation
+
+These are testing builds, not the Chrome Web Store release. Publishing this document on main does **not** release the testing code. Some urgent fixes below are already on main; they still need checking alongside the rest.
+
+## Downloads
+
+- [Download the extension tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip)
+- [Extension installation instructions](https://github.com/Considious/SLINK-Browser-Extension/blob/audit/test-foundation/TESTING.md)
+- [Install/update the PDA testing script](https://raw.githubusercontent.com/Considious/Torn-Scripts/audit/test-foundation/SLINK-PDA/SLINK_PDA_Dashboard.user.js)
+- [PDA installation instructions](https://github.com/Considious/Torn-Scripts/blob/audit/test-foundation/SLINK-PDA/TESTING.md)
+
+Back up important settings first. Use a separate Chrome profile for the unpacked extension, and keep the stable PDA script disabled while testing. Update an existing tester install in place: **do not uninstall SLINK or clear app data.** A separate test profile/install may need its own authentication.
+
+## What changed
+
+- **Settings and saved data:** safer saving, less chance of an older page replacing newer settings, and better PDA storage/recovery handling. Cloud recovery remains manual.
+- **Editors and checkboxes:** background updates should no longer close settings, replace what you are typing, or make unrelated checkboxes act as one.
+- **Autosave:** many personal settings now save as you change them, with failed-save/retry feedback. Authentication, some shared settings and explicit actions still need their normal buttons.
+- **Startup and performance:** better use of cached startup data, fewer unnecessary page scans and repeated requests, and cleaner pause/resume when changing tabs or backgrounding PDA.
+- **Shared stats and prices:** modules reuse newer authenticated battle stats and shared item information. Slow or incomplete replies should not overwrite newer data or invent zero values.
+- **Extension storage:** large player-information caches are separated from ordinary settings to reduce storage-limit problems.
+- **Dashboard access:** repaired module loading, permissions and action buttons on the standalone extension dashboard, including Museums, Officer tools and the Armory Recaller entry.
+- **Mugging and Fair Fight:** known suitable targets come first; unchecked targets can be offered for checks rather than leaving the list empty. Failed checks must not erase known estimates. Provider outages should leave other module controls usable.
+- **Racing and other QOL tools:** repaired car highlighting, steadier saved names/progress, safer travel forecasts and Company alerts, and more stable Money, Museums and Events controls.
+- **Chat:** custom buttons and GIF/sticker tools are accessible from supported native chat windows. There is an optional GIPHY picker and optional Fair Fight bubbles beside chat profile links.
+- **Themes:** optional CSS theming for Torn pages, using your selected SLINK theme and existing supplied image assets.
+- **Errors:** clearer explanations for full device storage, API caps, outages, access problems and startup failures, with a support code.
+
+These are changes to test—not a promise that every reported issue is already resolved on every device.
+
+## Please test these first
+
+Try the checks that apply to your permissions and normal Torn use. We especially need **physical PDA testing**, plus both the **Torn panel and standalone extension dashboard** on desktop.
+
+### 1. Saved settings and alerts
+
+- [ ] Change a few harmless alert choices. Navigate away, refresh, close/reopen SLINK, and restart PDA/the browser. Confirm the saved choices remain.
+- [ ] Use Enable all / Disable all, then change individual alerts. The checkboxes, enabled count and alerts that actually appear must agree.
+- [ ] Snooze a medical/cooldown alert, then change pages and refresh. It must stay snoozed and must not repeatedly announce itself.
+- [ ] Check that saved keys, targets, notes and themes remain. Report repeated authentication prompts even if the key is still present.
+
+### 2. Forms, checkboxes and autosave
+
+- [ ] Leave a settings section open and type while normal refreshes happen. It must not close, move the cursor, erase text or change your selections.
+- [ ] Add/edit a clearly disposable target. Try an invalid ID first: your notes should remain so you can correct it and retry.
+- [ ] Change one Market Watch item and one Officer permission checkbox. Unrelated items/permissions must not toggle with it.
+- [ ] Where autosave is shown, wait for Saved, then reopen/reload. A failed save must not claim success.
+- [ ] Change different harmless settings from the dashboard and Torn panel. Both saved changes should remain.
+
+Unsaved text is protected from background updates; that does not promise it survives a full page reload. Credentials, shared policies and explicit Save/Send actions are not all autosaved.
+
+### 3. Navigation, resizing and speed
+
+- [ ] Open Alerts or Market Watch, change Torn pages and refresh. SLINK should return to that same module—not default to Quality of Life.
+- [ ] Resize and reposition the extension panel. Reopen/change pages: its saved size and position should remain within the screen.
+- [ ] Check narrow and wide layouts. Buttons should stay readable, alerts fit the width, and extra height should not create huge gaps between controls.
+- [ ] On PDA, reach every Combat and QOL subtab. No buttons should be trapped offscreen.
+- [ ] Switch Torn tabs/windows; background and return to PDA several times. Watch for duplicate controls, repeated actions, theme flicker, full-looking restarts or noticeable lag.
+
+### 4. Battle stats, Mugging and provider failures
+
+- [ ] Refresh your battle stats in Mugging. Close SLINK, change pages and refresh. The newer stats must not revert to an older total.
+- [ ] Compare your own stats across the relevant combat modules. Report conflicting values with the time each was refreshed.
+- [ ] Find Mugging targets. Check that unchecked rows are clearly marked, do not claim fake zero stats, and can become estimated entries after successful checks/refresh.
+- [ ] Check the selected Fair Fight ceiling: known targets above it must not be presented as within range.
+- [ ] If Fair Fight is genuinely unavailable, War/other module controls should still work, using identified cached estimates or N/A—not fabricated values.
+
+Do not attack someone, revoke a key or intentionally exhaust an API allowance just to run a test.
+
+### 5. Racing, QOL and Officer tools
+
+- [ ] Racing: mark a build complete, save the exact nickname, and open a matching official race. The correct car should highlight once, without selecting it or repeatedly scrolling.
+- [ ] Abroad Stocks: check the destination, travel method and displayed leave time. Missing provider data must not look like confirmed zero stock or a certain forecast.
+- [ ] Money/Museums/Company: check that available figures and prices are readable, missing values are honest, and your inputs survive refreshes.
+- [ ] Events: select Halloween outside the event dates, then another event. Guides must not disappear just because the event is inactive.
+- [ ] On the extension dashboard, open your permitted QOL and combat modules and try their ordinary buttons.
+- [ ] Officers: check restock/missing-item reports and Copy. The Recaller entry should open the armory; opening it must not recall items automatically.
+- [ ] If you already have suitable test accounts, check ordinary feature access, officer access and admin access. Do not change important faction grants solely for testing.
+
+### 6. Chat tools and themes
+
+- [ ] Open supported faction, company and private chats. Check the custom/media menu appears, opens once, and does not cover native controls.
+- [ ] Test custom profile/retaliation links. Names and 【ATTACK】 links should remain clickable after chat updates; IDs should not break profile links.
+- [ ] Enable the optional GIF picker. Search, view still previews, manually play/pause and copy a link. Nothing should send without your action.
+- [ ] Check GIF/sticker searches and custom templates without sending unwanted messages. Existing drafts must remain untouched.
+- [ ] Enable Fair Fight in chat. Check names/profile links remain usable, bubbles do not duplicate, and unavailable estimates show N/A or an identified fallback.
+- [ ] Enable Apply my SLINK theme to Torn. Check Crimes, Travel, an existing attack log and Chat for readable text, intact controls and meaningful status colors. Toggle it off: Torn styling should return.
+- [ ] Change theme/opacity, navigate and reload. Saved choices should remain, and decoration must not block buttons.
+
+### 7. Errors and recovery
+
+- [ ] If a normal check fails, does the message tell you what happened and what to do next? Include the support code in your report.
+- [ ] After a temporary connection failure, reconnect and retry. Your settings and drafts must not be cleared.
+- [ ] “Device storage full” must not be described as an API cap. Unknown limit reset periods must not be presented as definite minute/daily limits.
+
+Do not fill, corrupt or clear your real storage to provoke an error. Controlled storage/API failures are covered by developer tests.
+
+## What is not ready to claim yet
+
+- The shared **remote Fair Fight backup** and other testing-worker changes still need their separate backend rollout. Local backup behavior can work without that deployment.
+- Automatic mini-profiles, inline GIF/image embedding, the large emoji picker and /tableflip-style shortcuts are **not included** in this build.
+- Automated tests are passing (116 client checks and 93 backend cases), but they do not replace real-device and live-Torn testing.
+- A main-branch document update is not a Chrome Web Store update or a deployment of the testing services.
+
+## How to report a result
+
+Please include:
+
+- **Build and platform:** extension version + Torn panel/dashboard, or PDA script version + phone/OS/PDA app version.
+- **Check:** which checklist item you tried.
+- **Result:** PASS, FAIL, or NOT TESTED.
+- **If it failed:** what you clicked, what you expected, what happened, and whether it happens again.
+- A screenshot or exact error/support code if useful.
+
+Never include API keys, session tokens or private messages. If something threatens saved data or triggers an unintended action, stop and report the first failure rather than repeating it.
+
+---
+
+<details>
+<summary>Earlier development notes — historical detail, not the current installation instructions</summary>
+
+Older version numbers, unresolved items and “not implemented yet” notes below describe those earlier builds. Use the combined checklist above for the current build.
 
 ## Candidate 40 — 30 October 2026 — Errors that explain what happened
 
@@ -834,3 +963,5 @@ Follow-ups: none received yet. Keep dated tester reports and retest results unde
 ## Reporting a problem
 
 Include the tester version, your device/platform, what you clicked, what you expected and what happened instead. A screenshot or recording can help. Never include an API key or login token. Use a harmless test target or isolated test profile for checks involving saved records; do not delete important data to test a change.
+
+</details>
