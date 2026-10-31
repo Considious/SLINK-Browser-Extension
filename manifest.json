@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.19.20",
-  "version_name": "0.19.20",
+  "version": "0.19.21",
+  "version_name": "0.19.21",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",

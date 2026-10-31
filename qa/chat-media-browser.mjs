@@ -76,16 +76,20 @@ try{for(const platform of ['extension','pda'])for(const width of [390,1100]){
  await page.evaluate(()=>{
   window.ffEnabled=true;window.ffCalls=0;
   const row=document.createElement('div');row.className='virtualItem___fixture';row.id='ffrow';
-  row.innerHTML='<a data-label="avatar" href="/profiles.php?XID=42"><img alt="avatar"></a><span><a class="player" href="/profiles.php?XID=42">Player</a></span>';
+  row.innerHTML='<span class="senderContainer___fixture" style="display:inline-flex;align-items:center"><a data-label="avatar" href="/profiles.php?XID=42"><img alt="avatar" style="width:14px;height:14px"></a><a class="sender___fixture player" href="/profiles.php?XID=42">Player:</a></span><span class="message___fixture">Message</span>';
   document.querySelector('#chatRoot').append(row);
   window.ff=window.SLINK_CHAT_FF.mount({activity:window.activity,enabled:()=>window.ffEnabled,lookup:async ids=>{window.ffCalls++;return ids.map(id=>({id,ff:2.4,at:Date.now(),source:'fixture'}));}});
  });
  await page.waitForSelector('#ffrow .slink-chat-ff-bubble');
  assert.equal(await page.locator('#ffrow .slink-chat-ff-bubble').count(),1,'Avatar/name links must not produce duplicate bubbles');
- assert.equal(await page.locator('#ffrow a[data-label="avatar"] > .slink-chat-ff-bubble').count(),1,'The exact avatar anchor is the only badge container');
+ assert.equal(await page.locator('#ffrow span[class*="senderContainer___"] > .slink-chat-ff-bubble').count(),1,'The exact sender container is the only badge host');
+ assert.equal(await page.locator('#ffrow a[data-label="avatar"] .slink-chat-ff-bubble').count(),0);
+ assert.equal(await page.evaluate(()=>document.querySelector('#ffrow .slink-chat-ff-bubble').nextElementSibling===document.querySelector('#ffrow .player')),true,'Badge is immediately before the sender-name link');
+ const placement=await page.evaluate(()=>{const b=document.querySelector('#ffrow .slink-chat-ff-bubble').getBoundingClientRect(),n=document.querySelector('#ffrow .player').getBoundingClientRect(),a=document.querySelector('#ffrow [data-label="avatar"]').getBoundingClientRect();return {before:b.right<=n.left+1,sameLine:Math.abs((b.top+b.bottom)/2-(n.top+n.bottom)/2)<4,afterAvatar:b.left>=a.right};});
+ assert.deepEqual(placement,{before:true,sameLine:true,afterAvatar:true},'Badge must occupy the original first-bubble slot on the name line, not below the avatar');
  assert.equal(await page.locator('#ffrow .player .slink-chat-ff-bubble').count(),0);
  await page.evaluate(()=>{const row=document.createElement('div');row.className='virtualItem___fixture';row.id='noavatar';row.innerHTML='<a href="/profiles.php?XID=99">No avatar</a>';document.querySelector('#chatRoot').append(row);});
- assert.equal(await page.locator('#noavatar .slink-chat-ff-bubble').count(),0,'No text-link fallback when an avatar is absent');
+ assert.equal(await page.locator('#noavatar .slink-chat-ff-bubble').count(),0,'No placement outside the explicit sender container');
  await page.evaluate(()=>{window.keptBadge=document.querySelector('#ffrow .slink-chat-ff-bubble');window.setActivity(false);});
  assert.equal(await page.locator('#ffrow .slink-chat-ff-bubble').count(),1);
  await page.evaluate(()=>window.setActivity(true));
@@ -99,15 +103,14 @@ try{for(const platform of ['extension','pda'])for(const width of [390,1100]){
  assert.equal(await page.evaluate(()=>window.ffCalls),1,'Redrawn names reuse remembered estimates immediately');
  await page.evaluate(()=>{
   const marker=document.createElement('span');marker.innerHTML='<span class="ffscouter-marker-wrapper"><span class="ffscouter-bubble">2.40</span></span>';
-  document.querySelector('#ffrow a[data-label="avatar"]').append(marker);
+  document.querySelector('#ffrow').append(marker);
  });
- await page.waitForFunction(()=>!document.querySelector('#ffrow .slink-chat-ff-bubble'));
- assert.equal(await page.locator('#ffrow .ffscouter-bubble').count(),1,'An existing provider badge in this exact avatar suppresses SLINK duplication');
+ assert.equal(await page.locator('#ffrow .slink-chat-ff-bubble').count(),1,'No nearby-marker detection: SLINK always uses its assigned sender slot');
  await page.evaluate(()=>document.querySelector('#ffrow .ffscouter-marker-wrapper').parentElement.remove());
  await page.waitForSelector('#ffrow .slink-chat-ff-bubble',{timeout:500});
  await page.evaluate(()=>{window.ffEnabled=false;window.ff.sync();});
  assert.equal(await page.locator('#ffrow .slink-chat-ff-bubble').count(),0,'Explicit opt-out still removes badges');
  assert.deepEqual(errors,[]);
- console.log(platform+' '+width+'px: media/picker/send regression passed; same image/badge nodes retained on focus changes; exact avatar-only placement; instant cached redraw; same-container coexistence; opt-out cleanup passed.');
+ console.log(platform+' '+width+'px: original first-bubble slot before sender verified geometrically; one fixed host; no avatar badge or nearby-marker decisions; focus retention and media/picker/send regression passed.');
  await page.close();
 }}finally{await browser.close();}
