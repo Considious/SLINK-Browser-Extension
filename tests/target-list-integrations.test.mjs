@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 
 const [leveling, bounties, war] = await Promise.all([
   readFile(new URL('../src/modules/leveling.js', import.meta.url), 'utf8'),
@@ -20,7 +21,26 @@ assert.match(bounties, /source:'bounties'/);
 assert.match(war, /data-war-save-source="war"/);
 assert.match(war, /data-war-save-source="outside"/);
 assert.match(war, /targetList\.add/);
-assert.match(war, /source === 'outside' \? 'outside-targets' : 'war'/);
-assert.match(war, /tags:source === 'war' \? \['War'\] : \['Target'\]/);
+const start=war.indexOf("        for (const button of root.querySelectorAll('[data-war-save-target]'))");
+const end=war.indexOf("        for (const button of root.querySelectorAll('[data-war-copy]'))",start);
+assert(start>=0&&end>start,'War Save Target binding boundaries are missing');
+const bindStart=war.indexOf('      function bindControl('),bindEnd=war.indexOf('\n      }',bindStart)+8;
+assert(bindStart>=0&&bindEnd>bindStart,'Production duplicate-binding guard is missing');
+for(const [kind,expectedSource,tag]of [['war','war','War'],['outside','outside-targets','Target']]){
+ let click,payload,bindings=0;
+ const button={dataset:{warSaveTarget:'42',warSaveSource:kind},textContent:'Save Target',isConnected:true,addEventListener:(type,fn)=>{assert.equal(type,'click');click=fn;bindings++;}};
+ const member={id:42,name:'Target',statusState:'Okay',battleStatsEstimate:500000,fairFight:2};
+ const context=vm.createContext({root:{querySelectorAll:()=>[button]},current:{runtime:{snapshot:{members:[member]},outsideTargets:[member]},activeWar:{warId:'war-test'}},
+ SLINK:{core:{messaging:{send:async(type,data)=>{assert.equal(type,'targetList.add');payload=data;}},format:{errorMessage:String}}},setTimeout:fn=>fn()});
+ vm.runInContext("let localError='';const boundEvents=new WeakMap();"+war.slice(bindStart,bindEnd)+war.slice(start,end),context);
+ vm.runInContext(war.slice(start,end),context);
+ assert.equal(bindings,1,'A retained target action must not acquire duplicate click handlers');
+ await click();
+ assert.equal(payload.source,expectedSource);
+ assert.equal(payload.tags[0],tag);
+ assert.equal(payload.playerId,42);
+ assert.equal(payload.sourceContext.battleStatsEstimate,500000);
+ assert.equal(button.disabled,false,'Save action must release its busy state');
+}
 
 console.log('Target List source integration tests passed.');

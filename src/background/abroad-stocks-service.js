@@ -17,16 +17,19 @@
     snoozes:'abroadStocks.snoozes.v1'
   });
   let refreshing = null;
+  let settingsQueue = Promise.resolve();
 
   function normalizeSettings(input = {}) {
     const explicit = input?.travelMethodExplicit === true;
     const detectedDefault = input?.travelDefault === 'airstrip' ? 'airstrip' : 'standard';
+    const minutes = (value, maximum, fallback) => value === null || value === undefined || String(value).trim() === '' || !Number.isFinite(Number(value))
+      ? fallback : Math.min(maximum, Math.max(0, Number(value)));
     return {
       travelMethod:explicit && Object.hasOwn(ABROAD.TRAVEL_MULTIPLIERS, input?.travelMethod) ? input.travelMethod : detectedDefault,
       travelMethodExplicit:explicit,
       travelDefault:detectedDefault,
-      arrivalBufferMinutes:Math.min(30, Math.max(0, Number(input?.arrivalBufferMinutes) || 3)),
-      alertLeadMinutes:Math.min(180, Math.max(0, Number(input?.alertLeadMinutes) || 10)),
+      arrivalBufferMinutes:minutes(input?.arrivalBufferMinutes, 30, 3),
+      alertLeadMinutes:minutes(input?.alertLeadMinutes, 180, 10),
       alertsEnabled:input?.alertsEnabled !== false,
       soundEnabled:input?.soundEnabled === true,
       landingRecommendationEnabled:input?.landingRecommendationEnabled !== false,
@@ -84,8 +87,7 @@
       const property = response?.property || {};
       const hasAirstrip = Array.isArray(property?.modifications)
         && property.modifications.some(value => /airstrip/i.test(String(value || '')));
-      const next = normalizeSettings({ ...currentSettings, travelDefault:hasAirstrip ? 'airstrip' : 'standard' });
-      await SLINK.core.storage.set(KEYS.settings, next);
+      const next = await patchSettings({ travelDefault:hasAirstrip ? 'airstrip' : 'standard' });
       currentRuntime.travelDefaultCheckedAt = Date.now();
       currentRuntime.hasAirstrip = hasAirstrip;
       return next;
@@ -187,24 +189,13 @@
   }
 
   async function ensureMarketPrices(currentRuntime, now = Date.now()) {
-    if (Number(currentRuntime.marketPricesFetchedAt || 0) + MARKET_CACHE_MS > now
-      && Object.keys(currentRuntime.marketPrices || {}).length) return currentRuntime.marketPrices;
     const key = await tornKey();
     if (!key) throw new Error('Save a Torn API key before enabling landing purchase recommendations.');
-    await SLINK.core.tornApiLimiter.reserve({ wait:true });
-    const url = new URL('https://api.torn.com/v2/torn/items');
-    url.searchParams.set('cat', 'All');
-    url.searchParams.set('sort', 'ASC');
-    url.searchParams.set('comment', 'SLINK abroad landing ROI');
-    const response = await SLINK.core.http.requestJson('tornApi', url.href, {
-      headers:{ Authorization:`ApiKey ${key}` },
-      cache:'no-store'
-    });
-    if (response?.error) throw new Error(response.error.message || response.error.error || 'Torn item prices request failed.');
-    const prices = marketPriceMap(response);
+    const catalog = await SLINK.services.sharedData.catalog({ key, maxAgeMs:MARKET_CACHE_MS, needPrices:true });
+    const prices = marketPriceMap({ items:catalog.items });
     if (!Object.keys(prices).length) throw new Error('Torn returned no item market prices.');
     currentRuntime.marketPrices = prices;
-    currentRuntime.marketPricesFetchedAt = now;
+    currentRuntime.marketPricesFetchedAt = catalog.pricesAt;
     return prices;
   }
 
@@ -315,10 +306,23 @@
     return publicStatus(true);
   }
 
+  function patchSettings(input = {}) {
+    const patch = { ...input };
+    const operation = settingsQueue.catch(() => {}).then(async () => {
+      const previous = await SLINK.core.storage.get(KEYS.settings, {});
+      const next = { ...previous, ...normalizeSettings({ ...previous, ...patch }) };
+      await SLINK.core.storage.set(KEYS.settings, next);
+      return normalizeSettings(next);
+    });
+    settingsQueue = operation;
+    return operation;
+  }
+
   async function saveSettings(input = {}) {
-    const next = normalizeSettings({ ...input, travelMethodExplicit:true });
-    await SLINK.core.storage.set(KEYS.settings, next);
-    return publicStatus(false);
+    const patch = { ...input };
+    if (Object.hasOwn(patch, 'travelMethod')) patch.travelMethodExplicit = true;
+    const { tornIntelKey, ...publicSettings } = await patchSettings(patch);
+    return { settings:publicSettings };
   }
 
   async function toggleWatch(input = {}) {

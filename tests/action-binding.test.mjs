@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const read=path=>fs.readFileSync(new URL('../'+path,import.meta.url),'utf8');
+const scope=vm.createContext({console,AbortController,URL});
+for(const file of ['runtime','permissions','modules'])vm.runInContext(read('src/core/'+file+'.js'),scope);
+const api=scope.SLINK_EXTENSION;
+const listeners=new Map(),button={disabled:false,addEventListener:(type,fn)=>listeners.set(type,fn),removeEventListener:type=>listeners.delete(type)};
+let calls=0,release,observed,prevented=0,errors=[],active=true;
+const target={name:'nested icon'};
+const event={currentTarget:button,target,preventDefault(){assert.equal(this,event);prevented++;}};
+const unbind=api.modules.bindAction(button,{onClick:async click=>{calls++;observed=click;click.preventDefault();await new Promise(resolve=>release=resolve);assert.equal(click.currentTarget,button);assert.equal(click.target,target);click.currentTarget.disabled=false;}},{active:()=>active,onError:error=>errors.push(error.message)});
+listeners.get('click')(event);assert.equal(calls,1,'Handler must run synchronously in the user gesture');assert.equal(button.disabled,true);
+listeners.get('click')(event);assert.equal(calls,1,'Pending clicks must not repeat the action');
+event.currentTarget=null;event.target=null;release();await new Promise(resolve=>setImmediate(resolve));assert.equal(button.disabled,false);assert.equal(prevented,1);assert.equal(observed.currentTarget,button);
+active=false;listeners.get('click')({target});assert.equal(calls,1);unbind();assert.equal(listeners.size,0);
+active=true;api.modules.bindAction(button,{onClick:()=>{throw Error('sync failure');}},{onError:error=>errors.push(error.message)});listeners.get('click')({target});assert.equal(button.disabled,false);
+api.modules.bindAction(button,{onClick:async()=>{throw Error('async failure');}},{onError:error=>errors.push(error.message)});listeners.get('click')({target});await new Promise(resolve=>setImmediate(resolve));assert.equal(button.disabled,false);assert.deepEqual(errors,['sync failure','async failure']);
+let definition;
+const life=api.modules.lifecycle({ui:Object.freeze({setActions:value=>{definition=value[0];}}),isActive:()=>true});
+life.context.ui.setActions([{onClick:()=>{calls++;}}]);life.dispose();definition.onClick();assert.equal(calls,1,'Disposed module actions cannot run from retained buttons');
+// Exercise the real dashboard adapter, including denied and admin access.
+vm.runInContext(read('src/core/dashboard-host.js'),scope);
+let current={scopes:['feature']},adapter,opened;
+const holder={children:[],replaceChildren(){this.children=[];},append(node){this.children.push(node);}};
+const panel={querySelector:selector=>selector==='[data-host-actions]'?holder:{textContent:'',dataset:{}},addEventListener(){},removeEventListener(){}};
+scope.document={querySelector:()=>panel,createElement:()=>({disabled:false,dataset:{},addEventListener(type,fn){this.click=fn;},removeEventListener(){}})};
+scope.location={href:'https://dashboard.test/'};scope.chrome={tabs:{create:async details=>{opened=details;return{id:9};}}};
+api.modules.register({id:'fixture',requiredScopes:['feature'],start:async context=>{adapter=context.ui;return{};}});
+const host=api.core.dashboardHost.create({root:scope.document,permissions:()=>current,visible:()=>true});
+await host.select('fixture');let done;
+adapter.setActions([{id:'refresh',label:'Refresh',onClick:async click=>{assert.equal(click.currentTarget,holder.children[0]);await new Promise(resolve=>done=resolve);click.currentTarget.disabled=false;}}]);
+const control=holder.children[0],native={target:control,currentTarget:control};control.click(native);native.currentTarget=null;done();await new Promise(resolve=>setImmediate(resolve));assert.equal(control.disabled,false);
+await adapter.navigateTo('war');assert.equal(opened.url,'https://www.torn.com/factions.php?step=your#/tab=armoury');
+current={scopes:[]};opened=null;await adapter.navigateTo('war');assert.equal(opened,null);assert.equal(host.allowed('fixture'),false);
+current={scopes:['admin.*']};assert.equal(host.allowed('fixture'),true);
+await host.stop();
+const officerSource=read('src/modules/faction-officers.js');let officerHandler,writes=0,navigations=0,permitted=true;
+const officer=vm.createContext({context:{listen:(root,type,fn)=>{officerHandler=fn;}},root:{},allowed:()=>permitted,current:{access:{armory:true}},
+ SLINK:{core:{storage:{set:async()=>{writes++;}},format:{errorMessage:error=>error.message}}},
+ global:{dispatchEvent(){}},CustomEvent:class{},ui:{navigateTo:async()=>{navigations++;throw Error('Tab creation refused');}},notice:'',render(){}});
+vm.runInContext(officerSource.slice(officerSource.indexOf("      context.listen(root,'click',async event=>{"),officerSource.indexOf('      await load(true);')),officer);
+const recallEvent={target:{closest:()=>({dataset:{foAction:'open-recaller'}})}};
+await officerHandler(recallEvent);assert.equal(writes,1);assert.equal(navigations,1);assert.equal(officer.notice,'Tab creation refused','Real Officer handoff must await and report navigation failure');
+permitted=false;await officerHandler(recallEvent);assert.equal(writes,1);assert.equal(navigations,1,'Revoked Officer action cannot open a page');
+console.log('Shared action binding: real event capture, immediate gesture, double-click exclusion, retry, stale actions, dashboard/admin/denied handoff passed.');

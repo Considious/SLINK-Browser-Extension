@@ -26,6 +26,25 @@
   let refreshing = null;
   let contributing = null;
   let syncing = null;
+  let settingsQueue = Promise.resolve();
+
+  function saveSettings(input = {}) {
+    const task = settingsQueue.then(async () => {
+      const current = await SLINK.core.storage.get(SETTINGS_KEY, {});
+      const next = { ...current };
+      if (Object.hasOwn(input, 'enabled')) next.enabled = input.enabled === true;
+      for (const [key,min,max] of [['minFairFight',1,3],['maxFairFight',1,3],['limit',1,100]]) {
+        if (!Object.hasOwn(input, key)) continue;
+        const value = Number(input[key]);
+        if (!Number.isFinite(value)) throw new Error('Invalid Mugging setting: ' + key);
+        next[key] = Math.max(min, Math.min(max, key === 'limit' ? Math.trunc(value) : value));
+      }
+      await SLINK.core.storage.set(SETTINGS_KEY, next);
+      return next;
+    });
+    settingsQueue = task.catch(() => undefined);
+    return task;
+  }
   let observationQueue=Promise.resolve();
   async function fairFightKey(){for(const name of ['access.settings.v1','war.settings.v1','leveling.settings.v1','bounties.settings.v1']){const value=await SLINK.core.storage.get(name,{});if(value.ffKey)return String(value.ffKey).trim();}return '';}
   const fairFightChecks=global.SLINK_MUGGING_FF.create({key:fairFightKey,request:(ids,key,signal)=>SLINK.core.http.requestJson('ffscouter','https://ffscouter.com/api/v1/get-stats?key='+encodeURIComponent(key)+'&targets='+ids.join(','),{cache:'no-store',signal}),queue:queueObservations});
@@ -65,36 +84,18 @@
   }
 
   async function storedOwnBattleStats() {
-    const [sharedValue, legacyValue] = await Promise.all([
-      SLINK.core.storage.get(OWN_STATS_KEY, null),
-      SLINK.core.storage.get(LEGACY_OWN_STATS_KEY, null)
-    ]);
-    const shared = normalizeOwnBattleStats(sharedValue);
-    const legacy = normalizeOwnBattleStats(legacyValue);
-    const newest = shared.checkedAt >= legacy.checkedAt ? shared : legacy;
-    if (newest.total > 0 && (shared.total !== newest.total || shared.level !== newest.level || shared.checkedAt !== newest.checkedAt)) {
-      await SLINK.core.storage.set(OWN_STATS_KEY, newest);
-    }
-    return newest;
+    const key = await tornKey();
+    if (!key) return normalizeOwnBattleStats({});
+    const record = await SLINK.services.sharedData.peekPersonal({ key });
+    return record || normalizeOwnBattleStats({});
   }
 
   async function ownBattleStats(force = false) {
-    const cached = await storedOwnBattleStats();
-    if (!force && Number(cached?.total) > 0 && Number(cached?.level) > 0 && Date.now() - Number(cached?.checkedAt || 0) < OWN_STATS_TTL_MS) return Number(cached.total);
     const key = await tornKey();
     if (!key) throw new Error('Save your Torn API key under API and feature access first.');
-    const endpoint = '/v2/user?selections=battlestats,basic';
-    await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Mugging', priority:'high', endpoint });
-    const response = await SLINK.core.http.requestJson(
-      'tornApi',
-      'https://api.torn.com/v2/user?selections=battlestats%2Cbasic&comment=SLINK%20Mugging%20rough%20assignment',
-      { headers:{ Authorization:`ApiKey ${key}` }, cache:'no-store' }
-    );
-    if (response?.error) throw new Error(response.error?.message || response.error?.error || 'Torn rejected the battle-stat request.');
-    const total = battleStatsTotal(response);
-    const level = Math.max(0, Math.trunc(Number(response?.level ?? response?.basic?.level) || 0));
-    await SLINK.core.storage.set(OWN_STATS_KEY, { total, level, checkedAt:Date.now() });
-    return total;
+    const record = await SLINK.services.sharedData.personal({ key, force, maxAgeMs:OWN_STATS_TTL_MS, requireLevel:true });
+    await SLINK.core.storage.set(OWN_STATS_KEY, record);
+    return record.total;
   }
 
   async function cachedOwnBattleStats() {
@@ -310,7 +311,7 @@
         pendingSync:Array.isArray(pending) ? pending.length : 0,
         lastSyncAt:Math.max(0, Number(sync?.lastSuccessAt) || 0),
         synced:Math.max(0, Number(sync?.accepted) || 0),
-        syncError:String(sync?.error || '')
+        syncError:sync?.error ? SLINK.core.format.errorMessage(sync.error) : ''
       };
       await SLINK.core.storage.set(CONTRIBUTION_KEY, status);
       return status;
@@ -418,20 +419,21 @@
     const cache = normalizeCache(storedCache);
     return {
       ...cache,
-      userBattleStats:ownProfile.total > 0 ? ownProfile.total : cache.userBattleStats,
-      userLevel:ownProfile.level > 0 ? ownProfile.level : cache.userLevel,
+      userBattleStats:ownProfile.total > 0 ? ownProfile.total : 0,
+      userLevel:ownProfile.level > 0 ? ownProfile.level : 0,
       ownBattleStatsCheckedAt:ownProfile.checkedAt,
       contribution:{
         ...contribution,
         pendingSync:Array.isArray(pending) ? pending.length : 0,
         lastSyncAt:Math.max(0, Number(sync?.lastSuccessAt) || 0),
         synced:Math.max(0, Number(sync?.accepted) || 0),
-        syncError:String(sync?.error || '')
+        syncError:sync?.error ? SLINK.core.format.errorMessage(sync.error) : ''
       }
     };
   }
 
   const routes = Object.freeze({
+    'mugging.settings.save':saveSettings,
     'mugging.activity.touch':touchActivity,
     'mugging.assignments.refresh':refresh,
     'mugging.contribution.run':runContribution,

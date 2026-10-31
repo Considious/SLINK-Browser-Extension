@@ -140,6 +140,10 @@
     return [title, ...rows.map(row => `${row.name} ${row.current}/${row.target}`)].join('\n');
   }
 
+  function missingCrimeMessage(rows) {
+    return ['OC Items Missing:', ...rows.map(row => `${row.userName} [${row.userId}] — ${row.itemName} for ${row.crimeName}`)].join('\n');
+  }
+
   function itemCatalog(payload = {}) {
     const rows = Array.isArray(payload?.items) ? payload.items : Object.values(payload?.items || {});
     return new Map(rows.map(row => [Number(row?.id), String(row?.name || `Item ${row?.id}`)]).filter(([id]) => id > 0));
@@ -179,6 +183,6 @@
   SLINK.define('core','factionOfficers',Object.freeze({
     OFFICER_SCOPE,ARMORY_SCOPE,OC_SCOPE,ADMIN_SCOPE,ARMORY_URL,CRIMES_URL,
     INVENTORY_CATEGORIES,ARMORY_ITEMS,OC_ITEMS,normalizeThresholds,
-    shortages,restockMessage,itemCatalog,memberCatalog,missingCrimeItems
+    shortages,restockMessage,missingCrimeMessage,itemCatalog,memberCatalog,missingCrimeItems
   }));
 })(globalThis);

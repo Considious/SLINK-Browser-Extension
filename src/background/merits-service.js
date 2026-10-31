@@ -5,6 +5,18 @@
   const MERITS = SLINK.core.merits;
   const KEYS = Object.freeze({ settings:'merits.settings.v1', runtime:'merits.runtime.v1' });
   let refreshing = null;
+  let settingsQueue = Promise.resolve();
+
+  function mutateSettings(update) {
+    const operation = settingsQueue.catch(() => {}).then(async () => {
+      const raw = await SLINK.core.storage.get(KEYS.settings, {});
+      const next = MERITS.normalizeSettings(await update(MERITS.normalizeSettings(raw)));
+      await SLINK.core.storage.set(KEYS.settings, {...raw,...next});
+      return next;
+    });
+    settingsQueue = operation;
+    return operation;
+  }
 
   async function settings() {
     return MERITS.normalizeSettings(await SLINK.core.storage.get(KEYS.settings, {}));
@@ -173,24 +185,27 @@
   }
 
   async function saveSettings(input = {}) {
-    const previous = await settings();
-    const next = MERITS.normalizeSettings({ ...previous, ...input, pinned:previous.pinned });
-    await SLINK.core.storage.set(KEYS.settings, next);
+    const preferenceOnly = input.preferenceOnly === true;
+    const patch = {};
+    for (const key of ['filter','refreshMinutes']) if (Object.hasOwn(input,key)) patch[key] = input[key];
+    const next = await mutateSettings(previous => ({...previous,...patch}));
     const current = await runtime();
-    if (current.snapshot) await saveRuntime({ nextRefreshAt:Number(current.fetchedAt || Date.now()) + next.refreshMinutes * 60_000 });
-    return publicStatus(false);
+    if (current.snapshot) await saveRuntime({ nextRefreshAt:Number(current.fetchedAt || Date.now()) + (await settings()).refreshMinutes * 60_000 });
+    return preferenceOnly ? {settings:next} : publicStatus(false);
   }
 
   async function setPinned(input = {}) {
     const key = String(input.key || '');
+    const forceRemove = input.pinned === false;
     if (!/^(?:medal|honor):\d+$/.test(key)) throw new Error('Choose a valid medal or honor.');
-    const stored = await settings();
-    const currentRuntime = await runtime();
-    const current = currentRuntime.snapshot ? MERITS.buildView(currentRuntime.snapshot, stored).settings : stored;
-    const remove = input.pinned === false || current.pinned.includes(key);
-    const pinned = remove ? current.pinned.filter(value => value !== key) : [...current.pinned, key];
-    if (pinned.length > MERITS.TRACK_LIMIT) throw new Error(`You can pin up to ${MERITS.TRACK_LIMIT} active Merit farms.`);
-    await SLINK.core.storage.set(KEYS.settings, MERITS.normalizeSettings({ ...current, pinned }));
+    await mutateSettings(async stored => {
+      const currentRuntime = await runtime();
+      const current = currentRuntime.snapshot ? MERITS.buildView(currentRuntime.snapshot, stored).settings : stored;
+      const remove = forceRemove || current.pinned.includes(key);
+      const pinned = remove ? current.pinned.filter(value => value !== key) : [...current.pinned, key];
+      if (pinned.length > MERITS.TRACK_LIMIT) throw new Error(`You can pin up to ${MERITS.TRACK_LIMIT} active Merit farms.`);
+      return {...current,pinned};
+    });
     return publicStatus(false);
   }
 

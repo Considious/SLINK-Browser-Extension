@@ -1,4 +1,14 @@
-# SLINK testing changelog and checklist
+# SLINK changelog and review checklist
+
+## Main release — 30 October 2026
+
+The testing implementation has now been promoted to main: **extension 0.19.15 / PDA 0.4.127**. The checklist below still applies. The separate testing branch remains available; no tester results are invented by this release.
+
+[Main extension ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/main.zip) · [Stable PDA installer](https://raw.githubusercontent.com/Considious/Torn-Scripts/main/SLINK-PDA/SLINK_PDA_Dashboard.user.js)
+
+The extension repository update still needs Chrome Web Store submission/review to reach store-installed users. Cloudflare source publication is separate from verified deployment. The remote public Fair Fight backup remains disabled until its migration/configuration rollout; existing local fallback stays available. Saved settings/keys are not reset. Pre-release main heads are retained in backup/pre-audit-promotion-2026-10-30 in each repository.
+
+The remaining version/install notes below identify the separate testing channel.
 
 ## Start here
 
@@ -8,7 +18,7 @@ This is the combined test list for the current testing build. You only need the 
 - **PDA:** 0.4.126
 - **Testing branch:** audit/test-foundation
 
-These are testing builds, not the Chrome Web Store release. Publishing this document on main does **not** release the testing code. Some urgent fixes below are already on main; they still need checking alongside the rest.
+These are testing builds, not the Chrome Web Store release. The code has since been promoted to main as noted above; these version numbers identify the separate testing channel. Some urgent fixes below are already on main; they still need checking alongside the rest.
 
 ## Downloads
 
@@ -108,7 +118,7 @@ Do not fill, corrupt or clear your real storage to provoke an error. Controlled 
 - The shared **remote Fair Fight backup** and other testing-worker changes still need their separate backend rollout. Local backup behavior can work without that deployment.
 - Automatic mini-profiles, inline GIF/image embedding, the large emoji picker and /tableflip-style shortcuts are **not included** in this build.
 - Automated tests are passing (116 client checks and 93 backend cases), but they do not replace real-device and live-Torn testing.
-- A main-branch document update is not a Chrome Web Store update or a deployment of the testing services.
+- Main source publication is not a Chrome Web Store update or confirmation that Cloudflare services have deployed.
 
 ## How to report a result
 

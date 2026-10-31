@@ -55,3 +55,4 @@ await assert.rejects(request);await assert.rejects(request,/temporarily unavaila
 clock+=61_000;transport='ok';await request();assert.equal(calls,2);
 transport='hang';const timeout=request();while(!timers.length)await Promise.resolve();timers[0]();await assert.rejects(()=>timeout,/timed out/);
 console.log('Main hotfix: verified chat lineup, idempotent quoting, War/Leveling/Bounty outage fallback, unknown values, partial cache retention, HTTP timeout/backoff and recovery passed.');
+

@@ -34,7 +34,7 @@ assert(!war.includes('queueArmoryEnhancement'), 'SLINK must not restructure Torn
 assert(war.includes('war.armory.request'), 'Armory request handling must remain available');
 
 assert.equal((market.match(/function elementVisible\(element\)/g) || []).length, 1, 'The shared PDA visibility helper must exist exactly once.');
-assert(market.includes("return document.visibilityState !== 'hidden';"), 'Market DOM formatting must not depend on document.hasFocus() in PDA/WebView or Torn SPA transitions.');
+assert(market.includes("SLINK.core.pageActivity?.eligible() === true"), 'Extension Market DOM formatting must use the focused-page owner adapter; PDA has its own visibility adapter.');
 assert(market.includes("const marketDomTestAllowed = SLINK.core.permissions.hasScope(context.permissions, 'admin.*');"), 'Market DOM Test must derive visibility from admin.*.');
 assert(market.includes("if (marketDomTestAllowed) marketActions.push"), 'Market DOM Test must only be added for administrators.');
 assert(market.includes("data-tdd-market-dom-test"), 'Market DOM Test must mark a real production listing.');

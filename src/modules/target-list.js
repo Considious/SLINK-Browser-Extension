@@ -2,6 +2,7 @@
   'use strict';
 
   const SLINK = global.SLINK_EXTENSION;
+  const editorViews = new WeakMap();
   const MODULE_STYLES = `
     .target-list-note,.target-list-error { margin:7px 0; padding:7px; border-radius:6px; background:#202c39; color:#a9d5ff; }
     .target-list-error { background:#432929; color:#ffc0c0; }
@@ -84,6 +85,20 @@
 
       context.ui.setTitle('Target List');
       context.ui.setModuleStyles(MODULE_STYLES);
+      const contentRoot = context.ui.getContentElement();
+      const retainedView = editorViews.get(contentRoot);
+      if (retainedView) {
+        formOpen = retainedView.formOpen;
+        pollingOpen = retainedView.pollingOpen;
+        editingId = retainedView.editingId;
+      }
+      contentRoot.dataset.uiExplicitCommit = 'true';
+      const draftGuard = SLINK.core.formState?.protect(contentRoot.getRootNode?.() || contentRoot);
+      let savingTarget = false;
+      function cancelDraft(selector) {
+        const element = contentRoot.querySelector(selector);
+        if (element) draftGuard?.cancel(element);
+      }
 
       function editingTarget() {
         return current.targets.find(target => Number(target.id) === Number(editingId)) || null;
@@ -151,11 +166,13 @@
       }
 
       function render() {
+        if (context.signal?.aborted) return;
+        editorViews.set(contentRoot, { formOpen, pollingOpen, editingId });
         context.ui.setSubtitle(`${current.count || 0} saved target${current.count === 1 ? '' : 's'} · local`);
         context.ui.setStatus(localError || 'Targets are added only when you explicitly save them.', localError ? 'error' : 'ready');
         context.ui.setActions([
-          { id:'add', label:formOpen ? 'Close form' : 'Add target', onClick:() => { formOpen = !formOpen; editingId = null; localError = ''; render(); } },
-          { id:'polling', label:pollingOpen ? 'Close polling' : 'Polling', onClick:() => { pollingOpen = !pollingOpen; localError = ''; render(); } }
+          { id:'add', label:formOpen ? 'Close form' : 'Add target', onClick:() => { cancelDraft('.target-list-form'); formOpen = !formOpen; editingId = null; localError = ''; render(); } },
+          { id:'polling', label:pollingOpen ? 'Close polling' : 'Polling', onClick:() => { cancelDraft('.target-list-polling'); pollingOpen = !pollingOpen; localError = ''; render(); } }
         ]);
         context.ui.setContentHtml(`
           <div class="target-list-note">This list is user-curated. Other SLINK target feeds are not copied here automatically.${current.polling?.settings?.enabled ? ` Rolling checks are spread across ${current.polling.settings.intervalMinutes} minutes.` : ''}${current.stakeout?.targetCount ? ' Stakeouts use DOM/cache/timer-aware checks and only request Torn when the saved information is due.' : ''}</div>
@@ -172,7 +189,7 @@
         const root = context.ui.getContentElement();
         root.querySelectorAll('[data-target-list-profile]').forEach(link => {
           link.addEventListener('click', () => {
-            SLINK.core.playerIntelligenceDom.rememberIntent(
+            if(context.presentation!=='dashboard')SLINK.core.playerIntelligenceDom.rememberIntent(
               Number(link.dataset.targetListProfile),
               'target-list'
             );
@@ -189,6 +206,7 @@
           });
         });
         root.querySelector('#target-list-poll-save')?.addEventListener('click', async () => {
+          const ticket = draftGuard?.begin(root.querySelector('.target-list-polling'));
           const button = root.querySelector('#target-list-poll-save');
           if (button) { button.disabled = true; button.textContent = 'Saving…'; }
           try {
@@ -198,15 +216,20 @@
               intervalMinutes:root.querySelector('#target-list-poll-interval')?.value,
               mugOnly:root.querySelector('#target-list-poll-mug-only')?.checked === true
             });
+            if (ticket) draftGuard.commit(ticket);
           } catch (error) {
             localError = SLINK.core.format.errorMessage(error);
           }
           render();
         });
         root.querySelector('#target-list-cancel')?.addEventListener('click', () => {
+          cancelDraft('.target-list-form');
           formOpen = false; editingId = null; localError = ''; render();
         });
         root.querySelector('#target-list-save')?.addEventListener('click', async () => {
+          if (savingTarget) return;
+          const ticket = draftGuard?.begin(root.querySelector('.target-list-form'));
+          const wasEditing = Boolean(editingId);
           const playerId = Number(root.querySelector('#target-list-id')?.value || editingId);
           const tags = [...root.querySelectorAll('[data-target-list-tag]:checked')].map(node => node.dataset.targetListTag);
           const payload = {
@@ -220,10 +243,15 @@
             sourceLabel:'Manual'
           };
           try {
+            savingTarget = true;
             localError = '';
             current = await SLINK.core.messaging.send(editingId ? 'targetList.update' : 'targetList.add', payload);
-            formOpen = false; editingId = null;
+            if (context.signal?.aborted) return;
+            const unchanged = ticket ? draftGuard.commit(ticket) : true;
+            if (unchanged) { formOpen = false; editingId = null; }
+            else if (!wasEditing && formOpen && Number(contentRoot.querySelector('#target-list-id')?.value) === playerId) editingId = playerId;
           } catch (error) { localError = SLINK.core.format.errorMessage(error); }
+          finally { savingTarget = false; }
           render();
         });
         root.querySelectorAll('[data-target-list-action]').forEach(button => {
@@ -232,6 +260,7 @@
             const playerId = Number(card?.dataset.targetListId);
             const action = button.dataset.targetListAction;
             if (action === 'edit') {
+              cancelDraft('.target-list-form');
               editingId = playerId; formOpen = true; localError = ''; render(); return;
             }
             if (action === 'remove' && !global.confirm('Remove this player from Target List?')) return;
@@ -250,10 +279,13 @@
             }
             try {
               localError = '';
-              if (action === 'remove') current = await SLINK.core.messaging.send('targetList.remove', { playerId });
+              if (action === 'remove') {
+                current = await SLINK.core.messaging.send('targetList.remove', { playerId });
+                if (Number(editingId) === playerId) { cancelDraft('.target-list-form'); editingId = null; formOpen = false; }
+              }
               if (action === 'refresh') {
                 busyId = playerId; render();
-                await SLINK.core.playerIntelligenceDom.observeCurrentPage({
+                if(context.presentation!=='dashboard')await SLINK.core.playerIntelligenceDom.observeCurrentPage({
                   playerId,
                   source:'target-list',
                   requireIntent:false
@@ -267,7 +299,7 @@
       }
 
       current = await SLINK.core.messaging.send('targetList.status');
-      if (!current.targets.length) formOpen = true;
+      if (!current.targets.length && !retainedView) formOpen = true;
       countdownTimer = setInterval(render, 30_000);
       const runStakeoutTick = async () => {
         if (stakeoutTicking) return;

@@ -100,6 +100,31 @@
       let activityTimer = null;
       let visibilityObserver = null;
       const INACTIVE_AFTER_MS = 5 * 60_000;
+      const root = context.ui.getContentElement(), guard = SLINK.core.formState.protect(root.getRootNode());
+      const previousExplicit = root.dataset.uiExplicitCommit; root.dataset.uiExplicitCommit = 'true';
+      const boundEditors = new WeakSet(), boundTargets = new WeakSet();
+      let mounted = false, editorVariant = '', policyVariant = '', settingsRevision = 0, savingAuthentication = false;
+      const preferences = SLINK.core.formState.autosave({
+        root,fields:{'leveling-poll':'pollSeconds','leveling-min-ff':'minFF','leveling-max-ff':'maxFF'},
+        read:key => current?.settings?.[key],
+        async save(patch) {settingsRevision++;try {return await SLINK.core.messaging.send('leveling.preferences.save',patch);} finally {settingsRevision++;}},
+        select:response => response.settings,
+        onCommit:patch => {current = {...current,settings:{...current?.settings,...patch}};},
+        onState:state => {
+          if (stopped) return;
+          const label = root.querySelector('[data-leveling-save-state]'),retry = root.querySelector('[data-leveling-retry]');
+          if (label) label.textContent = ({idle:'Poll and Fair Fight preferences save automatically.',saving:'Saving preferences…',saved:'Preferences saved.',failed:'Preferences not saved. Retry.',invalid:'Enter valid poll seconds and Fair Fight values.',unsaved:'Preferences not saved yet.'})[state.state] || '';
+          if (retry) retry.hidden = state.state !== 'failed';
+        }
+      });
+      async function requestStatus(type,payload) {
+        const revision = settingsRevision, status = await SLINK.core.messaging.send(type,payload);
+        if (revision !== settingsRevision || preferences.busy) for (const key of ['pollSeconds','minFF','maxFF']) {
+          if (current?.settings?.[key] !== undefined) status.settings = {...status.settings,[key]:current.settings[key]};
+        }
+        return status;
+      }
+      const patchHtml = (node,html) => {if (node.innerHTML !== html) node.innerHTML = html;};
 
       context.ui.setTitle('SLINK Leveling');
       context.ui.setModuleStyles(MODULE_STYLES);
@@ -153,6 +178,7 @@
             <label>Maximum FF
               <input id="leveling-max-ff" type="number" min="1" max="3" step="0.1" value="${Number(settings.maxFF) || 3}">
             </label>
+            <div class="wide" role="status"><span data-leveling-save-state>Poll and Fair Fight preferences save automatically.</span> <button type="button" data-leveling-retry hidden>Retry</button></div>
             <div class="leveling-settings-actions">
               <button id="leveling-save" type="button">Save and authenticate</button>
               <button id="leveling-clear-session" type="button">Clear session</button>
@@ -167,7 +193,7 @@
         return targets.map(target => {
           const profile = `https://www.torn.com/profiles.php?XID=${encodeURIComponent(target.id)}`;
           const attack = `https://www.torn.com/page.php?sid=attack&user2ID=${encodeURIComponent(target.id)}`;
-          const fairFight = finiteFairFight(target.fair_fight, target.fair_fight_estimated) + (target.fair_fight_stale ? ' (cached estimate)' : '');
+          const fairFight = finiteFairFight(target.fair_fight, target.fair_fight_estimated) + (String(target.fair_fight_source||'').startsWith('SLINK Backup')?' ('+escape(target.fair_fight_source)+')':target.fair_fight_stale ? ' (cached estimate)' : '');
           return `
             <article class="leveling-target">
               <div class="leveling-target-head">
@@ -201,6 +227,7 @@
       }
 
       function render() {
+        if (stopped || context.signal?.aborted) return;
         const runtime = current?.runtime || {};
         const usage = current?.tornApiUsage || { count: 0, limit: 60 };
         context.ui.setSubtitle(current?.session?.authenticated
@@ -212,29 +239,42 @@
         );
         context.ui.setActions([
           { id: 'refresh', label: busy ? 'Syncing...' : 'Refresh', disabled: busy, onClick: () => runCycle(true) },
-          { id: 'settings', label: settingsOpen ? 'Close settings' : 'Settings', onClick: () => { settingsOpen = !settingsOpen; if (!settingsOpen) termsOpen = false; render(); } }
+          { id: 'settings', label: settingsOpen ? 'Close settings' : 'Settings', onClick: async () => { try {if (settingsOpen) await preferences.flush();settingsOpen = !settingsOpen;if (!settingsOpen) termsOpen = false;render();} catch (error) {localError=SLINK.core.format.errorMessage(error);render();} } }
         ]);
-        context.ui.setContentHtml(`
-          <div class="leveling-summary">
+        if (stopped || context.signal?.aborted) return;
+        if (!mounted) {
+          root.innerHTML = '<div data-leveling-summary></div><div data-leveling-notices></div><div data-leveling-editor></div><div data-leveling-targets></div>';
+          mounted = true;
+        }
+        patchHtml(root.querySelector('[data-leveling-summary]'),`<div class="leveling-summary">
             <div class="leveling-stat"><b>${runtime.targets?.length || 0}</b><span>Targets</span></div>
             <div class="leveling-stat"><b>${Number(runtime.lastCycleChecked) || 0}</b><span>Assigned</span></div>
             <div class="leveling-stat"><b>${Number(runtime.lastCycleReported) || 0}</b><span>Reported</span></div>
             <div class="leveling-stat"><b>${Number(runtime.pendingChecks) || 0}</b><span>Pending</span></div>
             <div class="leveling-stat"><b>${usage.count}/${usage.limit}</b><span>API / min</span></div>
             <div class="leveling-stat"><b>${current?.settings?.hasFfKey ? 'Yes' : 'Local'}</b><span>FFScouter</span></div>
-          </div>
-          ${!current?.configured ? '<div class="leveling-note">Add your Torn API key and accept the current terms to start.</div>' : ''}
-          ${(localError || runtime.lastError) ? `<div class="leveling-error">${escape(localError || runtime.lastError)}</div>` : ''}
-          ${settingsOpen ? settingsHtml() : ''}
-          <div>${targetsHtml(runtime.targets || [])}</div>
-        `);
+          </div>`);
+        patchHtml(root.querySelector('[data-leveling-notices]'),(!current?.configured ? '<div class="leveling-note">Add your Torn API key and accept the current terms to start.</div>' : '')
+          + ((localError || runtime.lastError) ? '<div class="leveling-error">'+escape(localError || runtime.lastError)+'</div>' : ''));
+        const policy = JSON.stringify([current?.terms?.version,current?.terms?.documentSha256,current?.terms?.disclosureVersion,current?.terms?.disclosureSha256]);
+        const variant = JSON.stringify([settingsOpen,termsOpen,current?.terms?.accepted,SLINK.core.permissions.hasScope(current?.permissions,'admin.*'),policy]);
+        if (policy !== policyVariant) {const accept=root.querySelector('#leveling-accept-terms');if (accept) guard.cancel(accept);policyVariant=policy;}
+        if (variant !== editorVariant) {
+          root.querySelector('[data-leveling-editor]').innerHTML = settingsOpen ? settingsHtml() : '';
+          editorVariant = variant;
+          if (settingsOpen) preferences.mount();
+        }
+        for (const [id,key] of [['leveling-poll','pollSeconds'],['leveling-min-ff','minFF'],['leveling-max-ff','maxFF']]) guard.hydrate(root.querySelector('#'+id),current?.settings?.[key]);
+        const save = root.querySelector('#leveling-save');if (save) {save.disabled=savingAuthentication;save.textContent=savingAuthentication?'Authenticating…':'Save and authenticate';}
+        patchHtml(root.querySelector('[data-leveling-targets]'),targetsHtml(runtime.targets || []));
         bindEvents();
       }
 
       function bindEvents() {
         const root = context.ui.getContentElement();
-        root.addEventListener('pointerdown', () => void markActivity(), { once: true });
-        for (const button of root.querySelectorAll('[data-leveling-save-target]')) button.addEventListener('click', async () => {
+        for (const button of root.querySelectorAll('[data-leveling-save-target]')) {
+          if (boundTargets.has(button)) continue;boundTargets.add(button);
+          button.addEventListener('click', async () => {
           const targetId = Number(button.dataset.levelingSaveTarget);
           const target = (current?.runtime?.targets || []).find(row => Number(row.id) === targetId);
           if (!target) return;
@@ -272,10 +312,15 @@
             }, 1400);
           }
         });
+        }
+        const editor = root.querySelector('.leveling-settings');
+        if (!editor || boundEditors.has(editor)) return;
+        boundEditors.add(editor);
+        root.querySelector('[data-leveling-retry]')?.addEventListener('click',()=>{void preferences.flush().catch(()=>{});});
         root.querySelector('#leveling-show-terms')?.addEventListener('click', () => { termsOpen = true; render(); });
         root.querySelector('#leveling-hide-terms')?.addEventListener('click', () => { termsOpen = false; render(); });
         root.querySelector('#leveling-clear-session')?.addEventListener('click', async () => {
-          try { current = await SLINK.core.messaging.send('leveling.session.clear'); localError = ''; render(); }
+          try { current = await requestStatus('leveling.session.clear'); localError = ''; render(); }
           catch (error) { localError = SLINK.core.format.errorMessage(error); render(); }
         });
         root.querySelector('#leveling-hide-all')?.addEventListener('click', async () => {
@@ -288,16 +333,15 @@
           context.ui.setHidden(true);
         });
         root.querySelector('#leveling-save')?.addEventListener('click', async () => {
+          if (savingAuthentication) return;
           localError = '';
+          const ticket = guard.begin(editor);
           const accept = root.querySelector('#leveling-accept-terms');
           const payload = {
             tornKey: root.querySelector('#leveling-torn-key')?.value || '',
             ffKey: root.querySelector('#leveling-ff-key')?.value || '',
-            pollSeconds: root.querySelector('#leveling-poll')?.value,
             apiContributionLimit: root.querySelector('#leveling-zero-contribution')?.checked ? 0 : 60,
             contributorOnly: root.querySelector('#leveling-contributor-only')?.checked === true,
-            minFF: root.querySelector('#leveling-min-ff')?.value,
-            maxFF: root.querySelector('#leveling-max-ff')?.value,
             acceptTerms: Boolean(accept?.checked && !current?.terms?.accepted)
           };
           if (!current?.terms?.accepted && !accept?.checked) {
@@ -305,18 +349,18 @@
             render();
             return;
           }
-          busy = true;
+          savingAuthentication = true;
           render();
           let runAfterSave = false;
           try {
-            current = await SLINK.core.messaging.send('leveling.settings.save', payload);
-            settingsOpen = false;
-            termsOpen = false;
+            await preferences.flush();
+            current = await requestStatus('leveling.settings.save', payload);
+            if (guard.commit(ticket)) {settingsOpen = false;termsOpen = false;}
             runAfterSave = true;
           } catch (error) {
             localError = SLINK.core.format.errorMessage(error);
           } finally {
-            busy = false;
+            savingAuthentication = false;
             render();
             if (runAfterSave) void runCycle(true);
           }
@@ -328,7 +372,7 @@
         if (Date.now() - lastActivityTouchAt < 60_000) return;
         lastActivityTouchAt = Date.now();
         try {
-          current = await SLINK.core.messaging.send('leveling.activity.touch');
+          current = await requestStatus('leveling.activity.touch');
         } catch {}
       }
 
@@ -351,7 +395,7 @@
       }
 
       async function refreshStatus() {
-        current = await SLINK.core.messaging.send('leveling.status');
+        current = await requestStatus('leveling.status');
         if (!current.configured) settingsOpen = true;
         render();
       }
@@ -407,7 +451,9 @@
         render();
         const startedAt = Date.now();
         try {
+          const revision = settingsRevision;
           const prepared = await SLINK.core.messaging.send('leveling.cycle.prepare');
+          if (revision !== settingsRevision || preferences.busy) prepared.status.settings = {...prepared.status.settings,pollSeconds:current?.settings?.pollSeconds,minFF:current?.settings?.minFF,maxFF:current?.settings?.maxFF};
           current = prepared.status;
           render();
           await runPacedChecks(prepared.checks || [], current.settings.pollSeconds);
@@ -428,6 +474,7 @@
         cycleTimer = setTimeout(() => void runCycle(false), delay);
       }
 
+      context.listen(root,'pointerdown',()=>void markActivity(),{once:true});
       leaderTimer = setInterval(() => void isLeader(), 5_000);
       await refreshStatus();
       const moduleView = context.ui.getContentElement()?.closest('.module-view');
@@ -441,6 +488,8 @@
       return Object.freeze({
         async stop() {
           stopped = true;
+          await preferences.stop();
+          if (previousExplicit === undefined) delete root.dataset.uiExplicitCommit;else root.dataset.uiExplicitCommit=previousExplicit;
           clearTimeout(cycleTimer);
           clearInterval(leaderTimer);
           clearInterval(activityTimer);
@@ -451,5 +500,4 @@
     }
   });
 })(globalThis);
-
 

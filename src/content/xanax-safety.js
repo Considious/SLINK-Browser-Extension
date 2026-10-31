@@ -17,7 +17,7 @@
     `[data-id="${XANAX_ITEM_ID}"][title="Xanax"]`
   ].join(',');
   const ENERGY_SELECTOR = '#barEnergy,[id*="barEnergy"],[data-stat="energy"],[data-testid*="energy" i],[aria-label*="energy" i],[class*="barEnergy"],a[href*="gym.php"]';
-  function activePage() { return document.visibilityState === 'visible' && document.hasFocus?.() === true; }
+  function activePage() { return global.SLINK_EXTENSION.core.pageActivity.eligible(); }
 
   function integer(value) {
     const parsed = Number(String(value ?? '').replace(/,/g, ''));
@@ -144,6 +144,7 @@
   global.addEventListener('blur', syncActivity);
   global.addEventListener('pageshow', syncActivity);
   global.addEventListener('pagehide', () => { observer.disconnect(); global.clearTimeout(decorateTimer); decorateTimer = null; });
+  global.SLINK_EXTENSION.core.pageActivity.subscribe(syncActivity);
   syncActivity();
 })(globalThis);
 

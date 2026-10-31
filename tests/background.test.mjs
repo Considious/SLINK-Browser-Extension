@@ -2,10 +2,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { webcrypto } from 'node:crypto';
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(testDirectory, '..');
 const workerDirectory = path.join(root, 'src', 'background');
+// Real limiter sleeps made this combined, network-free route fixture spend a
+// minute waiting for its own earlier scenarios. Keep production limiter logic;
+// advance its clock only once immediate promise work has finished. HTTP deadline
+// timers are cancelled normally by the immediate mocked fetch responses.
+let fixtureNow = globalThis.Date.now();
+class Date extends globalThis.Date {
+  constructor(...args) { super(...(args.length ? args : [fixtureNow])); }
+  static now() { return fixtureNow; }
+}
+function fixtureTimeout(callback, delay = 0, ...args) {
+  return setImmediate(() => { fixtureNow += Math.max(0, Number(delay) || 0); callback(...args); });
+}
 const values = new Map();
 const alarms = new Map();
 const claimRequestBodies = [];
@@ -69,7 +82,9 @@ const onStartup = event();
 const onAlarm = event();
 
 const chrome = {
+  windows:{ getAll:async()=>[], onFocusChanged:event() },
   tabs: {
+    onActivated:event(), onRemoved:event(), onUpdated:event(),
     async query() { return [{ id:7, url:'https://www.torn.com/index.php' }]; },
     async sendMessage(tabId, message) {
       assert(tabId === 7 && message?.type === 'restore', 'Unexpected Torn UI control message.');
@@ -135,6 +150,10 @@ const chrome = {
 
 let context;
 context = vm.createContext({
+  crypto:webcrypto,
+  TextEncoder,
+  AbortController,
+  Date,
   chrome,
   console,
   fetch: async (input, options = {}) => {
@@ -529,8 +548,8 @@ context = vm.createContext({
       requestMethod: options.method || 'GET'
     };
   },
-  setTimeout,
-  clearTimeout,
+  setTimeout:fixtureTimeout,
+  clearTimeout:clearImmediate,
   URL,
   URLSearchParams,
   importScripts(...relativePaths) {
@@ -544,9 +563,9 @@ context.globalThis = context;
 
 const workerPath = path.join(workerDirectory, 'service-worker.js');
 vm.runInContext(fs.readFileSync(workerPath, 'utf8'), context, { filename: workerPath });
-await new Promise(resolve => setTimeout(resolve, 0));
+await vm.runInContext('initialize()',context); // Join the already-running initialization instead of guessing one event-loop tick.
 
-assert(onMessage.listeners.length === 1, 'Background message router was not registered.');
+assert(onMessage.listeners.length > 0, 'Background message router was not registered.');
 assert(onInstalled.listeners.length === 1, 'Install listener was not registered.');
 assert(onStartup.listeners.length === 1, 'Startup listener was not registered.');
 assert(onAlarm.listeners.length === 1, 'Alarm listener was not registered.');
@@ -555,19 +574,22 @@ assert(values.get('slink.permissions.snapshot')?.scopes?.length === 0, 'Unauthen
 assert(alarms.has('slink.worker.connection'), 'Worker connection alarm was not created.');
 assert(alarms.has('slink.playerStats.daily'), 'Daily local player-stat alarm was not created.');
 assert(alarms.has('slink.adhd.alerts'), 'ADHD scheduler alarm was not created.');
-assert(alarms.has('slink.market.watch'), 'Market Watch scheduler alarm was not created.');
+assert(!alarms.has('slink.market.watch'), 'Inactive Market Watch must not create a polling alarm before user activity.');
 assert(alarms.has('slink.market.dollar-bazaars'), '$1 Bazaar hourly scheduler alarm was not created.');
 assert(values.get('slink.worker.lastStatus')?.connected === true, 'Automatic Worker connection was not persisted.');
 assert(values.get('slink.themes.catalog.v1')?.catalog?.revision === 'test.remote.1', 'Remote theme catalog was not cached locally.');
 
 async function send(type, payload = {}, sender = { id: 'test' }) {
-  return new Promise(resolve => {
-    const keptOpen = onMessage.listeners[0](
-      { channel: 'slink', requestId: 1, type, payload },
-      sender,
-      resolve
-    );
-    assert(keptOpen === true, `Route ${type} did not keep the response channel open.`);
+  return new Promise((resolve,reject) => {
+    const timeout=setTimeout(()=>reject(new Error(`Route ${type} did not respond within 15 seconds in the fixture.`)),15000);
+    let responses = 0;
+    const respond = value => {
+      clearTimeout(timeout);
+      assert(++responses === 1, `Route ${type} responded more than once.`);
+      resolve(value);
+    };
+    const outcomes = onMessage.fire({ channel:'slink', requestId:1, type, payload }, sender, respond);
+    assert(outcomes.some(result => result === true), `Route ${type} did not keep the response channel open.`);
   });
 }
 
@@ -653,12 +675,12 @@ assert((await send('market.permissions.refresh')).data.marketWatchLimit === 40, 
 const firstMarketWatch = await send('market.watch.save', { itemId:1, maxPrice:90, priority:'normal', marketEnabled:true, bazaarEnabled:true });
 assert(firstMarketWatch.ok && firstMarketWatch.data.opportunities.length === 2, 'API-only Item Market and Weaver Bazaar results did not create watch opportunities.');
 const firstMarketUid = firstMarketWatch.data.settings.watches.find(watch => watch.itemId === 1)?.uid;
-let marketRuntime = structuredClone(values.get('market.runtime.v1'));
+let marketRuntime = structuredClone(values.get('slink.market.runtime.v1'));
 const firstBazaarRuntime = marketRuntime.results[firstMarketUid].bazaar;
 assert(firstBazaarRuntime.nextCheckAt - firstBazaarRuntime.screenedAt === 5_000, 'Weaver summary did not schedule its next market-wide screen in five seconds.');
 marketRuntime.weaverSummary.fetchedAt = Date.now() - 5_001;
 marketRuntime.results[firstMarketUid].bazaar.nextCheckAt = Date.now() - 1;
-values.set('market.runtime.v1', marketRuntime);
+values.set('slink.market.runtime.v1', marketRuntime);
 const summaryRequestsBeforeFiveSecondRefresh = weaverSummaryRequests;
 const detailRequestsBeforeFiveSecondRefresh = weaverDetailRequests;
 await send('market.status', { refreshIfDue:true });
@@ -678,7 +700,7 @@ const secondUid = secondMarketWatch.data.settings.watches.find(watch => watch.it
 const editedMarketWatch = await send('market.watch.save', { uid:secondUid, itemId:2, maxPrice:95, priority:'normal', marketEnabled:true, bazaarEnabled:true });
 assert(editedMarketWatch.ok && editedMarketWatch.data.marketWatchLimit === 40, 'Signed Market Watch tier was not enforced or exposed.');
 assert(editedMarketWatch.data.settings.lastPriority === 'normal', 'Saved Market Watch priority was not remembered for the next watch.');
-assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverSummaryRequests === 2 && weaverDetailRequests === 4, 'Editing one watch force-refreshed unrelated watches, bypassed the local catalog cache, or skipped Weaver summary screening.');
+assert(marketCatalogRequests === 1 && itemMarketRequests === 3 && weaverSummaryRequests === 2 && weaverDetailRequests === 4, `Editing one watch force-refreshed unrelated watches, bypassed the local catalog cache, or skipped Weaver summary screening: ${JSON.stringify({marketCatalogRequests,itemMarketRequests,weaverSummaryRequests,weaverDetailRequests})}`);
 const enabledWeaverPricelist = await send('market.settings.save', { weaverPricelistEnabled:true, listedItemsEnabled:false, weaverSourceOrder:'pricelist-first' });
 assert(enabledWeaverPricelist.ok, 'Weaver price-list settings could not be enabled.');
 const syncedWeaverPricelist = await send('market.weaver.pricelist.sync');
@@ -911,7 +933,7 @@ const cachedStack = await send('adhd.status', { refreshIfDue:false });
 assert(cachedStack.data.settings.stackModeSince > 0, 'A cached low-energy reading disabled Stack mode.');
 assert(cachedStack.data.nextRefreshAt <= Date.now() + 5 * 60_000, 'Stack mode must keep checking energy at least every five minutes.');
 // The API fixture returns 100 energy; a NEW reading should end Stack mode.
-await new Promise(resolve => setTimeout(resolve, 2));
+fixtureNow += 2;
 const spentStack = await send('adhd.refresh');
 assert(spentStack.ok && spentStack.data.settings.stackModeSince === 0, 'Fresh energy below 150 did not end Stack mode.');
 assert(spentStack.data.activeAlerts.some(a => a.id === 'energyRefill'), 'Unused refill did not resume after spending energy.');

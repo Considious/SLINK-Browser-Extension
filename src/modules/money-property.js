@@ -52,18 +52,19 @@
         <span><strong>${money(stock.monthlyValue)}</strong><small>Estimated monthly value</small></span>
         <span><strong>${percent(stock.monthlyRoi)}</strong><small>Estimated monthly ROI</small></span>
       </div>
-      <label><input type="checkbox" data-stock-alert="${escapeHtml(stock.alertKey)}" ${settings.stockAlerts[stock.alertKey] ? 'checked' : ''}> Alert when affordable</label>
+      <label><input id="money-stock-${escapeHtml(encodeURIComponent(stock.alertKey))}" type="checkbox" data-stock-alert="${escapeHtml(stock.alertKey)}" ${settings.stockAlerts[stock.alertKey] ? 'checked' : ''}> Alert when affordable</label>
     </article>`;
   }
 
   function bankResults(status, amount) {
+    if (String(amount ?? '').trim() === '') return '<p>Enter an amount from $0 to $2,000,000,000.</p>';
     const comparison=CORE.bankComparison(status?.bankPlanner,amount);
     if(comparison.error)return `<p>${escapeHtml(comparison.error)}</p>`;
     return `<p>Bank interest merits: ${comparison.meritLevel}/10 (+${comparison.meritLevel*5}%) · ${escapeHtml(comparison.stock.label)}</p><div class="slink-bank-terms">${comparison.rows.map(row=>`<article class="slink-finance-stat"><strong>${row.label}${row.days===comparison.best?' · Best daily ROI':''}</strong>${row.available?`<small>APR ${row.effectiveApr.toFixed(3)}% · ${row.days} days</small><p><strong>${exactMoney(row.profit)} profit</strong><small>${exactMoney(row.perDay)} per day</small><small>${exactMoney(row.total)} returned at maturity</small><small>Term ROI ${percent(row.roi)}</small><small>Daily ROI ${percent(row.dailyRoi)}</small></p>`:'<p>No rate returned for this term.</p>'}</article>`).join('')}</div>`;
   }
 
   function bankCard(status, settings) {
-    return `<article class="slink-finance-card"><div class="slink-finance-head"><div><strong>Bank investment comparison</strong><small>Rates checked ${relativeTime(status.bankPlanner?.fetchedAt)} · cached for up to 1 hour</small></div><a href="${CORE.BANK_URL}">Open bank</a></div><p>Each term uses its own Torn APR, your bank interest merits, and your active bank stock benefit. Daily income is an average; interest is paid at maturity.</p>${status.bankPlanner?.error?`<p>${escapeHtml(status.bankPlanner.error)}</p>`:''}<label class="slink-bank-amount">Amount to invest (maximum $2 billion)<input type="number" inputmode="numeric" min="0" max="2000000000" step="1" data-bank-amount value="${settings.bankAmount}"></label><div data-bank-results>${bankResults(status,settings.bankAmount)}</div></article>`;
+    return `<article class="slink-finance-card"><div class="slink-finance-head"><div><strong>Bank investment comparison</strong><small data-money-readonly="rates-age">Rates checked ${relativeTime(status.bankPlanner?.fetchedAt)} · cached for up to 1 hour</small></div><a href="${CORE.BANK_URL}">Open bank</a></div><p>Each term uses its own Torn APR, your bank interest merits, and your active bank stock benefit. Daily income is an average; interest is paid at maturity.</p><p data-money-readonly="rates-error">${escapeHtml(status.bankPlanner?.error || '')}</p><label class="slink-bank-amount">Amount to invest (maximum $2 billion)<input id="money-setting-bankAmount" type="number" inputmode="numeric" min="0" max="2000000000" step="1" data-bank-amount value="${settings.bankAmount}"></label><div data-bank-results>${bankResults(status,settings.bankAmount)}</div></article>`;
   }
 
   SLINK.modules.register({
@@ -81,6 +82,59 @@
       let data = null;
       let busy = false;
       let notice = '';
+      let stopped = false;
+      let mounted = false;
+      let settingsRevision = 0;
+      let previewTimer = null;
+      let previewPending = false;
+      let actionBusy = false;
+      let saveState = {state:'idle'};
+      const stocks = new Map();
+      const fields = Object.fromEntries(['bankAmount','bankLeadHours','rentalLeadDays','cashierLeadHours','upkeepThreshold','loanReminder','soundEnabled'].map(key => ['money-setting-' + key,key]));
+      const patchHtml = (node, html) => { if (node && node.innerHTML !== html) node.innerHTML = html; };
+      function updateBankPreview() {
+        const input = root.querySelector('[data-bank-amount]');
+        if (input) patchHtml(root.querySelector('[data-bank-results]'),bankResults(data?.status,input.value));
+      }
+      function showSaveState() {
+        if (stopped || context.signal?.aborted || !mounted) return;
+        root.querySelector('[data-money-save-state]').textContent = ({idle:'Changes save automatically.',saving:'Saving…',saved:'Saved.',invalid:'Enter a complete number before saving.',failed:'Not saved. Retry your changes.',unsaved:'Changes not saved yet.'})[saveState.state] || '';
+        root.querySelector('[data-money-retry]').hidden = saveState.state !== 'failed';
+        updateBankPreview();
+      }
+      function schedulePreview() {
+        if (stopped || context.signal?.aborted || busy || actionBusy || !previewPending) return;
+        if (previewTimer) global.clearTimeout(previewTimer);
+        previewTimer = global.setTimeout(() => {
+          previewTimer = null;
+          if (busy || actionBusy || autosave.busy) return;
+          previewPending = false;void load(false,false);
+        },250);
+      }
+      const autosave = SLINK.core.formState.autosave({
+        root, fields,
+        read:key => key.startsWith('stock:') ? data?.settings?.stockAlerts?.[key.slice(6)] === true : data?.settings?.[key],
+        async save(patch) {
+          settingsRevision++;
+          const key = Object.keys(patch)[0];
+          try { return await SLINK.core.messaging.send(key.startsWith('stock:') ? 'money-property.stock-alert' : 'money-property.settings.save',key.startsWith('stock:') ? {key:key.slice(6),enabled:patch[key]} : patch); }
+          finally { settingsRevision++; }
+        },
+        select:response => response.settings,
+        onCommit:patch => {
+          const settings = {...data.settings,stockAlerts:{...data.settings.stockAlerts}};
+          for (const [key,value] of Object.entries(patch)) {
+            if (key.startsWith('stock:')) settings.stockAlerts[key.slice(6)] = value;
+            else settings[key] = value;
+          }
+          data = {...data,settings};render();
+        },
+        onState:state => {
+          saveState = state;showSaveState();
+          if (state.state !== 'saved' || stopped || context.signal?.aborted) return;
+          previewPending = true;schedulePreview();
+        }
+      });
 
       ui.setModuleStyles(`
         .slink-money-property{display:grid;gap:10px}.slink-finance-card{min-width:0;padding:11px;border:1px solid var(--slink-border-soft);border-radius:9px;background:var(--slink-bg-control)}
@@ -94,99 +148,114 @@
       `);
 
       function render() {
+        if(stopped || context.signal?.aborted)return;
         const status = data?.status;
         const settings = data?.settings || CORE.normalizeSettings();
         if (!status) {
+          mounted = false;stocks.clear();
           root.innerHTML = `<div class="slink-money-property"><article class="slink-finance-card"><div class="slink-finance-head"><div><strong>Money &amp; Property</strong><small>Bank, property, Duke loan, and stock-benefit planning.</small></div><button type="button" data-money-refresh>${busy ? 'Checking…' : 'Refresh'}</button></div><p>${escapeHtml(data?.lastError || 'Refresh to load your Torn financial information.')}</p></article></div>`;
           return;
         }
         const property = status.currentProperty;
-        root.innerHTML = `<div class="slink-money-property">
-          <article class="slink-finance-card"><div class="slink-finance-head"><div><strong>Money &amp; Property</strong><small>Updated ${relativeTime(data.fetchedAt)}</small></div><button type="button" data-money-refresh>${busy ? 'Checking…' : 'Refresh'}</button></div>
-            ${data.lastError ? `<p>${escapeHtml(data.lastError)}</p>` : ''}${notice ? `<p>${escapeHtml(notice)}</p>` : ''}
-            <div class="slink-finance-stats"><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.money.cashOnHand))}">${money(status.money.cashOnHand)}</strong><small>Cash on hand</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.money.factionCash))}">${money(status.money.factionCash)}</strong><small>Faction armory cash</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.money.availableCash))}">${money(status.money.availableCash)}</strong><small>Available for alerts</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.money.vaultCash))}">${money(status.money.vaultCash)}</strong><small>Property vault</small></div></div>
+        const markup = `<div class="slink-money-property">
+          <article class="slink-finance-card"><div class="slink-finance-head"><div><strong>Money &amp; Property</strong><small data-money-readonly="updated">Updated ${relativeTime(data.fetchedAt)}</small></div><button type="button" data-money-refresh>${busy ? 'Checking…' : 'Refresh'}</button></div>
+            <p data-money-readonly="error">${escapeHtml(data.lastError || '')}</p><p data-money-readonly="notice">${escapeHtml(notice)}</p>
+            <div class="slink-finance-stats" data-money-readonly="balances"><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.money.cashOnHand))}">${money(status.money.cashOnHand)}</strong><small>Cash on hand</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.money.factionCash))}">${money(status.money.factionCash)}</strong><small>Faction armory cash</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.money.availableCash))}">${money(status.money.availableCash)}</strong><small>Available for alerts</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.money.vaultCash))}">${money(status.money.vaultCash)}</strong><small>Property vault</small></div></div>
           </article>
           <article class="slink-finance-card"><div class="slink-finance-head"><strong>Bank and obligations</strong><a href="${CORE.BANK_URL}">Open bank</a></div>
-            <div class="slink-finance-stats"><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.bank.amount))}">${money(status.bank.amount)}</strong><small>Bank investment</small></div><div class="slink-finance-stat"><strong>${due(status.bank.maturedAt)}</strong><small>Bank maturity</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.loan.amount))}">${money(status.loan.amount)}</strong><small>Duke loan</small></div><div class="slink-finance-stat"><strong>${status.cashierChecks.length}</strong><small>Cashier checks returned</small></div></div>
+            <div class="slink-finance-stats" data-money-readonly="obligations"><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.bank.amount))}">${money(status.bank.amount)}</strong><small>Bank investment</small></div><div class="slink-finance-stat"><strong>${due(status.bank.maturedAt)}</strong><small>Bank maturity</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(status.loan.amount))}">${money(status.loan.amount)}</strong><small>Duke loan</small></div><div class="slink-finance-stat"><strong>${status.cashierChecks.length}</strong><small>Cashier checks returned</small></div></div>
           </article>
           <article class="slink-finance-card"><div class="slink-finance-head"><strong>Current property</strong><a href="${CORE.PROPERTY_URL}">Open properties</a></div>
-            ${property ? `<p><strong>${escapeHtml(property.name)}</strong> · rental ${due(property.rentalEndsAt)}</p><div class="slink-finance-stats"><div class="slink-finance-stat"><strong>${Number.isFinite(property.upkeepOwed) ? money(property.upkeepOwed) : '—'}</strong><small>${Number.isFinite(property.upkeepOwed) ? 'Upkeep owed' : 'Owed upkeep is not exposed by Torn API'}</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(property.upkeepPerDay))}">${money(property.upkeepPerDay)}</strong><small>Daily upkeep (property + staff)</small></div><div class="slink-finance-stat"><strong>${property.leaseExtension ? escapeHtml(property.leaseExtension.status) : 'None'}</strong><small>Extension offer</small></div></div>` : '<p>No property details were returned.</p>'}
+            <div data-money-readonly="property">${property ? `<p><strong>${escapeHtml(property.name)}</strong> · rental ${due(property.rentalEndsAt)}</p><div class="slink-finance-stats"><div class="slink-finance-stat"><strong>${Number.isFinite(property.upkeepOwed) ? money(property.upkeepOwed) : '—'}</strong><small>${Number.isFinite(property.upkeepOwed) ? 'Upkeep owed' : 'Owed upkeep is not exposed by Torn API'}</small></div><div class="slink-finance-stat"><strong title="${escapeHtml(exactMoney(property.upkeepPerDay))}">${money(property.upkeepPerDay)}</strong><small>Daily upkeep (property + staff)</small></div><div class="slink-finance-stat"><strong>${property.leaseExtension ? escapeHtml(property.leaseExtension.status) : 'None'}</strong><small>Extension offer</small></div></div>` : '<p>No property details were returned.</p>'}</div>
           </article>
           ${bankCard(status,settings)}
-          <article class="slink-finance-card"><details><summary><strong>Reminder settings</strong></summary><div class="slink-finance-settings">
-            <label>Bank warning (hours)<input type="number" min="0" max="168" data-money-setting="bankLeadHours" value="${settings.bankLeadHours}"></label>
-            <label>Rental warning (days)<input type="number" min="0" max="30" data-money-setting="rentalLeadDays" value="${settings.rentalLeadDays}"></label>
-            <label>Cashier-check warning (hours)<input type="number" min="0" max="168" data-money-setting="cashierLeadHours" value="${settings.cashierLeadHours}"></label>
-            <label>Upkeep alert threshold<input type="number" min="0" step="1000" data-money-setting="upkeepThreshold" value="${settings.upkeepThreshold}"></label>
-            <label><input type="checkbox" data-money-setting="loanReminder" ${settings.loanReminder ? 'checked' : ''}> Remind me about Loan Shark</label>
-            <label><input type="checkbox" data-money-setting="soundEnabled" ${settings.soundEnabled ? 'checked' : ''}> Play alert sounds</label>
-            <button type="button" data-money-save>Save reminder settings</button>
+          <article class="slink-finance-card"><details id="money-reminder-settings"><summary><strong>Reminder settings</strong></summary><div class="slink-finance-settings">
+            <label>Bank warning (hours)<input type="number" min="0" max="168" id="money-setting-bankLeadHours" data-money-setting="bankLeadHours" value="${settings.bankLeadHours}"></label>
+            <label>Rental warning (days)<input type="number" min="0" max="30" id="money-setting-rentalLeadDays" data-money-setting="rentalLeadDays" value="${settings.rentalLeadDays}"></label>
+            <label>Cashier-check warning (hours)<input type="number" min="0" max="168" id="money-setting-cashierLeadHours" data-money-setting="cashierLeadHours" value="${settings.cashierLeadHours}"></label>
+            <label>Upkeep alert threshold<input type="number" min="0" step="1000" id="money-setting-upkeepThreshold" data-money-setting="upkeepThreshold" value="${settings.upkeepThreshold}"></label>
+            <label><input type="checkbox" id="money-setting-loanReminder" data-money-setting="loanReminder" ${settings.loanReminder ? 'checked' : ''}> Remind me about Loan Shark</label>
+            <label><input type="checkbox" id="money-setting-soundEnabled" data-money-setting="soundEnabled" ${settings.soundEnabled ? 'checked' : ''}> Play alert sounds</label>
+            <div role="status"><span data-money-save-state></span> <button type="button" data-money-retry hidden>Retry</button></div>
           </div></details></article>
           <article class="slink-finance-card"><div class="slink-finance-head"><div><strong>Stock benefit ROI</strong><small>Estimated from current share price and Torn benefit data.</small></div><a href="${CORE.STOCKS_URL}">Open stocks</a></div>
-            <div class="slink-stock-list">${status.stocks.length ? status.stocks.map(stock => stockCard(stock, settings)).join('') : '<p>No income-producing stock benefit could be valued from Torn’s current stock and item data.</p>'}</div>
+            <div class="slink-stock-list">${status.stocks.map(stock => stockCard(stock, settings)).join('')}<p data-money-stock-empty>No income-producing stock benefit could be valued from Torn’s current stock and item data.</p></div>
           </article>
-          <article class="slink-finance-card"><strong>Active reminders</strong><div class="slink-finance-alerts">${data.activeAlerts?.length ? data.activeAlerts.map(alert => `<div class="slink-finance-alert"><strong>${escapeHtml(alert.title)}</strong><small>${escapeHtml(alert.detail)}</small></div>`).join('') : '<p>Nothing needs your attention right now.</p>'}</div></article>
+          <article class="slink-finance-card"><strong>Active reminders</strong><div class="slink-finance-alerts" data-money-readonly="alerts">${data.activeAlerts?.length ? data.activeAlerts.map(alert => `<div class="slink-finance-alert"><strong>${escapeHtml(alert.title)}</strong><small>${escapeHtml(alert.detail)}</small></div>`).join('') : '<p>Nothing needs your attention right now.</p>'}</div></article>
         </div>`;
+        const initialMount = !mounted;
+        if (!mounted) {
+          root.innerHTML = markup;mounted = true;
+          for (const node of root.querySelectorAll('.slink-stock-row')) stocks.set(node.querySelector('[data-stock-alert]').dataset.stockAlert,node);
+        } else {
+          const fresh = document.createElement('div');fresh.innerHTML = markup;
+          for (const node of root.querySelectorAll('[data-money-readonly]')) {
+            const replacement = fresh.querySelector('[data-money-readonly="' + node.dataset.moneyReadonly + '"]');
+            if (replacement) patchHtml(node,replacement.innerHTML);
+          }
+          const present = new Set();
+          for (const row of fresh.querySelectorAll('.slink-stock-row')) {
+            const key = row.querySelector('[data-stock-alert]').dataset.stockAlert;
+            present.add(key);
+            const current = stocks.get(key);
+            if (!current) {
+              root.querySelector('.slink-stock-list').insertBefore(row,root.querySelector('[data-money-stock-empty]'));
+              stocks.set(key,row);
+            } else {
+              for (const selector of ['.slink-stock-title','.slink-stock-payout','.slink-stock-metrics']) patchHtml(current.querySelector(selector),row.querySelector(selector).innerHTML);
+            }
+          }
+          for (const [key,node] of stocks) if (!present.has(key)) {node.remove();stocks.delete(key);}
+        }
+        for (const node of root.querySelectorAll('[data-money-readonly]')) if (node.tagName === 'P') node.hidden = !node.textContent.trim();
+        for (const [key,node] of stocks) fields[node.querySelector('[data-stock-alert]').id] = 'stock:' + key;
+        root.querySelector('[data-money-stock-empty]').hidden = stocks.size !== 0;
+        root.querySelector('[data-money-refresh]').disabled = busy || actionBusy;
+        if (initialMount) autosave.mount();
+        showSaveState();
       }
 
-      async function load(force = false) {
-        if (busy) return;
-        busy = true; notice = ''; render();
+      async function load(force = false, refreshIfDue = true) {
+        if (busy || stopped || context.signal?.aborted) return;
+        busy = true;notice = '';
+        if (mounted) root.querySelector('[data-money-refresh]').disabled = true;
+        else render();
+        const revision = settingsRevision;
         try {
-          data = await SLINK.core.messaging.send(force ? 'money-property.refresh' : 'money-property.status', { refreshIfDue:true });
+          const response = await SLINK.core.messaging.send(force ? 'money-property.refresh' : 'money-property.status', {refreshIfDue});
+          if (stopped || context.signal?.aborted) return;
+          data = {...response,settings:revision === settingsRevision && !autosave.busy ? response.settings : data?.settings || response.settings};
           ui.setStatus(data.lastError || 'Money and property information ready.', data.lastError ? 'error' : 'ready');
         } catch (error) {
-          notice = SLINK.core.format.errorMessage(error);
-          ui.setStatus(notice, 'error');
-        } finally { busy = false; render(); }
+          if (stopped || context.signal?.aborted) return;
+          notice = SLINK.core.format.errorMessage(error);ui.setStatus(notice,'error');
+        } finally {busy = false;render();schedulePreview();}
       }
 
-      root.addEventListener('click', async event => {
-        if (event.target.closest('[data-money-refresh]')) { void load(true); return; }
-        const save = event.target.closest('[data-money-save]');
-        if (save) {
-          save.disabled = true;
-          try {
-            const value = name => root.querySelector(`[data-money-setting="${name}"]`);
-            data = await SLINK.core.messaging.send('money-property.settings.save', {
-              bankLeadHours:value('bankLeadHours')?.value,
-              rentalLeadDays:value('rentalLeadDays')?.value,
-              cashierLeadHours:value('cashierLeadHours')?.value,
-              upkeepThreshold:value('upkeepThreshold')?.value,
-              loanReminder:value('loanReminder')?.checked,
-              soundEnabled:value('soundEnabled')?.checked
-            });
-            notice = 'Money and property reminder settings saved.';
-          } catch (error) { notice = SLINK.core.format.errorMessage(error); }
-          render();
-        }
-      });
-
-      root.addEventListener('change', async event => {
-        if(event.target.matches('[data-bank-amount]')){
-          if(!event.target.validity.valid)return;
-          try{data=await SLINK.core.messaging.send('money-property.settings.save',{bankAmount:Number(event.target.value)});}
-          catch(error){ui.setStatus(SLINK.core.format.errorMessage(error),'error');}
-          return;
-        }
-        const control = event.target.closest('[data-stock-alert]');
-        if (!control) return;
-        control.disabled = true;
+      context.listen(root,'click',async event => {
+        if (stopped || context.signal?.aborted) return;
+        if (event.target.closest('[data-money-retry]')) {void autosave.retry().catch(() => {});return;}
+        if (!event.target.closest('[data-money-refresh]') || busy || actionBusy) return;
+        actionBusy = true;render();
         try {
-          data = await SLINK.core.messaging.send('money-property.stock-alert', { key:control.dataset.stockAlert, enabled:control.checked });
-          notice = control.checked ? 'Stock affordability alert enabled.' : 'Stock affordability alert disabled.';
-        } catch (error) { notice = SLINK.core.format.errorMessage(error); }
-        render();
+          await autosave.flush();
+          if (stopped || context.signal?.aborted) return;
+          if (previewTimer) global.clearTimeout(previewTimer);
+          previewTimer = null;previewPending = false;
+          await load(true);
+        } catch (error) {notice = SLINK.core.format.errorMessage(error);}
+        finally {actionBusy = false;render();schedulePreview();}
       });
-
-      root.addEventListener('input',event=>{
-        if(!event.target.matches('[data-bank-amount]'))return;
-        const results=root.querySelector('[data-bank-results]');
-        if(results)results.innerHTML=bankResults(data?.status,event.target.value);
+      context.listen(root,'input',event => {
+        if (!stopped && event.target.matches('[data-bank-amount]')) updateBankPreview();
       });
 
       await load(false);
-      return { stop() {} };
+      return { async stop() {
+        stopped = true;previewPending = false;
+        if (previewTimer) global.clearTimeout(previewTimer);
+        await autosave.stop();
+      } };
     }
   });
 })(globalThis);

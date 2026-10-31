@@ -2,7 +2,7 @@
   'use strict';
 
   const SLINK = globalThis.SLINK_EXTENSION;
-  SLINK.core.formState?.protect(document);
+  const editorGuard = SLINK.core.formState?.protect(document);
   const byId = id => document.getElementById(id);
   let system = null;
   let leveling = null;
@@ -10,6 +10,7 @@
   let access = null;
   let adhd = null;
   let market = null;
+  let savingMarketWatch = false;
   let dollarBazaars = null;
   let muggingSettings = null;
   let contribution = null;
@@ -19,6 +20,8 @@
   let termsExpanded = false;
   let accessExpanded = null;
   let targetView = 'leveling';
+  let efficiencyActive='alerts';
+  const visiblePage=()=>document.visibilityState!=='hidden'?document.querySelector('[data-dashboard-page]:not([hidden])')?.dataset.dashboardPage:null;
   let adminUser = null;
   let activeTheme = SLINK.core.themes.get();
   let themePanelOpacity = SLINK.core.themes.DEFAULT_PANEL_OPACITY;
@@ -27,9 +30,46 @@
   let dismissedRetals = {};
   let pendingCustomSoundDataUrl = null;
   let soundClaiming = false;
+  const adhdSettingsDirty = new Set();
   let warTargetFilters = { minFF:1, maxFF:3, status:'all', abroad:'all', location:'all', sort:'availability' };
   const warLeaderClientId = `war-dashboard:${globalThis.crypto?.randomUUID?.() || `${Date.now()}:${Math.random()}`}`;
   const INSIDE_WINDOWS = Object.freeze([[0, 100], [200, 250], [450, 500], [950, 1000], [2350, 2500], [4850, 5000], [9900, 10000]]);
+
+  const editorRequests = {
+    market:{version:0,sequence:0,applied:0,pending:0,timer:null},
+    merits:{version:0,sequence:0,applied:0,pending:0,timer:null}
+  };
+  function scheduleEditorStatus(kind) {
+    const state=editorRequests[kind];clearTimeout(state.timer);
+    state.timer=setTimeout(async()=>{
+      if (state.pending) return;
+      try {
+        const value=await requestEditorStatus(kind,kind+'.status',{refreshIfDue:false});
+        if (kind==='market') {market=value;renderMarket();} else {merits=value;renderMerits();}
+      } catch (error) {
+        const node=byId(kind==='market'?'market-message':'merits-error');node.textContent=errorText(error);node.hidden=false;
+      }
+    },25);
+  }
+  async function saveEditorPreference(kind,patch) {
+    const state=editorRequests[kind];state.pending++;state.version++;
+    try {return await SLINK.core.messaging.send(kind+'.settings.save',{...patch,preferenceOnly:true});}
+    finally {state.pending--;state.version++;scheduleEditorStatus(kind);}
+  }
+  async function requestEditorStatus(kind,type,payload) {
+    const state=editorRequests[kind],mutation=type!==kind+'.status';
+    if (mutation) {state.pending++;state.version++;}
+    const version=state.version,sequence=++state.sequence;
+    try {
+      const value=await SLINK.core.messaging.send(type,payload);
+      const current=kind==='market'?market:merits;
+      if (sequence<state.applied && current) return current;
+      state.applied=sequence;
+      return version===state.version || !current ? value : {...value,settings:current.settings};
+    } finally {
+      if (mutation) {state.pending--;state.version++;scheduleEditorStatus(kind);}
+    }
+  }
 
   function setBusy(button, busy) {
     if (button) button.disabled = Boolean(busy);
@@ -244,6 +284,21 @@
     return `INSIDE HITS DISABLED — chain ${gate.count} is inside the ${gate.minimum}–${gate.maximum} major bonus window.`;
   }
 
+  function addSavedTargetAction(article,target,source) {
+    if(!hasScope('slink.combat.target-list'))return;
+    const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Save Target';
+    button.addEventListener('click',async()=>{
+      button.disabled=true;
+      try{
+        await SLINK.core.messaging.send('targetList.add',{playerId:target.id,name:target.name,tags:[source==='leveling'?'Level':'War'],
+          source:source==='outside'?'outside-targets':source,sourceLabel:source==='leveling'?'Leveling':source==='outside'?'Outside targets':'War',
+          battleStatsEstimate:target.battleStatsEstimate??target.bs_estimate??target.total_stats??undefined});
+        button.textContent='Saved';
+      }catch(error){button.disabled=false;button.textContent='Save failed — retry';button.title=errorText(error);}
+    });
+    article.querySelector('.target-actions').append(button);
+  }
+
   function targetCard(target) {
     const article = document.createElement('article');
     article.className = 'target';
@@ -257,6 +312,7 @@
     article.querySelector('.level').textContent = `Lv ${target.level ?? '?'}`;
     for (const text of [target.status || 'Unknown', `FF ${Number.isFinite(ff) ? `${target.fair_fight_estimated ? '~' : ''}${ff.toFixed(2)}` : '?'}`, target.local_difficulty, `BS ${SLINK.core.format.shortNumber(target.bs_estimate ?? target.total_stats)}`].filter(Boolean)) article.querySelector('.target-meta').append(pill(text));
     article.querySelector('.secondary-meta').textContent = `${target.competition_tier || 'Prime'} ${Number(target.competition_score) || 0}`;
+    addSavedTargetAction(article,target,'leveling');
     return article;
   }
 
@@ -295,6 +351,7 @@
     const statusDescription = String(member.statusDescription || '').trim();
     const duplicateStatus = [member.statusState, member.activity].some(value => String(value || '').trim().toLowerCase() === statusDescription.toLowerCase());
     article.querySelector('.secondary-meta').textContent = duplicateStatus ? '' : statusDescription;
+    addSavedTargetAction(article,member,outside?'outside':'war');
     const copyButton = article.querySelector('.copy-war-target');
     copyButton.addEventListener('click', async () => {
       await copyText(SLINK.core.war.factionCallout(member));
@@ -398,6 +455,72 @@
     return `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m ago`;
   }
 
+  function markAdhdSettingDirty(key) { adhdSettingsDirty.add(key); }
+
+  function setAdhdControl(id, value, property='value', key=id) {
+    if (adhdSettingsDirty.has(key)) return;
+    const element = byId(id);
+    if (element) element[property] = value;
+  }
+
+  function renderAdhdToggleRows(container, definitions, settings, kind) {
+    const signature = definitions.map(item => item.id).join('|');
+    if (container.dataset.slinkRowsSignature !== signature) {
+      const rows = definitions.map(definition => {
+        const row = document.createElement('div'); row.className = 'adhd-alert-toggle';
+        const label = document.createElement('span');
+        const visible = document.createElement('input'); visible.type = 'checkbox';
+        const sound = document.createElement('input'); sound.type = 'checkbox';
+        if (kind === 'city') {
+          visible.dataset.cityVisibleId = definition.id;
+          sound.dataset.citySoundId = definition.id;
+        } else {
+          visible.dataset.alertVisibleId = definition.id;
+          sound.dataset.alertSoundId = definition.id;
+        }
+        visible.addEventListener('change', () => markAdhdSettingDirty(`${kind}:visible:${definition.id}`));
+        sound.addEventListener('change', () => markAdhdSettingDirty(`${kind}:sound:${definition.id}`));
+        row.append(label, visible, sound);
+        return row;
+      });
+      container.replaceChildren(...rows);
+      container.dataset.slinkRowsSignature = signature;
+    }
+    definitions.forEach((definition, index) => {
+      const row = container.children[index];
+      if (!row) return;
+      const [label, visible, sound] = row.children;
+      const progress = kind === 'alert' ? (adhd?.crimeUniques || []).find(entry => entry.id === definition.id) : null;
+      const suffix = progress?.total ? ` · ${progress.completed}/${progress.total} · skill ${Math.floor(progress.skill || 0)}` : '';
+      label.textContent = kind === 'city' ? `${definition.label} · ${definition.shop}` : `${definition.label}${suffix}`;
+      if (kind === 'city') {
+        const id = `cityStock:${definition.id}`;
+        visible.title = `Show ${definition.label}`;
+        sound.title = `Sound for ${definition.label}`;
+        if (!adhdSettingsDirty.has(`city:visible:${definition.id}`)) visible.checked = settings.cityStockAlerts[definition.id] === true && settings.enabled[id] !== false;
+        if (!adhdSettingsDirty.has(`city:sound:${definition.id}`)) sound.checked = settings.soundEnabled[id] === true;
+      } else {
+        visible.title = definition.mode === 'tracking' ? `Keep ${definition.label} progress updated` : `Show ${definition.label}`;
+        sound.title = definition.mode === 'tracking' ? 'Progress-only tracker; no time-sensitive sound is generated.' : `Sound for ${definition.label}`;
+        sound.disabled = definition.mode === 'tracking';
+        if (!adhdSettingsDirty.has(`alert:visible:${definition.id}`)) visible.checked = settings.enabled[definition.id] !== false;
+        if (!adhdSettingsDirty.has(`alert:sound:${definition.id}`)) sound.checked = definition.mode !== 'tracking' && settings.soundEnabled[definition.id] === true;
+      }
+    });
+  }
+
+  async function runAdhdAction(button, action) {
+    setBusy(button, true);
+    try {
+      await action();
+      byId('adhd-settings-message').textContent = '';
+    } catch (error) {
+      byId('adhd-settings-message').textContent = errorText(error);
+    } finally {
+      setBusy(button, false);
+    }
+  }
+
   function renderAdhd() {
     const permitted = adhd?.permitted === true;
     const configured = adhd?.configured === true;
@@ -421,32 +544,17 @@
     byId('adhd-city-done').textContent = adhd?.city?.complete ? 'City cap complete for today' : 'I hit 100 — hide city alerts today';
 
     const settings = SLINK.core.adhd.normalizeSettings(adhd?.settings || {});
-    byId('adhd-medical-hours').value = settings.medicalThresholdHours;
-    byId('adhd-booster-hours').value = settings.boosterThresholdHours;
-    byId('adhd-landing-minutes').value = settings.landingLeadMinutes;
-    byId('adhd-addiction-threshold').value = settings.playerAddictionThreshold;
-    byId('adhd-sound-choice').value = settings.soundChoice;
+    setAdhdControl('adhd-medical-hours', settings.medicalThresholdHours);
+    setAdhdControl('adhd-booster-hours', settings.boosterThresholdHours);
+    setAdhdControl('adhd-landing-minutes', settings.landingLeadMinutes);
+    setAdhdControl('adhd-addiction-threshold', settings.playerAddictionThreshold);
+    setAdhdControl('adhd-sound-choice', settings.soundChoice);
     const customSound = pendingCustomSoundDataUrl === null ? settings.customSoundDataUrl : pendingCustomSoundDataUrl;
     byId('adhd-custom-sound-state').textContent = customSound ? 'Custom audio saved locally.' : 'No custom audio uploaded.';
-    byId('adhd-show-in-torn').checked = Boolean(system?.adhdInTorn);
-    byId('adhd-open-new-tab').checked = settings.openLinksInNewTab === true;
-    byId('adhd-alert-toggles').replaceChildren(...SLINK.core.adhd.ALERT_DEFINITIONS.map(definition => {
-      const row = document.createElement('div'); row.className = 'adhd-alert-toggle';
-      const progress = (adhd?.crimeUniques || []).find(entry => entry.id === definition.id);
-      const suffix = progress?.total ? ` · ${progress.completed}/${progress.total} · skill ${Math.floor(progress.skill || 0)}` : '';
-      const label = document.createElement('span'); label.textContent = `${definition.label}${suffix}`;
-      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.dataset.alertVisibleId = definition.id; visible.checked = settings.enabled[definition.id] !== false; visible.title = definition.mode === 'tracking' ? `Keep ${definition.label} progress updated` : `Show ${definition.label}`;
-      const sound = document.createElement('input'); sound.type = 'checkbox'; sound.dataset.alertSoundId = definition.id; sound.checked = definition.mode !== 'tracking' && settings.soundEnabled[definition.id] === true; sound.disabled = definition.mode === 'tracking'; sound.title = definition.mode === 'tracking' ? 'Progress-only tracker; no time-sensitive sound is generated.' : `Sound for ${definition.label}`;
-      row.append(label, visible, sound); return row;
-    }));
-    byId('adhd-city-stock-toggles').replaceChildren(...SLINK.core.adhd.CITY_SHOP_TARGETS.map(target => {
-      const id = `cityStock:${target.id}`;
-      const row = document.createElement('div'); row.className = 'adhd-alert-toggle';
-      const label = document.createElement('span'); label.textContent = `${target.label} · ${target.shop}`;
-      const visible = document.createElement('input'); visible.type = 'checkbox'; visible.dataset.cityVisibleId = target.id; visible.checked = settings.cityStockAlerts[target.id] === true && settings.enabled[id] !== false; visible.title = `Show ${target.label}`;
-      const sound = document.createElement('input'); sound.type = 'checkbox'; sound.dataset.citySoundId = target.id; sound.checked = settings.soundEnabled[id] === true; sound.title = `Sound for ${target.label}`;
-      row.append(label, visible, sound); return row;
-    }));
+    setAdhdControl('adhd-show-in-torn', Boolean(system?.adhdInTorn), 'checked');
+    setAdhdControl('adhd-open-new-tab', settings.openLinksInNewTab === true, 'checked');
+    renderAdhdToggleRows(byId('adhd-alert-toggles'), SLINK.core.adhd.ALERT_DEFINITIONS, settings, 'alert');
+    renderAdhdToggleRows(byId('adhd-city-stock-toggles'), SLINK.core.adhd.CITY_SHOP_TARGETS, settings, 'city');
     const list = byId('adhd-alert-list');
     const reminderControls = SLINK.core.adhd.reminderControls(settings,
       async action => { adhd = await SLINK.core.messaging.send('adhd.reminder.control', { action }); renderAdhd(); },
@@ -469,39 +577,39 @@
         }
         for (const [label, durationMs] of [['Snooze 5m', 5 * 60_000], ['Snooze 1h', 60 * 60_000]]) {
           const snooze = document.createElement('button'); snooze.type = 'button'; snooze.className = 'small secondary'; snooze.textContent = label;
-          snooze.addEventListener('click', async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }); renderAdhd(); });
+          snooze.addEventListener('click', () => runAdhdAction(snooze, async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }); renderAdhd(); }));
           actions.append(snooze);
         }
         if (alert.id === 'googlePlayPoints') {
           const claimed = document.createElement('button'); claimed.type = 'button'; claimed.className = 'small secondary'; claimed.textContent = 'Claimed — remind in 7 days';
-          claimed.addEventListener('click', async () => {
+          claimed.addEventListener('click', () => runAdhdAction(claimed, async () => {
             adhd = await SLINK.core.messaging.send('adhd.google-play-points.acknowledge');
             renderAdhd();
-          });
+          }));
           actions.append(claimed);
         }
         if (['disposalUnique', 'arsonUnique'].includes(alert.id)) {
           const checked = document.createElement('button'); checked.type = 'button'; checked.className = 'small secondary'; checked.textContent = 'Checked today';
-          checked.addEventListener('click', async () => {
+          checked.addEventListener('click', () => runAdhdAction(checked, async () => {
             adhd = await SLINK.core.messaging.send('adhd.crime-unique.acknowledge', { id:alert.id });
             renderAdhd();
-          });
+          }));
           actions.append(checked);
         }
         if (alert.kind === 'faction-onboarding') {
           const verified = document.createElement('button'); verified.type = 'button'; verified.className = 'small secondary';
-          verified.textContent = alert.viewerIsAdmin ? 'Admin verified' : 'Verified';
-          verified.addEventListener('click', async () => {
+          verified.textContent = alert.viewerIsAdmin ? 'Admin verify' : 'Verified';
+          verified.addEventListener('click', () => runAdhdAction(verified, async () => {
             await SLINK.core.messaging.send('faction.onboarding.verify', { memberId:alert.memberId });
             adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:false });
             renderAdhd();
-          });
+          }));
           const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'small secondary'; dismiss.textContent = 'Dismiss';
-          dismiss.addEventListener('click', async () => {
+          dismiss.addEventListener('click', () => runAdhdAction(dismiss, async () => {
             await SLINK.core.messaging.send('faction.onboarding.dismiss', { memberId:alert.memberId, joinedAt:alert.joinedAt });
             adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:false });
             renderAdhd();
-          });
+          }));
           actions.append(verified, dismiss);
         }
         card.append(copy, actions); return card;
@@ -519,6 +627,7 @@
   }
 
   function resetMarketWatchForm() {
+    editorGuard.cancel(byId('market-watch-form'));
     byId('market-watch-form').reset();
     byId('market-watch-uid').value = '';
     byId('market-watch-type').value = 'item';
@@ -548,6 +657,7 @@
     byId('market-watch-item-id').value = item?.id || '';
     byId('market-watch-item-meta').textContent = item ? marketItemLabel(item) : 'Choose a Torn item from the suggestions.';
     byId('market-item-suggestions').hidden = true;
+    editorGuard.noteEdit(byId('market-watch-form'));
   }
 
   function renderMarketSuggestions(query = '') {
@@ -588,6 +698,35 @@
         : market.fetchedAt ? `API watches last updated ${relativeTime(market.fetchedAt)}.` : 'Add a watch, then refresh.';
   }
 
+  // Price refreshes patch read-only copy, not the checkbox a person is using.
+  function patchMarketRows(container, rows) {
+    const old = new Map([...container.children].map(node => [node.dataset.editorRow || '', node]));
+    const desired = rows.map(next => {
+      const key = next.dataset.editorRow || '';
+      const node = old.get(key); old.delete(key);
+      if (!node) return next;
+      const input = node.querySelector('input'), incoming = next.querySelector('input');
+      if (input && incoming) {
+        editorGuard.hydrate(input, incoming.checked);
+        if (!input.dataset.pending) input.disabled = incoming.disabled;
+        const copy = node.classList.contains('market-weaver-item') ? node.querySelector('span') : node.firstElementChild;
+        const incomingCopy = next.classList.contains('market-weaver-item') ? next.querySelector('span') : next.firstElementChild;
+        if (copy.innerHTML !== incomingCopy.innerHTML) copy.innerHTML = incomingCopy.innerHTML;
+      } else if (node.textContent !== next.textContent) node.textContent = next.textContent;
+      return node;
+    });
+    for (const node of old.values()) { editorGuard.cancel(node); node.remove(); }
+    desired.forEach((node, index) => { if (container.children[index] !== node) container.insertBefore(node, container.children[index] || null); });
+  }
+
+  function retryMarketToggle(input) {
+    const holder=input.parentElement;
+    if (holder.querySelector('[data-market-retry-toggle]')) return;
+    const retry=document.createElement('button');retry.type='button';retry.textContent='Retry';retry.dataset.marketRetryToggle='true';
+    retry.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();if (!input.disabled) input.dispatchEvent(new Event('change',{bubbles:true}));});
+    holder.append(retry);
+  }
+
   function renderMarket() {
     if (!market) return;
     const settings = SLINK.core.market.normalizeSettings(market.settings || {});
@@ -604,24 +743,24 @@
     renderSharedApiUsage(system?.tornApiUsage || market.tornApiUsage);
     byId('market-error').textContent = market.lastError || '';
     byId('market-error').hidden = !market.lastError;
-    byId('market-show-in-torn').checked = settings.showInTorn;
-    byId('market-quick-buy').checked = settings.quickBuyEnabled;
-    byId('market-alert-sound').checked = settings.soundEnabled;
-    byId('market-listed-items').checked = settings.listedItemsEnabled;
-    byId('market-weaver-pricelist').checked = settings.weaverPricelistEnabled;
-    byId('market-weaver-source-order').value = settings.weaverSourceOrder;
+    editorGuard.hydrate(byId('market-show-in-torn'), settings.showInTorn);
+    editorGuard.hydrate(byId('market-quick-buy'), settings.quickBuyEnabled);
+    editorGuard.hydrate(byId('market-alert-sound'), settings.soundEnabled);
+    editorGuard.hydrate(byId('market-listed-items'), settings.listedItemsEnabled);
+    editorGuard.hydrate(byId('market-weaver-pricelist'), settings.weaverPricelistEnabled);
+    editorGuard.hydrate(byId('market-weaver-source-order'), settings.weaverSourceOrder);
     const priceList = market.weaverPricelist || {};
     byId('market-weaver-pricelist-status').textContent = priceList.lastError
       ? `Weaver sync issue: ${priceList.lastError}`
       : priceList.fetchedAt
         ? `${Number(priceList.itemCount || 0).toLocaleString()} prices imported · ${settings.weaverActiveItemIds.length} selected · synced ${relativeTime(priceList.fetchedAt)}.`
         : settings.weaverPricelistEnabled ? 'Weaver price list will sync on refresh.' : 'Weaver price list is off.';
-    if (!byId('market-watch-uid').value) byId('market-watch-priority').value = settings.lastPriority;
-    byId('market-watch-save').disabled = !market.permitted || watches.length >= SLINK.core.market.SAVED_WATCH_LIMIT && !byId('market-watch-uid').value;
+    if (!byId('market-watch-uid').value) editorGuard.hydrate(byId('market-watch-priority'), settings.lastPriority);
+    byId('market-watch-save').disabled = savingMarketWatch || !market.permitted || watches.length >= SLINK.core.market.SAVED_WATCH_LIMIT && !byId('market-watch-uid').value;
     const watchList = byId('market-watch-list');
-    watchList.replaceChildren(...(watches.length ? watches.map(watch => {
+    patchMarketRows(watchList, watches.length ? watches.map(watch => {
       const item = catalog.find(row => Number(row.id) === Number(watch.itemId));
-      const row = document.createElement('article'); row.className = 'market-watch-card';
+      const row = document.createElement('article'); row.className = 'market-watch-card'; row.dataset.editorRow = watch.uid;
       const copy = document.createElement('div');
       const title = document.createElement('strong'); title.textContent = watch.marketType === 'points' ? 'Points Market' : `${watch.label || item?.name || `Item ${watch.itemId}`} [${watch.itemId}]`;
       const sources = watch.marketType === 'points' ? 'Points Market · every 30s' : `${watch.marketEnabled ? 'Item Market' : ''}${watch.marketEnabled && watch.bazaarEnabled ? ' + ' : ''}${watch.bazaarEnabled ? 'Weaver Bazaar' : ''}`;
@@ -629,25 +768,25 @@
       copy.append(title, detail);
       const actions = document.createElement('div'); actions.className = 'row-actions';
       const enabled = document.createElement('label'); enabled.className = 'toggle';
-      const enabledInput = document.createElement('input'); enabledInput.type = 'checkbox'; enabledInput.checked = watch.enabled; enabledInput.dataset.marketWatchEnabled = watch.uid;
+      const enabledInput = document.createElement('input'); enabledInput.type = 'checkbox'; enabledInput.id = 'market-watch-active-' + watch.uid; enabledInput.checked = watch.enabled; enabledInput.disabled = !market.permitted; enabledInput.dataset.marketWatchEnabled = watch.uid;
       enabled.append(enabledInput, document.createTextNode('Active'));
       const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'small secondary'; edit.dataset.marketEdit = watch.uid; edit.textContent = 'Edit';
       const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'small danger'; remove.dataset.marketRemove = watch.uid; remove.textContent = 'Remove';
       actions.append(enabled, edit, remove); row.append(copy, actions); return row;
-    }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:market.permitted ? 'No watches yet.' : 'No Market Watch tier is active.' })]));
+    }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:market.permitted ? 'No watches yet.' : 'No Market Watch tier is active.' })]);
     const importedItems = Array.isArray(priceList.items) ? priceList.items : [];
     const selectedWeaverIds = new Set(settings.weaverActiveItemIds);
     const activeManualIds = new Set(watches.filter(watch => watch.enabled && watch.marketType === 'item').map(watch => Number(watch.itemId)));
     const weaverList = byId('market-weaver-item-list');
-    weaverList.replaceChildren(...(importedItems.length ? importedItems.map(price => {
-      const row = document.createElement('label'); row.className = 'market-weaver-item';
-      const input = document.createElement('input'); input.type = 'checkbox'; input.dataset.marketWeaverItem = String(price.itemId); input.checked = selectedWeaverIds.has(Number(price.itemId)); input.disabled = !market.permitted;
+    patchMarketRows(weaverList, importedItems.length ? importedItems.map(price => {
+      const row = document.createElement('label'); row.className = 'market-weaver-item'; row.dataset.editorRow = String(price.itemId);
+      const input = document.createElement('input'); input.type = 'checkbox'; input.id = 'market-weaver-active-' + price.itemId; input.dataset.marketWeaverItem = String(price.itemId); input.checked = selectedWeaverIds.has(Number(price.itemId)); input.disabled = !market.permitted;
       const copy = document.createElement('span');
       const title = document.createElement('strong'); title.textContent = `${price.name || `Item ${price.itemId}`} [${price.itemId}]`;
       const detail = document.createElement('small');
       detail.textContent = `$${Number(price.buyPrice || 0).toLocaleString()}${Number(price.bulkBuyPrice) > 0 ? ` · bulk $${Number(price.bulkBuyPrice).toLocaleString()} at ${Number(price.bulkThreshold || 0).toLocaleString()}+` : ''}${activeManualIds.has(Number(price.itemId)) ? ' · shares its SLINK item slot' : ''}`;
       copy.append(title, detail); row.append(input, copy); return row;
-    }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:priceList.fetchedAt ? 'No active Weaver prices were returned.' : 'Sync your Weaver price list to choose monitored items.' })]));
+    }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:priceList.fetchedAt ? 'No active Weaver prices were returned.' : 'Sync your Weaver price list to choose monitored items.' })]);
     byId('market-weaver-clear-active').disabled = !settings.weaverActiveItemIds.length;
     const dealList = byId('market-deal-list');
     dealList.replaceChildren(...(deals.length ? deals.map(deal => {
@@ -660,7 +799,7 @@
       const link = document.createElement('a'); link.className = 'button small'; link.href = deal.href; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'Open & highlight';
       const dismiss = document.createElement('button'); dismiss.type = 'button'; dismiss.className = 'small secondary'; dismiss.textContent = 'Dismiss 5m';
       dismiss.title = 'Hide this exact Market Watch deal for five minutes';
-      dismiss.addEventListener('click', async () => { market = await SLINK.core.messaging.send('market.deal.dismiss', { dismissKey:deal.dismissKey }); renderMarket(); });
+      dismiss.addEventListener('click', async () => { market = await requestEditorStatus('market','market.deal.dismiss', { dismissKey:deal.dismissKey }); renderMarket(); });
       actions.append(link, dismiss); card.append(copy, actions); return card;
     }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:market.fetchedAt ? 'No watched listing is currently below its target.' : 'Refresh after adding a watch.' })]));
     updateMarketClock();
@@ -763,8 +902,8 @@
     byId('merits-next').textContent = Number(merits.goals?.length || 0).toLocaleString('en-US');
     byId('merits-pinned').textContent = `${merits.pinned?.length || 0}/${SLINK.core.merits.TRACK_LIMIT}`;
     renderSharedApiUsage(system?.tornApiUsage || merits.tornApiUsage);
-    byId('merits-filter').value = merits.settings?.filter || 'all';
-    byId('merits-refresh-minutes').value = String(merits.settings?.refreshMinutes || 15);
+    editorGuard.hydrate(byId('merits-filter'), merits.settings?.filter || 'all');
+    editorGuard.hydrate(byId('merits-refresh-minutes'), merits.settings?.refreshMinutes || 15);
     byId('merits-error').textContent = merits.lastError || '';
     byId('merits-error').hidden = !merits.lastError;
     updateMeritsClock();
@@ -801,13 +940,13 @@
     byId('leveling-role').textContent = runtime.contributorOnly || runtime.idle ? 'API contributor' : runtime.collector ? 'API collector' : leveling?.configured ? 'Standby device' : 'Setup required';
     byId('leveling-status').textContent = runtime.cycleStatus || 'Ready';
     const settings = leveling?.settings || {};
-    byId('poll-seconds').value = settings.pollSeconds || 300;
-    byId('min-ff').value = settings.minFF || 1;
-    byId('max-ff').value = settings.maxFF || 3;
-    byId('contributor-only').checked = settings.contributorOnly === true;
+    editorGuard.hydrate(byId('poll-seconds'),settings.pollSeconds || 300);
+    editorGuard.hydrate(byId('min-ff'),settings.minFF || 1);
+    editorGuard.hydrate(byId('max-ff'),settings.maxFF || 3);
+    editorGuard.hydrate(byId('contributor-only'),settings.contributorOnly === true);
     byId('zero-contribution-row').hidden = !hasScope('admin.*');
-    byId('zero-contribution').checked = hasScope('admin.*') && Number(settings.apiContributionLimit) === 0;
-    byId('page-panel').checked = Boolean(system?.levelingInTorn);
+    editorGuard.hydrate(byId('zero-contribution'),hasScope('admin.*') && Number(settings.apiContributionLimit) === 0);
+    editorGuard.hydrate(byId('page-panel'),Boolean(system?.levelingInTorn));
     if (runtime.lastError) showError('leveling-error', runtime.lastError); else clearError('leveling-error');
   }
 
@@ -1097,7 +1236,17 @@
     byId('torn-chat-minimize').checked = tornMinimizedMode === 'chat';
   }
 
+  let tornPageSettingsPanel=null;
+  function mountTornPageThemeSettings(){
+    if(tornPageSettingsPanel||!globalThis.SLINK_TORN_THEME)return;
+    const container=byId('theme-options')?.parentElement;if(!container)return;
+    tornPageSettingsPanel=SLINK_TORN_THEME.mountSettings(container,{
+      read:()=>SLINK.core.messaging.send('themes.torn.get'),
+      patch:changes=>SLINK.core.messaging.send('themes.torn.patch',changes)
+    });
+  }
   async function applySavedTheme() {
+    mountTornPageThemeSettings();
     const [preferred, storedOpacity, storedMinimizedMode] = await Promise.all([
       SLINK.core.storage.get(
         SLINK.core.themes.STORAGE_KEY,
@@ -1161,64 +1310,31 @@
     }));
   }
 
-  const qualityInstances = new Map();
-  const qualityModuleIds = Object.freeze(['racing', 'abroad-stocks', 'company', 'museums', 'money-property', 'events', 'faction-officers']);
+  const qualityModuleIds = Object.freeze(["racing","abroad-stocks","company","museums","money-property","events","faction-officers","chat"]);
+  const combatModuleIds = Object.freeze(['bounties','mugging','target-list']);
   let qualityActive = 'racing';
-
+  let combatActive = 'overview';
+  let navigationReady=false;
+  const dashboardHost=SLINK.core.dashboardHost.create({
+    permissions:()=>system?.permissions||{},
+    visible:()=>document.visibilityState!=='hidden'
+  });
   function qualityDefinition(id) {
-    return SLINK.modules.list().find(definition => definition.id === id && definition.group === 'quality-of-life') || null;
+    return SLINK.modules.list().find(definition=>definition.id===id&&definition.group==='quality-of-life')||null;
   }
-
-  function qualityUi(id) {
-    const panel = document.querySelector(`[data-quality-panel="${CSS.escape(id)}"]`);
-    const content = panel?.querySelector(`[data-quality-content="${CSS.escape(id)}"]`);
-    const status = panel?.querySelector(`[data-quality-status="${CSS.escape(id)}"]`);
-    return {
-      getContentElement:() => content,
-      setModuleStyles(css) {
-        const styleId = `slink-dashboard-quality-style-${id}`;
-        let style = document.getElementById(styleId);
-        if (!style) {
-          style = document.createElement('style');
-          style.id = styleId;
-          document.head.append(style);
-        }
-        style.textContent = String(css || '');
-      },
-      setStatus(message, tone = 'normal') {
-        if (!status) return;
-        status.textContent = String(message || '');
-        status.hidden = !message;
-        status.className = `quality-status ${tone === 'error' ? 'error' : tone === 'ready' ? 'ready' : 'muted'}`;
-      },
-      setAlertCount(moduleOrCount, maybeCount) {
-        const count = maybeCount === undefined ? moduleOrCount : maybeCount;
-        const badge = document.querySelector('[data-alert-count="quality"]');
-        if (!badge) return;
-        badge.textContent = String(Math.max(0, Number(count) || 0));
-        badge.hidden = !(Number(count) > 0);
-      }
-    };
+  function syncDashboardModule() {
+    const page=navigationReady?document.querySelector('[data-dashboard-page]:not([hidden])')?.dataset.dashboardPage:null;
+    const id=page==='quality'?qualityActive:page==='workspace'&&combatActive!=='overview'?combatActive:null;
+    return dashboardHost.select(id);
   }
-
-  async function startQualityModule(id) {
-    if (qualityInstances.has(id)) return qualityInstances.get(id);
-    const definition = qualityDefinition(id);
-    if (!definition) throw new Error(`Quality of Life module "${id}" is unavailable.`);
-    const required = Array.isArray(definition.requiredScopes) ? definition.requiredScopes : [];
-    if (!required.every(hasScope)) {
-      qualityUi(id).setStatus(`Permission required: ${required.join(', ') || 'feature access'}`, 'error');
-      return null;
-    }
-    const instance = await definition.start({
-      url:new URL('https://www.torn.com/'),
-      permissions:system?.permissions || {},
-      ui:qualityUi(id),
-      module:definition,
-      presentation:'dashboard'
-    });
-    qualityInstances.set(id, instance || {});
-    return instance;
+  async function switchCombat(name,persist=true) {
+    const selected=combatModuleIds.includes(name)&&dashboardHost.allowed(name)?name:'overview';
+    combatActive=selected;
+    for(const node of document.querySelectorAll('[data-combat-overview]'))node.hidden=selected!=='overview';
+    for(const panel of document.querySelectorAll('[data-host-module]'))if(combatModuleIds.includes(panel.dataset.hostModule))panel.hidden=panel.dataset.hostModule!==selected;
+    for(const button of document.querySelectorAll('[data-combat-view]')){button.classList.toggle('active',button.dataset.combatView===selected);button.setAttribute('aria-pressed',String(button.dataset.combatView===selected));}
+    if(persist)void SLINK.core.storage.set('ui.dashboard.combatView',selected);
+    await syncDashboardModule();
   }
 
   async function switchQuality(name, persist = true) {
@@ -1231,8 +1347,7 @@
     for (const panel of document.querySelectorAll('[data-quality-panel]')) panel.hidden = panel.dataset.qualityPanel !== selected;
     for (const button of document.querySelectorAll('[data-quality-view]')) button.classList.toggle('active', button.dataset.qualityView === selected);
     if (persist) void SLINK.core.storage.set('ui.quality.activeView', selected);
-    try { await startQualityModule(selected); }
-    catch (error) { qualityUi(selected).setStatus(errorText(error), 'error'); }
+    await syncDashboardModule();
   }
 
   function renderAccessTabs() {
@@ -1240,11 +1355,16 @@
     byId('admin-tab').hidden = !admin;
     byId('diagnostics-tab').hidden = !admin;
     let qualityCount = 0;
-    for (const button of document.querySelectorAll('[data-quality-scope]')) {
-      button.hidden = !hasScope(button.dataset.qualityScope);
+    for (const button of document.querySelectorAll('[data-quality-view]')) {
+      const id = button.dataset.qualityView;
+      button.hidden = !SLINK.modules.canAccess(qualityDefinition(id), system?.permissions || {});
+      // The shared host rechecks authorization and stops a revoked module below.
       if (!button.hidden) qualityCount++;
     }
+    for(const button of document.querySelectorAll('[data-combat-view]'))if(button.dataset.combatView!=='overview')button.hidden=!dashboardHost.allowed(button.dataset.combatView);
+    if(combatActive!=='overview'&&!dashboardHost.allowed(combatActive))void switchCombat('overview',false);
     byId('quality-tab').hidden = qualityCount === 0;
+    void syncDashboardModule();
     const activePage = document.querySelector('[data-dashboard-page]:not([hidden])')?.dataset.dashboardPage;
     if ((!admin && (activePage === 'admin' || activePage === 'diagnostics')) || (activePage === 'quality' && qualityCount === 0)) switchPage('workspace', false);
     if (qualityCount > 0 && ![...document.querySelectorAll('[data-quality-view]')].some(button => !button.hidden && button.dataset.qualityView === qualityActive)) void switchQuality(qualityActive, false);
@@ -1257,10 +1377,12 @@
     for (const button of document.querySelectorAll('[data-page-tab]')) button.classList.toggle('active', button.dataset.pageTab === name);
     if (persist) void SLINK.core.storage.set('ui.dashboard.activePage', name);
     if (name === 'quality') void switchQuality(qualityActive, false);
+    else void syncDashboardModule();
   }
 
   function switchEfficiency(name) {
     const selected = ['alerts', 'market', 'merits', 'dollar'].includes(name) ? name : 'alerts';
+    efficiencyActive=selected;
     for (const panel of document.querySelectorAll('[data-efficiency-panel]')) panel.hidden = panel.dataset.efficiencyPanel !== selected;
     for (const button of document.querySelectorAll('[data-efficiency-view]')) button.classList.toggle('active', button.dataset.efficiencyView === selected);
     void SLINK.core.storage.set('ui.efficiency.activeView', selected);
@@ -1289,17 +1411,20 @@
   }
 
   async function refresh() {
+    const editorVersions={market:editorRequests.market.version,merits:editorRequests.merits.version};
     const [status, terms, themeRecord, statsStatus, meritsStatus, marketStatus, dollarStatus, savedMuggingSettings] = await Promise.all([
       SLINK.core.messaging.send('system.status'),
       SLINK.core.messaging.send('contribution.terms').catch(() => null),
       SLINK.core.messaging.send('themes.catalog', { force:true }).catch(() => null),
-      SLINK.core.messaging.send('playerStats.status', { refreshIfStale:true }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null })),
-      SLINK.core.messaging.send('merits.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), goals:[], pinned:[], settings:SLINK.core.merits.defaultSettings() })),
-      SLINK.core.messaging.send('market.status', { refreshIfDue:true }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), opportunities:[], settings:SLINK.core.market.defaultSettings(), catalog:{ items:[] } })),
-      SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:true }).catch(error => ({ bazaars:[], fetchedAt:0, nextRefreshAt:0, lastError:errorText(error) })),
+      SLINK.core.messaging.send('playerStats.status', { refreshIfStale:false }).catch(error => ({ configured:false, stale:true, error:errorText(error), data:null })),
+      requestEditorStatus('merits','merits.status', { refreshIfDue:false }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), goals:[], pinned:[], settings:SLINK.core.merits.defaultSettings() })),
+      requestEditorStatus('market','market.status', { refreshIfDue:false }).catch(error => ({ configured:false, permitted:false, lastError:errorText(error), opportunities:[], settings:SLINK.core.market.defaultSettings(), catalog:{ items:[] } })),
+      SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:false }).catch(error => ({ bazaars:[], fetchedAt:0, nextRefreshAt:0, lastError:errorText(error) })),
       SLINK.core.storage.get('mugging.settings.v1', {})
     ]);
     if (themeRecord?.catalog) SLINK.core.themes.installCatalog(themeRecord.catalog);
+    if (editorVersions.market!==editorRequests.market.version && market) marketStatus.settings=market.settings;
+    if (editorVersions.merits!==editorRequests.merits.version && merits) meritsStatus.settings=merits.settings;
     system = status; leveling = status.leveling; war = status.war; access = status.access; adhd = status.adhd; market = marketStatus; dollarBazaars = dollarStatus; muggingSettings = savedMuggingSettings || {}; contribution = status.contribution; contributionTerms = terms; playerStats = statsStatus; merits = meritsStatus;
     system.tornApiUsage = await SLINK.core.messaging.send('tornApi.usage').catch(() => status.tornApiUsage);
     dismissedRetals = await SLINK.core.storage.get('war.dismissedRetals.v1', {});
@@ -1322,7 +1447,7 @@
   }
 
   async function claimWarLeader() {
-    if (document.visibilityState !== 'visible') {
+    if (visiblePage()!=='workspace'||combatActive!=='overview') {
       if (warLeader) void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {});
       warLeader = false;
       return false;
@@ -1356,7 +1481,7 @@
       tornKey,
       acceptTerms
     })); else if (access?.settings?.hasTornKey || access?.settings?.enabled) tasks.push(SLINK.core.messaging.send('access.settings.save', { enabled:false, clearTornKey:true }).then(() => SLINK.core.messaging.send('access.session.clear')));
-    tasks.push(SLINK.core.storage.set('mugging.settings.v1', { ...(muggingSettings || {}), enabled:useMugging }));
+    tasks.push(SLINK.core.messaging.send('mugging.settings.save', { enabled:useMugging }));
     const results = await Promise.allSettled(tasks);
     const failures = results.filter(result => result.status === 'rejected');
     if (failures.length) throw new Error(failures.map(result => errorText(result.reason)).join(' / '));
@@ -1413,7 +1538,7 @@
       await refresh();
     } catch (error) { byId('access-message').textContent = errorText(error); } finally { setBusy(submit, false); }
   });
-  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('access.settings.save',{enabled:false,clearTornKey:true}),SLINK.core.storage.set('mugging.settings.v1',{...(muggingSettings||{}),enabled:false})]); await Promise.all([SLINK.core.messaging.send('leveling.session.clear'),SLINK.core.messaging.send('war.session.clear'),SLINK.core.messaging.send('access.session.clear')]); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
+  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('access.settings.save',{enabled:false,clearTornKey:true}),SLINK.core.messaging.send('mugging.settings.save',{enabled:false})]); await Promise.all([SLINK.core.messaging.send('leveling.session.clear'),SLINK.core.messaging.send('war.session.clear'),SLINK.core.messaging.send('access.session.clear')]); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
   byId('backup-local-data').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true);
     try {
@@ -1453,7 +1578,19 @@
   }
   byId('reset-position').addEventListener('click', event => restoreTornGui(event.currentTarget));
   byId('war-reset-position').addEventListener('click', event => restoreTornGui(event.currentTarget));
-  byId('refresh-targets').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { leveling = await SLINK.core.messaging.send('leveling.activity.touch'); const result = await SLINK.core.messaging.send('leveling.cycle.prepare',{contribute:false}); leveling = result.status; renderLeveling(); renderTargets(); } catch (error) { showError('leveling-error', error); } finally { setBusy(button, false); } });
+  const levelingPreferencesRoot=byId('poll-seconds').closest('.settings-grid');
+  levelingPreferencesRoot.dataset.uiExplicitCommit='true';
+  const levelingSaveState=document.createElement('span');levelingSaveState.role='status';
+  const levelingRetry=document.createElement('button');levelingRetry.type='button';levelingRetry.textContent='Retry';levelingRetry.hidden=true;
+  levelingPreferencesRoot.append(levelingSaveState,levelingRetry);
+  const levelingPreferences=SLINK.core.formState.autosave({
+    root:levelingPreferencesRoot,fields:{'poll-seconds':'pollSeconds','min-ff':'minFF','max-ff':'maxFF'},read:key=>leveling?.settings?.[key],
+    save:patch=>SLINK.core.messaging.send('leveling.preferences.save',patch),select:response=>response.settings,
+    onCommit:patch=>{leveling={...leveling,settings:{...leveling?.settings,...patch}};},
+    onState:state=>{levelingSaveState.textContent=({idle:'Poll and Fair Fight preferences save automatically.',saving:'Saving…',saved:'Preferences saved.',failed:'Preferences not saved. Retry.',invalid:'Enter valid poll seconds and Fair Fight values.',unsaved:'Preferences not saved yet.'})[state.state]||'';levelingRetry.hidden=state.state!=='failed';}
+  });
+  levelingPreferences.mount();levelingRetry.addEventListener('click',()=>{void levelingPreferences.flush().catch(()=>{});});
+  byId('refresh-targets').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { await levelingPreferences.flush();leveling = await SLINK.core.messaging.send('leveling.activity.touch'); const result = await SLINK.core.messaging.send('leveling.cycle.prepare',{contribute:false}); leveling = result.status; renderLeveling(); renderTargets(); } catch (error) { showError('leveling-error', error); } finally { setBusy(button, false); } });
   byId('war-refresh').addEventListener('click', async event => { const button = event.currentTarget; setBusy(button, true); try { war = await SLINK.core.messaging.send('war.cycle.prepare',{forceOpponentRefresh:true,manual:true}); renderWar(); renderTargets(); } catch (error) { showError('war-error', error); } finally { setBusy(button, false); } });
   byId('war-open-armory').addEventListener('click', async () => {
     await SLINK.core.storage.set('ui.war.requestedTab', 'armory');
@@ -1527,7 +1664,7 @@
   });
   byId('market-refresh').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-error').hidden = true;
-    try { market = await SLINK.core.messaging.send('market.refresh'); renderMarket(); }
+    try { market = await requestEditorStatus('market','market.refresh'); renderMarket(); }
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
     finally { setBusy(button, false); }
   });
@@ -1539,19 +1676,19 @@
   });
   byId('market-permissions-refresh').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-error').hidden = true;
-    try { market = await SLINK.core.messaging.send('market.permissions.refresh'); renderMarket(); }
+    try { market = await requestEditorStatus('market','market.permissions.refresh'); renderMarket(); }
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
     finally { setBusy(button, false); }
   });
   byId('market-weaver-pricelist-sync').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-message').textContent = 'Syncing your Weaver price list…';
-    try { market = await SLINK.core.messaging.send('market.weaver.pricelist.sync'); byId('market-message').textContent = 'Weaver price list synced.'; renderMarket(); }
+    try { market = await requestEditorStatus('market','market.weaver.pricelist.sync'); byId('market-message').textContent = 'Weaver price list synced.'; renderMarket(); }
     catch (error) { byId('market-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
   });
   byId('market-load-items').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-message').textContent = 'Loading Torn’s item catalog…';
-    try { market = await SLINK.core.messaging.send('market.catalog', { force:true }); byId('market-message').textContent = `${market.catalog?.items?.length || 0} API items loaded.`; renderMarket(); }
+    try { market = await requestEditorStatus('market','market.catalog', { force:true }); byId('market-message').textContent = `${market.catalog?.items?.length || 0} API items loaded.`; renderMarket(); }
     catch (error) { byId('market-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
   });
@@ -1578,7 +1715,10 @@
   });
   byId('market-watch-form').addEventListener('submit', async event => {
     event.preventDefault();
-    const button = byId('market-watch-save'); setBusy(button, true); byId('market-message').textContent = '';
+    const button = byId('market-watch-save'); if (button.disabled || savingMarketWatch) return;
+    savingMarketWatch=true;
+    const ticket = editorGuard.begin(byId('market-watch-form'));
+    setBusy(button, true); byId('market-message').textContent = '';
     try {
       const marketType = byId('market-watch-type').value === 'points' ? 'points' : 'item';
       if (marketType === 'item' && !byId('market-watch-market').checked && !byId('market-watch-bazaar').checked) throw new Error('Select Item Market, Weaver Bazaar, or both.');
@@ -1591,7 +1731,8 @@
         }
         if (!item) throw new Error('Choose an item from the Torn API suggestions.');
       }
-      market = await SLINK.core.messaging.send('market.watch.save', {
+      market = await requestEditorStatus('market','market.watch.save', {
+        requireExisting:Boolean(byId('market-watch-uid').value),
         uid:byId('market-watch-uid').value || `watch-${globalThis.crypto?.randomUUID?.() || Date.now()}`,
         marketType,
         itemId:item?.id || 0,
@@ -1603,29 +1744,38 @@
         enabled:byId('market-watch-enabled').checked
       });
       const savedName = marketType === 'points' ? 'Points Market' : item.name;
-      resetMarketWatchForm(); byId('market-message').textContent = `${savedName} watch saved.`; renderMarket();
+      if (editorGuard.commit(ticket)) resetMarketWatchForm(); byId('market-message').textContent = `${savedName} watch saved.`; renderMarket();
     } catch (error) { byId('market-message').textContent = errorText(error); }
-    finally { setBusy(button, false); }
+    finally { savingMarketWatch=false;renderMarket(); }
   });
   byId('market-watch-cancel').addEventListener('click', resetMarketWatchForm);
-  byId('market-settings-save').addEventListener('click', async event => {
-    const button = event.currentTarget; setBusy(button, true);
-    try {
-      market = await SLINK.core.messaging.send('market.settings.save', {
-        showInTorn:byId('market-show-in-torn').checked,
-        quickBuyEnabled:byId('market-quick-buy').checked,
-        soundEnabled:byId('market-alert-sound').checked,
-        listedItemsEnabled:byId('market-listed-items').checked,
-        weaverPricelistEnabled:byId('market-weaver-pricelist').checked,
-        weaverSourceOrder:byId('market-weaver-source-order').value
-      });
-      await SLINK.core.storage.set('ui.modules.market.showInTorn', byId('market-show-in-torn').checked);
-      if (byId('market-show-in-torn').checked) await SLINK.core.storage.set('ui.pagePanelHidden', false);
-      byId('market-message').textContent = 'Market settings saved locally. Refreshing sources…';
-      market = await SLINK.core.messaging.send('market.refresh'); renderMarket();
-    } catch (error) { byId('market-message').textContent = errorText(error); }
-    finally { setBusy(button, false); }
+  const marketSettingsRoot = byId('market-show-in-torn').closest('.market-global-settings');
+  marketSettingsRoot.dataset.uiExplicitCommit = 'true';
+  byId('market-watch-form').dataset.uiExplicitCommit = 'true';
+  byId('market-watch-list').dataset.uiExplicitCommit = 'true';
+  byId('market-weaver-item-list').dataset.uiExplicitCommit = 'true';
+  const marketSettingsState = document.createElement('span'); marketSettingsState.role = 'status';
+  const marketSettingsRetry = byId('market-settings-save'); marketSettingsRetry.textContent = 'Retry';
+  marketSettingsRetry.hidden = true; marketSettingsRetry.before(marketSettingsState);
+  const marketPreferences = SLINK.core.formState.autosave({
+    root:marketSettingsRoot, fields:{"market-show-in-torn":"showInTorn","market-quick-buy":"quickBuyEnabled","market-alert-sound":"soundEnabled","market-listed-items":"listedItemsEnabled","market-weaver-pricelist":"weaverPricelistEnabled","market-weaver-source-order":"weaverSourceOrder"},
+    read:key => market?.settings?.[key],
+    save:patch => saveEditorPreference('market',patch),
+    select:response => response.settings,
+    onCommit:patch => {
+      market = {...market,settings:{...market?.settings,...patch}};
+      if (Object.hasOwn(patch,'showInTorn')) {
+        void SLINK.core.storage.set('ui.modules.market.showInTorn', patch.showInTorn).catch(error => {marketSettingsState.textContent = errorText(error);});
+        if (patch.showInTorn) void SLINK.core.storage.set('ui.pagePanelHidden', false).catch(error => {marketSettingsState.textContent = errorText(error);});
+      }
+    },
+    onState:state => {
+      marketSettingsState.textContent = ({idle:'Settings save automatically.',saving:'Saving…',saved:'Saved.',failed:'Settings not saved. Retry.',invalid:'Check this setting.',unsaved:'Changes not saved yet.'})[state.state] || '';
+      marketSettingsRetry.hidden = state.state !== 'failed';
+    }
   });
+  marketPreferences.mount();
+  marketSettingsRetry.addEventListener('click', () => {void marketPreferences.flush().catch(() => {});});
   byId('market-watch-list').addEventListener('click', async event => {
     const edit = event.target.closest('[data-market-edit]');
     const remove = event.target.closest('[data-market-remove]');
@@ -1633,65 +1783,90 @@
       const watch = market?.settings?.watches?.find(row => row.uid === edit.dataset.marketEdit); if (!watch) return;
       byId('market-watch-uid').value = watch.uid; byId('market-watch-type').value = watch.marketType || 'item'; byId('market-watch-price').value = watch.maxPrice; byId('market-watch-priority').value = watch.priority; byId('market-watch-enabled').checked = watch.enabled; byId('market-watch-market').checked = watch.marketEnabled; byId('market-watch-bazaar').checked = watch.bazaarEnabled; byId('market-watch-save').disabled = false;
       if (watch.marketType !== 'points') selectMarketItem(marketCatalog().find(item => Number(item.id) === Number(watch.itemId)) || { id:watch.itemId, name:watch.label });
-      syncMarketWatchType(); byId('market-watch-price').focus();
+      syncMarketWatchType(); editorGuard.noteEdit(byId('market-watch-form')); byId('market-watch-price').focus();
     }
     if (remove) {
       const watch = market?.settings?.watches?.find(row => row.uid === remove.dataset.marketRemove); if (!watch || !confirm(`Remove the ${watch.label} watch?`)) return;
       setBusy(remove, true);
-      try { market = await SLINK.core.messaging.send('market.watch.remove', { uid:watch.uid }); byId('market-message').textContent = `${watch.label} removed.`; renderMarket(); }
+      try { market = await requestEditorStatus('market','market.watch.remove', { uid:watch.uid }); byId('market-message').textContent = `${watch.label} removed.`; renderMarket(); }
       catch (error) { byId('market-message').textContent = errorText(error); setBusy(remove, false); }
     }
   });
   byId('market-watch-list').addEventListener('change', async event => {
     const input = event.target.closest('[data-market-watch-enabled]'); if (!input) return;
     const watch = market?.settings?.watches?.find(row => row.uid === input.dataset.marketWatchEnabled); if (!watch) return;
-    input.disabled = true; byId('market-message').textContent = '';
+    const ticket = editorGuard.begin(input), enabled = input.checked;
+    input.disabled = true; input.dataset.pending = 'true'; byId('market-message').textContent = '';
     try {
-      market = await SLINK.core.messaging.send('market.watch.save', { ...watch, enabled:input.checked });
-      byId('market-message').textContent = `${watch.label} is now ${input.checked ? 'active' : 'saved but inactive'}.`;
+      market = await requestEditorStatus('market','market.watch.toggle', { uid:watch.uid, enabled });
+      editorGuard.commit(ticket);
+      input.parentElement.querySelector('[data-market-retry-toggle]')?.remove();
+      byId('market-message').textContent = `${watch.label} is now ${enabled ? 'active' : 'saved but inactive'}.`;
       renderMarket();
-    } catch (error) { byId('market-message').textContent = errorText(error); renderMarket(); }
+    } catch (error) { byId('market-message').textContent = errorText(error);retryMarketToggle(input); }
+    finally {delete input.dataset.pending; input.disabled = !market?.permitted;}
   });
   byId('market-weaver-item-list').addEventListener('change', async event => {
     const input = event.target.closest('[data-market-weaver-item]'); if (!input) return;
     const itemId = Math.trunc(Number(input.dataset.marketWeaverItem) || 0);
     const checked = input.checked;
     if (!(itemId > 0)) { renderMarket(); return; }
-    input.disabled = true; byId('market-message').textContent = '';
+    const ticket = editorGuard.begin(input); input.disabled = true; input.dataset.pending = 'true'; byId('market-message').textContent = '';
     try {
-      market = await SLINK.core.messaging.send('market.weaver.selection.toggle', { itemId, checked });
+      market = await requestEditorStatus('market','market.weaver.selection.toggle', { itemId, checked });
+      editorGuard.commit(ticket);
+      input.parentElement.querySelector('[data-market-retry-toggle]')?.remove();
       byId('market-message').textContent = `${checked ? 'Activated' : 'Paused'} this Weaver item · ${market.settings?.weaverActiveItemIds?.length || 0} selected.`;
       renderMarket();
-    } catch (error) { byId('market-message').textContent = errorText(error); renderMarket(); }
+    } catch (error) { byId('market-message').textContent = errorText(error);retryMarketToggle(input); }
+    finally {delete input.dataset.pending; input.disabled = !market?.permitted;}
   });
   byId('market-weaver-clear-active').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-message').textContent = '';
-    try { market = await SLINK.core.messaging.send('market.weaver.selection.save', { itemIds:[] }); byId('market-message').textContent = 'All Weaver prices are saved but inactive.'; renderMarket(); }
+    try { market = await requestEditorStatus('market','market.weaver.selection.save', { itemIds:[] }); byId('market-message').textContent = 'All Weaver prices are saved but inactive.'; renderMarket(); }
     catch (error) { byId('market-message').textContent = errorText(error); }
     finally { setBusy(button, false); }
   });
   byId('merits-refresh').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('merits-error').hidden = true;
-    try { merits = await SLINK.core.messaging.send('merits.refresh'); renderMerits(); }
+    try { merits = await requestEditorStatus('merits','merits.refresh'); renderMerits(); }
     catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
     finally { setBusy(button, false); }
   });
-  for (const select of [byId('merits-filter'), byId('merits-refresh-minutes')]) select.addEventListener('change', async () => {
-    try {
-      merits = await SLINK.core.messaging.send('merits.settings.save', {
-        filter:byId('merits-filter').value,
-        refreshMinutes:byId('merits-refresh-minutes').value
-      });
-      renderMerits();
-    } catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
+  const meritsSettingsRoot = byId('merits-filter').closest('.merits-controls');
+  meritsSettingsRoot.dataset.uiExplicitCommit = 'true';
+  const meritsSaveState = document.createElement('span'); meritsSaveState.role = 'status';
+  const meritsRetry = document.createElement('button'); meritsRetry.type = 'button'; meritsRetry.textContent = 'Retry'; meritsRetry.hidden = true;
+  meritsSettingsRoot.append(meritsSaveState,meritsRetry);
+  const meritsPreferences = SLINK.core.formState.autosave({
+    root:meritsSettingsRoot,fields:{'merits-filter':'filter','merits-refresh-minutes':'refreshMinutes'},read:key => merits?.settings?.[key],
+    save:patch => saveEditorPreference('merits',patch),
+    select:response => response.settings,
+    onCommit:patch => {
+      merits = {...merits,settings:{...merits?.settings,...patch}};
+    },
+    onState:state => {
+      meritsSaveState.textContent = ({idle:'Settings save automatically.',saving:'Saving…',saved:'Saved.',failed:'Settings not saved. Retry.',invalid:'Check your setting.',unsaved:'Changes not saved yet.'})[state.state] || '';
+      meritsRetry.hidden = state.state !== 'failed';
+    }
   });
+  meritsPreferences.mount();
+  meritsRetry.addEventListener('click',()=>{void meritsPreferences.flush().catch(()=>{});});
   for (const list of [byId('merits-pinned-list'), byId('merits-goal-list')]) list.addEventListener('click', async event => {
     const button = event.target.closest('[data-merit-pin]');
     if (!button) return;
     setBusy(button, true);
-    try { merits = await SLINK.core.messaging.send('merits.pin', { key:button.dataset.meritPin }); renderMerits(); }
+    try { merits = await requestEditorStatus('merits','merits.pin', { key:button.dataset.meritPin }); renderMerits(); }
     catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
   });
+  for (const [id, key] of [
+    ['adhd-medical-hours','adhd-medical-hours'],['adhd-booster-hours','adhd-booster-hours'],
+    ['adhd-landing-minutes','adhd-landing-minutes'],['adhd-addiction-threshold','adhd-addiction-threshold'],
+    ['adhd-sound-choice','adhd-sound-choice'],['adhd-open-new-tab','adhd-open-new-tab'],
+    ['adhd-show-in-torn','adhd-show-in-torn']
+  ]) {
+    for (const eventName of ['input','change']) byId(id).addEventListener(eventName, () => markAdhdSettingDirty(key));
+  }
   byId('adhd-save-settings').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('adhd-settings-message').textContent = '';
     try {
@@ -1725,6 +1900,7 @@
       if (byId('adhd-show-in-torn').checked) await SLINK.core.storage.set('ui.pagePanelHidden', false);
       system.adhdInTorn = byId('adhd-show-in-torn').checked;
       pendingCustomSoundDataUrl = null;
+      adhdSettingsDirty.clear();
       byId('adhd-settings-message').textContent = 'Efficiency alert settings saved locally.';
       renderAdhd();
     } catch (error) { byId('adhd-settings-message').textContent = errorText(error); }
@@ -1759,6 +1935,9 @@
   for (const button of document.querySelectorAll('[data-page-tab]')) button.addEventListener('click', () => switchPage(button.dataset.pageTab));
   for (const button of document.querySelectorAll('[data-efficiency-view]')) button.addEventListener('click', () => switchEfficiency(button.dataset.efficiencyView));
   for (const button of document.querySelectorAll('[data-quality-view]')) button.addEventListener('click', () => void switchQuality(button.dataset.qualityView));
+  for(const button of document.querySelectorAll('[data-combat-view]'))button.addEventListener('click',()=>void switchCombat(button.dataset.combatView));
+  document.addEventListener('visibilitychange',()=>void syncDashboardModule());
+  addEventListener('pagehide',()=>void dashboardHost.stop());
   byId('donation-form').addEventListener('submit', async event => { event.preventDefault(); const submit = byId('donation-submit'); setBusy(submit,true); byId('donation-message').textContent=''; try { contribution=await SLINK.core.messaging.send('contribution.donate',{apiKey:byId('donation-key').value,acceptTerms:byId('donation-accept').checked}); byId('donation-key').value=''; byId('donation-accept').checked=false; byId('donation-message').textContent='Public Only key validated and saved on SLINK servers in encrypted form.'; renderContribution(); } catch(error){ byId('donation-message').textContent=errorText(error); } finally{ setBusy(submit,false); } });
   byId('donation-revoke').addEventListener('click', async () => { if (!confirm('Revoke this saved donation and erase its encrypted key material?')) return; try { contribution=await SLINK.core.messaging.send('contribution.revoke'); byId('donation-message').textContent='Donation revoked and encrypted key material erased.'; renderContribution(); } catch(error) { byId('donation-message').textContent=errorText(error); } });
   byId('run-diagnostic').addEventListener('click', async event => { const button=event.currentTarget; setBusy(button,true); try { byId('diagnostic').textContent=formatDiagnostic(await SLINK.core.messaging.send('diagnostics.run')); } catch(error){ byId('diagnostic').textContent=errorText(error); } finally{ setBusy(button,false); } });
@@ -1772,8 +1951,10 @@
     const requestedPage = await SLINK.core.storage.get('ui.dashboard.activePage', 'workspace');
     qualityActive = await SLINK.core.storage.get('ui.quality.activeView', 'racing');
     switchEfficiency(await SLINK.core.storage.get('ui.efficiency.activeView', 'alerts'));
+    await switchCombat(await SLINK.core.storage.get('ui.dashboard.combatView','overview'),false);
     await switchQuality(qualityActive, false);
     switchPage(['workspace', 'alerts', 'quality', 'admin', 'diagnostics'].includes(requestedPage) ? requestedPage : 'workspace', false);
+    navigationReady=true;await syncDashboardModule();
   }
   catch (error) {
     byId('connection').textContent = 'Extension background unavailable';
@@ -1794,7 +1975,7 @@
     } catch {}
   }, 2_000);
   setInterval(async () => {
-    if (!war?.configured) return;
+    if (!war?.configured||visiblePage()!=='workspace'||combatActive!=='overview') return;
     try {
       war = warLeader
         ? await SLINK.core.messaging.send('war.cycle.prepare')
@@ -1804,28 +1985,28 @@
     } catch (error) { showError('war-error', error); }
   }, 10_000);
   setInterval(async () => {
-    if (!adhd?.configured) return;
+    if (!adhd?.configured||visiblePage()!=='alerts'||efficiencyActive!=='alerts') return;
     try { adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:true }); renderAdhd(); }
     catch (error) { byId('adhd-error').textContent = errorText(error); byId('adhd-error').hidden = false; }
   }, 30_000);
   setInterval(async () => {
-    if (!merits?.configured) return;
-    try { merits = await SLINK.core.messaging.send('merits.status', { refreshIfDue:true }); renderMerits(); }
+    if (!merits?.configured||visiblePage()!=='alerts'||efficiencyActive!=='merits') return;
+    try { merits = await requestEditorStatus('merits','merits.status', { refreshIfDue:true }); renderMerits(); }
     catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
   }, 60_000);
   setInterval(async () => {
-    if (!market?.configured || !market?.permitted) return;
-    try { market = await SLINK.core.messaging.send('market.status', { refreshIfDue:true }); renderMarket(); }
+    if (!market?.configured || !market?.permitted||visiblePage()!=='alerts'||efficiencyActive!=='market') return;
+    try { market = await requestEditorStatus('market','market.status', { refreshIfDue:true }); renderMarket(); }
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
   }, 30_000);
   setInterval(async () => {
+    if(visiblePage()!=='alerts'||efficiencyActive!=='dollar')return;
     try { dollarBazaars = await SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:true }); renderDollarBazaars(); }
     catch (error) { byId('dollar-bazaars-error').textContent = errorText(error); byId('dollar-bazaars-error').hidden = false; }
   }, 60_000);
   setInterval(() => { updateAdhdClock(); updateMarketClock(); updateMeritsClock(); updateDollarBazaarClock(); }, 1_000);
   addEventListener('pagehide', () => { void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {}); }, { once:true });
 })();
-
 
 
 

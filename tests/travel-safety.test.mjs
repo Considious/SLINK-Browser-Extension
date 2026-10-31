@@ -11,7 +11,7 @@ const sandbox = {
   SLINK_EXTENSION:{ define(group, name, value) { definitions[`${group}.${name}`] = value; this[group] ||= {}; this[group][name] = value; } }
 };
 sandbox.globalThis = sandbox;
-vm.runInNewContext(fs.readFileSync(new URL('./core-travel-safety.js', import.meta.url), 'utf8'), sandbox);
+vm.runInNewContext(fs.readFileSync(new URL('../src/core/travel-safety.js', import.meta.url), 'utf8'), sandbox);
 const travel = sandbox.SLINK_EXTENSION.core.travelSafety;
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 

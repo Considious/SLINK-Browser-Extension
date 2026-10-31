@@ -157,7 +157,7 @@
     return merged;
   }
 
-  function enrichTarget(target, intelligence = null) {
+  function enrichTarget(target, intelligence = null, observerContext = {}) {
     const record = intelligence && typeof intelligence === 'object' ? intelligence : null;
     return {
       ...normalizeTarget(target),
@@ -167,8 +167,8 @@
       lastSeenMugged:Math.max(0, Number(record?.lastSeenMugged) || 0),
       bountyCount:Math.max(0, Math.trunc(Number(record?.bountyCount) || 0)),
       bountyTotal:Math.max(0, Number(record?.bountyTotal) || 0),
-      fairFight:Number.isFinite(Number(record?.fairFight)) ? Number(record.fairFight) : null,
-      battleStatsEstimate:Number.isFinite(Number(record?.battleStatsEstimate)) ? Number(record.battleStatsEstimate) : null
+      fairFight:SLINK.core.playerIntelligence.contextualFairFight(record, observerContext),
+      battleStatsEstimate:record?.battleStatsEstimate != null && Number.isFinite(Number(record.battleStatsEstimate)) ? Number(record.battleStatsEstimate) : null
     };
   }
 

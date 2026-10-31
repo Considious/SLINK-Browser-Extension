@@ -37,6 +37,7 @@ SLINK.define('core', 'storage', Object.freeze({
 SLINK.define('core', 'format', Object.freeze({
   errorMessage(error) { return String(error?.message || error || 'Unknown error'); }
 }));
+load('src/core/player-intelligence.js');
 load('src/core/target-list.js');
 
 SLINK.define('services', 'playerIntelligence', Object.freeze({

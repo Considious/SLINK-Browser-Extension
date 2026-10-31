@@ -1,3 +1,8 @@
+## 0.19.15 — 2026-10-30
+
+- Promote the testing implementation through Candidate40: saved settings/editors, startup/performance, shared data, dashboard/QOL repairs, Mugging recovery, optional chat/media/FF bubbles/Torn-page themes, public FF fallback and clearer errors.
+- Preserve existing settings, credentials and main-only files. See TESTER-CHANGELOG.md for the combined review checklist and MAIN-RELEASE.md for rollout limits.
+
 ## 0.19.12 - 2026-10-26
 
 - Move the oversized player-intelligence cache out of Chrome storage.local into per-player IndexedDB records, recovering storage space for War and other modules.
@@ -747,8 +752,3 @@ This changelog covers the `0.18.x` release series. It focuses on user-visible be
 - Market Watch prices are sourced only from Torn's v2 Item Market API and Weaver's marketplace JSON API; the extension does not scrape Torn pages for listing data.
 - Watch configuration, item catalogs, and results remain in local extension storage. SLINK's permission service only authenticates the signed Market Watch tier.
 - Added the Weaver API host permission required for API-only Bazaar Watch requests.
-
-
-
-
-

@@ -58,9 +58,7 @@
       `);
 
       function focusedTornPage() {
-        // PDA/WebView and some Torn SPA transitions can report hasFocus() as
-        // false while the visible page is still fully interactive.
-        return document.visibilityState !== 'hidden';
+        return !stopped && context.isActive?.() !== false && SLINK.core.pageActivity?.eligible() === true;
       }
 
       function elementVisible(element) {
@@ -1132,6 +1130,7 @@
         if (purchaseState.bazaarOneDollarTimer) return;
         purchaseState.bazaarOneDollarTimer = window.setTimeout(() => {
           purchaseState.bazaarOneDollarTimer = null;
+          if (!focusedTornPage()) return;
           formatBazaarOneDollarListings();
           formatItemMarketPurchaseOpportunities();
           syncHighlightedQuickPurchaseControls();
@@ -1184,65 +1183,101 @@
         if (element) element.textContent = `${event.detail.count || 0}/${event.detail.limit || 60}`;
       }
 
+      const root = ui.getContentElement();
+      const guard = SLINK.core.formState.protect(root.getRootNode());
+      const previousExplicit = root.dataset.uiExplicitCommit; root.dataset.uiExplicitCommit = 'true';
+      let mounted = false, preferenceRevision = 0, loading = false;
+      const soundPreferences = SLINK.core.formState.autosave({
+        root, fields:{'market-deal-sound':'soundEnabled'}, read:() => current?.settings?.soundEnabled,
+        async save(patch) {
+          preferenceRevision++;
+          try {return await SLINK.core.messaging.send('market.settings.save', {...patch,preferenceOnly:true});}
+          finally {preferenceRevision++;}
+        },
+        select:response => response.settings,
+        onCommit:patch => {current = {...current,settings:{...current?.settings,...patch}};},
+        onState:state => {
+          if (stopped || !mounted) return;
+          root.querySelector('[data-market-save-state]').textContent = ({idle:'',saving:'Saving…',saved:'Saved.',failed:'Sound setting not saved. Retry.',invalid:'Check your setting.',unsaved:'Changes not saved yet.'})[state.state] || '';
+          root.querySelector('[data-market-retry]').hidden = state.state !== 'failed';
+        }
+      });
+
       function render(status) {
+        if (stopped || context.signal?.aborted) return;
         current = status;
-        syncPurchaseCatalog(status);
-        updateStatus();
+        syncPurchaseCatalog(status); updateStatus();
         const deals = Array.isArray(status?.opportunities) ? status.opportunities : [];
-        ui.setAlertCount('market', deals.length, { group:'efficiency', label:'active Market Watch deals' });
-        const root = ui.getContentElement();
-        root.innerHTML = `<div class="slink-market-summary"><div><strong>${status?.activeWatchCount || 0}/${status?.marketWatchLimit || 0}</strong><small>Active · ${status?.savedWatchCount || 0} saved</small></div><div><strong>${deals.length}</strong><small>Deals</small></div><div><strong data-slink-api-usage>${status?.tornApiUsage?.count || 0}/${status?.tornApiUsage?.limit || 60}</strong><small>API / min</small></div></div>
-          <div class="slink-market-actions"><label class="slink-market-sound"><input type="checkbox" data-market-sound ${status?.settings?.soundEnabled === false ? '' : 'checked'}> Play deal sounds</label><button type="button" data-market-copy-all ${deals.length ? '' : 'disabled'}>Copy item list</button><button type="button" data-market-send-all disabled>Send list to Faction</button></div>
-          <div class="slink-market-list">${deals.length ? deals.map(row => `<article class="slink-market-deal"><strong>${escapeHtml(row.source)} · ${escapeHtml(row.itemName)}</strong><span>${escapeHtml(row.detail)}</span><div class="slink-market-actions"><a href="${escapeHtml(row.href)}" target="_self">Open &amp; highlight</a><button type="button" data-market-copy="${escapeHtml(row.id)}">Copy</button><button type="button" data-market-send="${escapeHtml(row.id)}" disabled>Send to Faction</button><button type="button" data-market-dismiss="${escapeHtml(row.id)}">Dismiss 5m</button></div></article>`).join('') : '<div class="slink-market-empty">No watched listing is currently at or below its target.</div>'}</div>`;
-        const copyAll = root.querySelector('[data-market-copy-all]');
-        const sendAll = root.querySelector('[data-market-send-all]');
-        root.querySelector('[data-market-sound]')?.addEventListener('change', async event => {
-          event.currentTarget.disabled = true;
-          try { render(await SLINK.core.messaging.send('market.settings.save', { soundEnabled:event.currentTarget.checked })); }
-          catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); event.currentTarget.disabled = false; }
+        ui.setAlertCount('market', deals.length, {group:'efficiency',label:'active Market Watch deals'});
+        if (!mounted) {
+          root.innerHTML = '<div class="slink-market-summary"></div><div class="slink-market-actions"><label class="slink-market-sound"><input id="market-deal-sound" type="checkbox" data-market-sound> Play deal sounds</label><button type="button" data-market-copy-all>Copy item list</button><button type="button" data-market-send-all disabled>Send list to Faction</button></div><div role="status"><span data-market-save-state></span> <button type="button" data-market-retry hidden>Retry</button></div><div class="slink-market-list"></div>';
+          root.querySelector('[data-market-sound]').checked = status?.settings?.soundEnabled !== false;
+          mounted = true; soundPreferences.mount();
+        }
+        root.querySelector('.slink-market-summary').innerHTML = '<div><strong>' + (status?.activeWatchCount || 0) + '/' + (status?.marketWatchLimit || 0) + '</strong><small>Active · ' + (status?.savedWatchCount || 0) + ' saved</small></div><div><strong>' + deals.length + '</strong><small>Deals</small></div><div><strong data-slink-api-usage>' + (status?.tornApiUsage?.count || 0) + '/' + (status?.tornApiUsage?.limit || 60) + '</strong><small>API / min</small></div>';
+        guard.hydrate(root.querySelector('[data-market-sound]'),status?.settings?.soundEnabled !== false);
+        root.querySelector('[data-market-copy-all]').disabled = !deals.length;
+        const list = root.querySelector('.slink-market-list');
+        const old = new Map([...list.querySelectorAll('[data-deal-id]')].map(node => [node.dataset.dealId,node]));
+        list.querySelector('.slink-market-empty')?.remove();
+        deals.forEach((deal,index) => {
+          let card = old.get(String(deal.id)); old.delete(String(deal.id));
+          if (!card) {
+            card = document.createElement('article'); card.className = 'slink-market-deal'; card.dataset.dealId = String(deal.id);
+            card.innerHTML = '<strong></strong><span></span><div class="slink-market-actions"><a target="_self">Open &amp; highlight</a><button type="button" data-market-copy>Copy</button><button type="button" data-market-send disabled>Send to Faction</button><button type="button" data-market-dismiss>Dismiss 5m</button></div>';
+            for (const action of ['copy','send','dismiss']) card.querySelector('[data-market-' + action + ']').dataset['market' + action[0].toUpperCase() + action.slice(1)] = deal.id;
+          }
+          card.querySelector('strong').textContent = deal.source + ' · ' + deal.itemName;
+          card.querySelector('span').textContent = deal.detail; card.querySelector('a').href = deal.href;
+          if (list.children[index] !== card) list.insertBefore(card,list.children[index] || null);
         });
-        copyAll?.addEventListener('click', async () => {
-          const result = await SLINK.core.factionChat.prime(aggregateShare(deals), { key:marketShareKey('all') });
-          copyAll.textContent = result.ok ? 'List copied' : result.label;
-          updateShareButtons(root);
-        });
-        sendAll?.addEventListener('click', async () => {
-          sendAll.disabled = true; sendAll.textContent = 'Sending…';
-          const result = await SLINK.core.factionChat.sendPrimed({ key:marketShareKey('all') });
-          sendAll.textContent = result.label;
-          updateShareButtons(root);
-        });
-        root.querySelectorAll('[data-market-copy]').forEach(button => button.addEventListener('click', async () => {
-          const row = deals.find(item => item.id === button.dataset.marketCopy);
-          const result = row ? await SLINK.core.factionChat.prime(row.shareText, { key:marketShareKey(row.id) }) : { ok:false, label:'Copy failed' };
-          button.textContent = result.label;
-          updateShareButtons(root);
-        }));
-        root.querySelectorAll('[data-market-send]').forEach(button => button.addEventListener('click', async () => {
-          const row = deals.find(item => item.id === button.dataset.marketSend);
-          if (!row) return;
-          button.disabled = true; button.textContent = 'Sending…';
-          const result = await SLINK.core.factionChat.sendPrimed({ key:marketShareKey(row.id) });
-          button.textContent = result.label;
-          updateShareButtons(root);
-        }));
-        root.querySelectorAll('[data-market-dismiss]').forEach(button => button.addEventListener('click', async () => {
-          const row = deals.find(item => item.id === button.dataset.marketDismiss);
-          if (!row) return;
-          button.disabled = true; button.textContent = 'Dismissing…';
-          render(await SLINK.core.messaging.send('market.deal.dismiss', { dismissKey:row.dismissKey }));
-        }));
-        updateShareButtons(root);
-        schedulePurchaseOpportunityFormatting(0);
+        for (const node of old.values()) node.remove();
+        if (!deals.length) {
+          const empty = document.createElement('div'); empty.className = 'slink-market-empty'; empty.textContent = 'No watched listing is currently at or below its target.'; list.append(empty);
+        }
+        updateShareButtons(root); schedulePurchaseOpportunityFormatting(0);
       }
 
+      context.listen(root,'click',async event => {
+        const button = event.target.closest('button'); if (!button || button.disabled || stopped) return;
+        const deals = current?.opportunities || [];
+        try {
+          if (button.matches('[data-market-retry]')) {await soundPreferences.flush(); return;}
+          if (button.matches('[data-market-copy-all]')) {
+            const result = await SLINK.core.factionChat.prime(aggregateShare(deals),{key:marketShareKey('all')});
+            if (!stopped) button.textContent = result.ok ? 'List copied' : result.label;
+          } else if (button.matches('[data-market-send-all],[data-market-send]')) {
+            const id = button.matches('[data-market-send-all]') ? 'all' : button.dataset.marketSend;
+            if (id !== 'all' && !deals.some(row => String(row.id) === id)) return;
+            button.disabled = true;
+            const result = await SLINK.core.factionChat.sendPrimed({key:marketShareKey(id)});
+            if (!stopped) button.textContent = result.label;
+          } else if (button.matches('[data-market-copy]')) {
+            const row = deals.find(item => String(item.id) === button.dataset.marketCopy); if (!row) return;
+            const result = await SLINK.core.factionChat.prime(row.shareText,{key:marketShareKey(row.id)});
+            if (!stopped) button.textContent = result.label;
+          } else if (button.matches('[data-market-dismiss]')) {
+            const row = deals.find(item => String(item.id) === button.dataset.marketDismiss); if (!row) return;
+            button.disabled = true;
+            render(await SLINK.core.messaging.send('market.deal.dismiss',{dismissKey:row.dismissKey}));
+          }
+        } catch (error) {if (!stopped) {button.disabled = false;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}}
+        finally {if (!stopped) updateShareButtons(root);}
+      });
+
       async function load(refreshIfDue = true) {
-        try { render(await SLINK.core.messaging.send('market.status', { refreshIfDue })); await claimMarketSound(); }
-        catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
+        if (loading || stopped) return;
+        loading = true; const revision = preferenceRevision;
+        try {
+          const status = await SLINK.core.messaging.send('market.status',{refreshIfDue});
+          if (revision !== preferenceRevision) status.settings = {...status.settings,...current?.settings};
+          render(status); if (!stopped) await claimMarketSound();
+        } catch (error) {if (!stopped) ui.setStatus(SLINK.core.format.errorMessage(error),'error');}
+        finally {loading = false;}
       }
 
       const marketActions = [
-        { id:'refresh', label:'Refresh', onClick:async event => { event.currentTarget.disabled = true; try { await touchMarketActivity(true); render(await SLINK.core.messaging.send('market.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
+        { id:'refresh', label:'Refresh', onClick:async event => { event.currentTarget.disabled = true; try { await soundPreferences.flush(); await touchMarketActivity(true); render(await SLINK.core.messaging.send('market.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
         { id:'permissions', label:'Refresh permissions', onClick:async event => { event.currentTarget.disabled = true; try { await touchMarketActivity(true); render(await SLINK.core.messaging.send('market.permissions.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
         { id:'settings', label:'Settings', onClick:async () => { await touchMarketActivity(true); return SLINK.core.messaging.send('ui.dashboard.open', { page:'alerts', efficiencyView:'market' }); } }
       ];
@@ -1282,7 +1317,7 @@
         if (!stopped && moduleVisible() && Date.now() - lastActivityTouchAt <= INACTIVE_AFTER_MS) void load(true);
       }, 5_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
-      return { stop() { stopped = true; observer?.disconnect(); visibilityObserver?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); moduleView?.removeEventListener('click', noteMarketInteraction, true); moduleView?.removeEventListener('input', noteMarketInteraction, true); moduleView?.removeEventListener('change', noteMarketInteraction, true); global.removeEventListener('slink:api-usage', updateApiUsage); global.removeEventListener('hashchange', schedulePurchaseOpportunityFormatting); global.removeEventListener('popstate', schedulePurchaseOpportunityFormatting); global.removeEventListener('resize', scheduleQuickPurchaseControlSync); global.removeEventListener('scroll', scheduleQuickPurchaseControlSync, true); document.removeEventListener('click', handleHighlightedQuickPurchaseClick, true); document.removeEventListener('click', handleBazaarPurchaseClick, true); ui.setAlertCount('market', 0); clearPurchaseOpportunityFormatting(); } };
+      return { async stop() { stopped = true; await soundPreferences.stop(); if (previousExplicit === undefined) delete root.dataset.uiExplicitCommit; else root.dataset.uiExplicitCommit = previousExplicit; observer?.disconnect(); visibilityObserver?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); moduleView?.removeEventListener('click', noteMarketInteraction, true); moduleView?.removeEventListener('input', noteMarketInteraction, true); moduleView?.removeEventListener('change', noteMarketInteraction, true); global.removeEventListener('slink:api-usage', updateApiUsage); global.removeEventListener('hashchange', schedulePurchaseOpportunityFormatting); global.removeEventListener('popstate', schedulePurchaseOpportunityFormatting); global.removeEventListener('resize', scheduleQuickPurchaseControlSync); global.removeEventListener('scroll', scheduleQuickPurchaseControlSync, true); document.removeEventListener('click', handleHighlightedQuickPurchaseClick, true); document.removeEventListener('click', handleBazaarPurchaseClick, true); ui.setAlertCount('market', 0); clearPurchaseOpportunityFormatting(); } };
     }
   });
 })(globalThis);

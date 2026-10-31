@@ -55,6 +55,7 @@
     if (!response?.ok) {
       const error = new Error(response?.error?.message || 'SLINK background request failed.');
       error.code = response?.error?.code || 'SLINK_MESSAGE_FAILED';
+      for(const key of ['status','retryAfterMs','provider'])if(response?.error?.[key]!==undefined)error[key]=response.error[key];
       throw error;
     }
     return response.data;
@@ -84,6 +85,7 @@
           requestId: message.requestId,
           error: {
             code: String(error?.code || 'SLINK_BACKGROUND_ERROR'),
+            status:Number(error?.status)||0, retryAfterMs:Number(error?.retryAfterMs)||0, provider:String(error?.provider||''),
             message: SLINK.core.format?.errorMessage(error) || String(error)
           }
         }));

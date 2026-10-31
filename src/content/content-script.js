@@ -8,7 +8,7 @@
     'ui.pagePanelHidden','ui.main.position','ui.bubble.position','ui.main.size','ui.main.collapsed','ui.main.minimizedMode',
     'ui.main.navigation.v2','ui.main.activeModule','ui.main.activeModulesByGroup',
     'permissions.snapshot','permissions.leveling','permissions.war','permissions.access',
-    SLINK.core.themes.STORAGE_KEY,SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY,SLINK.core.themes.CATALOG_STORAGE_KEY
+    SLINK.core.themes.STORAGE_KEY,SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY,SLINK.core.themes.CATALOG_STORAGE_KEY,'ui.tornTheme.v1'
   ];
   let startupValues = {};
   try {
@@ -34,6 +34,9 @@
   let runtimeActive = false;
   let modulesRunning = false;
   let activityTransition = Promise.resolve();
+  let activityGeneration = 0;
+  let claimGeneration = 0;
+  let activityNeedsCleanup = false;
 
   ui.setHidden(Boolean(startupValues['ui.pagePanelHidden']));
 
@@ -55,7 +58,8 @@
       permissions,
       ui,
       modulePresentation,
-      moduleVisible: module => SLINK.core.storage.get(`ui.modules.${module.id}.showInTorn`, module.defaultShowInTorn)
+      moduleVisible: module => SLINK.core.storage.get(`ui.modules.${module.id}.showInTorn`, module.defaultShowInTorn),
+      isActive: () => runtimeActive && SLINK.core.pageActivity.eligible()
     });
   }
 
@@ -115,9 +119,20 @@
   }
 
   async function applyRuntimeActivity(active) {
-    const next = Boolean(active);
+    const next = Boolean(active) && document.visibilityState === 'visible' && document.hasFocus();
+    const generation = ++activityGeneration;
+    // Revoke synchronously: do not wait for a slow module start/stop queue.
+    runtimeActive = next;
+    SLINK.core.pageActivity.setGranted(next);
+    if (!next) { activityNeedsCleanup = true; stopRuntimeTimers(); SLINK.modules.invalidate?.(); }
     activityTransition = activityTransition.then(async () => {
-      runtimeActive = next;
+      if (generation !== activityGeneration) return;
+      if (activityNeedsCleanup) {
+        await SLINK.modules.stopAll({ preserveUi:true });
+        modulesRunning = false;
+        activityNeedsCleanup = false;
+        if (generation !== activityGeneration) return;
+      }
       if (!runtimeActive) {
         stopRuntimeTimers();
         // Yield network/DOM workers to the newly active Torn tab without
@@ -127,21 +142,26 @@
       }
       if (!initialized || modulesRunning) return;
       const permissions = await reloadThemeAndPermissions();
-      if (!runtimeActive) return;
+      if (!runtimeActive || generation !== activityGeneration) return;
       await startModules(permissions);
       modulesRunning = true;
+      if (!runtimeActive || generation !== activityGeneration) {
+        await SLINK.modules.stopAll({ preserveUi:true }); modulesRunning = false; return;
+      }
       await startRuntimeTimers();
     }).catch(error => console.error('[SLINK] Page activity transition:', error));
     return activityTransition;
   }
 
   async function claimRuntimeActivity() {
-    if (document.visibilityState !== 'visible' || document.hasFocus?.() !== true || !global.chrome?.runtime?.id) {
+    const claim = ++claimGeneration;
+    if (document.visibilityState !== 'visible' || !document.hasFocus() || !global.chrome?.runtime?.id) {
       await applyRuntimeActivity(false);
       return false;
     }
     try {
       const response = await chrome.runtime.sendMessage({ channel:'slink-page-activity', type:'claim', visible:true, url:global.location.href });
+      if (claim !== claimGeneration) return false;
       await applyRuntimeActivity(response?.active === true);
       return response?.active === true;
     } catch (error) {
@@ -152,6 +172,7 @@
   }
 
   function releaseRuntimeActivity() {
+    claimGeneration += 1;
     void applyRuntimeActivity(false);
     if (global.chrome?.runtime?.id) void chrome.runtime.sendMessage({ channel:'slink-page-activity', type:'release' }).catch(() => {});
   }
@@ -235,6 +256,7 @@
     if (changes[themePanelOpacityKey]) {
       ui.setThemePanelOpacity(changes[themePanelOpacityKey].newValue);
     }
+    if(changes[SLINK.core.storage.fullKey('ui.tornTheme.v1')])ui.setTornThemeSettings?.(changes[SLINK.core.storage.fullKey('ui.tornTheme.v1')].newValue);
     if (changes[themeKey] || changes[catalogKey]) {
       void Promise.all([
         SLINK.core.storage.get(SLINK.core.themes.STORAGE_KEY, SLINK.core.themes.DEFAULT_THEME_ID),
@@ -279,5 +301,3 @@
   global.addEventListener('pageshow', () => void claimRuntimeActivity());
   global.addEventListener('pagehide', releaseRuntimeActivity);
 })(globalThis);
-
-

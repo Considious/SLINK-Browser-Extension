@@ -12,7 +12,7 @@
   const STORAGE_KEY = 'considious-custom-chat-buttons-v1';
   const ARM_DURATION_MS = 10_000;
   const NEWSLETTER_FALLBACK_LIMIT = 60_000;
-  const CHAT_ROOT_SELECTOR = '[id^="faction-"], [id^="private-"]';
+  const CHAT_ROOT_SELECTOR = '[id^="faction-"], [id^="private-"], #chatRoot [id="faction"], #chatRoot [id="company"]';
   const COMPOSER_SELECTOR = 'textarea[placeholder="Type your message here..."], textarea[class*="textarea___"], textarea';
   const CHAT_HEADER_SELECTOR = 'button[class*="header___"], [class*="header___"]';
   const CHAT_HEADER_DISCOVERY_SELECTOR = 'button[data-prevent-flyout-swipe="true"][class*="header___"], button[class*="header___"]';
@@ -29,7 +29,12 @@
   const SCOPES = new Set(Object.keys(SCOPE_CONTEXTS));
 
   let macros = loadMacros();
+  let sharedRevision = null;
+  let sharedReady = null;
+  let savingEditorData = false;
   let menu = null;
+  let menuMacros = null;
+  let windowMedia = null;
   let menuChatRoot = null;
   let menuStatus = '';
   let editor = null;
@@ -41,35 +46,33 @@
 
   let observer = null;
   let enabled = false;
-  function enable() {
-    if (enabled) return;
-    enabled = true;
-    addStyles();
-    scanContexts();
-    observer = new MutationObserver(mutations => {
-      if (!activePage()) return;
-      if (menuChatRoot && !menuChatRoot.isConnected) closeMenu();
-      const selector = CHAT_ROOT_SELECTOR + ',' + CHAT_HEADER_DISCOVERY_SELECTOR + ',[data-testid="editor-root"]';
-      if (mutations.some(mutation => [...(mutation.addedNodes || [])].some(node => node.nodeType === 1 &&
-        (node.matches?.(selector) || node.querySelector?.(selector))))) scheduleScan();
-    });
-    syncActivity();
-    window.addEventListener('hashchange', scheduleScan);
-  }
-  function activePage() { return document.visibilityState === 'visible' && document.hasFocus?.() === true; }
+  const activity = globalThis.SLINK_EXTENSION.core.pageActivity;
   function syncActivity() {
     observer?.disconnect();
-    window.clearTimeout(scanTimer); scanTimer = null;
-    if (!enabled || !activePage()) return;
+    if (!enabled || !activity.eligible()) { clearTimeout(scanTimer); scanTimer = null; closeMenu(); return; }
     observer.observe(document.documentElement, { childList:true, subtree:true });
     scheduleScan();
   }
-  document.addEventListener('visibilitychange', syncActivity);
-  window.addEventListener('focus', syncActivity);
-  window.addEventListener('blur', syncActivity);
-  window.addEventListener('pageshow', syncActivity);
-  window.addEventListener('pagehide', () => { observer?.disconnect(); window.clearTimeout(scanTimer); scanTimer = null; });
+  activity.subscribe(syncActivity);
+  window.addEventListener('slink-chat-disable', () => { enabled = false; syncActivity(); });
+  function enable() {
+    if (enabled) return;
+    enabled = true;
+    sharedReady = SLINK_EXTENSION.core.messaging.send('chat.macros.importLegacy',{macros:loadMacros()}).then(record=>{
+      sharedRevision=record.revision;macros=normalizeMacros(record.macros);
+      if(menu&&!menu.hidden)renderMenu();return record;
+    }).catch(error=>{sharedRevision=null;console.warn('[SLINK] Chat buttons not synchronized:',error.message);return null;});
+    addStyles();
+    observer = new MutationObserver(mutations => {
+      if (!activity.eligible()) return;
+      if (menuChatRoot && !menuChatRoot.isConnected) closeMenu();
+      const selector = CHAT_ROOT_SELECTOR + ',' + CHAT_HEADER_DISCOVERY_SELECTOR + ',' + COMPOSER_SELECTOR + ',[data-testid="editor-root"]';
+      if (mutations.some(mutation => [...(mutation.addedNodes || [])].some(node => node.nodeType === 1 && (node.matches?.(selector) || node.querySelector?.(selector))))) scheduleScan();
+    });
+    syncActivity();
+  }
   window.addEventListener('slink-chat-enable', enable);
+  window.addEventListener('hashchange', scheduleScan);
 
   window.addEventListener('resize', () => {
     if (menu && !menu.hidden && menuChatRoot) positionMenu(menuChatRoot);
@@ -134,9 +137,19 @@
     }
   }
 
-  function saveMacros() {
+  async function saveMacros(nextMacros) {
+    await sharedReady;
+    if(sharedRevision===null)throw Error('Chat storage is unavailable. Your draft has been kept; reopen Chat after access is restored.');
+    const record=await SLINK_EXTENSION.core.messaging.send('chat.macros.save',{macros:nextMacros,expectedRevision:sharedRevision});
+    sharedRevision=record.revision;macros=normalizeMacros(record.macros);
     GM_setValue(STORAGE_KEY, macros);
   }
+  chrome.storage.onChanged.addListener((changes,area)=>{
+    const record=changes[SLINK_EXTENSION.STORAGE_PREFIX+'qol.chat.macros.v1']?.newValue;
+    if(area!=='local'||!record||editor)return;
+    sharedRevision=record.revision;macros=normalizeMacros(record.macros);clearArmed();
+    if(menu&&!menu.hidden)renderMenu();
+  });
 
   function isNewsletterPage() {
     return /factions\.php$/i.test(window.location.pathname) && /(?:^|[&#])option=newsletter(?:&|$)/i.test(window.location.hash);
@@ -149,6 +162,9 @@
   function contextType(root) {
     if (isNewsletterRoot(root)) return 'newsletter';
     const id = String(root?.id || '');
+    if(id==='faction')return 'faction';
+    if(id==='company')return 'company';
+    if(/^\d+$/.test(id))return 'private';
     if (id.startsWith('faction-')) return 'faction';
     if (id.startsWith('private-')) return 'private';
     return chatHeader(root)?.querySelector('[class*="arrowIcon___"]') ? 'faction' : 'private';
@@ -291,7 +307,8 @@
   }
 
   function scheduleScan() {
-    if (!activePage() || scanTimer !== null) return;
+    if (!enabled || !activity.eligible()) return;
+    if (scanTimer) window.clearTimeout(scanTimer);
     scanTimer = window.setTimeout(() => {
       scanTimer = null;
       scanContexts();
@@ -305,14 +322,14 @@
     let candidate = header.parentElement;
     const fallback = candidate;
     for (let depth = 0; candidate && candidate !== document.body && depth < 8; depth += 1) {
-      if (candidate.querySelector(COMPOSER_SELECTOR)) return candidate;
+      if (candidate.querySelector(COMPOSER_SELECTOR)&&(!header.closest('#chatRoot')||/^(?:\d+|faction(?:-.*)?|private-.+|company)$/.test(candidate.id))) return candidate;
       candidate = candidate.parentElement;
     }
-    return fallback;
+    return header.closest('#chatRoot')?null:fallback;
   }
 
   function scanContexts() {
-    if (!activePage()) return;
+    if (!enabled || !activity.eligible()) return;
     const handledHeaders = new Set();
     document.querySelectorAll(CHAT_ROOT_SELECTOR).forEach((root) => {
       const header = chatHeader(root);
@@ -412,11 +429,15 @@
     menu.id = 'ccb-menu';
     menu.hidden = true;
     menu.addEventListener('pointerdown', (event) => event.stopPropagation());
+    menuMacros=document.createElement('div');menuMacros.dataset.ccbMacros='';
+    windowMedia=globalThis.SLINK_CHAT_WINDOW_MEDIA?.({menu,macros:menuMacros,isActive:()=>enabled&&activity.eligible()&&!!menuChatRoot?.isConnected,layout:()=>{if(menuChatRoot)positionMenu(menuChatRoot);}});
+    if(!windowMedia)menu.append(menuMacros);
     document.body.appendChild(menu);
     return menu;
   }
 
   function toggleMenu(root) {
+    if(!enabled||!activity.eligible())return;
     if (menu && !menu.hidden && menuChatRoot === root) {
       closeMenu();
       return;
@@ -426,10 +447,12 @@
     const element = ensureMenu();
     element.hidden = false;
     renderMenu(false);
+    windowMedia?.resume();
     positionMenu(root);
   }
 
   function closeMenu() {
+    windowMedia?.suspend();
     if (menu) menu.hidden = true;
     menuChatRoot = null;
     menuStatus = '';
@@ -449,7 +472,7 @@
     const previousScrollTop = preserveScroll
       ? (menu.querySelector('.ccb-menu-list')?.scrollTop || 0)
       : 0;
-    menu.replaceChildren();
+    menuMacros.replaceChildren();
 
     const header = document.createElement('div');
     header.className = 'ccb-menu-head';
@@ -463,7 +486,7 @@
     manage.textContent = '⚙';
     manage.addEventListener('click', openEditor);
     header.append(title, manage);
-    menu.appendChild(header);
+    menuMacros.appendChild(header);
 
     const list = document.createElement('div');
     list.className = 'ccb-menu-list';
@@ -487,13 +510,13 @@
         list.appendChild(button);
       });
     }
-    menu.appendChild(list);
+    menuMacros.appendChild(list);
     list.scrollTop = previousScrollTop;
 
     const status = document.createElement('div');
     status.className = 'ccb-status';
     status.textContent = menuStatus || 'First click loads · second click sends';
-    menu.appendChild(status);
+    menuMacros.appendChild(status);
   }
 
   function positionMenu(root) {
@@ -503,7 +526,7 @@
       : (chatHeader(root)?.querySelector('[data-ccb-trigger]') || chatHeader(root));
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
-    const width = Math.min(280, window.innerWidth - 12);
+    const width = Math.min(menu.dataset.ccbMediaOpen==='true'?420:280, window.innerWidth - 12);
     menu.style.width = `${width}px`;
     menu.style.left = `${Math.max(6, Math.min(window.innerWidth - width - 6, rect.right - width))}px`;
     menu.style.top = `${Math.max(6, Math.min(window.innerHeight - menu.offsetHeight - 6, rect.bottom + 5))}px`;
@@ -690,6 +713,7 @@
   }
 
   async function handleMacroClick(macro, root) {
+    if(!enabled||!activity.eligible())return;
     if (sending) return;
     if (!root?.isConnected) {
       closeMenu();
@@ -747,7 +771,9 @@
     }
   }
 
-  function openEditor() {
+  async function openEditor() {
+    await sharedReady;
+    if(sharedRevision===null){window.alert('Chat settings could not be loaded. Your existing buttons have not been changed.');return;}
     closeMenu();
     if (editor) return;
     editorDraft = macros.map((macro) => ({ ...macro }));
@@ -973,7 +999,8 @@
     renderEditor();
   }
 
-  function saveEditor() {
+  async function saveEditor() {
+    if(savingEditorData)return;
     const incomplete = editorDraft.find((macro) => !String(macro.label || '').trim() || !String(macro.message || '').trim());
     if (incomplete) {
       window.alert('Every custom message button needs both a label and a message.');
@@ -990,14 +1017,19 @@
       window.alert(`Newsletter button "${oversizedNewsletter.label}" exceeds the separate ${NEWSLETTER_FALLBACK_LIMIT.toLocaleString()} character limit.`);
       return;
     }
-    macros = normalizeMacros(editorDraft);
-    saveMacros();
+    const submittedEditor=editor,submittedDraft=JSON.stringify(editorDraft);
+    savingEditorData=true;
+    try { await saveMacros(normalizeMacros(editorDraft)); }
+    catch(error){window.alert(globalThis.SLINK_ERRORS?.message(error)||'This action failed. Retry once; your editor has been kept.');return;}
+    finally{savingEditorData=false;}
     clearArmed();
+    if(editor!==submittedEditor||JSON.stringify(editorDraft)!==submittedDraft){scanContexts();return;}
     closeEditor();
     scanContexts();
   }
 
   function addStyles() {
+    if(document.getElementById('ccb-styles'))return;
     const style = document.createElement('style');
     style.id = 'ccb-styles';
     style.textContent = `
@@ -1009,6 +1041,11 @@
       .ccb-newsletter-limit { color:#9faab3; text-align:right; }
       #ccb-menu { position:fixed; z-index:2147483600; max-height:min(360px,calc(100vh - 12px)); overflow:hidden; padding:7px; border:1px solid #59616a; border-radius:8px; color:#e9edf0; background:#1d2227; box-shadow:0 10px 32px rgba(0,0,0,.58); font:12px/1.3 system-ui,sans-serif; box-sizing:border-box; }
       #ccb-menu[hidden] { display:none !important; }
+      #ccb-menu [hidden] {display:none!important}
+      #ccb-menu[data-ccb-media-open=true] {max-height:min(620px,calc(100dvh - 12px));overflow-y:auto;overscroll-behavior:contain;}
+      .ccb-media-tabs {display:flex;flex-wrap:wrap;gap:5px;padding:4px 0 8px;position:sticky;top:-7px;z-index:1;background:#1d2227;}
+      .ccb-media-tabs button {padding:7px;border:1px solid #777;border-radius:5px;background:#303840;color:#fff;cursor:pointer;font:12px/1.3 system-ui;}
+      .ccb-media-tabs button[aria-pressed=true] {background:#645184;border-color:#cba9fa;}
       .ccb-menu-head { display:flex; align-items:center; gap:8px; padding:2px 2px 6px; border-bottom:1px solid rgba(255,255,255,.1); }
       .ccb-menu-head strong { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .ccb-manage { width:27px; height:25px; padding:0; border:1px solid #59616a; border-radius:5px; color:#e9edf0; background:#303840; cursor:pointer; }
@@ -1059,5 +1096,3 @@
   globalThis.SLINK_CHAT_BUTTONS = Object.freeze({ enable, openEditor });
   window.addEventListener('slink-chat-open-editor', openEditor);
 })();
-
-

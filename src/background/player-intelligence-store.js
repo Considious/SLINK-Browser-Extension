@@ -71,13 +71,8 @@
             const existing = players.get(id);
             existing.onsuccess = () => {
               try {
-                const previous = existing.result?.record;
-                // Stable's legacy merge has no per-field clocks: apply the newer
-                // observation last when reconciling a rollback-created Chrome copy.
-                const age = value => Math.max(Number(value?.observedAt) || 0, Number(value?.checkedAt) || 0);
-                const [older, newer] = previous && age(previous) > age(record) ? [record, previous] : [previous, record];
-                const merged = previous
-                  ? { ...older, ...newer, ...SLINK.core.playerIntelligence.mergeRecord(older, newer) }
+                const merged = existing.result?.record
+                  ? { ...existing.result.record, ...record, ...SLINK.core.playerIntelligence.mergeRecord(existing.result.record, record) }
                   : record;
                 players.put({ id, record:merged });
               } catch { tx.abort(); }

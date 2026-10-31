@@ -40,6 +40,31 @@
 
   let cyclePromise = null;
   let authenticatingPromise = null;
+  let settingsQueue = Promise.resolve();
+  let authenticationQueue = Promise.resolve();
+  const preferenceVersions = {pollSeconds:0,minFF:0,maxFF:0};
+
+  function mutateSettings(update) {
+    const operation = settingsQueue.catch(() => {}).then(async () => {
+      const previous = await settings();
+      const next = update(previous);
+      await SLINK.core.storage.set(KEYS.settings,next);
+      return {previous,next};
+    });
+    settingsQueue = operation;
+    return operation;
+  }
+
+  async function savePreferences(input = {}) {
+    const patch = {};
+    for (const key of Object.keys(preferenceVersions)) if (Object.hasOwn(input,key)) {
+      if (input[key] === '' || input[key] === null || !Number.isFinite(Number(input[key]))) throw new Error('Enter a valid Leveling preference.');
+      patch[key] = clamp(input[key],key === 'pollSeconds' ? 60 : 1,key === 'pollSeconds' ? 300 : 3);
+    }
+    for (const key of Object.keys(patch)) preferenceVersions[key]++;
+    const {next} = await mutateSettings(previous => ({...previous,...patch}));
+    return {settings:{pollSeconds:next.pollSeconds,minFF:next.minFF,maxFF:next.maxFF}};
+  }
   let localLeader = { tabId: null, expiresAt: 0 };
 
   function clamp(value, minimum, maximum) {
@@ -319,22 +344,9 @@
   }
 
   async function ensureBattleStats(force = false) {
-    const cached = await SLINK.core.storage.get(KEYS.battleStats, null);
-    if (!force && cached?.score > 0 && Date.now() - Number(cached.checkedAt) < BATTLE_STATS_CACHE_MS) return cached;
-    const data = await tornJson('https://api.torn.com/v2/user/battlestats');
-    const stats = data?.battlestats ?? data;
-    const values = ['strength', 'defense', 'speed', 'dexterity'].map(name => {
-      const value = finiteNumberOrNull(stats?.[name]?.value ?? stats?.[name]);
-      return value !== null && value >= 0 ? value : null;
-    });
-    if (values.some(value => value === null)) throw new Error('Torn returned incomplete battle stats.');
-    const result = {
-      score: values.reduce((sum, value) => sum + Math.sqrt(value), 0),
-      total: finiteNumberOrNull(stats?.total) ?? values.reduce((sum, value) => sum + value, 0),
-      checkedAt: Date.now()
-    };
-    await SLINK.core.storage.set(KEYS.battleStats, result);
-    return result;
+    const current = await settings();
+    if (!current.tornKey) throw new Error('Torn API key is not configured.');
+    return SLINK.services.sharedData.personal({ key:current.tornKey, force, maxAgeMs:BATTLE_STATS_CACHE_MS });
   }
 
   function fairFightToScoreRatio(fairFight) {
@@ -390,7 +402,7 @@
           fairFight: finiteNumberOrNull(row?.fair_fight),
           bsEstimate: finiteNumberOrNull(row?.bs_estimate),
           source: String(row?.source || 'FFScouter').slice(0, 100),
-          checkedAt: now
+          checkedAt: row?.backup?Number(row.last_updated)*1000:now
         };
       }
       for (const id of ids) {
@@ -405,13 +417,13 @@
     return targets.map(target => {
       const cached = cache[String(target.id)] || {};
       const refined = finiteNumberOrNull(cached.fairFight);
-      const estimated = estimateFairFight(target.total_stats, battleStats);
+      const estimated = String(cached.source||'').startsWith('SLINK Backup')?null:estimateFairFight(target.total_stats, battleStats);
       const fairFight = refined ?? estimated;
       return {
         ...target,
         fair_fight: fairFight,
         fair_fight_estimated: refined === null && estimated !== null,
-        fair_fight_source: refined !== null ? cached.source : (estimated !== null ? 'Local estimate' : ''),
+        fair_fight_source: String(cached.source||'').startsWith('SLINK Backup')?cached.source:refined !== null ? cached.source : (estimated !== null ? 'Local estimate' : ''),
         fair_fight_stale:refined !== null && now - Number(cached.checkedAt || 0) >= FF_CACHE_MS,
         fair_fight_checked_at:Number(cached.checkedAt) || 0,
         bs_estimate: finiteNumberOrNull(cached.bsEstimate) ?? finiteNumberOrNull(target.total_stats),
@@ -761,26 +773,19 @@
     };
   }
 
-  async function saveSettings(input = {}) {
-    const previous = await settings();
-    const requestedContributionLimit = Object.prototype.hasOwnProperty.call(input, 'apiContributionLimit')
-      ? (Number(input.apiContributionLimit) === 0 ? 0 : DEFAULT_API_CONTRIBUTION_LIMIT)
-      : previous.apiContributionLimit;
-    const next = {
-      tornKey: input.clearTornKey ? '' : (String(input.tornKey || '').trim() || previous.tornKey),
-      ffKey: input.clearFfKey ? '' : (String(input.ffKey || '').trim() || previous.ffKey),
-      pollSeconds: clamp(input.pollSeconds || previous.pollSeconds, 60, 300),
-      apiContributionLimit: previous.apiContributionLimit,
-      contributorOnly: Object.prototype.hasOwnProperty.call(input, 'contributorOnly')
-        ? input.contributorOnly === true
-        : previous.contributorOnly,
-      minFF: clamp(input.minFF || previous.minFF, 1, 3),
-      maxFF: clamp(input.maxFF || previous.maxFF, 1, 3)
-    };
+  function saveSettings(input = {}) {
+    const captured = {...input}, versions = {...preferenceVersions};
+    const operation = authenticationQueue.catch(() => {}).then(() => saveAuthentication(captured,versions));
+    authenticationQueue = operation;
+    return operation;
+  }
+
+  async function saveAuthentication(input, versions) {
+    const before = await settings();
     if (
-      next.contributorOnly &&
-      !previous.contributorOnly &&
-      previous.tornKey &&
+      input.contributorOnly === true &&
+      !before.contributorOnly &&
+      before.tornKey &&
       await acceptedCurrentTerms()
     ) {
       try {
@@ -790,7 +795,22 @@
         });
       } catch {}
     }
-    await SLINK.core.storage.set(KEYS.settings, next);
+
+    const {previous,next} = await mutateSettings(previous => {
+      const next = {
+        ...previous,
+        tornKey:input.clearTornKey ? '' : (String(input.tornKey || '').trim() || previous.tornKey),
+        ffKey:input.clearFfKey ? '' : (String(input.ffKey || '').trim() || previous.ffKey),
+        contributorOnly:Object.hasOwn(input,'contributorOnly') ? input.contributorOnly === true : previous.contributorOnly
+      };
+      for (const key of Object.keys(preferenceVersions)) if (Object.hasOwn(input,key) && versions[key] === preferenceVersions[key]) {
+        next[key] = clamp(input[key] || previous[key],key === 'pollSeconds' ? 60 : 1,key === 'pollSeconds' ? 300 : 3);
+      }
+      return next;
+    });
+    const requestedContributionLimit = Object.prototype.hasOwnProperty.call(input, 'apiContributionLimit')
+      ? (Number(input.apiContributionLimit) === 0 ? 0 : DEFAULT_API_CONTRIBUTION_LIMIT)
+      : previous.apiContributionLimit;
     if (input.acceptTerms === true) {
       const terms = await fetchTerms(true);
       await SLINK.core.storage.set(KEYS.acceptedTerms, {
@@ -828,7 +848,7 @@
         await SLINK.core.storage.set(KEYS.lastInteractionAt, Date.now());
         await syncUserDemand(true);
       }
-      await SLINK.core.storage.set(KEYS.settings, next);
+      await mutateSettings(previous => ({...previous,apiContributionLimit:next.apiContributionLimit}));
     }
     return publicStatus();
   }
@@ -1099,6 +1119,7 @@
       'leveling.status': publicStatus,
       'leveling.terms': () => fetchTerms(true),
       'leveling.settings.save': saveSettings,
+      'leveling.preferences.save': savePreferences,
       'leveling.activity.touch': touchActivity,
       'leveling.session.clear': async () => {
         await clearSession();

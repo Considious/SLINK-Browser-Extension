@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const row={player_id:1,bs_estimate:12345,bss_public:400,last_updated:Math.floor(Date.now()/1000),source:'bss',fair_fight:2};
+let offline=false,calls=[];
+const slink={core:{permissions:{getCapability:()=>({origins:['https://ffscouter.com/*'],label:'FF'})}},define(group,name,value){this[group][name]=value;}};
+const context=vm.createContext({SLINK_EXTENSION:slink,URL,AbortController,setTimeout,clearTimeout,console,chrome:{permissions:{contains:async()=>true}},fetch:async url=>{calls.push(String(url));if(offline)throw Error('network unavailable');return {ok:true,status:200,text:async()=>JSON.stringify([row])};}});
+vm.runInContext(read('src/core/ff-backup.js'),context);context.SLINK_FF_BACKUP_CLIENT=context.SLINK_FF_BACKUP.create({store:context.SLINK_FF_BACKUP.openStore(null),ownScore:async()=>800,transport:async()=>{throw Error('No backup network permitted');}});
+vm.runInContext(read('src/core/http.js'),context);
+const url='https://ffscouter.com/api/v1/get-stats?key=never-persist&targets=1';
+let result=await slink.core.http.requestJson('ffscouter',url);assert.equal(result[0].fair_fight,2);offline=true;result=await slink.core.http.requestJson('ffscouter',url);assert.equal(result[0].fair_fight,2.33);assert.match(result[0].source,/SLINK Backup/);assert.equal(calls.length,2);assert.ok(calls.every(url=>new URL(url).hostname==='ffscouter.com'));
+console.log('Actual extension HTTP wrapper: passive capture, local outage fallback, source labels and zero extra Torn requests passed.');

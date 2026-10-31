@@ -16,6 +16,7 @@
   const PAGES_PER_BATCH = 2;
   let scanPromise = null;
   let budgetQueue = Promise.resolve();
+  let settingsQueue = Promise.resolve();
   let legacyStatusMigration = null;
 
   function defaultRuntime() {
@@ -162,7 +163,7 @@
           fairFight:Number.isFinite(fairFight) && fairFight > 0 ? fairFight : null,
           bsEstimate:Number.isFinite(bsEstimate) && bsEstimate > 0 ? bsEstimate : null,
           source:String(row?.source || 'FFScouter').slice(0, 100),
-          checkedAt:now
+          checkedAt:row?.backup?Number(row.last_updated)*1000:now
         };
       }
       for (const id of chunk) {
@@ -261,20 +262,32 @@
     }
   }
 
-  async function saveSettings(input = {}) {
-    const previous = await settings();
-    const next = CORE.normalizeSettings({
-      ...previous,
-      ...input,
-      tornKey:input.clearTornKey ? '' : (String(input.tornKey || '').trim() || previous.tornKey),
-      ffKey:input.clearFfKey ? '' : (String(input.ffKey || '').trim() || previous.ffKey)
+  function saveSettings(input = {}) {
+    const task = settingsQueue.then(async () => {
+      const stored = await SLINK.core.storage.get(KEYS.settings, {});
+      const previous = CORE.normalizeSettings(stored);
+      const next = CORE.normalizeSettings({
+        ...previous,
+        ...input,
+        tornKey:input.clearTornKey ? '' : (String(input.tornKey || '').trim() || previous.tornKey),
+        ffKey:input.clearFfKey ? '' : (String(input.ffKey || '').trim() || previous.ffKey)
+      });
+      await SLINK.core.storage.set(KEYS.settings, { ...stored, ...next });
+      const scanShapeChanged = ['minimumReward', 'scanFullList']
+        .some(key => JSON.stringify(next[key]) !== JSON.stringify(previous[key]));
+      if ((!next.enabled && (input.deferScanRestart !== true || previous.enabled)) || (scanShapeChanged && input.deferScanRestart !== true)) await SLINK.core.storage.set(KEYS.runtime, next.enabled ? freshStart() : defaultRuntime());
+      if (next.enabled) await SLINK.core.storage.set(KEYS.activity, Date.now());
     });
-    await SLINK.core.storage.set(KEYS.settings, next);
-    const scanShapeChanged = ['minimumReward', 'scanFullList']
-      .some(key => JSON.stringify(next[key]) !== JSON.stringify(previous[key]));
-    if (!next.enabled || scanShapeChanged) await SLINK.core.storage.set(KEYS.runtime, next.enabled ? freshStart() : defaultRuntime());
-    if (next.enabled) await SLINK.core.storage.set(KEYS.activity, Date.now());
-    return publicStatus();
+    settingsQueue = task.catch(() => undefined);
+    // Public presentation can require legacy-cache migration. Do not hold the
+    // settings mutation queue on that unrelated work.
+    return task.then(async () => {
+      if (input.deferScanRestart !== true) return publicStatus();
+      // Preference writes acknowledge without reading the full player cache or
+      // rebuilding results. The UI coalesces that local read after editing.
+      const currentSettings=await settings(),keys=await credentials(currentSettings);
+      return {configured:Boolean(keys.tornKey&&(keys.ffKey||currentSettings.includeUnknownEstimates)),settings:publicSettings(currentSettings,keys)};
+    });
   }
 
   async function sharedStatuses() {
@@ -330,6 +343,10 @@
     return publicStatus();
   }
 
+  function publicSettings(currentSettings, keys) {
+    return {...currentSettings,tornKey:undefined,ffKey:undefined,hasTornKey:Boolean(keys.tornKey),hasFfKey:Boolean(keys.ffKey),tornKeySource:keys.tornSource,ffKeySource:keys.ffSource};
+  }
+
   async function publicStatus() {
     const [currentSettings, currentRuntime, fairFight, statuses, lastInteractionAt] = await Promise.all([
       settings(), runtime(), SLINK.core.storage.get(KEYS.fairFight, {}),
@@ -340,15 +357,7 @@
     return {
       configured:Boolean(keys.tornKey && (keys.ffKey || currentSettings.includeUnknownEstimates)),
       active:active(lastInteractionAt),
-      settings:{
-        ...currentSettings,
-        tornKey:undefined,
-        ffKey:undefined,
-        hasTornKey:Boolean(keys.tornKey),
-        hasFfKey:Boolean(keys.ffKey),
-        tornKeySource:keys.tornSource,
-        ffKeySource:keys.ffSource
-      },
+      settings:publicSettings(currentSettings,keys),
       runtime:{
         ...currentRuntime,
         targets:undefined,

@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';import vm from 'node:vm';import {readFileSync} from 'node:fs';
+const ctx=vm.createContext({URL,Date,console});vm.runInContext(readFileSync(new URL('../src/core/chat-ff.js',import.meta.url),'utf8'),ctx);const C=ctx.SLINK_CHAT_FF;
+assert.equal(C.playerId({getAttribute:()=>'/profiles.php?XID=123'}),123);assert.equal(C.playerId({getAttribute:()=> 'https://evil.test/profiles.php?XID=123'}),null);
+assert.equal(C.fromRow({player_id:1,fair_fight:null}).ff,null);assert.equal(C.fromRow({player_id:1,fair_fight:199.28}).ff,199.28);
+let clock=Date.now(),calls=0,remote=0,offline=false,observer=7;
+const intel={playerId:2,fairFight:2.25,checkedAt:clock-10000,fairFightContext:{observerId:7,ownStatsAt:10}};
+const lookup=C.createLookup({now:()=>clock,state:async()=>({allowed:true,key:'private-key',context:{observerId:observer,ownStatsAt:10}}),request:async ids=>{calls++;if(offline)throw Error('offline');return ids.filter(id=>id===1).map(player_id=>({player_id,fair_fight:2.5,bs_estimate:1000}));},intelligence:async id=>id===2?intel:null,backup:async ids=>{remote++;return ids.filter(id=>id===3).map(player_id=>({player_id,fair_fight:2.8,backup:true,source:'SLINK Backup',last_updated:Math.floor(clock/1000)-86400}));}});
+let rows=await lookup([1,1,2,3,4]);assert.equal(rows.length,4);assert.equal(calls,1);assert.equal(rows.find(r=>r.id===1).ff,2.5);assert.equal(rows.find(r=>r.id===2).source,'SLINK player intelligence');assert.equal(rows.find(r=>r.id===3).backup,true);assert.equal(rows.find(r=>r.id===4).ff,null);
+await lookup([1,2,3,4]);assert.equal(calls,1);assert.equal(remote,1);
+offline=true;clock+=600001;rows=await lookup([2]);assert.equal(rows[0].ff,2.25);
+observer=8;rows=await lookup([2]);assert.equal(rows[0].ff,null,'Observer-bound intelligence must never leak to a different account');
+assert.equal(C.fromIntelligence(intel,{observerId:7,ownStatsAt:11}),null,'Updated own battle stats invalidate cached personal FF');
+let release;const wait=new Promise(r=>release=r);let requests=0;const concurrent=C.createLookup({state:async()=>({allowed:true,key:'x'}),request:async()=>{requests++;await wait;return [{player_id:1,fair_fight:2}];},intelligence:async()=>null,backup:async()=>[]});const a=concurrent([1]),b=concurrent([1]);await new Promise(r=>setTimeout(r,0));release();await Promise.all([a,b]);assert.equal(requests,1);
+const noAccess=C.createLookup({state:async()=>({allowed:false}),request:()=>{throw Error('must not request');}});assert.equal((await noAccess([1])).length,0);
+const invalid=C.createLookup({state:async()=>({allowed:true,key:'x'}),request:async()=>{throw Object.assign(Error('invalid'),{status:401});},intelligence:async()=>intel,backup:async()=>{throw Error('must not conceal invalid credentials');}});await assert.rejects(invalid([1]),/invalid/);
+console.log('Independent chat FF: primary priority, scoped intelligence/public backup, unknowns, context fences, batching, cache, permission denial and credential errors passed.');
+const missingPersonal=C.createLookup({state:async()=>({allowed:true,key:'x'}),request:async()=>[{player_id:1,bs_estimate:1000,fair_fight:null}],intelligence:async()=>null,backup:async()=>[{player_id:1,bs_estimate:1000,fair_fight:2.3,backup:true,source:'SLINK Backup',last_updated:Math.floor(Date.now()/1000)}]});assert.equal((await missingPersonal([1]))[0].ff,2.3,'A primary total without personal FF can use locally computed public-BSS fallback');

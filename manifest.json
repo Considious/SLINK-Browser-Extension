@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "SLINK",
-  "version": "0.19.14",
+  "name": "SLINK Audit Test",
+  "version": "0.19.15",
+  "version_name": "0.19.15",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -9,6 +10,8 @@
     "storage"
   ],
   "host_permissions": [
+    "https://api.giphy.com/*",
+    "https://chatsticker.com/*",
     "https://www.torn.com/*",
     "https://api.torn.com/*",
     "https://ffscouter.com/*",
@@ -76,7 +79,9 @@
       "js": [
         "src/core/runtime.js",
         "src/core/format.js",
+        "src/core/errors.js",
         "src/core/mugging-ff.js",
+        "src/core/clipboard.js",
         "src/core/ui-state.js",
         "src/core/form-state.js",
         "src/core/storage.js",
@@ -88,6 +93,10 @@
         "src/core/merits.js",
         "src/core/themes.js",
         "src/core/messaging.js",
+        "src/core/page-activity.js",
+        "src/core/torn-theme-variables.js",
+        "src/core/torn-theme-pages.js",
+        "src/core/torn-theme.js",
         "src/content/player-intelligence-dom.js",
         "src/core/faction-chat.js",
         "src/core/abroad-stocks.js",
@@ -103,6 +112,10 @@
         "src/core/bounties.js",
         "src/content/xanax-safety.js",
         "src/content/custom-chat-buttons.js",
+        "src/core/chat-ff.js",
+        "src/content/chat-ff.js",
+        "src/core/chat-giphy.js",
+        "src/core/chat-giphy-ui.js",
         "src/content/ui-shell.js",
         "src/modules/leveling.js",
         "src/modules/bounties.js",

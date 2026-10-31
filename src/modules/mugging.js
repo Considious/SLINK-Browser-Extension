@@ -122,18 +122,91 @@
       let notice = '';
       let error = '';
       let busy = false;
+      let finding = false;
+      let stopped = false;
+      let saveSequence = 0;
+      let appliedSaveSequence = 0;
+      let enableSequence = 0;
+      let cacheRevision = 0;
+      const pendingFields = new Map();
+      const controlKeys = { 'mugging-enabled':'enabled', 'mugging-min-ff':'minFairFight', 'mugging-max-ff':'maxFairFight', 'mugging-limit':'limit' };
+      let mounted = false;
+      let actionState = '';
+      let renderedSummary = '';
+      let renderedTargets = '';
       let moduleView = null;
       let visibilityObserver = null;
       let lastActivityTouchAt = 0;
       context.ui.setTitle('SLINK Mugging');
       context.ui.setModuleStyles(MODULE_STYLES);
+      const contentRoot = context.ui.getContentElement();
+      contentRoot.dataset.uiExplicitCommit = 'true';
+      const draftGuard = SLINK.core.formState?.protect(contentRoot.getRootNode?.() || contentRoot);
 
-      async function persistSettings() {
-        await SLINK.core.storage.set(SETTINGS_KEY, settings);
+      async function persistSettings(patch, element) {
+        const controls = element?.matches?.('input') ? [element] : [...(element?.querySelectorAll?.('input') || [])];
+        const tickets = controls.map(control => ({ id:control.id, ticket:draftGuard?.begin(control) }));
+        const sequence = ++saveSequence;
+        cacheRevision++;
+        const fields = Object.keys(patch);
+        for (const key of fields) pendingFields.set(key, (pendingFields.get(key) || 0) + 1);
+        try {
+          // Submit immediately to the background's existing settings queue.
+          // Delaying writes in a second UI queue could reorder user intent
+          // across a paused/resumed module or another window.
+          const saved = fields.length
+            ? await SLINK.core.messaging.send('mugging.settings.save', patch) : settings;
+          const acknowledged = tickets.filter(({ticket}) => ticket ? draftGuard.commit(ticket) : true);
+          if (stopped || context.signal?.aborted) return null;
+          if (sequence >= appliedSaveSequence) {
+            settings = normalizeSettings(saved);
+            appliedSaveSequence = sequence;
+            error = '';
+          }
+          for (const {id} of acknowledged) {
+            const control = contentRoot.querySelector('#'+id);
+            if (!control) continue;
+            if (control.type === 'checkbox') control.checked = settings[controlKeys[id]];
+            else if (control.value !== String(settings[controlKeys[id]])) control.value = String(settings[controlKeys[id]]);
+          }
+          render();
+          return settings;
+        } finally {
+          for (const key of fields) {
+            const count = (pendingFields.get(key) || 1) - 1;
+            if (count) pendingFields.set(key, count); else pendingFields.delete(key);
+          }
+        }
+      }
+
+      function saveError(caught) {
+        if (stopped || context.signal?.aborted) return;
+        error = SLINK.core.format.errorMessage(caught);
+        render();
+      }
+
+      async function findTargets() {
+        if (finding || busy || stopped || context.signal?.aborted) return;
+        finding = true;
+        const values = {
+          enabled:contentRoot.querySelector('#mugging-enabled')?.checked === true,
+          minFairFight:contentRoot.querySelector('#mugging-min-ff')?.value,
+          maxFairFight:contentRoot.querySelector('#mugging-max-ff')?.value,
+          limit:contentRoot.querySelector('#mugging-limit')?.value
+        };
+        const patch = Object.fromEntries(Object.entries(values).filter(([key,value]) =>
+          pendingFields.has(key) || String(value) !== String(settings[key])
+        ));
+        render();
+        try {
+          const saved = await persistSettings(patch, contentRoot.querySelector('.mugging-controls'));
+          if (saved) await refreshAssignments();
+        } catch (caught) { saveError(caught); }
+        finally { finding = false; render(); }
       }
 
       function moduleVisible() {
-        return Boolean(moduleView && !moduleView.hidden);
+        return Boolean(!stopped && !context.signal?.aborted && moduleView && !moduleView.hidden);
       }
 
       async function touchMuggingUi(force = false) {
@@ -152,25 +225,30 @@
       function syncMuggingVisibility() {
         if (!moduleVisible()) return;
         void touchMuggingUi(true);
+        const revision = cacheRevision;
         void SLINK.core.messaging.send('mugging.status').then(value => {
+          if (stopped || context.signal?.aborted || revision !== cacheRevision) return;
           cache = normalizeCache(value);
           render();
         }).catch(() => null);
       }
 
       async function refreshAssignments() {
-        if (busy) return;
+        if (busy || stopped || context.signal?.aborted) return;
         if (!settings.enabled) {
           error = 'Enable Mugging on this device before requesting assignments.';
           render();
           return;
         }
         busy = true; error = ''; notice = ''; render();
+        const revision = ++cacheRevision;
         try {
-          cache = normalizeCache(await SLINK.core.messaging.send('mugging.assignments.refresh', { ...settings, forceBattleStats:true }));
+          const value = await SLINK.core.messaging.send('mugging.assignments.refresh', { ...settings, forceBattleStats:true });
+          if (stopped || context.signal?.aborted || revision !== cacheRevision) return;
+          cache = normalizeCache(value);
           notice = `Loaded ${cache.targets.length} rough Fair Fight assignments from cached Mugging intelligence.`;
         } catch (caught) {
-          error = SLINK.core.format.errorMessage(caught);
+          if (revision === cacheRevision) error = SLINK.core.format.errorMessage(caught);
         } finally {
           busy = false;
           render();
@@ -197,66 +275,113 @@
       }
 
       function render() {
+        if (stopped || context.signal?.aborted) return;
         context.ui.setSubtitle(settings.enabled ? 'Rough Fair Fight assignments' : 'Disabled locally');
         context.ui.setStatus(error || (settings.enabled ? 'Mugging permission granted.' : 'Mugging is available but disabled on this device.'), error ? 'error' : settings.enabled ? 'ready' : 'normal');
-        context.ui.setActions([{ id:'refresh', label:busy ? 'Finding…' : 'Find targets', onClick:refreshAssignments }]);
+        const nextActionState = busy || finding ? 'busy' : 'ready';
+        if (actionState !== nextActionState) {
+          actionState = nextActionState;
+          context.ui.setActions([{ id:'refresh', label:busy || finding ? 'Finding…' : 'Find targets', disabled:busy || finding, onClick:findTargets }]);
+        }
+        const summary = summaryHtml();
+        const targets = targetsHtml();
+        if (mounted) {
+          if (summary !== renderedSummary) {
+            contentRoot.querySelector('#mugging-summary').innerHTML = summary;
+            renderedSummary = summary;
+          }
+          if (targets !== renderedTargets) {
+            contentRoot.querySelector('#mugging-targets').innerHTML = targets;
+            renderedTargets = targets;
+            bindTargetActions();
+          }
+          const find = contentRoot.querySelector('#mugging-find');
+          find.disabled = busy || finding;
+          find.textContent = busy || finding ? 'Finding targets…' : 'Find targets';
+          updateMessages();
+          return;
+        }
+        mounted = true;
+        renderedSummary = summary;
+        renderedTargets = targets;
         context.ui.setContentHtml(`
-          <div class="mugging-summary">
-            <div class="mugging-stat"><b>${cache.targets.length}</b><span>Assignments</span></div>
-            <div class="mugging-stat"><b>${cache.pool.eligible}</b><span>Eligible pool</span></div>
-            <div class="mugging-stat"><b>${cache.userBattleStats ? escape(SLINK.core.format.shortNumber(cache.userBattleStats)) : '—'}</b><span>Your BS</span></div>
-            <div class="mugging-stat"><b>${escape(cache.contribution.mode)}</b><span>${cache.contribution.fetched}/${cache.contribution.apiBudgetPerMinute || 0} contributor checks</span></div>
-          </div>
-          ${cache.pool.excluded ? `<p class="mugging-note">Pool exclusions: ${Number(cache.pool.excluded.no_estimate)||0} without estimates · ${Number(cache.pool.excluded.timed_unavailable)||0} hospital/jail timers · ${Number(cache.pool.excluded.mug_cooldown)||0} post-mug cooldowns · ${Number(cache.pool.excluded.fair_fight_range)||0} outside your FF range.</p>` : ''}
-          ${cache.ffCheckNotice?`<p class="mugging-note">${escape(cache.ffCheckNotice)}</p>`:''}
+          <div class="mugging-summary" id="mugging-summary">${summary}</div>
+          <p class="mugging-note" id="mugging-pool-note" hidden></p>
+          <p class="mugging-note" id="mugging-ff-note" hidden></p>
           <div class="mugging-controls">
             <label class="mugging-check"><input id="mugging-enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}><span>Enable Mugging on this device</span></label>
             <label>Minimum rough FF<input id="mugging-min-ff" type="number" min="1" max="3" step=".1" value="${settings.minFairFight}"></label>
             <label>Maximum rough FF<input id="mugging-max-ff" type="number" min="1" max="3" step=".1" value="${settings.maxFairFight}"></label>
             <label>Target count<input id="mugging-limit" type="number" min="1" max="100" step="1" value="${settings.limit}"></label>
-            <button class="mugging-wide" id="mugging-find" type="button" ${busy ? 'disabled' : ''}>${busy ? 'Finding targets…' : 'Find targets'}</button>
-            <div class="mugging-note mugging-wide">Contributor checks use only spare shared Torn capacity, keep 10 calls/min reserved for interactive work, and never exceed 40 contribution calls/min. Mugging assignments stop after five minutes away, while low-priority contribution may continue independently. Results are deduplicated locally and synchronized to shared SLINK intelligence in acknowledged batches about every five minutes while this client is running. Pending: ${cache.contribution.pendingSync}${cache.contribution.lastSyncAt ? ` · Last sync ${escape(new Date(cache.contribution.lastSyncAt).toLocaleString())}` : ''}${cache.contribution.syncError ? ` · Sync retry pending: ${escape(cache.contribution.syncError)}` : ''}.</div>
-            ${error ? `<div class="mugging-note mugging-wide">${escape(error)}</div>` : ''}
-            ${notice ? `<div class="mugging-note mugging-wide">${escape(notice)}</div>` : ''}
+            <button class="mugging-wide" id="mugging-find" type="button" ${busy || finding ? 'disabled' : ''}>${busy || finding ? 'Finding targets…' : 'Find targets'}</button>
+            <div class="mugging-note mugging-wide" id="mugging-sync" hidden></div>
+            <div class="mugging-note mugging-wide" id="mugging-error" hidden></div>
+            <div class="mugging-note mugging-wide" id="mugging-notice" hidden></div>
           </div>
-          <div>${targetsHtml()}</div>
+          <div id="mugging-targets">${targets}</div>
         `);
+        updateMessages();
         bind();
+      }
+
+      function summaryHtml() {
+        return `<div class="mugging-stat"><b>${cache.targets.length}</b><span>Assignments</span></div>
+          <div class="mugging-stat"><b>${cache.pool.eligible}</b><span>Eligible pool</span></div>
+          <div class="mugging-stat"><b>${cache.userBattleStats ? escape(SLINK.core.format.shortNumber(cache.userBattleStats)) : '—'}</b><span>Your BS</span></div>
+          <div class="mugging-stat"><b>${escape(cache.contribution.mode)}</b><span>${cache.contribution.fetched}/${cache.contribution.apiBudgetPerMinute || 0} contributor checks</span></div>`;
+      }
+
+      function updateMessages() {
+        const excluded = cache.pool.excluded;
+        const messages = {
+          'mugging-ff-note':cache.ffCheckNotice,
+          'mugging-error':error,
+          'mugging-notice':notice,
+          'mugging-sync':cache.contribution.lastSyncAt ? `Last sync ${new Date(cache.contribution.lastSyncAt).toLocaleString()}` : '',
+          'mugging-pool-note':excluded ? `Pool exclusions: ${Number(excluded.no_estimate)||0} without estimates · ${Number(excluded.timed_unavailable)||0} hospital/jail timers · ${Number(excluded.mug_cooldown)||0} post-mug cooldowns · ${Number(excluded.fair_fight_range)||0} outside your FF range.` : ''
+        };
+        for (const [id,text] of Object.entries(messages)) {
+          const node = contentRoot.querySelector('#'+id);
+          if (!node) continue;
+          if (node.textContent !== text) node.textContent = text;
+          node.hidden = !text;
+        }
       }
 
       function bind() {
         const root = context.ui.getContentElement();
         root.querySelector('#mugging-enabled')?.addEventListener('change', async event => {
-          settings = normalizeSettings({ ...settings, enabled:event.target.checked });
-          await persistSettings();
-          error = '';
-          notice = settings.enabled ? 'Mugging enabled locally; contributor scheduling started.' : 'Mugging disabled locally; cached assignments were kept.';
-          if (settings.enabled) {
-            await SLINK.core.messaging.send('mugging.activity.touch').catch(() => null);
-            void SLINK.core.messaging.send('mugging.contribution.run').then(value => {
-              cache = normalizeCache({ ...cache, contribution:value });
-              render();
-            }).catch(() => null);
-          }
-          render();
+          const sequence = ++enableSequence;
+          try {
+            const saved = await persistSettings({ enabled:event.target.checked }, event.target);
+            if (!saved || sequence !== enableSequence) return;
+            notice = settings.enabled ? 'Mugging enabled locally; contributor scheduling started.' : 'Mugging disabled locally; cached assignments were kept.';
+            if (settings.enabled && contentRoot.querySelector('#mugging-enabled')?.checked === true) {
+              await SLINK.core.messaging.send('mugging.activity.touch').catch(() => null);
+              if (stopped || context.signal?.aborted || sequence !== enableSequence) return;
+              void SLINK.core.messaging.send('mugging.contribution.run').then(value => {
+                if (stopped || context.signal?.aborted) return;
+                cache = normalizeCache({ ...cache, contribution:value });
+                render();
+              }).catch(() => null);
+            }
+            render();
+          } catch (caught) { if (sequence === enableSequence) saveError(caught); }
         });
-        const saveFilters = async () => {
-          settings = normalizeSettings({
-            ...settings,
-            minFairFight:root.querySelector('#mugging-min-ff')?.value,
-            maxFairFight:root.querySelector('#mugging-max-ff')?.value,
-            limit:root.querySelector('#mugging-limit')?.value
+        for (const [id,key] of [['mugging-min-ff','minFairFight'],['mugging-max-ff','maxFairFight'],['mugging-limit','limit']]) {
+          root.querySelector('#'+id)?.addEventListener('change', async event => {
+            try {
+              const saved = await persistSettings({ [key]:event.target.value }, event.target);
+              if (saved?.enabled) await touchMuggingUi(true);
+            } catch (caught) { saveError(caught); }
           });
-          await persistSettings();
-          if (settings.enabled) await SLINK.core.messaging.send('mugging.activity.touch').catch(() => null);
-        };
-        root.querySelector('#mugging-min-ff')?.addEventListener('change', saveFilters);
-        root.querySelector('#mugging-max-ff')?.addEventListener('change', saveFilters);
-        root.querySelector('#mugging-limit')?.addEventListener('change', saveFilters);
-        root.querySelector('#mugging-find')?.addEventListener('click', async () => {
-          await saveFilters();
-          await refreshAssignments();
-        });
+        }
+        root.querySelector('#mugging-find')?.addEventListener('click', findTargets);
+        bindTargetActions();
+      }
+
+      function bindTargetActions() {
+        const root = context.ui.getContentElement();
         root.querySelectorAll('[data-mugging-save]').forEach(button => button.addEventListener('click', async () => {
           const target = cache.targets.find(row => row.id === Number(button.dataset.muggingSave));
           if (!target) return;
@@ -294,6 +419,7 @@
       }
       syncMuggingVisibility();
       return { stop() {
+        stopped = true;
         visibilityObserver?.disconnect();
         moduleView?.removeEventListener('click', noteMuggingInteraction, true);
         moduleView?.removeEventListener('input', noteMuggingInteraction, true);

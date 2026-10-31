@@ -170,4 +170,3 @@
     scopeMatches
   }));
 })(globalThis);
-

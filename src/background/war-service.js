@@ -40,6 +40,7 @@
   const LOCAL_LEADER_LEASE_MS = 15_000;
   let authenticating = null;
   let cycling = null;
+  let settingsQueue = Promise.resolve();
   let alertCycling = null;
   let lastCycleStartedAt = 0;
   let lastAlertCycleStartedAt = 0;
@@ -612,9 +613,10 @@
         returned.add(id);
         const value = fairFightValue(row), battleStatsEstimate = battleStatsValue(row);
         if (value !== null || battleStatsEstimate !== null) cache[id] = {
-          ...cache[id], value:value ?? cache[id]?.value ?? null,
+          ...cache[id], value:row?.backup?value:value ?? cache[id]?.value ?? null,
           battleStatsEstimate:battleStatsEstimate ?? cache[id]?.battleStatsEstimate ?? null,
-          checkedAt:value !== null ? now : Number(cache[id]?.checkedAt) || 0
+          checkedAt:row?.backup ? Number(row.last_updated)*1000 : value !== null ? now : Number(cache[id]?.checkedAt) || 0,
+          backupSource:row?.backup?String(row.source):''
         };
       }
       for (const id of targets) if (!returned.has(id) && !cache[id]) cache[id] = { value:null, checkedAt:now };
@@ -626,11 +628,12 @@
     await SLINK.core.storage.set(KEYS.ffCache, cache);
     return values.map(member => ({
       ...member,
-      fairFight:fairFightValue({ fairFight:cache[member.id]?.value }) ?? fairFightValue(member),
+      fairFight:cache[member.id]?.backupSource?fairFightValue({fairFight:cache[member.id]?.value}):fairFightValue({ fairFight:cache[member.id]?.value }) ?? fairFightValue(member),
       battleStatsEstimate:battleStatsValue(cache[member.id]) ?? battleStatsValue(member),
       fairFightCheckedAt:Number(cache[member.id]?.checkedAt) || Number(member.fairFightCheckedAt) || 0,
       fairFightStale:Boolean(warning || now - Number(cache[member.id]?.checkedAt || 0) > 5 * 60_000),
-      fairFightWarning:warning
+      fairFightWarning:warning,
+      backupSource:String(cache[member.id]?.backupSource||'')
     }));
   }
 
@@ -1147,35 +1150,40 @@
     return publicStatus();
   }
 
-  async function saveSettings(input = {}) {
-    const current = await settings();
-    const displayMode = ['extension', 'torn', 'hybrid'].includes(input.displayMode) ? input.displayMode : current.displayMode;
-    const next = {
-      ...current,
-      tornKey:input.clearTornKey === true ? '' : (String(input.tornKey || '').trim() || current.tornKey),
-      ffKey:input.clearFfKey === true ? '' : (String(input.ffKey || '').trim() || current.ffKey),
-      displayMode,
-      warMode:input.warMode === 'termed' ? 'termed' : (input.warMode === 'war' ? 'war' : current.warMode),
-      idleMinutes:Math.max(0, Math.min(60, Number(input.idleMinutes ?? current.idleMinutes) || 0)),
-      minFF:Math.max(1, Math.min(3, Number(input.minFF ?? current.minFF) || 1)),
-      maxFF:Math.max(1, Math.min(3, Number(input.maxFF ?? current.maxFF) || 3)),
-      outsideMinFF:Math.max(1, Math.min(3, Number(input.outsideMinFF ?? current.outsideMinFF) || 1)),
-      outsideMaxFF:Math.max(1, Math.min(3, Number(input.outsideMaxFF ?? current.outsideMaxFF) || 3)),
-      alertSound:input.alertSound === undefined ? current.alertSound : input.alertSound === true,
-      alertPanelFlash:input.alertPanelFlash === undefined ? current.alertPanelFlash : input.alertPanelFlash === true,
-      alertPageFlash:input.alertPageFlash === undefined ? current.alertPageFlash : input.alertPageFlash === true,
-      chainAlert:input.chainAlert === undefined ? current.chainAlert : input.chainAlert === true,
-      turtleAlert:input.turtleAlert === undefined ? current.turtleAlert : input.turtleAlert === true,
-      turtleMinutes:Math.max(1, Math.min(60, Number(input.turtleMinutes ?? current.turtleMinutes) || 5))
-    };
-    await SLINK.core.storage.set(KEYS.settings, next);
-    await SLINK.core.storage.set('ui.modules.war.showInTorn', displayMode !== 'extension');
-    if (input.acceptTerms === true) {
-      const terms = await fetchTerms();
-      await SLINK.core.storage.set(KEYS.acceptedTerms, { version:terms.version, sha256:terms.sha256, acceptedAt:Date.now() });
-    }
-    if (String(input.tornKey || '').trim() || input.acceptTerms === true) await ensureSession(true);
-    return publicStatus();
+  function saveSettings(input = {}) {
+    const task = settingsQueue.then(async () => {
+      const current = await settings();
+      const displayMode = ['extension', 'torn', 'hybrid'].includes(input.displayMode) ? input.displayMode : current.displayMode;
+      const next = {
+        ...current,
+        tornKey:input.clearTornKey === true ? '' : (String(input.tornKey || '').trim() || current.tornKey),
+        ffKey:input.clearFfKey === true ? '' : (String(input.ffKey || '').trim() || current.ffKey),
+        displayMode,
+        warMode:input.warMode === 'termed' ? 'termed' : (input.warMode === 'war' ? 'war' : current.warMode),
+        idleMinutes:Math.max(0, Math.min(60, Number(input.idleMinutes ?? current.idleMinutes) || 0)),
+        minFF:Math.max(1, Math.min(3, Number(input.minFF ?? current.minFF) || 1)),
+        maxFF:Math.max(1, Math.min(3, Number(input.maxFF ?? current.maxFF) || 3)),
+        outsideMinFF:Math.max(1, Math.min(3, Number(input.outsideMinFF ?? current.outsideMinFF) || 1)),
+        outsideMaxFF:Math.max(1, Math.min(3, Number(input.outsideMaxFF ?? current.outsideMaxFF) || 3)),
+        alertSound:input.alertSound === undefined ? current.alertSound : input.alertSound === true,
+        alertPanelFlash:input.alertPanelFlash === undefined ? current.alertPanelFlash : input.alertPanelFlash === true,
+        alertPageFlash:input.alertPageFlash === undefined ? current.alertPageFlash : input.alertPageFlash === true,
+        chainAlert:input.chainAlert === undefined ? current.chainAlert : input.chainAlert === true,
+        turtleAlert:input.turtleAlert === undefined ? current.turtleAlert : input.turtleAlert === true,
+        turtleMinutes:Math.max(1, Math.min(60, Number(input.turtleMinutes ?? current.turtleMinutes) || 5))
+      };
+      await SLINK.core.storage.set(KEYS.settings, next);
+      await SLINK.core.storage.set('ui.modules.war.showInTorn', displayMode !== 'extension');
+    });
+    settingsQueue = task.catch(() => undefined);
+    return task.then(async () => {
+      if (input.acceptTerms === true) {
+        const terms = await fetchTerms();
+        await SLINK.core.storage.set(KEYS.acceptedTerms, { version:terms.version, sha256:terms.sha256, acceptedAt:Date.now() });
+      }
+      if (String(input.tornKey || '').trim() || input.acceptTerms === true) await ensureSession(true);
+      return publicStatus();
+    });
   }
 
   async function publicStatus() {

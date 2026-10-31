@@ -10,7 +10,7 @@
     standard:'Standard',
     airstrip:'Private Island airstrip',
     business:'Business Class',
-    private:'Private Jet'
+    private:'Private (WLT benefit)'
   });
 
   function escapeHtml(value) {
@@ -58,14 +58,6 @@
         '.slink-provider-strip{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px;color:var(--slink-muted);font-size:10px}.slink-provider-strip span[data-ok="true"]{color:var(--slink-ready)}.slink-provider-strip span[data-ok="false"]{color:var(--slink-warning)}'
       );
 
-      function filteredRows() {
-        const needle = query.trim().toLocaleLowerCase();
-        if (!needle) return status?.rows || [];
-        return (status?.rows || []).filter(row => mode === 'country'
-          ? (row.countryName + ' ' + row.countryCode).toLocaleLowerCase().includes(needle)
-          : (row.itemName + ' ' + (row.itemId || '')).toLocaleLowerCase().includes(needle));
-      }
-
       function providerCell(providerId, row) {
         const source = row.sources?.[providerId];
         const label = ABROAD.PROVIDERS[providerId].label;
@@ -92,93 +84,182 @@
           (row.watched ? 'Watching departure' : 'Alert me when to leave') + '</button></div></article>';
       }
 
-      function render() {
-        if (!status) return;
-        const root = ui.getContentElement();
-        const providerStrip = PROVIDER_ORDER.map(providerId => {
-          const provider = status.providers?.[providerId] || {};
-          return '<span data-ok="' + String(provider.ok === true) + '">' + escapeHtml(ABROAD.PROVIDERS[providerId].label) + ': ' +
-            (provider.ok ? relativeTime(provider.fetchedAt) : provider.rows ? 'cached' : 'unavailable') + '</span>';
-        }).join('');
-        const rows = filteredRows();
-        root.innerHTML =
-          '<div class="slink-provider-strip">' + providerStrip + '</div>' +
-          '<div class="slink-abroad-toolbar"><select data-search-mode><option value="item">Item</option><option value="country">Country</option></select>' +
-          '<input data-search-query type="search" placeholder="Search by ' + mode + '..." value="' + escapeHtml(query) + '">' +
-          '<button type="button" data-refresh>Refresh</button></div>' +
-          '<div class="slink-abroad-list">' + (rows.length ? rows.map(rowCard).join('') : '<div class="slink-abroad-empty">No matching abroad stock is currently available.</div>') + '</div>' +
-          '<details class="slink-abroad-settings"><summary>Travel and alert settings</summary><div class="slink-abroad-grid">' +
-          '<label>Travel method<select data-setting="travelMethod">' + Object.entries(TRAVEL_LABELS).map(([value,label]) => '<option value="' + value + '">' + escapeHtml(label) + '</option>').join('') + '</select><small>' + (status.settings.travelMethodExplicit ? 'Manually selected' : 'Automatically selected from your current property') + '</small></label>' +
-          '<label>Arrival buffer (minutes)<input data-setting="arrivalBufferMinutes" type="number" min="0" max="30" value="' + Number(status.settings.arrivalBufferMinutes) + '"></label>' +
-          '<label>Alert before leave time (minutes)<input data-setting="alertLeadMinutes" type="number" min="0" max="180" value="' + Number(status.settings.alertLeadMinutes) + '"></label>' +
-          '<label><span>Departure reminders</span><input data-setting="alertsEnabled" type="checkbox"' + (status.settings.alertsEnabled ? ' checked' : '') + '></label>' +
-          '<label><span>Reminder sound</span><input data-setting="soundEnabled" type="checkbox"' + (status.settings.soundEnabled ? ' checked' : '') + '></label>' +
-          '<label style="grid-column:1/-1"><span>Two-minute landing purchase recommendation</span><input data-setting="landingRecommendationEnabled" type="checkbox"' + (status.settings.landingRecommendationEnabled ? ' checked' : '') + '><small>Checks YATA, Prometheus, and Torn Intel, then recommends the in-stock item with the best return against Torn market value.</small></label>' +
-          '<button type="button" data-save-settings>Save settings</button></div></details>';
-
-        root.querySelector('[data-search-mode]').value = mode;
-        root.querySelector('[data-setting="travelMethod"]').value = status.settings.travelMethod;
-        root.querySelector('[data-search-mode]').addEventListener('change', event => { mode = event.target.value; query = ''; render(); });
-        root.querySelector('[data-search-query]').addEventListener('input', event => {
-          query = event.target.value;
-          const needle = query.trim().toLocaleLowerCase();
-          root.querySelectorAll('.slink-abroad-card').forEach(card => {
-            card.hidden = Boolean(needle) && !String(card.dataset[mode === 'country' ? 'searchCountry' : 'searchItem'] || '').includes(needle);
-          });
-        });
-        root.querySelector('[data-refresh]').addEventListener('click', async event => {
-          event.currentTarget.disabled = true;
-          try { status = await SLINK.core.messaging.send('abroadStocks.refresh'); render(); updateStatus(); }
-          catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
-        });
-        root.querySelectorAll('[data-watch-key]').forEach(button => button.addEventListener('click', async () => {
-          const row = status.rows.find(candidate => candidate.key === button.dataset.watchKey);
-          status = await SLINK.core.messaging.send('abroadStocks.watch.toggle', {
-            key:row.key, countryCode:row.countryCode, countryName:row.countryName, itemId:row.itemId, itemName:row.itemName
-          });
-          render(); updateStatus();
-        }));
-        root.querySelector('[data-save-settings]').addEventListener('click', async event => {
-          const next = {
-            ...status.settings,
-            travelMethod:root.querySelector('[data-setting="travelMethod"]').value,
-            arrivalBufferMinutes:Number(root.querySelector('[data-setting="arrivalBufferMinutes"]').value),
-            alertLeadMinutes:Number(root.querySelector('[data-setting="alertLeadMinutes"]').value),
-            alertsEnabled:root.querySelector('[data-setting="alertsEnabled"]').checked,
-            soundEnabled:root.querySelector('[data-setting="soundEnabled"]').checked,
-            landingRecommendationEnabled:root.querySelector('[data-setting="landingRecommendationEnabled"]').checked
-          };
-          event.currentTarget.disabled = true;
-          try { status = await SLINK.core.messaging.send('abroadStocks.settings.save', { settings:next }); render(); updateStatus(); }
-          catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
-        });
+      const root = ui.getContentElement();
+      const fields = Object.fromEntries(['travelMethod','arrivalBufferMinutes','alertLeadMinutes','alertsEnabled','soundEnabled','landingRecommendationEnabled'].map(key => ['abroad-setting-' + key,key]));
+      let mounted = false;
+      let settingsRevision = 0;
+      let requestSequence = 0;
+      let appliedSequence = 0;
+      let saveState = {state:'idle'};
+      let previewTimer = null;
+      let refreshing = false;
+      const cards = new Map();
+      const pendingWatches = new Set();
+      function changedHtml(node, html) { if (node.innerHTML !== html) node.innerHTML = html; }
+      function showSaveState() {
+        if (stopped || context.signal?.aborted || !mounted) return;
+        root.querySelector('[data-abroad-save-state]').textContent = ({idle:'Changes save automatically.',saving:'Saving…',saved:'Saved.',invalid:'Enter a complete number before saving.',failed:'Not saved. Retry your changes.',unsaved:'Changes not saved yet.'})[saveState.state] || '';
+        root.querySelector('[data-abroad-retry]').hidden = saveState.state !== 'failed';
       }
+      function schedulePreview() {
+        if (previewTimer) global.clearTimeout(previewTimer);
+        if (stopped || context.signal?.aborted) return;
+        previewTimer = global.setTimeout(() => {
+          previewTimer = null;
+          if (autosave.busy) return;
+          void load(false).catch(showError);
+        },250);
+      }
+      const autosave = SLINK.core.formState.autosave({
+        root,fields,
+        read:key => status?.settings?.[key],
+        async save(settings) {
+          settingsRevision++;
+          try { return await SLINK.core.messaging.send('abroadStocks.settings.save',{settings}); }
+          finally { settingsRevision++; }
+        },
+        select:response => response.settings,
+        onCommit:patch => {
+          status = {...status,settings:{...status?.settings,...patch,
+            ...(Object.hasOwn(patch,'travelMethod') ? {travelMethodExplicit:true} : {})}};
+          render();
+        },
+        onState:state => {
+          saveState = state;showSaveState();
+          if (state.state === 'saved') schedulePreview();
+        }
+      });
+      function showError(error) {
+        if (!stopped && !context.signal?.aborted) ui.setStatus(SLINK.core.format.errorMessage(error),'error');
+      }
+      function filterCards() {
+        const needle = query.trim().toLocaleLowerCase();
+        let visible = 0;
+        for (const record of cards.values()) {
+          record.node.hidden = Boolean(needle) && !String(record.node.dataset[mode === 'country' ? 'searchCountry' : 'searchItem'] || '').includes(needle);
+          if (!record.node.hidden) visible++;
+        }
+        root.querySelector('[data-abroad-empty]').hidden = visible !== 0;
+      }
+      function render() {
+        if (stopped || context.signal?.aborted || !status) return;
+        if (!mounted) {
+          root.innerHTML =
+            '<div class="slink-provider-strip"></div>' +
+            '<div class="slink-abroad-toolbar"><select id="abroad-search-mode" data-search-mode><option value="item">Item</option><option value="country">Country</option></select>' +
+            '<input id="abroad-search-query" data-search-query type="search" placeholder="Search by item..."><button type="button" data-refresh>Refresh</button></div>' +
+            '<div class="slink-abroad-list"><div class="slink-abroad-empty" data-abroad-empty>No matching abroad stock is currently available.</div></div>' +
+            '<details class="slink-abroad-settings" id="abroad-settings"><summary>Travel and alert settings</summary><div class="slink-abroad-grid">' +
+            '<label>Travel method<select id="abroad-setting-travelMethod" data-setting="travelMethod">' + Object.entries(TRAVEL_LABELS).map(([value,label]) => '<option value="' + value + '">' + escapeHtml(label) + '</option>').join('') + '</select><small data-abroad-method-hint></small></label>' +
+            '<label>Arrival buffer (minutes)<input id="abroad-setting-arrivalBufferMinutes" data-setting="arrivalBufferMinutes" type="number" min="0" max="30" value="' + Number(status.settings.arrivalBufferMinutes) + '"></label>' +
+            '<label>Alert before leave time (minutes)<input id="abroad-setting-alertLeadMinutes" data-setting="alertLeadMinutes" type="number" min="0" max="180" value="' + Number(status.settings.alertLeadMinutes) + '"></label>' +
+            '<label><span>Departure reminders</span><input id="abroad-setting-alertsEnabled" data-setting="alertsEnabled" type="checkbox"' + (status.settings.alertsEnabled ? ' checked' : '') + '></label>' +
+            '<label><span>Reminder sound</span><input id="abroad-setting-soundEnabled" data-setting="soundEnabled" type="checkbox"' + (status.settings.soundEnabled ? ' checked' : '') + '></label>' +
+            '<label style="grid-column:1/-1"><span>Two-minute landing purchase recommendation</span><input id="abroad-setting-landingRecommendationEnabled" data-setting="landingRecommendationEnabled" type="checkbox"' + (status.settings.landingRecommendationEnabled ? ' checked' : '') + '><small>Checks YATA, Prometheus, and Torn Intel, then recommends the in-stock item with the best return against Torn market value.</small></label>' +
+            '</div><div role="status"><span data-abroad-save-state></span> <button type="button" data-abroad-retry hidden>Retry</button></div></details>';
+          root.querySelector('[data-search-mode]').value = mode;
+          root.querySelector('[data-search-query]').value = query;
+          root.querySelector('[data-setting="travelMethod"]').value = status.settings.travelMethod;
+          mounted = true;autosave.mount();
+        }
+        changedHtml(root.querySelector('.slink-provider-strip'),PROVIDER_ORDER.map(providerId => {
+          const provider = status.providers?.[providerId] || {};
+          return '<span data-ok="' + String(provider.ok === true) + '">' + escapeHtml(ABROAD.PROVIDERS[providerId].label) + ': ' + (provider.ok ? relativeTime(provider.fetchedAt) : provider.rows ? 'cached' : 'unavailable') + '</span>';
+        }).join(''));
+        const list = root.querySelector('.slink-abroad-list');
+        const present = new Set();
+        for (const row of status.rows || []) {
+          present.add(row.key);
+          const html = rowCard(row);
+          let record = cards.get(row.key);
+          if (!record) {
+            const holder = document.createElement('div');holder.innerHTML = html;
+            record = {node:holder.firstElementChild,html};cards.set(row.key,record);
+            list.insertBefore(record.node,root.querySelector('[data-abroad-empty]'));
+          } else if (record.html !== html) {
+            const holder = document.createElement('div');holder.innerHTML = html;
+            const fresh = holder.firstElementChild;
+            for (const selector of ['header','.slink-abroad-sources','.slink-abroad-restock']) changedHtml(record.node.querySelector(selector),fresh.querySelector(selector).innerHTML);
+            record.node.dataset.searchCountry = fresh.dataset.searchCountry;
+            record.node.dataset.searchItem = fresh.dataset.searchItem;
+            record.html = html;
+          }
+          const button = record.node.querySelector('[data-watch-key]');
+          button.dataset.watched = String(row.watched === true);
+          button.textContent = row.watched ? 'Watching departure' : 'Alert me when to leave';
+          button.disabled = pendingWatches.has(row.key);
+        }
+        for (const [key,record] of cards) if (!present.has(key)) {record.node.remove();cards.delete(key);}
+        root.querySelector('[data-abroad-method-hint]').textContent = status.settings.travelMethodExplicit ? 'Manually selected' : 'Automatically selected from your current property';
+        root.querySelector('[data-refresh]').disabled = refreshing;
+        filterCards();showSaveState();
+      }
+      context.listen(root,'input',event => {
+        if (event.target.matches('[data-search-query]')) {query = event.target.value;filterCards();}
+      });
+      context.listen(root,'change',event => {
+        if (event.target.matches('[data-search-mode]')) {
+          mode = event.target.value;
+          root.querySelector('[data-search-query]').placeholder = 'Search by ' + mode + '...';
+          filterCards();
+        }
+      });
+      context.listen(root,'click',async event => {
+        if (stopped || context.signal?.aborted) return;
+        if (event.target.closest('[data-abroad-retry]')) {void autosave.retry().catch(() => {});return;}
+        if (event.target.closest('[data-refresh]')) {
+          if (refreshing) return;
+          refreshing = true;render();
+          try {await autosave.flush();if (!stopped && !context.signal?.aborted) await load(false,'abroadStocks.refresh');}
+          catch (error) {showError(error);}
+          finally {refreshing = false;render();}
+          return;
+        }
+        const button = event.target.closest('[data-watch-key]');
+        if (!button || pendingWatches.has(button.dataset.watchKey)) return;
+        const row = status.rows.find(candidate => candidate.key === button.dataset.watchKey);
+        if (!row) return;
+        pendingWatches.add(row.key);render();
+        try {
+          await load(false,'abroadStocks.watch.toggle',{key:row.key,countryCode:row.countryCode,countryName:row.countryName,itemId:row.itemId,itemName:row.itemName});
+        } catch (error) {showError(error);}
+        finally {pendingWatches.delete(row.key);render();schedulePreview();}
+      });
 
       function updateStatus() {
+        if (stopped || context.signal?.aborted) return;
         const alertCount = status?.activeAlerts?.length || 0;
         ui.setAlertCount('abroad-stocks', alertCount, { group:'quality-of-life', label:'abroad departure reminders' });
         ui.setStatus(status?.fetchedAt ? 'Updated ' + relativeTime(status.fetchedAt) + ' · ' + status.watches.length + ' departure watch' + (status.watches.length === 1 ? '' : 'es') : 'Open this tab or press Refresh to load abroad stock.', status?.fetchedAt ? 'ready' : 'normal');
       }
 
-      async function load(touch = false) {
-        status = await SLINK.core.messaging.send(touch ? 'abroadStocks.activity.touch' : 'abroadStocks.status');
-        if (stopped) return;
+      async function load(touch = false, type = '', payload = {refreshIfDue:false}) {
+        if (!type && pendingWatches.size) return;
+        const sequence = ++requestSequence;
+        const revision = settingsRevision;
+        const response = await SLINK.core.messaging.send(type || (touch ? 'abroadStocks.activity.touch' : 'abroadStocks.status'),payload);
+        if (stopped || context.signal?.aborted || sequence < appliedSequence) return;
+        appliedSequence = sequence;
+        status = {...response,settings:revision === settingsRevision && !autosave.busy ? response.settings : status?.settings || response.settings};
         render();
         updateStatus();
       }
 
-      await load(true);
+      try {await load(true);}
+      catch (error) {stopped = true;await autosave.stop();throw error;}
+      if (stopped || context.signal?.aborted) {await autosave.stop();return {stop(){}};}
       timer = global.setInterval(() => {
-        if (stopped) return;
+        if (stopped || context.signal?.aborted || context.isActive?.() === false) return;
         const section = ui.getContentElement()?.parentElement;
-        if (section && !section.hidden && document.visibilityState === 'visible') void load(true);
+        if (section && !section.hidden && document.visibilityState === 'visible') void load(true).catch(showError);
       }, 60_000);
 
       return {
-        stop() {
+        async stop() {
           stopped = true;
           if (timer) global.clearInterval(timer);
-          ui.setAlertCount('abroad-stocks', 0);
+          if (previewTimer) global.clearTimeout(previewTimer);
+          await autosave.stop();
         }
       };
     }

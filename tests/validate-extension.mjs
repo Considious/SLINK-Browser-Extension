@@ -159,17 +159,18 @@ const marketServiceSource = read('src/background/market-service.js');
 const marketModuleSource = read('src/modules/market.js');
 const audioServiceSource = read('src/background/audio-service.js');
 const offscreenAudioSource = read('src/offscreen/audio.js');
-assert(marketServiceSource.includes('/v2/market/') && marketServiceSource.includes("requestJson('weaver'") && marketServiceSource.includes('/v2/torn/items'), 'Market/Bazaar Watch is not sourced from the declared JSON APIs.');
+assert(marketServiceSource.includes('/v2/market/') && marketServiceSource.includes("requestJson('weaver'") && marketServiceSource.includes('SLINK.services.sharedData.catalog') && read('src/background/shared-data-service.js').includes('/v2/torn/items'), 'Market/Bazaar Watch must use declared listing APIs and the shared Torn catalog provider.');
 assert(marketServiceSource.includes("weaverJson('https://weav3r.dev/api/marketplace'") && marketServiceSource.includes('/api/pricelist/') && marketServiceSource.includes('pollWeaverTargets'), 'Weaver watches do not use summary-first screening for the SLINK and Weaver price lists.');
 assert(marketServiceSource.includes("weaverJson('https://weav3r.dev/api/dollar-bazaars/bazaars?page=1&limit=100'") && marketServiceSource.includes("'market.dollar.refresh'") && marketServiceSource.includes('periodInMinutes:60'), '$1 Bazaars does not use Weaver’s per-bazaar JSON totals, hourly cache, and manual refresh route.');
 assert(!read('src/modules/dollar-bazaars.js').includes('fetch(') && !read('src/modules/dollar-bazaars.js').includes('querySelectorAll'), '$1 Bazaars must use the background API route instead of scraping a web page.');
 assert(!marketServiceSource.includes('workerClient') && !marketServiceSource.includes('D1'), 'Private Market/Bazaar Watch data must remain local instead of using a SLINK Worker or D1.');
 assert(marketServiceSource.includes('summarizeErrors') && marketServiceSource.includes('tornBlockedUntil'), 'Market Watch does not collapse repeated capacity errors or stop redundant limiter retries within one cycle.');
-assert(marketModuleSource.includes('SLINK Buy') && marketModuleSource.includes('data-slink-market-highlight'), 'Torn listing highlights or the custom buy control are missing.');
-assert(marketModuleSource.includes('quickPurchaseAnchor') && marketModuleSource.includes('anchor:flow.anchor') && marketModuleSource.includes('QUICK_PURCHASE_FLOW_TIMEOUT_MS'), 'SLINK Buy does not preserve the working Dashboard anchor through its multi-stage purchase flow.');
-assert(marketModuleSource.includes('bazaarQuantityInput') && marketModuleSource.includes('button[data-testid="activate-buy-button"]') && marketModuleSource.includes('button[data-testid="buy-button"]'), 'The working Dashboard Bazaar open/fill/buy controls were not ported.');
-assert(marketModuleSource.includes("nodeUnavailable(node, kind = '')") && marketModuleSource.includes("kind === 'item-market'") && marketModuleSource.includes('input.disabled || input.readOnly'), 'Item Market availability does not preserve disabled-before-quantity Torn rows.');
-assert(marketModuleSource.includes('data-slink-market-shop-profit') && marketModuleSource.includes('listingHighlightState'), 'City-shop-profit highlighting is missing from Torn purchase pages.');
+assert(marketModuleSource.includes('syncHighlightedQuickPurchaseControls') && marketModuleSource.includes('data-tdd-item-market-shop-profit') && marketModuleSource.includes('data-tdd-quick-buy'), 'Torn listing highlights and the shared SLINK Buy control must remain wired to the current production DOM contract.');
+// Execute the current purchase helpers instead of requiring obsolete helper names
+// or whitespace (anchor:flow.anchor). Regressions still fail this validator.
+await import('./purchase-controls.test.mjs');
+assert(marketModuleSource.includes('bazaarPurchaseQuantityInput') && marketModuleSource.includes('button[data-testid="activate-buy-button"]') && marketModuleSource.includes('button[data-testid="buy-button"]'), 'Bazaar open/fill/buy controls are missing.');
+assert(marketModuleSource.includes('data-tdd-bazaar-shop-profit') && marketModuleSource.includes('data-tdd-item-market-shop-profit') && marketModuleSource.includes('price < sellPrice'), 'City-shop-profit highlighting is missing from Torn purchase pages.');
 assert(marketModuleSource.includes('data-market-send') && marketModuleSource.includes('Send to Faction'), 'Per-listing Faction Chat sending is missing from the Torn Market GUI.');
 assert(marketServiceSource.includes("'market.deal.dismiss'") && marketModuleSource.includes('data-market-dismiss') && dashboardSource.includes("market.deal.dismiss"), 'Five-minute Market Watch dismissal is missing from an interface.');
 assert(marketServiceSource.includes("'market.sound.claim'") && marketModuleSource.includes("messaging.send('audio.flush')") && dashboardHtml.includes('market-alert-sound'), 'Market Watch background sound delivery or its user toggle is missing.');
@@ -200,7 +201,7 @@ assert(dashboardSource.includes('dataset.revokeScope') && dashboardSource.includ
 assert(!read('src/background/adhd-service.js').includes('workerClient') && !read('src/background/adhd-service.js').includes('D1'), 'Private ADHD timer and city data must remain local instead of using Worker or D1 storage.');
 assert(read('src/background/player-stats-service.js').includes("'playerStats.refresh'") && read('src/background/player-stats-service.js').includes('personalstats,money,workstats'), 'The local daily Torn player-stat collector is missing or not combined.');
 assert(!read('src/background/player-stats-service.js').includes('workerClient') && !read('src/background/player-stats-service.js').includes('D1'), 'Player stats must not use a SLINK Worker or D1.');
-assert(read('src/modules/adhd.js').includes('Send to Faction') && read('src/modules/adhd.js').includes('focusedTornPage'), 'Torn-only city-stock copy/send controls are missing.');
+assert(read('src/modules/adhd.js').includes('Send to Faction') && read('src/modules/adhd.js').includes('factionChat.sendPrimed') && read('src/core/faction-chat.js').includes('!focusedTornPage()'), 'City-stock sharing must use the shared focus-guarded Faction Chat helper.');
 assert(!dashboardSource.includes('Send to Faction'), 'The extension dashboard must not offer direct Faction Chat sending.');
 assert(read('src/background/adhd-service.js').includes('/v2/torn/stocks') && read('src/core/adhd.js').includes('bonus?.passive !== false'), 'Stock alerts do not use Torn catalog names or still include passive benefits.');
 assert(read('src/background/theme-service.js').includes('/api/themes'), 'Background theme catalog route is missing.');
@@ -240,15 +241,16 @@ assert(!listFiles(path.join(root, 'src')).some(file => fs.readFileSync(file, 'ut
 assert(warModuleSource.includes("activeTab === 'armory'") && warModuleSource.includes('pageIsFocused()'), 'The in-Torn War module is missing its focused-page Armory Recaller.');
 assert(warModuleSource.includes('Search name, rank, or ID') && warModuleSource.includes('Select shown') && warModuleSource.includes('Clear shown'), 'The Armory whitelist is missing standalone-compatible search or bulk rank selection.');
 assert(warModuleSource.includes('captureDisplayedRankOrder') && warModuleSource.includes("war.armory.rankOrder.v1") && warModuleSource.includes('12 * 60 * 60_000'), 'The Armory whitelist is missing Torn rank ordering or its 12-hour roster cache.');
-assert(warModuleSource.includes("const content = activeTab === 'armory'") && warModuleSource.includes("? `${tabBar}<div>${body}</div>`"), 'The Armory tab still includes unrelated War summary and alert content.');
+assert(warModuleSource.includes("const overviewHtml=activeTab==='armory'?'':") && warModuleSource.includes("patchWarBody(root.querySelector('[data-war-body]'),body)"), 'The Armory tab must retain its separate body without unrelated War summary and alert content.');
 assert(warModuleSource.includes('belongsToTermedOpponent') && warModuleSource.includes('for (const retal of visibleRetals())'), 'Termed-war opponent retals are not consistently filtered from the GUI and alerts.');
 assert(warModuleSource.includes('function onAttackPage()') && warModuleSource.includes('dialog___') && warModuleSource.includes("'war.mug.report'"), 'Mug result capture is not narrowly scoped to Torn attack-result dialogs.');
 assert(warServiceSource.includes("'war.mug.report': recordMugResult") && warServiceSource.includes('torn_attack_result_dom'), 'Scraped mug results are not connected to local War reporting.');
 assert(warModuleSource.includes('.item-action [data-role="retrieve"].active') && warModuleSource.includes('.retrieve-cont .retrieve-yes'), 'The Armory Recaller does not use Torn\'s explicit retrieve and confirmation controls.');
 assert(warServiceSource.includes("'war.armory.members'") && warServiceSource.includes("'war.armory.request'"), 'The extension is missing its cached Armory status or request routes.');
-assert(warModuleSource.includes("button.textContent = 'Request Item'") && warModuleSource.includes('/^(revitalize|warlord)$/i') && warModuleSource.includes('slink-armory-request-cell'), 'Warlord and Revitalize item requests are not inserted into a separate Torn armory column.');
-assert(warModuleSource.includes('grid-template-columns:62px minmax(170px,1fr) 145px 70px 120px 112px 126px') && !warModuleSource.includes('flex-wrap:wrap !important; min-width:780px'), 'Armory rows do not use a uniform fixed-column layout.');
-assert(warModuleSource.includes("actionSlot.className = 'slink-armory-request-action'") && warModuleSource.includes('else row.append(cell)'), 'Every Armory row does not reserve the same SLINK status and request cell.');
+// Native Armory row decoration was intentionally removed. Keep the recaller,
+// native confirmation, focus checks and recovery covered by executable tests.
+await import('./armory.test.mjs');
+assert(!warModuleSource.includes('slink-armory-request-cell') && !warModuleSource.includes('queueArmoryEnhancement'), 'Removed Torn Armory row restructuring must not return.');
 assert(warModuleSource.includes('NO INSIDE HITS DURING MAJOR BONUS WINDOWS') && warModuleSource.includes('INSIDE_WINDOWS'), 'The Termed-war major-window inside gate is missing.');
 assert(warModuleSource.includes('profile-button-attack') && warModuleSource.includes('renderProfileAttackGate'), 'The inside gate does not cover Torn profile attack buttons.');
 assert(warModuleSource.includes('data-war-retal-dismiss') && warModuleSource.includes('retalDismissKey'), 'Per-player retaliation dismissal is missing.');
@@ -276,11 +278,12 @@ const dashboardQualityJs = read('src/dashboard/dashboard.js');
 const abroadQualityModule = read('src/modules/abroad-stocks.js');
 assert(dashboardQualityHtml.includes('data-page-tab="quality"') && dashboardQualityHtml.includes('data-quality-view="abroad-stocks"'), 'Dashboard Quality of Life navigation is missing.');
 assert(dashboardQualityHtml.includes('../modules/racing.js') && dashboardQualityHtml.includes('../modules/events.js'), 'Dashboard does not load the shared Quality of Life modules.');
-assert(dashboardQualityJs.includes('ui.quality.activeView') && dashboardQualityJs.includes('definition.start'), 'Dashboard does not preserve or start shared Quality of Life modules.');
+assert(dashboardQualityJs.includes('ui.quality.activeView') && dashboardQualityJs.includes('dashboardHost.select(id)'), 'Dashboard does not preserve or select shared Quality of Life modules.');
+await import('./dashboard-parity.test.mjs');
 assert(!abroadQualityModule.includes('data-setting="tornIntelKey"'), 'The unsupported Torn Intel client-key entry is still visible.');
 
-assert(read('src/background/faction-officer-service.js').includes('/api/faction/onboarding/sync') && read('src/background/faction-officer-service.js').includes('/officer-roles'), 'Faction onboarding sharing or role-based officer assignment service is missing.');
-assert(read('src/modules/faction-officers.js').includes("requiredScopes:['admin.*']") && dashboardHtml.includes('data-quality-view="faction-officers"'), 'Admin faction-officer role settings are missing from Quality of Life.');
+assert(read('src/background/faction-officer-service.js').includes('/api/faction/onboarding/sync') && read('src/background/faction-officer-service.js').includes('/officer-access') && read('src/background/faction-officer-service.js').includes('CORE.ADMIN_SCOPE'), 'Faction onboarding sharing or admin-protected role assignment service is missing.');
+assert(read('src/modules/faction-officers.js').includes('permissionTest:permissions=>[CORE.ADMIN_SCOPE,...SCOPES]') && read('src/modules/faction-officers.js').includes('if(!current?.access?.admin||!access)return') && dashboardHtml.includes('data-quality-view="faction-officers"'), 'Officer tools must admit their granted scopes while keeping role assignment admin-only.');
 assert(read('src/core/adhd.js').includes("id:'factionOnboarding'") && read('src/background/adhd-service.js').includes('factionOfficer.activeAlerts'), 'Faction onboarding alerts are not integrated into Efficiency alerts.');
 
 

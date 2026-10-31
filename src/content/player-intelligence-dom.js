@@ -75,7 +75,7 @@
   }
 
   function activeProfile(expectedPlayerId = 0) {
-    if (!global.document || global.document.visibilityState !== 'visible' || !global.document.hasFocus?.()) {
+    if (!global.document || !SLINK.core.pageActivity?.eligible()) {
       return { active:false, reason:'inactive-page' };
     }
     let url;
@@ -216,25 +216,11 @@
     timer = setTimeout(() => void observeCurrentPage(), OBSERVE_DEBOUNCE_MS);
   }
 
-  function syncActivity() {
-    clearTimeout(timer);
-    observer?.disconnect();
-    if (!activeProfile().active || !observer) return;
+  function start() {
+    if (!global.document?.documentElement || observer || !activeProfile().active) return;
+    observer = new MutationObserver(schedule);
     observer.observe(global.document.documentElement, { childList:true, subtree:true });
     schedule();
-  }
-
-  function start() {
-    if (!global.document?.documentElement || observer) return;
-    observer = new MutationObserver(schedule);
-    global.document.addEventListener('visibilitychange', syncActivity);
-    global.addEventListener('focus', syncActivity);
-    global.addEventListener('blur', syncActivity);
-    global.addEventListener('pageshow', syncActivity);
-    global.addEventListener('pagehide', () => { clearTimeout(timer); observer?.disconnect(); });
-    global.addEventListener('hashchange', syncActivity);
-    global.addEventListener('popstate', syncActivity);
-    syncActivity();
   }
 
   function stop() {
@@ -257,6 +243,9 @@
     stop
   }));
 
-  if (global.document) start();
+  if (global.document) {
+    SLINK.core.pageActivity?.subscribe(active => { if (active) start(); else stop(); });
+    global.addEventListener('hashchange', () => { stop(); start(); });
+    global.addEventListener('popstate', () => { stop(); start(); });
+  }
 })(globalThis);
-

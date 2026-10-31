@@ -18,6 +18,19 @@
   let refreshing = null;
   let mobilityRefreshing = null;
   let crimeRefreshing = null;
+  let settingsQueue = Promise.resolve();
+
+  function mutateSettings(mutator) {
+    const task = settingsQueue.then(async () => {
+      const current = await settings();
+      const before = JSON.stringify(current);
+      const next = ADHD.normalizeSettings(await mutator(current) || current);
+      if (JSON.stringify(next) !== before) await SLINK.core.storage.set(KEYS.settings, next);
+      return next;
+    });
+    settingsQueue = task.catch(() => undefined);
+    return task;
+  }
 
   async function settings() {
     return ADHD.normalizeSettings(await SLINK.core.storage.get(KEYS.settings, {}));
@@ -262,24 +275,22 @@
         }
         const snapshot = { day, fetchedAt:now, mobilityFetchedAt:now, data, cityItemsBought, cityItemsAtReset, cityBaselineVersion:CITY_BASELINE_VERSION, cityShops, stockCatalog, cluster, crimeUniques };
         // Only a new measured energy reading may end Stack mode; never infer a drop.
-        const latestSettings = await settings();
-        let settingsChanged = false;
+        const latestSettings = await mutateSettings(async latestSettings => {
         for (const progressRow of ADHD.crimeUniqueProgress(snapshot)) {
           if (!progressRow.complete) continue;
           if (latestSettings.enabled[progressRow.id] !== false || latestSettings.soundEnabled[progressRow.id] === true) {
             latestSettings.enabled[progressRow.id] = false;
             latestSettings.soundEnabled[progressRow.id] = false;
-            settingsChanged = true;
           }
         }
-        if (settingsChanged) await SLINK.core.storage.set(KEYS.settings, latestSettings);
         const energy = data?.bars?.energy?.current;
         if (latestSettings.stackModeSince > 0 && now > latestSettings.stackModeSince
           && energy !== null && energy !== undefined && energy !== ''
           && Number.isFinite(Number(energy)) && Number(energy) >= 0 && Number(energy) < 150) {
           latestSettings.stackModeSince = 0;
-          await SLINK.core.storage.set(KEYS.settings, latestSettings);
         }
+        return latestSettings;
+        });
         await saveRuntime({
           fetchedAt:now,
           nextRefreshAt:ADHD.nextRefreshAt(snapshot, latestSettings, now),
@@ -390,7 +401,7 @@
   }
 
   async function saveSettings(input = {}) {
-    const previous = await settings();
+    const next = await mutateSettings(async previous => {
     const enabled = { ...previous.enabled };
     if (input.enabled && typeof input.enabled === 'object') {
       for (const id of ADHD.ALL_ALERT_IDS) {
@@ -409,7 +420,7 @@
         if (Object.hasOwn(input.cityStockAlerts, target.id)) cityStockAlerts[target.id] = input.cityStockAlerts[target.id] === true;
       }
     }
-    const next = ADHD.normalizeSettings({
+    return ADHD.normalizeSettings({
       ...previous,
       medicalThresholdHours:Object.hasOwn(input, 'medicalThresholdHours') ? input.medicalThresholdHours : previous.medicalThresholdHours,
       boosterThresholdHours:Object.hasOwn(input, 'boosterThresholdHours') ? input.boosterThresholdHours : previous.boosterThresholdHours,
@@ -422,7 +433,7 @@
       openLinksInNewTab:Object.hasOwn(input, 'openLinksInNewTab') ? input.openLinksInNewTab : previous.openLinksInNewTab,
       cityStockAlerts
     });
-    await SLINK.core.storage.set(KEYS.settings, next);
+    });
     const currentRuntime = await runtime();
     if (currentRuntime.snapshot) await saveRuntime({
       nextRefreshAt:ADHD.nextRefreshAt(currentRuntime.snapshot, next),
@@ -433,15 +444,15 @@
   }
 
   async function acknowledgeCity() {
-    const next = await settings();
+    await mutateSettings(next => {
     next.cityDoneDay = ADHD.utcDay();
-    await SLINK.core.storage.set(KEYS.settings, next);
+    });
     return publicStatus(false);
   }
 
   async function reminderControl(input = {}) {
-    const next = await settings();
     let resetIds;
+    const next = await mutateSettings(next => {
     if (input.action === 'stack-on' || input.action === 'stack-off') {
       next.stackModeSince = input.action === 'stack-on' ? Date.now() : 0;
       resetIds = ['energyFull', 'energyRefill'];
@@ -450,7 +461,7 @@
       resetIds = ['timer24'];
     } else throw new Error('Unknown reminder action.');
     for (const id of resetIds) delete next.snoozedUntil[id];
-    await SLINK.core.storage.set(KEYS.settings, next);
+    });
     const sound = await SLINK.core.storage.get(KEYS.soundState, {});
     await SLINK.core.storage.set(KEYS.soundState, {
       ...sound,
@@ -466,17 +477,17 @@
     const id = String(input.id || '');
     const definition = ADHD.CRIME_UNIQUE_DEFINITIONS.find(row => row.id === id && row.mode === 'daily');
     if (!definition) throw new Error('Unknown daily crime unique reminder.');
-    const next = await settings();
+    await mutateSettings(next => {
     next.crimeUniqueDoneDay[id] = ADHD.utcDay();
     delete next.snoozedUntil[id];
-    await SLINK.core.storage.set(KEYS.settings, next);
+    });
     return publicStatus(false);
   }
 
   async function acknowledgeGooglePlayPoints() {
-    const next = await settings();
+    const next = await mutateSettings(next => {
     next.googlePlayPointsClaimedAt = Date.now();
-    await SLINK.core.storage.set(KEYS.settings, next);
+    });
     const currentRuntime = await runtime();
     if (currentRuntime.snapshot) await saveRuntime({ nextRefreshAt:ADHD.nextRefreshAt(currentRuntime.snapshot, next) });
     return publicStatus(false);
@@ -502,9 +513,9 @@
     }
     if (!ADHD.ALERT_DEFINITIONS.some(definition => definition.id === id) && !/^cityStock:\d+$/.test(id)) throw new Error('Unknown Efficiency alert.');
     const durationMs = Math.min(ADHD.DAY_MS, Math.max(60_000, Number(input.durationMs) || 60 * 60_000));
-    const next = await settings();
+    await mutateSettings(next => {
     next.snoozedUntil[id] = Date.now() + durationMs;
-    await SLINK.core.storage.set(KEYS.settings, next);
+    });
     return publicStatus(false);
   }
 

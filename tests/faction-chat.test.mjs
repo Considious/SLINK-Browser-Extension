@@ -111,9 +111,12 @@ const context = {
     define(namespace, name, value) {
       modules[namespace] ||= {};
       modules[namespace][name] = value;
+      this[namespace] = modules[namespace];
     }
   }
 };
+vm.runInNewContext(read('src/core/format.js'), context, { filename:'format.js' });
+vm.runInNewContext(read('src/core/clipboard.js'), context, { filename:'clipboard.js' });
 vm.runInNewContext(helperSource, context, { filename:'faction-chat.js' });
 const primed = await modules.core.factionChat.prime('RETAL test', { key:'retal:1' });
 assert(primed.ok && modules.core.factionChat.isPrimed('retal:1'), 'Copy did not prime the shared frozen Faction Chat message.');

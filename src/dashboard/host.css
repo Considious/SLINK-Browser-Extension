@@ -1,0 +1,12 @@
+.dashboard-host-panel{min-width:0;--slink-bg-control:var(--slink-control);--slink-border-soft:var(--slink-border)}
+.dashboard-host-panel[hidden],[data-combat-overview][hidden]{display:none!important}
+.dashboard-host-panel [data-host-content]{min-width:0;overflow-wrap:anywhere}
+.dashboard-host-panel input,.dashboard-host-panel select,.dashboard-host-panel textarea{max-width:100%;box-sizing:border-box}
+.dashboard-host-panel [data-host-status]{margin:8px 0;line-height:1.45}
+.dashboard-host-panel [data-tone=error]{color:var(--slink-error)}
+.dashboard-host-panel [data-tone=ready]{color:var(--slink-ready)}
+.dashboard-host-panel [data-macro-editor]{display:grid;gap:10px}
+.dashboard-host-panel [data-macro-id]{display:grid;gap:7px}
+.dashboard-host-panel [data-macro-id] label{display:grid;gap:4px}
+.dashboard-host-panel [data-macro-id] textarea{min-height:90px;width:100%;resize:vertical}
+[data-combat-view].active{border-color:var(--slink-accent);background:var(--slink-accent)}

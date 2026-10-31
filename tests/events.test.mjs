@@ -52,3 +52,25 @@ assert.equal(yearRound.events.some(event => event.id === 'guide:halloween' && ev
 assert.equal(core.selectEvent(yearRound, 'guide:halloween').name, 'Halloween');
 console.log('SLINK Events tests passed.');
 
+const vm=await import('node:vm');
+const eventsModule=readFileSync(new URL('../src/modules/events.js',import.meta.url),'utf8');
+const loadStart=eventsModule.indexOf('      async function load('),loadEnd=eventsModule.indexOf("      context.listen(root, 'click'",loadStart);
+assert(loadStart>=0&&loadEnd>loadStart);
+const eventReads=[];
+const eventsController={busy:false,stopped:false,mounted:true,notice:'',settingsRevision:0,data:{selectedId:'christmas',selected:{id:'christmas',name:'Christmas Town'}},context:{signal:{aborted:false}},autosave:{busy:false},renders:0,statusUpdates:0,
+ root:{querySelector:()=>({disabled:false})},SLINK:{core:{messaging:{send(type,payload){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});eventReads.push({type,payload,resolve,reject});return promise;}},format:{errorMessage:error=>error.message}}},
+ ui:{setStatus(){eventsController.statusUpdates++;}},render(){if(!eventsController.stopped)eventsController.renders++;}};
+vm.createContext(eventsController);vm.runInContext(eventsModule.slice(loadStart,loadEnd),eventsController);
+const olderStatus=eventsController.load(false);await eventsController.load(true);assert.equal(eventReads.length,1,'Events allows one active calendar status request');
+eventsController.settingsRevision+=2;eventsController.data.selectedId='guide:halloween';eventsController.data.selected={id:'guide:halloween',name:'Halloween'};
+eventReads[0].resolve({selectedId:'christmas',selected:{id:'christmas'},calendar:{fresh:true},permitted:false});await olderStatus;
+assert.equal(eventsController.data.selectedId,'guide:halloween');assert.equal(eventsController.data.selected.name,'Halloween');
+assert.equal(eventsController.data.calendar.fresh,true);assert.equal(eventsController.data.permitted,false,'The selection fence must not preserve stale permission data');
+const failedStatus=eventsController.load(true);eventReads.at(-1).reject(Error('synthetic calendar failure'));await failedStatus;
+assert.equal(eventsController.notice,'synthetic calendar failure');assert.equal(eventsController.busy,false);
+const stoppedStatus=eventsController.load(true);eventsController.stopped=true;
+const beforeRenders=eventsController.renders,beforeStatusUpdates=eventsController.statusUpdates;
+eventReads.at(-1).resolve({selectedId:'christmas'});await stoppedStatus;
+assert.equal(eventsController.renders,beforeRenders);assert.equal(eventsController.statusUpdates,beforeStatusUpdates);
+console.log('Events controller: selection generation fence, fresh calendar/permissions, duplicate read guard, read failure recovery and stopped UI isolation passed.');
+

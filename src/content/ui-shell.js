@@ -156,6 +156,9 @@
     let chatButtonAlertCount = 0;
     let chatButtonTheme = null;
     let themeHealth = { current:100, maximum:100 };
+    let tornThemeSettings=options.preferences?.['ui.tornTheme.v1']||{};
+    const tornPageTheme=global.SLINK_TORN_THEME?.create({document,activity:SLINK.core.pageActivity});
+    function setTornThemeSettings(value){tornThemeSettings=value||{};tornPageTheme?.update({settings:tornThemeSettings});}
     let minimizedMode = 'bubble';
 
     function setThemePanelOpacity(value) {
@@ -173,11 +176,14 @@
       chatButtonTheme = theme;
       SLINK.core.themes.applyHealthToElement(host, theme, themeHealth.current, themeHealth.maximum);
       applyChatButtonTheme(chatButton, theme);
+      tornPageTheme?.update({theme,settings:tornThemeSettings,assetCss:{...SLINK.core.themes.assetVariables(theme),...SLINK.core.themes.healthAssetVariables(theme,themeHealth.current,themeHealth.maximum)}});
       return theme;
     }
 
     function setThemeHealth(current, maximum) {
       themeHealth = { current:Number(current), maximum:Number(maximum) };
+      const theme=chatButtonTheme||SLINK.core.themes.get();
+      tornPageTheme?.update({assetCss:{...SLINK.core.themes.assetVariables(theme),...SLINK.core.themes.healthAssetVariables(theme,current,maximum)}});
       return SLINK.core.themes.applyHealthToElement(host, chatButtonTheme || SLINK.core.themes.DEFAULT_THEME_ID, current, maximum);
     }
     setTheme(options.themeId || SLINK.core.themes.DEFAULT_THEME_ID, options.permissions || {});
@@ -733,7 +739,7 @@
         button.type = 'button';
         button.textContent = String(action.label || 'Action');
         if (action.href) button.addEventListener('click', () => global.open(String(action.href), '_blank', 'noopener'));
-        else if (typeof action.onClick === 'function') button.addEventListener('click', event => void action.onClick(event));
+        else if (typeof action.onClick === 'function') SLINK.modules.bindAction(button,action,{onError:error=>console.error('[SLINK] Alert action:',error)});
         buttons.push(button);
       }
       alert.actions.replaceChildren(...buttons);
@@ -785,7 +791,7 @@
         setModuleStyles(value) { moduleStyle.textContent = String(value || ''); },
         setContentHtml(value) { content.innerHTML = String(value || ''); },
         getContentElement() { return content; },
-        setStatus(message, tone = 'normal') { status.textContent = String(message || ''); status.dataset.tone = String(tone || 'normal'); },
+        setStatus(message, tone = 'normal') { status.textContent = tone==='error'&&message?SLINK.core.format.errorMessage(message):String(message || ''); status.dataset.tone = String(tone || 'normal'); },
         setRows(rows) {
           content.replaceChildren();
           for (const row of rows || []) {
@@ -800,7 +806,7 @@
           for (const definition of definitions || []) {
             const button = document.createElement('button'); button.type = 'button'; button.textContent = String(definition.label || 'Action'); button.disabled = Boolean(definition.disabled);
             if (definition.id) button.dataset.action = String(definition.id);
-            if (typeof definition.onClick === 'function') button.addEventListener('click', event => void definition.onClick(event));
+            if (typeof definition.onClick === 'function') SLINK.modules.bindAction(button,definition,{active:()=>!element.hidden&&document.visibilityState==='visible',onError:error=>api.setStatus(SLINK.core.format.errorMessage(error),'error')});
             actions.append(button);
           }
         },
@@ -879,6 +885,7 @@
       setTheme,
       setThemeHealth,
       setThemePanelOpacity,
+      setTornThemeSettings,
       setMinimizedMode,
       setCollapsed,
       setHidden(value) { hidden = Boolean(value); refreshShell(); },
@@ -892,6 +899,5 @@
 
   SLINK.define('core', 'uiShell', Object.freeze({ createShell }));
 })(globalThis);
-
 
 

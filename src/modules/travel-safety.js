@@ -68,7 +68,7 @@
       }
 
       async function handleTravelClick(event) {
-        if (stopped || event.defaultPrevented) return;
+        if (stopped || context.isActive?.() === false || event.defaultPrevented) return;
         const button = TRAVEL.travelButton(event.target);
         if (!button || button.disabled || !/^\/travelagency\.php$/i.test(global.location.pathname)) return;
         if (bypass.has(button)) { bypass.delete(button); return; }
@@ -84,6 +84,7 @@
         pending.add(button);
         try {
           const status = await loadStatus(false);
+          if (stopped || context.isActive?.() === false) return;
           const assessment = TRAVEL.assessTrip({ oneWayMs, crime:status?.crime });
           if (assessment.blocked) {
             showConflict(button, TRAVEL.destinationFromLabel(button.getAttribute('aria-label')), assessment);
@@ -92,6 +93,7 @@
           bypass.add(button);
           button.click();
         } catch (error) {
+          if (stopped || context.isActive?.() === false) return;
           ui.setStatus('Travel safety could not verify the crime time, so the flight was not blocked: ' + SLINK.core.format.errorMessage(error), 'error');
           bypass.add(button);
           button.click();
