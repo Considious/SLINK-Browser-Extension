@@ -20,6 +20,7 @@ importScripts(
   '../core/themes.js',
   '../core/messaging.js',
   '../core/http.js',
+  '../core/mugging-ff.js',
   '../core/war.js',
   '../core/worker-client.js',
   '../core/torn-api-limiter.js',
@@ -521,6 +522,3 @@ chrome.alarms.onAlarm.addListener(alarm => {
 });
 
 void initialize().catch(error => console.error('[SLINK] Service worker initialization:', error));
-
-
-

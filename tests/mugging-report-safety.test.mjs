@@ -26,7 +26,7 @@ const context=vm.createContext({console,Date:class extends Date{static now(){ret
  hasScope:()=>true,muggingClientId:()=> 'synthetic',muggingRequest:async(_,options)=>transport(options.body),errorMessage:error=>error.message,
  validPlayerIntelligenceId:value=>Number(value)>0?Number(value):null,
  SYNC_INTERVAL_MS:300000,SYNC_RETRY_MS:60000,SYNC_BATCH_SIZE:100,SYNC_MAX_BATCHES:5,
- SYNC_KEY:'sync',PENDING_KEY:'pending',SETTINGS_KEY:'settings',REQUIRED_SCOPE:'slink.mugging',BASE_URL:'https://synthetic.invalid',syncing:null,
+ SYNC_KEY:'sync',PENDING_KEY:'pending',SETTINGS_KEY:'settings',REQUIRED_SCOPE:'slink.mugging',BASE_URL:'https://synthetic.invalid',syncing:null,observationQueue:Promise.resolve(),
  clientId:async()=> 'synthetic',SLINK:{core:{storage:{get:async(key,fallback)=>structuredClone(map.get(key)??fallback),set:async(key,value)=>map.set(key,structuredClone(value))},
  permissions:{hasScope:()=>true},http:{requestJson:async(_,url,options)=>transport(JSON.parse(options.body))}},services:{permissionAccess:{ensureSession:async()=>({token:'synthetic'})}}}});
 map.set('settings',{enabled:true});

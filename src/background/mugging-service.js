@@ -26,6 +26,9 @@
   let refreshing = null;
   let contributing = null;
   let syncing = null;
+  let observationQueue=Promise.resolve();
+  async function fairFightKey(){for(const name of ['access.settings.v1','war.settings.v1','leveling.settings.v1','bounties.settings.v1']){const value=await SLINK.core.storage.get(name,{});if(value.ffKey)return String(value.ffKey).trim();}return '';}
+  const fairFightChecks=global.SLINK_MUGGING_FF.create({key:fairFightKey,request:(ids,key,signal)=>SLINK.core.http.requestJson('ffscouter','https://ffscouter.com/api/v1/get-stats?key='+encodeURIComponent(key)+'&targets='+ids.join(','),{cache:'no-store',signal}),queue:queueObservations});
 
   function finiteStat(value) {
     const candidate = value && typeof value === 'object'
@@ -134,10 +137,14 @@
   }
 
   async function queueObservations(rows) {
+    const task=observationQueue.catch(()=>{}).then(()=>writeObservations(rows));observationQueue=task;return task;
+  }
+  async function writeObservations(rows) {
     if (!rows.length) return;
     const current = await SLINK.core.storage.get(PENDING_KEY, []);
-    const byPlayer = new Map((Array.isArray(current) ? current : []).map(row => [Number(row.playerId), row]));
-    for (const row of rows) byPlayer.set(Number(row.playerId), row);
+    const identity=row=>String(row.playerId)+(row.estimateOnly?':ff':'');
+    const byPlayer = new Map((Array.isArray(current) ? current : []).map(row => [identity(row), row]));
+    for (const row of rows) byPlayer.set(identity(row), row);
     await SLINK.core.storage.set(PENDING_KEY, [...byPlayer.values()]
       .sort((left, right) => Number(right.observedAt) - Number(left.observedAt)).slice(0, 500));
   }
@@ -147,7 +154,8 @@
     const playerId = Math.max(0, Math.trunc(Number(row?.playerId ?? record.playerId ?? record.id) || 0));
     const observedAt = Math.max(0, Number(row?.observedAt ?? record.observedAt) || Date.now());
     return {
-      report_id:`${client}:${playerId}:${Math.trunc(observedAt)}`,
+      report_id:`${client}:${playerId}:${Math.trunc(observedAt)}${row.estimateOnly?':ff':''}`,
+      estimate_only:row.estimateOnly===true,
       player_id:playerId,
       name:String(record.name || '').slice(0, 80),
       observed_at:observedAt,
@@ -197,9 +205,7 @@
           });
           const acknowledged = new Set(Array.isArray(response?.acknowledged_report_ids) ? response.acknowledged_report_ids.map(String) : []);
           if (!acknowledged.size) throw new Error('The Mugging Worker did not acknowledge the contributor batch.');
-          const latest = await SLINK.core.storage.get(PENDING_KEY, []);
-          const remaining = (Array.isArray(latest) ? latest : []).filter(row => !acknowledged.has(reportForObservation(row, client).report_id));
-          await SLINK.core.storage.set(PENDING_KEY, remaining);
+          const remove=observationQueue.catch(()=>{}).then(async()=>{const latest=await SLINK.core.storage.get(PENDING_KEY,[]);await SLINK.core.storage.set(PENDING_KEY,(Array.isArray(latest)?latest:[]).filter(row=>!acknowledged.has(reportForObservation(row,client).report_id)));});observationQueue=remove;await remove;
           accepted += acknowledged.size;
           if (rows.length < SYNC_BATCH_SIZE) break;
         }
@@ -263,11 +269,12 @@
         ceiling:CONTRIBUTION_CEILING,
         interactiveReserve:INTERACTIVE_RESERVE
       });
-      const response = capacity.available > 0
-        ? await requestTasks(session, mode, Math.min(100, capacity.available * 4))
+      const response = capacity.available > 0 || await fairFightKey()
+        ? await requestTasks(session, mode, Math.min(40,Math.max(20, capacity.available * 4)))
         : { tasks:[] };
       let fetched = 0, skipped = 0, errors = 0;
       const observations = [];
+      await fairFightChecks.check(Array.isArray(response?.tasks)?response.tasks:[]).catch(()=>null);
       for (const task of (Array.isArray(response?.tasks) ? response.tasks : [])) {
         if (fetched >= capacity.available) break;
         try {
@@ -321,6 +328,7 @@
       updatedAt:Math.max(0, Number(value.updatedAt ?? value.generated_at) || 0),
       estimateKind:String((value.estimateKind ?? value.estimate_kind) || 'rough'),
       estimateSource:String((value.estimateSource ?? value.estimate_source) || 'cached battle-stat estimate'),
+      ffCheckNotice:String(value.ffCheckNotice||''),
       userBattleStats:Math.max(0, Number(value.userBattleStats ?? value.user_battle_stats) || 0),
       userLevel:Math.max(0, Math.trunc(Number(value.userLevel ?? value.user_level) || 0)),
       pool:{
@@ -334,9 +342,9 @@
         name:String(target?.name || '').trim(),
         level:Math.max(0, Math.trunc(Number(target?.level) || 0)),
         status:target?.status && typeof target.status === 'object' ? target.status : null,
-        fairFight:Number.isFinite(Number(target?.fairFight ?? target?.fair_fight)) ? Number(target?.fairFight ?? target?.fair_fight) : null,
-        roughFairFight:Number.isFinite(Number(target?.roughFairFight ?? target?.rough_fair_fight)) ? Number(target?.roughFairFight ?? target?.rough_fair_fight) : null,
-        battleStatsEstimate:Number.isFinite(Number(target?.battleStatsEstimate ?? target?.battle_stats_estimate)) ? Number(target?.battleStatsEstimate ?? target?.battle_stats_estimate) : null,
+        fairFight:global.SLINK_MUGGING_FF.positive(target?.fairFight ?? target?.fair_fight),
+        roughFairFight:global.SLINK_MUGGING_FF.positive(target?.roughFairFight ?? target?.rough_fair_fight),
+        battleStatsEstimate:global.SLINK_MUGGING_FF.positive(target?.battleStatsEstimate ?? target?.battle_stats_estimate),
         battleStatsCheckedAt:Math.max(0, Number(target?.battleStatsCheckedAt ?? target?.battle_stats_checked_at) || 0),
         estimateKind:String((target?.estimateKind ?? target?.estimate_kind) || 'rough'),
         estimateSource:String((target?.estimateSource ?? target?.estimate_source) || 'cached'),
@@ -364,7 +372,7 @@
       if (input.touch !== false) await touchActivity();
       const suppliedStats = Number(input.userBattleStats) || 0;
       const userBattleStats = suppliedStats > 0 ? suppliedStats : await ownBattleStats(input.forceBattleStats === true);
-      const response = await SLINK.core.http.requestJson('muggingWorker', `${BASE_URL}/api/assignments/rough`, {
+      const loadAssignments=()=>SLINK.core.http.requestJson('muggingWorker', `${BASE_URL}/api/assignments/rough`, {
         method:'POST',
         headers:{
           Authorization:`Bearer ${session.token}`,
@@ -378,9 +386,13 @@
           limit:Math.max(1, Math.min(100, Math.trunc(Number(settings.limit) || 50)))
         })
       });
+      let response=await loadAssignments();
+      const checked=await fairFightChecks.check(response?.targets||[]).catch(()=>({queued:0}));
+      if(checked.queued>0){const synced=await syncPending(true);if(Number(synced.accepted)>0)response=await loadAssignments();}
       const ownProfile = await storedOwnBattleStats();
       const cache = normalizeCache({
         ...response,
+        ffCheckNotice:checked.keyMissing?'Save your FFScouter key in API and feature access to check unknown targets.':checked.error||'',
         userBattleStats,
         userLevel:Math.max(0, Math.trunc(Number(ownProfile?.level) || 0)),
         ownBattleStatsCheckedAt:Math.max(0, Number(ownProfile?.checkedAt) || 0)
@@ -436,5 +448,3 @@
     normalizeCache, refresh, reportForObservation, routes, runContribution, status, syncPending, touchActivity
   }));
 })(globalThis);
-
-
