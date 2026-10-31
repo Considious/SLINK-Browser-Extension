@@ -77,6 +77,10 @@
 
   function eventRows(payload = {}) {
     const source = payload.calendar ?? payload.events ?? payload.competitions ?? payload;
+    if(source && !Array.isArray(source) && typeof source==='object' && ('events' in source || 'competitions' in source)){
+      return ['events','competitions'].flatMap(group=>eventRows({calendar:source[group]||[]}).map(event=>({...event,id:group+':'+event.id})));
+    }
+    if(source && !Array.isArray(source) && typeof source==='object' && Object.keys(source).length===1 && 'start_time' in source)return [];
     return rows(source).map(({ key, value }) => {
       if (value === null || value === undefined) return null;
       const item = typeof value === 'object' ? value : { start:value };
@@ -85,7 +89,7 @@
       const startAt = timestampMs(item.start ?? item.start_time ?? item.starts_at ?? item.from ?? item.timestamp ?? item.time);
       const endAt = timestampMs(item.end ?? item.end_time ?? item.ends_at ?? item.to);
       return {
-        id:String(item.id ?? item.event_id ?? item.slug ?? key ?? name).trim() || name,
+        id:String(item.id ?? item.event_id ?? item.slug ?? item.title ?? item.name ?? key ?? name).trim() || name,
         name,
         startAt,
         endAt,
@@ -111,8 +115,12 @@
     const source = globalEvents.length ? globalEvents : personalEvents;
     const events = source.map(event => {
       const override = personal.get(identity(event)) || personal.get(String(event.name).toLowerCase());
-      const startAt = override?.startAt || event.startAt;
-      const endAt = override?.endAt || event.endAt;
+      const clock=String(userPayload?.calendar?.start_time||'').match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      const offset=clock&&Number(clock[1])<24&&Number(clock[2])<60&&Number(clock[3]||0)<60?(Number(clock[1])*3600+Number(clock[2])*60+Number(clock[3]||0))*1000:null;
+      const shift=value=>value?Math.floor(value/86400000)*86400000+offset:0;
+      const personalClock=event.fixedStartTime===false&&offset!==null;
+      const startAt = override?.startAt || (personalClock?shift(event.startAt):event.startAt);
+      const endAt = override?.endAt || (personalClock?shift(event.endAt):event.endAt);
       const state = startAt && startAt <= now && (!endAt || endAt > now)
         ? 'active'
         : startAt > now ? 'upcoming'
@@ -123,7 +131,7 @@
         startAt,
         endAt,
         description:event.description || override?.description || '',
-        personalized:Boolean(override?.startAt),
+        personalized:Boolean(override?.startAt)||personalClock,
         state
       };
     }).sort((left, right) => {
@@ -141,7 +149,7 @@
       || events.find(event => !event.guideOnly)
       || events[0]
       || null;
-    return { at:now, events, nextId:next?.id || '', next };
+    return { schemaVersion:2, at:now, events, nextId:next?.id || '', next };
   }
 
   function selectEvent(calendar = {}, selectedId = '') {

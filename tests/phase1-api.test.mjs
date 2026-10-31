@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
+const read=p=>fs.readFileSync(new URL('../src/'+p,import.meta.url),'utf8');
+const S={core:{},services:{},define(g,k,v){this[g][k]=v;}},ctx=vm.createContext({SLINK_EXTENSION:S,URL,console});
+vm.runInContext(read('core/events.js'),ctx);vm.runInContext(read('core/museum.js'),ctx);
+const time=Date.UTC(2026,9,30,14),calendar={calendar:{competitions:[{title:'Halloween',description:'Treats',start:Date.UTC(2026,9,25)/1000,end:Date.UTC(2026,10,1)/1000,fixed_start_time:true}],events:[{title:'Personal day',start:Date.UTC(2026,9,31)/1000,end:Date.UTC(2026,10,1)/1000,fixed_start_time:false}]}};
+const merged=S.core.events.mergeCalendars(calendar,{calendar:{start_time:'12:34:00'}},time);
+assert.equal(merged.schemaVersion,2);assert.equal(merged.events.length,2);assert.equal(merged.events.find(e=>e.name==='Halloween').state,'active');assert(!merged.events.some(e=>e.name==='competitions'||e.guideOnly));assert.equal(merged.events.find(e=>e.name==='Personal day').startAt,Date.UTC(2026,9,31,12,34));
+const requests=[],catalog={items:[{name:'Dahlia',type:'Flower'},{name:'Lion Plushie',type:'Plushie'},{name:'Meteorite Fragment',type:'Artifact'}]};
+ctx.MUSEUM=S.core.museum;ctx.tornJson=async url=>{const u=new URL(url);requests.push(u);const offset=Number(u.searchParams.get('offset'));return {inventory:{items:Array.from({length:offset?1:250},(_,i)=>({id:offset+i+1,amount:1,name:'Test'}))},_metadata:{total:251}};};
+const source=read('background/museum-service.js'),start=source.indexOf('async function fetchInventory('),end=source.indexOf('async function ensureCatalog',start);vm.runInContext(source.slice(start,end),ctx);
+const result=await ctx.fetchInventory('synthetic',catalog);assert.equal(result.inventory.items.length,753);assert.equal(requests.length,6);assert.deepEqual([...new Set(requests.map(u=>u.searchParams.get('cat')))].sort(),['Artifact','Flower','Plushie']);
+for(const cat of ['Artifact','Flower','Plushie'])assert.deepEqual(requests.filter(u=>u.searchParams.get('cat')===cat).map(u=>u.searchParams.get('offset')),['0','250']);
+console.log('Official nested Torn calendar, fixed/personal times, schema migration and explicit category inventory pagination passed.');

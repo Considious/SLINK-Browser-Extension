@@ -43,7 +43,7 @@
     refreshing = (async () => {
       await SLINK.services.permissionAccess.ensureSession(false, CORE.SCOPE);
       const current = await runtime();
-      if (!force && current.calendar && Date.now() - Number(current.fetchedAt || 0) < CORE.CACHE_MS) return publicStatus(false);
+      if (!force && current.calendar?.schemaVersion===2 && Date.now() - Number(current.fetchedAt || 0) < CORE.CACHE_MS) return publicStatus(false);
       const key = await tornKey();
       if (!key) throw new Error('Save your Torn API key under API and feature access first.');
       try {
@@ -75,7 +75,7 @@
       SLINK.core.storage.get('permissions.snapshot', null)
     ]);
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, CORE.SCOPE);
-    if (refreshIfDue && permitted && (!current.calendar || Date.now() - Number(current.fetchedAt || 0) >= CORE.CACHE_MS)) {
+    if (refreshIfDue && permitted && (current.calendar?.schemaVersion!==2 || Date.now() - Number(current.fetchedAt || 0) >= CORE.CACHE_MS)) {
       try { return await refresh(false); } catch {}
     }
     const selected = CORE.selectEvent(current.calendar || {}, currentSettings.selectedId);

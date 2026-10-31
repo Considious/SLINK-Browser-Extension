@@ -2,17 +2,18 @@
 
 ## What changed
 
-- **Saved settings:** improved saving so alert choices, targets, notes and other preferences are less likely to revert or disappear.
+- **Saved settings:** improved PDA saving for themes and chat preferences, while keeping existing settings and keys. Other saved-data protections remain in place.
 - **Forms and checkboxes:** background updates should no longer close editors, erase typing or change unrelated selections.
 - **Autosave:** many personal settings now save as you change them, with a warning and retry option if saving fails.
 - **Loading and performance:** improved page loading, reduced unnecessary checking, and better recovery after switching tabs or returning to PDA.
 - **Battle stats and Fair Fight:** improved reuse of your current stats and handling of missing estimates. An unavailable Fair Fight service should not stop the rest of a module working.
 - **Mugging:** improved target checking and refreshes. Unchecked targets are clearly marked, and failed checks should not erase known estimates.
 - **Extension dashboard:** repaired missing module access and buttons, including QOL and Officer tools.
-- **Racing and QOL:** repaired car highlighting and improved the stability of settings and controls across Abroad Stocks, Company, Museums, Money and Events.
-- **Chat:** added access to custom buttons and GIF/sticker tools from supported chat windows, plus optional Fair Fight bubbles beside profile links.
+- **Museums and Events:** corrected Museum inventory requests and event calendar reading, including Halloween dates and personal event start times.
+- **Racing and other QOL tools:** repaired car highlighting and improved the stability of settings and controls across Abroad Stocks, Company, Money and Events.
+- **Chat Fair Fight bubbles:** corrected duplicates alongside existing Fair Fight bubbles, stretched badges and bubbles disappearing after chat redraws.
 - **Themes:** added an optional setting to apply your SLINK theme to Torn pages.
-- **Error messages:** clearer explanations of what failed and what to do next, instead of unexplained technical errors.
+- **Error messages:** clearer explanations of what failed and what to do next. Terms-loading errors now identify the affected service instead of only saying the information was incomplete.
 
 ## What needs tested
 

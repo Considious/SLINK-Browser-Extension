@@ -29,16 +29,21 @@
     return response;
   }
 
-  async function fetchInventory(key) {
+  async function fetchInventory(key,catalog) {
     const items = [];
-    let offset = 0;
+    const wanted=new Set(MUSEUM.SETS.flatMap(set=>set.items).map(item=>MUSEUM.canonicalName(item.name).toLowerCase()));
+    const categories=[...new Set((catalog.items||[]).filter(item=>wanted.has(MUSEUM.canonicalName(item.name).toLowerCase())).map(item=>String(item.type||'')).filter(Boolean))];
+    if(!categories.length)throw new Error('The item catalog has no Museum inventory categories. Refresh the item catalog before retrying.');
+    for(const category of categories){
+    let offset=0;
     for (let page = 0; page < 20; page += 1) {
-      const body = await tornJson(`https://api.torn.com/v2/user/inventory?limit=250&offset=${offset}&comment=SLINK%20museum%20assistant`, key);
+      const body = await tornJson(`https://api.torn.com/v2/user/inventory?cat=${encodeURIComponent(category)}&limit=250&offset=${offset}&comment=SLINK%20museum%20assistant`, key);
       const rows = Array.isArray(body?.inventory?.items) ? body.inventory.items : [];
       items.push(...rows);
       const total = Math.max(0, Number(body?._metadata?.total) || 0);
-      if (rows.length < 250 || (total && items.length >= total)) break;
+      if (rows.length < 250 || (total && offset + rows.length >= total)) break;
       offset += rows.length;
+    }
     }
     return { inventory:{ items, timestamp:Math.floor(Date.now() / 1000) } };
   }
@@ -56,10 +61,8 @@
       const key = await tornKey();
       if (!key) throw new Error('Save your Torn API key under API and feature access first.');
       try {
-        const [inventory, catalog] = await Promise.all([
-          fetchInventory(key),
-          ensureCatalog(current, key, force)
-        ]);
+        const catalog=await ensureCatalog(current,key,force);
+        const inventory=await fetchInventory(key,catalog);
         await SLINK.core.storage.set(KEYS.runtime, { fetchedAt:Date.now(), inventory, catalog, lastError:'' });
       } catch (error) {
         await SLINK.core.storage.set(KEYS.runtime, { ...current, lastError:SLINK.core.format.errorMessage(error) });
