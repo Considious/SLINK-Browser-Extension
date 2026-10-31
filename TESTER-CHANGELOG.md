@@ -9,6 +9,7 @@
 - **Forms and checkboxes:** background updates should no longer close editors, erase typing or change unrelated selections.
 - **Autosave:** many personal settings now save as you change them, with a warning and retry option if saving fails.
 - **Loading and performance:** improved page loading, reduced unnecessary checking, and better recovery after switching tabs or returning to PDA.
+- **PDA chat performance:** stopped repeated whole-chat processing when only a header or unrelated page content changes. New GIFs and Fair Fight bubbles still appear, existing ones remain during app switching, and the Halloween basket checker now runs only on Items.
 - **PDA script on PC:** corrected startup being blocked by the browser's Content Security Policy. No security settings need to be disabled. Startup errors now show the underlying failure instead of only saying startup did not finish.
 - **Battle stats and Fair Fight:** improved reuse of your current stats and handling of missing estimates. An unavailable Fair Fight service should not stop the rest of a module working.
 - **Mugging:** improved target checking and refreshes. Unchecked targets are clearly marked, and failed checks should not erase known estimates.
@@ -38,6 +39,7 @@ Please try the checks that apply to you, on PDA or the extension.
 - [ ] **Your page and size are remembered:** leave SLINK on Alerts or Market Watch, then change Torn pages. It should return to that module. Resizing should stay saved without stretching controls or creating huge gaps.
 - [ ] **PDA navigation is usable:** reach every Combat and QOL subtab. Check that buttons, text and alerts fit and can be scrolled where needed.
 - [ ] **Loading feels better:** switch tabs/windows, change pages, and background/return to PDA. Watch for slowdowns, flickering themes, repeated restarts or duplicate buttons.
+- [ ] **PDA stays responsive:** leave a busy chat open while browsing, scrolling and using SLINK. Confirm typing and page controls respond promptly, new GIFs/stickers still appear, and switching away and back does not remove existing images or Fair Fight bubbles. Check the Halloween basket helper still appears on Items.
 - [ ] **PDA script on PC:** if you use it through a desktop userscript manager, update the existing script and confirm it opens, accepts your saved/manual key and retains settings with normal browser security enabled.
 - [ ] **Battle stats stay current:** refresh your stats in Mugging, then close SLINK and refresh Torn. The newer total should remain rather than reverting. Compare it with other combat modules.
 - [ ] **Mugging targets update:** find targets and refresh after checks finish. Unchecked entries should be clearly labelled, known estimates should remain, and known targets above your selected Fair Fight limit should not be treated as suitable.
