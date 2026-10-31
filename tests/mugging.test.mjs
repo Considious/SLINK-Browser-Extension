@@ -40,7 +40,7 @@ assert(serviceSource.includes('wait:false') && serviceSource.includes("priority:
 assert(serviceSource.includes('PENDING_KEY') && serviceSource.includes('pendingSync:true'), 'Contributor observations are not retained for synchronization.');
 assert(serviceSource.includes('const SYNC_INTERVAL_MS = 5 * 60_000') && serviceSource.includes('const SYNC_BATCH_SIZE = 100'), 'Contributor reports must use five-minute acknowledged batches.');
 assert(serviceSource.includes('/api/contributor/reports') && serviceSource.includes('acknowledged_report_ids'), 'Phase 10 does not use acknowledged contributor-report batches.');
-assert(serviceSource.includes("SLINK.core.storage.set(PENDING_KEY, remaining)"), 'Acknowledged observations are not removed from the pending queue.');
+assert(serviceSource.includes('observationQueue=remove') && serviceSource.includes('!acknowledged.has(reportForObservation(row,client).report_id)'), 'Acknowledged observations must be removed through the serialized queue without dropping newer reports.');
 assert(serviceSource.includes("'mugging.contribution.sync'"), 'Manual/background Phase 10 synchronization route is missing.');
 assert(serviceSource.includes("if (mode === 'active')") && serviceSource.includes('maybeRefreshActiveAssignments'), 'Inactive users can still refresh personal Mugging assignments.');
 assert(moduleSource.includes("SLINK.core.messaging.send('mugging.activity.touch'"), 'Mugging UI activity is not reported to the Phase 9 scheduler.');

@@ -1,4 +1,6 @@
-# SLINK audit tester build — candidate 38
+# SLINK audit tester build — candidate 39
+
+Current extension **0.19.14.1**, PDA **0.4.125** includes the main Mugging recovery fix without replacing audit features: real FF batches, ACK/upload/re-fetch, pending-only labels and positive-estimate race protection. Saved settings/keys preserved. Use Candidate39 in the single TESTER-CHANGELOG.md. Chat/media/public-backup/editor/theme changes remain included; no audit promotion to main.
 
 Current builds: extension **0.19.13.11**, PDA **0.4.123**. Enable **Quality of Life → Chat → Fair Fight in chat** (initially OFF). This independent implementation uses the existing saved key and shared FF/intelligence/public-backup services, without extra Torn requests. The same setting is available on the extension dashboard. See Candidate 38 in TESTER-CHANGELOG.md for the combined test checklist and live-device limitations. Older version notes below are historical; main/stable remains unchanged.
 

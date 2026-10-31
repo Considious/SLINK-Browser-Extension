@@ -21,6 +21,7 @@ importScripts(
   '../core/themes.js',
   '../core/messaging.js',
   '../core/http.js',
+  '../core/mugging-ff.js',
   '../core/ff-backup.js',
   'ff-backup-service.js',
   '../core/war.js',

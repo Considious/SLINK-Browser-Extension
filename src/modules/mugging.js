@@ -59,6 +59,7 @@
       updatedAt:Math.max(0, Number(value.updatedAt ?? value.generated_at) || 0),
       estimateKind:String((value.estimateKind ?? value.estimate_kind) || 'rough'),
       estimateSource:String((value.estimateSource ?? value.estimate_source) || 'cached battle-stat estimate'),
+      ffCheckNotice:String(value.ffCheckNotice||''),
       userBattleStats:Math.max(0, Number(value.userBattleStats ?? value.user_battle_stats) || 0),
       userLevel:Math.max(0, Math.trunc(Number(value.userLevel ?? value.user_level) || 0)),
       pool:{
@@ -85,8 +86,8 @@
         name:String(target?.name || '').trim(),
         level:Math.max(0, Math.trunc(Number(target?.level) || 0)),
         status:target?.status && typeof target.status === 'object' ? target.status : null,
-        fairFight:Number.isFinite(Number(target?.fairFight ?? target?.fair_fight)) ? Number(target?.fairFight ?? target?.fair_fight) : null,
-        battleStatsEstimate:Number.isFinite(Number(target?.battleStatsEstimate ?? target?.battle_stats_estimate)) ? Number(target?.battleStatsEstimate ?? target?.battle_stats_estimate) : null,
+        fairFight:global.SLINK_MUGGING_FF.positive(target?.fairFight ?? target?.fair_fight),
+        battleStatsEstimate:global.SLINK_MUGGING_FF.positive(target?.battleStatsEstimate ?? target?.battle_stats_estimate),
         estimateKind:String((target?.estimateKind ?? target?.estimate_kind) || 'rough'),
         estimateSource:String((target?.estimateSource ?? target?.estimate_source) || 'cached'),
         confidence:String(target?.confidence || '')
@@ -264,11 +265,11 @@
             <div class="mugging-meta">
               <span class="mugging-badge">${escape(statusLabel(target))}</span>
               ${levelBadge(target.level, cache.userLevel)}
-              <span class="mugging-badge">Rough FF ${target.fairFight === null ? '?' : target.fairFight.toFixed(2)}</span>
+              <span class="mugging-badge">${target.estimateKind==='unchecked'?'FF check pending':`Rough FF ${target.fairFight === null ? '?' : target.fairFight.toFixed(2)}`}</span>
               <span class="mugging-badge">Estimated BS ${target.battleStatsEstimate === null ? '?' : escape(SLINK.core.format.shortNumber(target.battleStatsEstimate))}</span>
               ${target.confidence ? `<span class="mugging-badge">${escape(target.confidence)}</span>` : ''}
             </div>
-            <div class="mugging-actions"><a href="${profile}">Profile</a><a href="${attack}">Attack</a><button type="button" data-mugging-save="${target.id}">Save Target</button></div>
+            <div class="mugging-actions"><a href="${profile}">Profile</a>${target.estimateKind==='unchecked'?'':`<a href="${attack}">Attack</a>`}<button type="button" data-mugging-save="${target.id}">Save Target</button></div>
           </article>`;
         }).join('');
       }
@@ -306,6 +307,7 @@
         context.ui.setContentHtml(`
           <div class="mugging-summary" id="mugging-summary">${summary}</div>
           <p class="mugging-note" id="mugging-pool-note" hidden></p>
+          <p class="mugging-note" id="mugging-ff-note" hidden></p>
           <div class="mugging-controls">
             <label class="mugging-check"><input id="mugging-enabled" type="checkbox" ${settings.enabled ? 'checked' : ''}><span>Enable Mugging on this device</span></label>
             <label>Minimum rough FF<input id="mugging-min-ff" type="number" min="1" max="3" step=".1" value="${settings.minFairFight}"></label>
@@ -332,6 +334,7 @@
       function updateMessages() {
         const excluded = cache.pool.excluded;
         const messages = {
+          'mugging-ff-note':cache.ffCheckNotice,
           'mugging-error':error,
           'mugging-notice':notice,
           'mugging-sync':cache.contribution.lastSyncAt ? `Last sync ${new Date(cache.contribution.lastSyncAt).toLocaleString()}` : '',

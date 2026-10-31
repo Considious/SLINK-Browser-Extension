@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';
+const ctx=vm.createContext({Date,URL,AbortController,setTimeout,clearTimeout});vm.runInContext(readFileSync(new URL('../src/core/mugging-ff.js',import.meta.url),'utf8'),ctx);const C=ctx.SLINK_MUGGING_FF;let now=Date.now(),calls=0,queued=[];
+for(const value of [null,undefined,0,false,-1,NaN,Infinity])assert.equal(C.positive(value),null);
+const publicRow={player_id:1,source:'bss',bs_estimate:20000,last_updated:Math.floor(now/1000)};
+assert.equal(C.publicEstimate({...publicRow,source:'premium'},now),null);assert.equal(C.publicEstimate({...publicRow,bs_estimate:0},now),null);
+assert.equal(C.publicEstimate({...publicRow,source:'premium',bs_estimate:999999,available_estimates:{bss:publicRow}},now).record.battleStatsEstimate,20000);
+const checker=C.create({now:()=>now,key:async()=> 'existing',request:async ids=>{calls++;assert.ok(ids.length<=200);return ids.filter(id=>id!==2).map(player_id=>({...publicRow,player_id}));},queue:async rows=>queued.push(...rows)});
+await checker.check([{id:1,needs_estimate:true},{id:2,needs_estimate:true},{id:3,needs_estimate:false}]);assert.equal(calls,1);assert.equal(queued.length,1);assert.equal(queued[0].estimateOnly,true);
+await checker.check([{id:2,needs_estimate:true}]);assert.equal(calls,1,'Unusable provider rows have a ten-minute negative cache');
+now+=60001;await checker.check([{id:4,needs_estimate:true}]);assert.equal(calls,2);
+const absent=C.create({key:async()=>'',request:()=>{throw Error('No key must not request');},queue:async()=>{}});assert.equal((await absent.check([{id:5,needs_estimate:true}])).keyMissing,true);
+let failures=0;const broken=C.create({now:()=>now,key:async()=> 'existing',request:async()=>{failures++;throw Error('unavailable');},queue:async()=>{throw Error('Must not upload missing estimates');}});assert.equal((await broken.check([{id:6,needs_estimate:true}])).queued,0);await broken.check([{id:6,needs_estimate:true}]);assert.equal(failures,1,'Provider failures back off without zeros');
+const service=readFileSync(new URL('../src/background/mugging-service.js',import.meta.url),'utf8');assert.match(service,/fairFightChecks.check\(response\?\.targets/);assert.match(service,/fairFightChecks.check\(Array.isArray\(response\?\.tasks/);assert.match(service,/synced.accepted/);assert.match(service,/observationQueue=remove/);
+console.log('Mugging FF public-only parsing, no zero/spy uploads, batching, negative cache, failure backoff, missing-key safety and refresh/contribution hooks passed.');

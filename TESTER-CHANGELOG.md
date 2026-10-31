@@ -1,5 +1,25 @@
 # SLINK tester changelog
 
+## Candidate 39 — 30 October 2026 — Main Mugging repair carried into testing
+
+**Extension0.19.14.1 / PDA0.4.125, audit/test-foundation.** Includes the complete urgent main Mugging repair below, while retaining Candidate38's chat bubbles/media, public FF backup, shared providers, retained editors/settings, themes and all other audit changes. This is a targeted backport, not replacement of testing with main. Backend testing branch receives the same Mugging worker0.6.3 repair while retaining the separate public-backup implementation. Main/live services are not redeployed by this testing update.
+
+Validation:112/112 client commands and28/28 backend/pipeline cases passed, including four round trips against the actual testing-client functions with zero local skips. Two existing test fixtures were updated for the new helper import and serialized acknowledgement path. The retained FF-check notice updates in place. PDA source digest rebuilt; launcher17618bytes,16 external fragments. These checks do not certify physical PDA or live account recovery.
+
+Known in-range targets stay first; unchecked targets fill remaining spaces, clearly labeled with no fake0 stats/FF or direct Attack shortcut. Both clients batch public FF checks and preserve pending estimates separately from status observations. Find targets uploads useful results, awaits ACK and fetches assignments again. Background FF checks also work without spare Torn calls. Failed uploads/unknown estimates remain pending; positive estimates survive status-only write races. Existing keys, settings and user lists are unchanged.
+
+Test the full sequence: Find targets → unchecked entries → FF batch → acknowledged contribution → refreshed estimated assignments. Also test missing keys, provider outage, failed upload retry, hard FF ceilings and hospital/cooldown exclusions. Confirm unsaved editor fields remain untouched and Candidate38 chat tools still work. The FF check message uses retained text updates, not rebuilding the editor. Physical PDA and live authenticated client/R2 catch-up remain acceptance checks; a passing local round trip is not a claim that the live pool has recovered.
+
+Downloads: [Extension tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip) · [PDA tester installer](https://raw.githubusercontent.com/Considious/Torn-Scripts/audit/test-foundation/SLINK-PDA/SLINK_PDA_Dashboard.user.js).
+
+## Urgent MAIN Mugging recovery — 30 October 2026
+
+Worker0.6.3-client-ff-recovery / extension0.19.14 / PDA0.4.124. Isolated main repair only, not promotion of the audit branch. Known eligible targets first; missing estimates now fill remaining slots as visibly unchecked, not FF0 or fake zero stats. Both clients actually batch FFScouter checks, upload public estimates with original timestamps, wait for ACK on Find targets, and fetch assignments again. Missing keys/failures stay honest and queued work is retained. No mass-zeroing or schema migration. Race-safe R2 writes preserve newer positive estimates. Admin wildcard accepted. Unchecked rows have no direct Attack shortcut. Existing settings/keys unchanged.
+
+Test: update PDA in place / extension to0.19.14, Find targets, observe known-first + FF-check-pending rows, then successful checks becoming estimated assignments on refresh. Verify known too-strong targets stay outside the hard FF ceiling; hospital/cooldown filters remain. Disable/block FF in an isolated test session: pending rows must not become0 or erase prior estimates. Failed uploads must retry; refreshed status must not erase queued FF results. Test FF contributions with zero spare Torn calls. Check live health version and growth in estimate coverage, rather than interpreting a successful source push as verified production behavior. Installed Chrome needs a store release/adoption; repository code alone cannot change an installed build.
+
+Evidence:28 local worker/pipeline cases pass (including four actual-client-function round trips), six client FF/report/stat checks plus PDA runtime build pass. Physical PDA/native bridge and authenticated live R2/client acceptance remain unverified until observed. Deployment status is recorded in the implementation checkpoint. Audit branch Candidate38 remains separate and has NOT been promoted to main by this repair.
+
 ## Candidate 38 — 30 October 2026 — Optional Fair Fight chat bubbles
 
 **Testing only: extension 0.19.13.11 / PDA 0.4.123.** Enable **Quality of Life → Chat → Fair Fight in chat**. It defaults OFF and saves immediately. The extension dashboard page has the same setting. Existing Chat permission/faction grants and admin.* apply; no new permission or migration.

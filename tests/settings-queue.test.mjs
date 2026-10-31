@@ -27,6 +27,7 @@ fail=true;await assert.rejects(()=>alerts['adhd.settings.save']({medicalThreshol
 await alerts['adhd.settings.save']({medicalThresholdHours:4});
 assert.equal(records.get('adhd.settings.v1').medicalThresholdHours,4);
 assert.equal(records.get('adhd.settings.v1').enabled.medicalCooldown,false);
+vm.runInContext(read('src/core/mugging-ff.js'),context);
 vm.runInContext(read('src/background/mugging-service.js'),context);
 const save=api.services.mugging.routes['mugging.settings.save'];
 records.set('mugging.settings.v1',{enabled:false,minFairFight:1,maxFairFight:3,limit:50,unknownFutureSetting:'retain'});
