@@ -66,6 +66,12 @@
   }
 
   async function requestJsonRaw(capabilityName, input, options = {}) {
+    try {
+      const data = await requestJsonTransport(capabilityName, input, options);
+      return global.SLINK_ERRORS?.annotateBody(data,{provider:capabilityName}) ?? data;
+    } catch(error) { if(error && typeof error==='object')error.provider=capabilityName; throw error; }
+  }
+  async function requestJsonTransport(capabilityName, input, options = {}) {
     const url = validateUrl(capabilityName, input);
     if (!await hasCapability(capabilityName)) {
       const error = new Error(`${SLINK.core.permissions.getCapability(capabilityName).label} permission has not been granted.`);
@@ -88,12 +94,13 @@
       } catch {
         const error = new Error(`Expected JSON from ${url.hostname}.`);
         error.code = 'SLINK_INVALID_JSON';
+        error.status = response.status;
         throw error;
       }
     }
     if (!response.ok) {
-      const primaryMessage = data?.error?.message || data?.error || `HTTP ${response.status}`;
-      const diagnosticDetail = typeof data?.detail === 'string' && data.detail.trim()
+      const primaryMessage = data?.user_message || data?.error?.message || data?.error || `HTTP ${response.status}`;
+      const diagnosticDetail = !data?.user_message && typeof data?.detail === 'string' && data.detail.trim()
         ? data.detail.trim()
         : '';
       const error = new Error(diagnosticDetail && !String(primaryMessage).includes(diagnosticDetail)
@@ -101,6 +108,7 @@
         : primaryMessage);
       error.code = 'SLINK_HTTP_ERROR';
       error.status = response.status;
+      error.provider = capabilityName;
       const retryAfter = response.headers?.get?.('retry-after');
       if (retryAfter) {
         const seconds = Number(retryAfter);
@@ -116,6 +124,10 @@
   }
 
   async function requestText(capabilityName, input, options = {}) {
+    try { return await requestTextTransport(capabilityName,input,options); }
+    catch(error){if(error&&typeof error==='object')error.provider=capabilityName;throw error;}
+  }
+  async function requestTextTransport(capabilityName, input, options = {}) {
     const url = validateUrl(capabilityName, input);
     if (!await hasCapability(capabilityName)) {
       const error = new Error(`${SLINK.core.permissions.getCapability(capabilityName).label} permission has not been granted.`);

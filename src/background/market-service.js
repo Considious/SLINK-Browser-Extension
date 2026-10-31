@@ -113,15 +113,15 @@
       error?.data?.detail,
       error?.data?.code
     ].filter(value => typeof value === 'string').join(' ').toLowerCase();
-    return /\b(daily|per[ -]?day|day[ -]?(?:limit|quota)|daily[ -]?(?:limit|quota))\b/.test(detail) ? 'daily' : 'minute';
+    return /\b(daily|per[ -]?day|day[ -]?(?:limit|quota)|daily[ -]?(?:limit|quota))\b/.test(detail) ? 'daily' : /per[ -]?minute|minute[ -]?(?:limit|quota)/.test(detail) ? 'minute' : 'unknown';
   }
 
   function weaverLimitError(kind, retryAfterMs = 0) {
     const daily = kind === 'daily';
-    const error = new Error(daily ? WEAVER_DAILY_LIMIT_MESSAGE : WEAVER_MINUTE_LIMIT_MESSAGE);
-    error.code = daily ? 'SLINK_WEAVER_DAILY_LIMIT' : 'SLINK_WEAVER_RATE_LIMIT';
+    const error = new Error(daily ? WEAVER_DAILY_LIMIT_MESSAGE : kind==='minute' ? WEAVER_MINUTE_LIMIT_MESSAGE : 'Weaver request allowance was reached; the service did not identify whether it is per-minute or daily. Checks will retry after the current backoff.');
+    error.code = daily ? 'SLINK_WEAVER_DAILY_LIMIT' : kind==='minute' ? 'SLINK_WEAVER_RATE_LIMIT' : 'SLINK_WEAVER_LIMIT_UNKNOWN';
     error.retryAfterMs = Math.max(0, Number(retryAfterMs) || 0);
-    error.limitKind = daily ? 'daily' : 'minute';
+    error.limitKind = kind;
     return error;
   }
 
@@ -130,7 +130,7 @@
     return {
       events:(Array.isArray(value?.events) ? value.events : []).map(Number).filter(at => at > now - MARKET.WEAVER_RATE_WINDOW_MS && at <= now + 5_000).sort((a, b) => a - b),
       cooldownUntil,
-      cooldownReason:cooldownUntil && value?.cooldownReason === 'daily' ? 'daily' : 'minute'
+      cooldownReason:cooldownUntil && ['daily','minute','unknown'].includes(value?.cooldownReason) ? value.cooldownReason : 'minute'
     };
   }
 
@@ -307,7 +307,7 @@
           fetchedAt:now, nextCheckAt:retry, screenedAt:summary.fetchedAt,
           lowestPrice:currentLowest, listings:[]
         });
-        if (error?.code === 'SLINK_WEAVER_RATE_LIMIT') break;
+        if (['SLINK_WEAVER_RATE_LIMIT','SLINK_WEAVER_DAILY_LIMIT','SLINK_WEAVER_LIMIT_UNKNOWN'].includes(error?.code)) break;
       }
     }
   }

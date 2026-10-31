@@ -1,5 +1,6 @@
 importScripts(
   '../core/runtime.js',
+  '../core/errors.js',
   '../core/format.js',
   '../core/storage.js',
   '../core/player-intelligence.js',

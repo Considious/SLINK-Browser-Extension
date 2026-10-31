@@ -52,6 +52,7 @@
   }
 
   function errorMessage(error, fallback = 'Unknown error') {
+    if(global.SLINK_ERRORS)return global.SLINK_ERRORS.message(error,{fallback});
     if (typeof error === 'string' && error.trim()) return error.trim();
     if (error?.message) return String(error.message);
     if (error?.error?.error) return String(error.error.error);

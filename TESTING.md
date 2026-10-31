@@ -1,3 +1,7 @@
+# SLINK audit tester build — candidate 40
+
+Current extension **0.19.14.2**, PDA **0.4.126**. Clearer errors across the shared UI, request paths, chat and startup; no settings reset or main promotion. Follow Candidate40 in the single TESTER-CHANGELOG.md. Backend changes need a separate testing deployment and are not live from this commit.
+
 # SLINK audit tester build — candidate 39
 
 Current extension **0.19.14.1**, PDA **0.4.125** includes the main Mugging recovery fix without replacing audit features: real FF batches, ACK/upload/re-fetch, pending-only labels and positive-estimate race protection. Saved settings/keys preserved. Use Candidate39 in the single TESTER-CHANGELOG.md. Chat/media/public-backup/editor/theme changes remain included; no audit promotion to main.
@@ -59,4 +63,3 @@ Follow the linked changelog for step-by-step test and break-it instructions. Thi
 Run `npm run test:audit` for the focused candidate checks. They cover the actual dashboard imports, exact-grant access, revocation, Recaller navigation, intelligence queue recovery and Racing behavior, together with selected existing domain tests.
 
 Historical pre-repair baseline: 49 passing and 18 failing scripts (67 total), recorded in `docs/audit/BASELINE.md`. This is not the current result. Candidate 38 passes all 110 declared client validation commands; four isolated browser cases also pass. Physical PDA/live Torn acceptance is separate.
-

@@ -1020,7 +1020,7 @@
     const submittedEditor=editor,submittedDraft=JSON.stringify(editorDraft);
     savingEditorData=true;
     try { await saveMacros(normalizeMacros(editorDraft)); }
-    catch(error){window.alert(error.message);return;}
+    catch(error){window.alert(globalThis.SLINK_ERRORS?.message(error)||'This action failed. Retry once; your editor has been kept.');return;}
     finally{savingEditorData=false;}
     clearArmed();
     if(editor!==submittedEditor||JSON.stringify(editorDraft)!==submittedDraft){scanContexts();return;}

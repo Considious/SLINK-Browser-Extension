@@ -311,7 +311,7 @@
         pendingSync:Array.isArray(pending) ? pending.length : 0,
         lastSyncAt:Math.max(0, Number(sync?.lastSuccessAt) || 0),
         synced:Math.max(0, Number(sync?.accepted) || 0),
-        syncError:String(sync?.error || '')
+        syncError:sync?.error ? SLINK.core.format.errorMessage(sync.error) : ''
       };
       await SLINK.core.storage.set(CONTRIBUTION_KEY, status);
       return status;
@@ -427,7 +427,7 @@
         pendingSync:Array.isArray(pending) ? pending.length : 0,
         lastSyncAt:Math.max(0, Number(sync?.lastSuccessAt) || 0),
         synced:Math.max(0, Number(sync?.accepted) || 0),
-        syncError:String(sync?.error || '')
+        syncError:sync?.error ? SLINK.core.format.errorMessage(sync.error) : ''
       }
     };
   }

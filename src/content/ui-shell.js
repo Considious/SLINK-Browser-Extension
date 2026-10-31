@@ -791,7 +791,7 @@
         setModuleStyles(value) { moduleStyle.textContent = String(value || ''); },
         setContentHtml(value) { content.innerHTML = String(value || ''); },
         getContentElement() { return content; },
-        setStatus(message, tone = 'normal') { status.textContent = String(message || ''); status.dataset.tone = String(tone || 'normal'); },
+        setStatus(message, tone = 'normal') { status.textContent = tone==='error'&&message?SLINK.core.format.errorMessage(message):String(message || ''); status.dataset.tone = String(tone || 'normal'); },
         setRows(rows) {
           content.replaceChildren();
           for (const row of rows || []) {

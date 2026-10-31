@@ -1,5 +1,19 @@
 # SLINK tester changelog
 
+## Candidate 40 — 30 October 2026 — Errors that explain what happened
+
+**Testing only: extension 0.19.14.2 / PDA 0.4.126 / Cloudflare audit/test-foundation.** Main is unchanged. This is an error-message pass, not a settings reset, API-budget increase or automatic repair.
+
+When a check fails, SLINK now distinguishes device storage being full, API request limits, server/database setup problems, service outages, blocked connections, expired access, unverified keys, unsupported API requests and runtime/component loading problems. Messages explain what to try next and include a short support code. Known providers are named. Minute/daily limits are only named when identified; unknown reset periods are not guessed. Existing useful input-validation messages are retained.
+
+The old “Resource::kQuotaBytes quota exceeded” means device storage was full—not an API limit. The replacement warns that recent changes may not have saved, and tells you to back up before removing cached data. Nothing automatically deletes data. Error text hides labeled keys/tokens. Successful responses, access rules, status codes, retry schedules and saved preferences stay unchanged.
+
+**What to test:** On both clients, try a failed refresh, an unavailable provider, a refused/expired permission and a temporary connection failure. In a disposable browser profile only, simulate full storage: it must say storage, not API. Do not fill or clear your real profile. A 502 should name the unavailable service; 429 without a reset period must not claim it is a daily/minute cap. Reopen your existing settings, targets, snoozes, theme and last tab and confirm they are unchanged. Leave an editor open while an error arrives: it must not replace your draft or collapse the editor. PDA startup errors also give a short reason instead of exposing raw exceptions.
+
+Validation: 116/116 client commands and 93/93 backend/pipeline cases pass locally, with zero skipped backend cases. The matrix covers 36 representative errors, and integration checks exercise extension HTTP/messaging, all three PDA request methods, native-to-GM fallback, and all four worker response boundaries. An old Leveling policy test was corrected to the existing policy file/full-document fingerprint; production policy/acceptance requirements were not changed. Physical PDA and live service-failure acceptance still need testers. Cloudflare source is on testing only; no deployment or migration was run.
+
+Downloads: [Extension tester ZIP](https://github.com/Considious/SLINK-Browser-Extension/archive/refs/heads/audit/test-foundation.zip) · [PDA tester installer](https://raw.githubusercontent.com/Considious/Torn-Scripts/audit/test-foundation/SLINK-PDA/SLINK_PDA_Dashboard.user.js).
+
 ## Candidate 39 — 30 October 2026 — Main Mugging repair carried into testing
 
 **Extension0.19.14.1 / PDA0.4.125, audit/test-foundation.** Includes the complete urgent main Mugging repair below, while retaining Candidate38's chat bubbles/media, public FF backup, shared providers, retained editors/settings, themes and all other audit changes. This is a targeted backport, not replacement of testing with main. Backend testing branch receives the same Mugging worker0.6.3 repair while retaining the separate public-backup implementation. Main/live services are not redeployed by this testing update.

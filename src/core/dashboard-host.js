@@ -15,7 +15,7 @@
         setStatus(message,tone='normal') {
           if(!current())return;
           const node=panel.querySelector('[data-host-status]');
-          node.textContent=String(message||'');node.hidden=!message;node.dataset.tone=tone;
+          node.textContent=tone==='error'&&message?SLINK.core.format.errorMessage(message):String(message||'');node.hidden=!message;node.dataset.tone=tone;
         },
         setContentHtml(html){if(current())content.innerHTML=String(html||'');},
         setContentText(text){if(current())content.textContent=String(text||'');},
