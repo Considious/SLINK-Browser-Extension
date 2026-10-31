@@ -16,7 +16,7 @@
   const COMPOSER_SELECTOR = 'textarea[placeholder="Type your message here..."], textarea[class*="textarea___"], textarea';
   const CHAT_HEADER_SELECTOR = 'button[class*="header___"], [class*="header___"]';
   const CHAT_HEADER_DISCOVERY_SELECTOR = 'button[data-prevent-flyout-swipe="true"][class*="header___"], button[class*="header___"]';
-  const MINIMIZE_CONTROL_SELECTOR = 'svg[aria-label="Minimize"], svg[class*="minimizeIcon___"]';
+  const MINIMIZE_CONTROL_SELECTOR = '[aria-label="Minimize"], [aria-label^="Minimize "], svg[class*="minimizeIcon___"]';
   const SCOPE_CONTEXTS = Object.freeze({
     faction: ['faction'],
     private: ['private'],
@@ -45,9 +45,11 @@
   let scanTimer = null;
 
   let observer = null;
+  let inlineMedia = null;
   let enabled = false;
   const activity = globalThis.SLINK_EXTENSION.core.pageActivity;
   function syncActivity() {
+    inlineMedia?.sync();
     observer?.disconnect();
     if (!enabled || !activity.eligible()) { clearTimeout(scanTimer); scanTimer = null; closeMenu(); return; }
     observer.observe(document.documentElement, { childList:true, subtree:true });
@@ -58,6 +60,8 @@
   function enable() {
     if (enabled) return;
     enabled = true;
+    if(!inlineMedia&&globalThis.SLINK_CHAT_MEDIA)inlineMedia=globalThis.SLINK_CHAT_MEDIA.mount({activity,enabled:()=>enabled,settings:()=>globalThis.SLINK_GIPHY.client().get()});
+    void inlineMedia?.refresh();
     sharedReady = SLINK_EXTENSION.core.messaging.send('chat.macros.importLegacy',{macros:loadMacros()}).then(record=>{
       sharedRevision=record.revision;macros=normalizeMacros(record.macros);
       if(menu&&!menu.hidden)renderMenu();return record;
@@ -67,11 +71,18 @@
       if (!activity.eligible()) return;
       if (menuChatRoot && !menuChatRoot.isConnected) closeMenu();
       const selector = CHAT_ROOT_SELECTOR + ',' + CHAT_HEADER_DISCOVERY_SELECTOR + ',' + COMPOSER_SELECTOR + ',[data-testid="editor-root"]';
-      if (mutations.some(mutation => [...(mutation.addedNodes || [])].some(node => node.nodeType === 1 && (node.matches?.(selector) || node.querySelector?.(selector))))) scheduleScan();
+      if (mutations.some(mutation=>mutation.target?.closest?.(CHAT_HEADER_SELECTOR)) || mutations.some(mutation => [...(mutation.addedNodes || [])].some(node => node.nodeType === 1 && (node.matches?.(selector) || node.querySelector?.(selector))))) scheduleScan();
     });
     syncActivity();
   }
   window.addEventListener('slink-chat-enable', enable);
+  let accessGeneration=0;
+  window.addEventListener('slink-chat-enable',()=>{accessGeneration++;});
+  window.addEventListener('slink-chat-disable',()=>{accessGeneration++;});
+  async function bootstrapAccess(){const ticket=++accessGeneration;try{const permissions=await globalThis.SLINK_EXTENSION.core.messaging.send('permissions.get');if(ticket!==accessGeneration)return;if(globalThis.SLINK_EXTENSION.core.permissions.hasScope(permissions,'slink.qol.chat'))enable();else{enabled=false;syncActivity();}}catch{}}
+  void bootstrapAccess();
+  globalThis.chrome?.storage?.onChanged?.addListener((changes,area)=>{if(area!=='local')return;const keys=Object.keys(changes);if(keys.some(key=>/permissions|access.session/.test(key)))void bootstrapAccess();if(keys.some(key=>key.includes('qol.chat.giphy.v1')))void inlineMedia?.refresh();});
+  window.addEventListener('slink-chat-media-settings',()=>{void inlineMedia?.refresh();});
   window.addEventListener('hashchange', scheduleScan);
 
   window.addEventListener('resize', () => {
@@ -329,6 +340,7 @@
   }
 
   function scanContexts() {
+    inlineMedia?.sync();
     if (!enabled || !activity.eligible()) return;
     const handledHeaders = new Set();
     document.querySelectorAll(CHAT_ROOT_SELECTOR).forEach((root) => {
@@ -389,13 +401,21 @@
     event.stopImmediatePropagation?.();
   }
 
+  function injectMediaTrigger(root,header,container,minimize){
+    if(container.querySelector(':scope > [data-ccb-media-trigger]'))return;
+    const button=document.createElement('span');button.dataset.ccbMediaTrigger='true';button.className='ccb-trigger';button.style.cssText='flex:0 0 34px;width:34px;margin-left:4px;font-size:11px';button.setAttribute('role','button');button.tabIndex=0;button.title='Search GIFs and stickers';button.setAttribute('aria-label','SLINK: search GIFs and stickers');button.textContent='GIF';
+    const open=event=>{stopHeaderAction(event);const current=chatRootFromHeader(header)||root;if(!menu||menu.hidden||menuChatRoot!==current)toggleMenu(current);windowMedia?.select('gifs');};
+    for(const type of ['pointerdown','mousedown','dragstart'])button.addEventListener(type,stopHeaderAction);
+    button.addEventListener('click',open);button.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key))open(event);});
+    container.insertBefore(button,minimize?.parentElement===container?minimize:null);
+  }
   function injectMenuTrigger(root, suppliedHeader = null) {
     const header = suppliedHeader || chatHeader(root);
     if (!header) return;
     const minimize = minimizeControl(header) || minimizeControl(root);
     const actionContainer = minimize?.parentElement || header;
     const current = actionContainer.querySelector(':scope > [data-ccb-trigger]');
-    if (current) return;
+    if (current) { injectMediaTrigger(root,header,actionContainer,minimize);return; }
     const currentRoot = () => chatRootFromHeader(header) || root;
 
     const trigger = document.createElement('span');
@@ -421,6 +441,7 @@
     });
 
     actionContainer.insertBefore(trigger, minimize?.parentElement === actionContainer ? minimize : null);
+    injectMediaTrigger(root,header,actionContainer,minimize);
   }
 
   function ensureMenu() {

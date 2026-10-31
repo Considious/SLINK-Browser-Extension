@@ -11,6 +11,9 @@
 - **Extension dashboard:** repaired missing module access and buttons, including QOL and Officer tools.
 - **Museums and Events:** corrected Museum inventory requests and event calendar reading, including Halloween dates and personal event start times.
 - **Racing and other QOL tools:** repaired car highlighting and improved the stability of settings and controls across Abroad Stocks, Company, Money and Events.
+- **Chat media:** a GIF button inside supported chat windows opens GIF/sticker search. Supported links can display previews inside messages, with animations played only when clicked. Previews can be turned off in Chat settings.
+- **Dashboard buttons:** icons and alert counts now sit beside labels instead of covering them.
+- **Extension name:** restored the normal SLINK name.
 - **Chat Fair Fight bubbles:** corrected duplicates alongside existing Fair Fight bubbles, stretched badges and bubbles disappearing after chat redraws.
 - **Themes:** added an optional setting to apply your SLINK theme to Torn pages.
 - **Error messages:** clearer explanations of what failed and what to do next. Terms-loading errors now identify the affected service instead of only saying the information was incomplete.
@@ -33,6 +36,6 @@ Please try the checks that apply to you, on PDA or the extension.
 - [ ] **Racing highlights the right car:** use a completed build with an exact saved nickname. The matching official race should highlight that car once, without selecting it or repeatedly scrolling.
 - [ ] **QOL pages work:** check Abroad Stocks leave times, Company information, Museum prices and Money figures against what you can see in Torn. Open Halloween from Events even when it is not active. Inputs should remain editable during refreshes.
 - [ ] **Dashboard and Officer buttons work:** open your permitted modules on the extension dashboard. Check report copying and the Armory Recaller entry. Opening the armory should not recall anything automatically.
-- [ ] **Chat tools work:** open faction, company and private chats. Check custom buttons, profile/【ATTACK】 links, GIF/sticker searches and optional Fair Fight bubbles. Existing drafts and native chat controls should remain usable; nothing should send without your action.
+- [ ] **Chat tools work:** open a faction, company or private chat and click its GIF button. Enable GIFs & stickers and the chat-preview option. Try a supported GIF/sticker link: the preview should appear inside the message, and animations should play only when clicked. Turn previews off and confirm the setting stays saved. Check custom buttons, profile/【ATTACK】 links and Fair Fight bubbles too. Your draft must remain untouched; nothing should send without your action.
 - [ ] **Themes remain usable:** enable Torn-page theming, change theme/opacity, navigate and reload. Text should remain readable, decoration must not block buttons, and disabling the option should restore Torn’s appearance.
 - [ ] **Errors are understandable:** if a normal check fails, does the message explain the problem and next step? Reconnecting and retrying should not erase settings. Do not deliberately fill or clear your storage to provoke an error.
