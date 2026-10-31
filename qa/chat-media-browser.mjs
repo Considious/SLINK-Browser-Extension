@@ -1,0 +1,113 @@
+import fs from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),{chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE||'playwright');
+// Run explicitly with Playwright installed; set SLINK_PDA_ROOT to the PDA source
+// directory when it is not beside this extension checkout. No live keys required.
+const extensionRoot=fileURLToPath(new URL('../',import.meta.url));
+const pdaRoot=process.env.SLINK_PDA_ROOT||fileURLToPath(new URL('../../SLINK-PDA/',import.meta.url));
+const read=p=>fs.readFileSync(p.startsWith('extension/')?extensionRoot+p.slice(10):pdaRoot+'/'+p.slice(10),'utf8');
+const gif='https://giphy.com/gifs/UnBoxFestival-slinky-unbox-unboxfestival-XtiszAuc6r7byvYqZiy';
+const sticker='https://media1.giphy.com/media/v1.Y2lkPTQxLONG_ENCODED_VALUE/200w.gif';
+const browser=await chromium.launch({channel:'msedge',headless:true});
+try{for(const platform of ['extension','pda'])for(const width of [390,1100]){
+ const page=await browser.newPage({viewport:{width,height:760}}),errors=[],requests=[];
+ page.on('pageerror',e=>{errors.push(e.message);console.log(platform+' browser error: '+e.message);});
+ await page.route('**/*',route=>{
+  const url=route.request().url();
+  if(url==='https://www.torn.com/')return route.fulfill({contentType:'text/html',body:`<style>#faction{width:330px} .header___native{width:100%}textarea{width:70%}</style><div id="chatRoot"><div id="faction"><div><button class="header___native"><span>Faction</span><svg class="minimizeIcon___native" aria-label="Minimize Faction"></svg></button></div><div><textarea placeholder="Type your message here..."></textarea><button aria-label="Send message">Send</button></div><p class="message___native"><span><a id="gif" href="${gif}">${gif}</a></span></p><div class="text___native"><span><a id="sticker" href="${sticker}">${sticker}</a></span></div><p class="message___plain">hello https://stickershop.line-scdn.net/stickershop/v1/sticker/123/android/sticker.png</p></div></div>`});
+  requests.push(url);return route.fulfill({contentType:'image/gif',body:Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==','base64')});
+ });
+ await page.goto('https://www.torn.com/');
+ await page.evaluate(platform=>{
+  window.allow=true;window.sends=[];window.searches=[];const listeners=new Set();
+  window.activity={eligible:()=>window.allow,token:()=>1,current:()=>window.allow,defer:(fn,ms)=>setTimeout(fn,ms),cancel:timer=>clearTimeout(timer),subscribe:fn=>{listeners.add(fn);return()=>listeners.delete(fn);}};
+  window.setActivity=value=>{window.allow=value;for(const fn of listeners)fn(value);};
+  document.querySelector('[aria-label="Send message"]').onclick=()=>{window.sends.push(document.querySelector('textarea').value);document.querySelector('textarea').value='';};
+  window.chatClient={get:async()=>({enabled:true,inlineMedia:true,keyMode:'integrated'}),patch:async()=>{throw Error('Picker must not save settings');},search:async args=>{window.searches.push(args);return {rows:Array.from({length:24},(_,i)=>({provider:args.provider||'giphy',title:'Result '+i,animated:true,imageUrl:'https://media1.giphy.com/media/v1.encoded/200w.gif',image:'https://media1.giphy.com/media/v1.encoded/200w.gif',previewUrl:'https://media1.giphy.com/media/v1.encoded/200w.gif',shareUrl:'https://giphy.com/gifs/test-abc123'})),hasMore:false,nextOffset:24};}};
+  window.chrome={storage:{onChanged:{addListener(){}}},runtime:{id:'fixture'}};
+  if(platform==='extension')window.SLINK_EXTENSION={core:{pageActivity:window.activity,permissions:{hasScope:()=>true},messaging:{send:async type=>type==='permissions.get'?{scopes:['slink.qol.chat']}:type==='chat.macros.get'?{revision:0,macros:[],legacyImported:true}:type==='chat.highlights.get'?{highlights:[]}:{} } }};
+  else {const saved={};window.SLINK_PDA_PAGE_ACTIVITY=window.activity;window.SLINK_PDA_PLUGIN_API={hasScope:()=>true,ensurePermission:async()=>{},settings:(id,defaults)=>saved[id]||=(defaults||{}),root:()=>null,register:plugin=>plugin.start?.(),save:async()=>{},escapeHtml:s=>String(s),chatFairFight:async()=>[]};}
+ },platform);
+ await page.addScriptTag({content:read(platform==='extension'?'extension/src/core/chat-inline-media.js':'SLINK-PDA/src/00-chat-inline-media.part')});
+ if(platform==='pda')await page.addScriptTag({content:read('SLINK-PDA/src/00-chat-ff.part')});
+ await page.evaluate(()=>window.SLINK_GIPHY={client:()=>window.chatClient});
+ await page.addScriptTag({content:read('extension/src/core/chat-giphy-ui.js')});
+ await page.addScriptTag({content:read(platform==='extension'?'extension/src/content/custom-chat-buttons.js':'SLINK-PDA/src/addons/chat.addon.js')});
+ await page.waitForSelector('[data-ccb-media-trigger]');
+ await page.waitForSelector('#chatRoot img.torn-chat-custom-gif');
+ assert.equal(await page.locator('#chatRoot img.torn-chat-custom-gif').count(),3);
+ assert.equal(await page.locator('#sticker + img').getAttribute('src'),sticker,'Do not rebuild encoded sticker URL');
+ assert.equal(await page.locator('#gif + img').getAttribute('src'),'https://media.giphy.com/media/XtiszAuc6r7byvYqZiy/giphy.gif');
+ assert.equal(await page.locator('#gif').isVisible(),false);
+ await page.evaluate(()=>document.querySelector('#gif + img').remove());
+ await page.waitForSelector('#gif + img');
+ assert.equal(await page.locator('#gif + img').count(),1);
+ await page.click('[data-ccb-media-trigger]');
+ await page.waitForSelector('#ccb-menu [data-slink-giphy]',{timeout:5000});
+ const host=page.locator('#ccb-menu [data-slink-giphy]');
+ await host.locator('.tile').first().waitFor();
+ assert.equal(await host.locator('input[type=checkbox],select,input[type=password]').count(),0);
+ assert.equal(await host.locator('text=Settings save automatically.').count(),0);
+ assert.equal(await host.locator('[data-attribution]').count(),1);
+ const area=host.locator('[data-results]');
+ const geometry=await area.evaluate(el=>({client:el.clientHeight,scroll:el.scrollHeight}));
+ assert(geometry.scroll>geometry.client+100,JSON.stringify(geometry));
+ await area.hover();await page.mouse.wheel(0,500);await page.waitForTimeout(150);
+ assert(await area.evaluate(el=>el.scrollTop)>0,'Results scroll on first open');
+ await host.locator('[data-query]').fill('slinky');await host.locator('[data-search]').click();
+ await page.waitForTimeout(1300);
+ await host.locator('.tile').first().waitFor();
+ await area.hover();await page.mouse.wheel(0,500);await page.waitForTimeout(150);
+ assert(await area.evaluate(el=>el.scrollTop)>0,'Results scroll immediately after first search');
+ assert.equal(await page.evaluate(()=>window.sends.length),0,'Searching must never send');
+ await area.evaluate(el=>el.scrollTop=0);
+ await host.getByRole('button',{name:'Send to chat',exact:true}).first().click();
+ assert.deepEqual(await page.evaluate(()=>window.sends),['https://media1.giphy.com/media/v1.encoded/200w.gif']);
+ await page.evaluate(()=>{window.keptImage=document.querySelector('#gif + img');window.setActivity(false);});
+ assert.equal(await page.locator('#chatRoot img[data-slink-inline-media]').count(),3);
+ assert.equal(await page.locator('#gif').isVisible(),false);
+ await page.evaluate(()=>window.setActivity(true));
+ await page.waitForSelector('#gif + img');
+ assert.equal(await page.locator('#chatRoot img.torn-chat-custom-gif').count(),3);
+ assert.equal(await page.evaluate(()=>document.querySelector('#gif + img')===window.keptImage),true,'Focus changes retain the same image node');
+ await page.addScriptTag({content:read(platform==='extension'?'extension/src/core/chat-ff.js':'SLINK-PDA/src/00-chat-ff.part')});
+ await page.evaluate(()=>{
+  window.ffEnabled=true;window.ffCalls=0;
+  const row=document.createElement('div');row.className='virtualItem___fixture';row.id='ffrow';
+  row.innerHTML='<a data-label="avatar" href="/profiles.php?XID=42"><img alt="avatar"></a><span><a class="player" href="/profiles.php?XID=42">Player</a></span>';
+  document.querySelector('#chatRoot').append(row);
+  window.ff=window.SLINK_CHAT_FF.mount({activity:window.activity,enabled:()=>window.ffEnabled,lookup:async ids=>{window.ffCalls++;return ids.map(id=>({id,ff:2.4,at:Date.now(),source:'fixture'}));}});
+ });
+ await page.waitForSelector('#ffrow .slink-chat-ff-bubble');
+ assert.equal(await page.locator('#ffrow .slink-chat-ff-bubble').count(),1,'Avatar/name links must not produce duplicate bubbles');
+ assert.equal(await page.locator('#ffrow a[data-label="avatar"] > .slink-chat-ff-bubble').count(),1,'The exact avatar anchor is the only badge container');
+ assert.equal(await page.locator('#ffrow .player .slink-chat-ff-bubble').count(),0);
+ await page.evaluate(()=>{const row=document.createElement('div');row.className='virtualItem___fixture';row.id='noavatar';row.innerHTML='<a href="/profiles.php?XID=99">No avatar</a>';document.querySelector('#chatRoot').append(row);});
+ assert.equal(await page.locator('#noavatar .slink-chat-ff-bubble').count(),0,'No text-link fallback when an avatar is absent');
+ await page.evaluate(()=>{window.keptBadge=document.querySelector('#ffrow .slink-chat-ff-bubble');window.setActivity(false);});
+ assert.equal(await page.locator('#ffrow .slink-chat-ff-bubble').count(),1);
+ await page.evaluate(()=>window.setActivity(true));
+ assert.equal(await page.evaluate(()=>document.querySelector('#ffrow .slink-chat-ff-bubble')===window.keptBadge),true);
+ assert.equal(await page.evaluate(()=>window.ffCalls),1,'Resuming retained badges needs no new lookup');
+ await page.evaluate(()=>{
+  const old=document.getElementById('ffrow'),next=old.cloneNode(true);
+  next.querySelectorAll('.slink-chat-ff-bubble').forEach(n=>n.remove());old.replaceWith(next);
+ });
+ await page.waitForSelector('#ffrow .slink-chat-ff-bubble',{timeout:500});
+ assert.equal(await page.evaluate(()=>window.ffCalls),1,'Redrawn names reuse remembered estimates immediately');
+ await page.evaluate(()=>{
+  const marker=document.createElement('span');marker.innerHTML='<span class="ffscouter-marker-wrapper"><span class="ffscouter-bubble">2.40</span></span>';
+  document.querySelector('#ffrow a[data-label="avatar"]').append(marker);
+ });
+ await page.waitForFunction(()=>!document.querySelector('#ffrow .slink-chat-ff-bubble'));
+ assert.equal(await page.locator('#ffrow .ffscouter-bubble').count(),1,'An existing provider badge in this exact avatar suppresses SLINK duplication');
+ await page.evaluate(()=>document.querySelector('#ffrow .ffscouter-marker-wrapper').parentElement.remove());
+ await page.waitForSelector('#ffrow .slink-chat-ff-bubble',{timeout:500});
+ await page.evaluate(()=>{window.ffEnabled=false;window.ff.sync();});
+ assert.equal(await page.locator('#ffrow .slink-chat-ff-bubble').count(),0,'Explicit opt-out still removes badges');
+ assert.deepEqual(errors,[]);
+ console.log(platform+' '+width+'px: media/picker/send regression passed; same image/badge nodes retained on focus changes; exact avatar-only placement; instant cached redraw; same-container coexistence; opt-out cleanup passed.');
+ await page.close();
+}}finally{await browser.close();}

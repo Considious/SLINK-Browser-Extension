@@ -160,7 +160,7 @@
       if(!dashboard){observer=new MutationObserver(mutations => { if (hasActiveHighlights() && mutations.some(mutationContainsChatMessage)) scheduleScan(); });
       observer.observe(document.body,{childList:true,subtree:true});
       if (hasActiveHighlights()) scanHighlights();}
-      return {async stop(){stopped=true;observer?.disconnect();observer=null;clearTimeout(scanTimer);await Promise.all([...rows.values()].map(record=>record.controller.stop()));await giphyPanel?.stop();if(priorExplicit===undefined)delete root.dataset.uiExplicitCommit;else root.dataset.uiExplicitCommit=priorExplicit;if(!dashboard)global.dispatchEvent(new CustomEvent('slink-chat-disable'));}};
+      return {async stop(){stopped=true;observer?.disconnect();observer=null;clearTimeout(scanTimer);await Promise.all([...rows.values()].map(record=>record.controller.stop()));await giphyPanel?.stop();if(priorExplicit===undefined)delete root.dataset.uiExplicitCommit;else root.dataset.uiExplicitCommit=priorExplicit;/* Closing a settings view must not disable native chat features. */}};
     }
   });
 })(globalThis);
