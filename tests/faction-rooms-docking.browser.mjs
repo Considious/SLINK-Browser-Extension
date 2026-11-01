@@ -23,6 +23,13 @@ try{
  }
  await page.evaluate(()=>{document.querySelector('.item___fixture').remove();document.querySelectorAll('.item___fixture').forEach((el,i)=>{el.style.transform='translateX(-'+i*313+'px)';});});await page.waitForTimeout(300);
  const closedNative=await geometry();assert(Math.abs(closedNative.gap-closedNative.nativeGap)<.6,'Closing a native chat must keep the gap after Torn finishes sliding the remaining chats');
+ // Native badges extend above the bar into the Rooms rectangle. Hit-testing
+ // verifies they are visible AND clickable, not just numerically higher z-index.
+ await page.evaluate(()=>{window.alertClicks=0;const badge=document.createElement('button');badge.dataset.nativeAlert='';badge.textContent='1';badge.style.cssText='position:absolute;right:30px;top:-18px;width:24px;height:24px;border-radius:50%;background:lime';badge.onclick=()=>alertClicks++;document.querySelector('.bar').append(badge);});
+ for(const layer of ['auto','1','900']){await page.evaluate(value=>{document.querySelector('.bar').style.zIndex=value;window.dispatchEvent(new Event('resize'));},layer);await page.waitForTimeout(80);const badge=await page.locator('[data-native-alert]').boundingBox(),x=badge.x+10,y=badge.y+4;
+  assert.equal(await page.evaluate(({x,y})=>!!document.elementFromPoint(x,y)?.closest('[data-native-alert]'),{x,y}),true,'Native unread badges must be above Rooms, including their protruding portion');await page.mouse.click(x,y);
+ }
+ assert.equal(await page.evaluate(()=>alertClicks),3);await page.locator('[data-native-alert]').evaluate(el=>el.remove());
  const before=await geometry();
  await page.evaluate(()=>{active=false;for(const f of callbacks)f();});await page.waitForTimeout(50);assert.deepEqual(await geometry(),before,'Blur must not release or reposition the reserved slot');
  await page.evaluate(()=>{active=true;for(const f of callbacks)f();});await page.locator('[data-close]').click();assert.equal(await page.locator('[data-slink-room-reserve]').count(),0);
