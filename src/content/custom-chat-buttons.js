@@ -45,14 +45,22 @@
   let scanTimer = null;
 
   let observer = null;
+  let discovery = null;
+  let observedChat = null;
   let inlineMedia = null;
   let enabled = false;
   const activity = globalThis.SLINK_EXTENSION.core.pageActivity;
   function syncActivity() {
     inlineMedia?.sync();
     observer?.disconnect();
+    discovery?.disconnect();
     if (!enabled || !activity.eligible()) { clearTimeout(scanTimer); scanTimer = null; closeMenu(); return; }
-    observer.observe(document.documentElement, { childList:true, subtree:true });
+    observedChat=document.getElementById('chatRoot');
+    if(observedChat)observer.observe(observedChat,{childList:true,subtree:true});
+    if(isNewsletterPage()||!observedChat)observer.observe(document.documentElement,{childList:true,subtree:true});
+    discovery||=new MutationObserver(()=>{if(activity.eligible()&&document.getElementById('chatRoot')!==observedChat)syncActivity();});
+    if(observedChat)for(let parent=observedChat.parentElement;parent;parent=parent.parentElement)discovery.observe(parent,{childList:true});
+    window.dispatchEvent(new CustomEvent('slink-chat-root'));
     scheduleScan();
   }
   activity.subscribe(syncActivity);
@@ -69,9 +77,10 @@
     addStyles();
     observer = new MutationObserver(mutations => {
       if (!activity.eligible()) return;
+      if(document.getElementById('chatRoot')!==observedChat){syncActivity();return;}
       if (menuChatRoot && !menuChatRoot.isConnected) closeMenu();
       const selector = CHAT_ROOT_SELECTOR + ',' + CHAT_HEADER_DISCOVERY_SELECTOR + ',' + COMPOSER_SELECTOR + ',[data-testid="editor-root"]';
-      if (mutations.some(mutation=>mutation.target?.closest?.(CHAT_HEADER_SELECTOR)) || mutations.some(mutation => [...(mutation.addedNodes || [])].some(node => node.nodeType === 1 && (node.matches?.(selector) || node.querySelector?.(selector))))) scheduleScan();
+      if (mutations.some(mutation=>mutation.target?.closest?.(CHAT_HEADER_SELECTOR)) || mutations.some(mutation => !mutation.target?.closest?.('[class*="message___"],[class*="senderContainer___"]')&&[...(mutation.addedNodes || [])].some(node => node.nodeType === 1 && (node.matches?.(selector) || node.querySelector?.(selector))))) scheduleScan();
     });
     syncActivity();
   }
