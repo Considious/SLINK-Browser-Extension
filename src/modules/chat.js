@@ -6,10 +6,12 @@
     ['pink','#ff85c2','#2a0016'],['purple','#c792ea','#170025'],['blue','#74c0fc','#001c2e'],
     ['cyan','#66d9e8','#002126'],['green','#8ce99a','#002607'],['lime','#c0eb75','#172500'],['white','#f1f3f5','#111']
   ]);
-  const MESSAGE_SELECTOR = '[class*="messageContent___"], [class*="messageText___"], .msg';
+  const MESSAGE_SELECTOR = '[class*="message___"], [class*="messageContent___"], [class*="messageText___"], .msg';
   let settings = { highlights:[] };
   let observer = null;
   let scanTimer = null;
+  let chatRoot = null;
+  const highlightScopes = new Set();
 
   function escape(value) { return SLINK.core.format.escapeHtml(value); }
   function normalized(value) {
@@ -24,8 +26,9 @@
   function color(id) { return COLORS.find(([key])=>key===id) || COLORS[0]; }
   function regexEscape(value) { return String(value).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
   function clearHighlights() {
-    document.querySelectorAll('mark[data-slink-chat-highlight]').forEach(mark => mark.replaceWith(document.createTextNode(mark.textContent || '')));
-    document.querySelectorAll(MESSAGE_SELECTOR).forEach(node => { delete node.dataset.slinkChatHighlighted; node.normalize(); });
+    const root=document.getElementById('chatRoot');if(!root)return;
+    root.querySelectorAll('mark[data-slink-chat-highlight]').forEach(mark => mark.replaceWith(document.createTextNode(mark.textContent || '')));
+    root.querySelectorAll(MESSAGE_SELECTOR).forEach(node => { delete node.dataset.slinkChatHighlighted; node.normalize(); });
   }
   function highlightNode(container) {
     if (!(container instanceof Element) || container.dataset.slinkChatHighlighted === 'true') return;
@@ -56,8 +59,14 @@
     }
     container.dataset.slinkChatHighlighted='true';
   }
-  function scanHighlights() { if (SLINK.core.pageActivity?.eligible()) document.querySelectorAll(MESSAGE_SELECTOR).forEach(highlightNode); }
-  function scheduleScan() { if (!SLINK.core.pageActivity?.eligible()) return; clearTimeout(scanTimer); scanTimer=setTimeout(scanHighlights,80); }
+  function observeHighlights(){observer?.disconnect();chatRoot=document.getElementById('chatRoot');if(observer&&chatRoot&&SLINK.core.pageActivity?.eligible())observer.observe(chatRoot,{childList:true,subtree:true});}
+  function scanHighlights() {
+    if(!SLINK.core.pageActivity?.eligible())return;
+    const scopes=highlightScopes.size?[...highlightScopes]:[document.getElementById('chatRoot')];highlightScopes.clear();observer?.disconnect();
+    try{for(const scope of scopes)if(scope?.isConnected){if(scope.matches?.(MESSAGE_SELECTOR))highlightNode(scope);scope.querySelectorAll(MESSAGE_SELECTOR).forEach(highlightNode);}}
+    finally{observeHighlights();}
+  }
+  function scheduleScan() { if (!SLINK.core.pageActivity?.eligible()||scanTimer!==null) return; scanTimer=setTimeout(()=>{scanTimer=null;scanHighlights();},80); }
 
   SLINK.modules.register({
     id:'chat', title:'Chat', shortTitle:'Chat', group:'quality-of-life', groupTitle:'Quality of Life',
@@ -153,14 +162,22 @@
       });
       updateHighlighting();
       function hasActiveHighlights() { return settings.highlights.some(item => item.enabled && String(item.term || '').trim()); }
-      function mutationContainsChatMessage(mutation) {
-        if (mutation.target?.closest?.(MESSAGE_SELECTOR)) return true;
-        return [...mutation.addedNodes].some(node => node.nodeType === Node.ELEMENT_NODE && (node.matches?.(MESSAGE_SELECTOR) || node.querySelector?.(MESSAGE_SELECTOR)));
+      function changedHighlights(mutations) {
+        if(!SLINK.core.pageActivity?.eligible()||!hasActiveHighlights())return;
+        for(const mutation of mutations){const target=mutation.target?.nodeType===3?mutation.target.parentElement:mutation.target,container=target?.closest?.(MESSAGE_SELECTOR);
+          if(container){delete container.dataset.slinkChatHighlighted;highlightScopes.add(container);}
+          for(const node of mutation.addedNodes||[]){if(node.nodeType!==1)continue;if(node.matches?.(MESSAGE_SELECTOR)){delete node.dataset.slinkChatHighlighted;highlightScopes.add(node);}else for(const child of node.querySelectorAll(MESSAGE_SELECTOR)){delete child.dataset.slinkChatHighlighted;highlightScopes.add(child);}}
+        }
+        if(highlightScopes.size)scheduleScan();
       }
-      if(!dashboard){observer=new MutationObserver(mutations => { if (hasActiveHighlights() && mutations.some(mutationContainsChatMessage)) scheduleScan(); });
-      observer.observe(document.body,{childList:true,subtree:true});
+      const syncHighlightActivity=()=>{clearTimeout(scanTimer);scanTimer=null;highlightScopes.clear();observeHighlights();if(SLINK.core.pageActivity?.eligible())scheduleScan();};
+      let unsubscribeHighlights=null;
+      if(!dashboard){observer=new MutationObserver(changedHighlights);
+      observeHighlights();
+      unsubscribeHighlights=SLINK.core.pageActivity?.subscribe(syncHighlightActivity);
+      global.addEventListener('slink-chat-root',syncHighlightActivity);
       if (hasActiveHighlights()) scanHighlights();}
-      return {async stop(){stopped=true;observer?.disconnect();observer=null;clearTimeout(scanTimer);await Promise.all([...rows.values()].map(record=>record.controller.stop()));await giphyPanel?.stop();if(priorExplicit===undefined)delete root.dataset.uiExplicitCommit;else root.dataset.uiExplicitCommit=priorExplicit;/* Closing a settings view must not disable native chat features. */}};
+      return {async stop(){stopped=true;unsubscribeHighlights?.();global.removeEventListener('slink-chat-root',syncHighlightActivity);observer?.disconnect();observer=null;clearTimeout(scanTimer);scanTimer=null;highlightScopes.clear();await Promise.all([...rows.values()].map(record=>record.controller.stop()));await giphyPanel?.stop();if(priorExplicit===undefined)delete root.dataset.uiExplicitCommit;else root.dataset.uiExplicitCommit=priorExplicit;/* Closing a settings view must not disable native chat features. */}};
     }
   });
 })(globalThis);

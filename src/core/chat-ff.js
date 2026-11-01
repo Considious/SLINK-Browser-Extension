@@ -45,16 +45,14 @@
   document.__slinkChatFfController?.stop();
   let root=null,observer=null,discovery=null,visibility=null,timer=null,epoch=0,busy=false,again=false,lastLookup=0,stopped=false;
   const remembered=new Map();
-  const entries=new Map();
+  const entries=new Map(),slots=new WeakMap();
   const active=()=>!stopped&&enabled()&&activity.eligible();
   // The supplied Torn markup has exactly one sender-name link in this span.
   // Its fixed slot is after the avatar and immediately before the sender name.
   const selector='span[class*="senderContainer___"] > a[class*="sender___"][href*="profiles.php"][href*="XID="]';
-  function remove(anchor,entry){visibility?.unobserve(anchor);entry.badge.remove();entries.delete(anchor);}
+  function remove(anchor,entry){visibility?.unobserve(anchor);entry.badge.remove();entries.delete(anchor);if(slots.get(entry.slot)===anchor)slots.delete(entry.slot);}
   function eligible(anchor){return anchor.isConnected&&root?.contains(anchor)&&anchor.getClientRects().length>0&&!anchor.closest('textarea,[contenteditable="true"],[hidden],[aria-hidden="true"]');}
-  function rowScope(anchor){return anchor.closest('[class*="virtualItem___"],[class*="chat-box-message"],[data-slink-chat-row]')||anchor.parentElement;}
-  function samePlace(a,b){return rowScope(a)===rowScope(b)&&playerId(a)===playerId(b);}
-  function consider(node){if(!active()||node.nodeType!==1)return;const anchors=[...(node.matches?.(selector)?[node]:[]),...node.querySelectorAll(selector)];for(const anchor of anchors){const id=playerId(anchor);if(!id||entries.has(anchor)||[...entries.keys()].some(a=>a.isConnected&&samePlace(a,anchor)))continue;const badge=document.createElement('span');badge.className='slink-chat-ff-bubble';badge.dataset.slinkChatFf='';badge.hidden=true;const entry={id,badge,visible:!visibility,at:0};entries.set(anchor,entry);visibility?.observe(anchor);const row=remembered.get(id);if(row&&eligible(anchor))paint(anchor,entry,row);}while(entries.size>300){const [anchor,entry]=entries.entries().next().value;remove(anchor,entry);}}
+  function consider(node){if(!active()||node.nodeType!==1)return;const anchors=[...(node.matches?.(selector)?[node]:[]),...node.querySelectorAll(selector)];for(const anchor of anchors){if(entries.has(anchor))continue;const id=playerId(anchor),slot=anchor.parentElement,prior=slots.get(slot);if(!id||prior?.isConnected)continue;for(const stale of slot.querySelectorAll(':scope > [data-slink-chat-ff]'))stale.remove();const badge=document.createElement('span');badge.className='slink-chat-ff-bubble';badge.dataset.slinkChatFf='';badge.hidden=true;const entry={id,slot,badge,visible:!visibility,at:0};entries.set(anchor,entry);slots.set(slot,anchor);visibility?.observe(anchor);const row=remembered.get(id);if(row&&eligible(anchor))paint(anchor,entry,row);}while(entries.size>300){const [anchor,entry]=entries.entries().next().value;remove(anchor,entry);}}
   function schedule(){if(!active()||timer!==null)return;timer=global.setTimeout(()=>{timer=null;void flush();},Math.max(100,5000-(Date.now()-lastLookup)));}
   function paint(anchor,entry,row){
    entry.row=row;remembered.set(entry.id,row);while(remembered.size>300)remembered.delete(remembered.keys().next().value);
@@ -77,8 +75,26 @@
   function attach(){
    if(!active())return;const next=document.getElementById('chatRoot');if(next===root&&observer)return;
    observer?.disconnect();root=next;if(!root)return;
-   observer=new global.MutationObserver(mutations=>{if(!active())return;let changed=false;for(const [a,e]of entries){if(!a.isConnected||!root?.contains(a)||playerId(a)!==e.id){remove(a,e);changed=true;}else if(e.row&&eligible(a)){if(e.badge.parentElement!==a.parentElement||e.badge.nextElementSibling!==a)paint(a,e,e.row);}}
-   for(const m of mutations){if(m.target?.closest?.('[data-slink-chat-ff]'))continue;if(m.type==='attributes'){consider(m.target);changed=true;}else for(const node of m.addedNodes){if(node.nodeType!==1||node.matches?.('[data-slink-chat-ff]')||node.closest?.('[data-slink-chat-ff]'))continue;consider(node);changed=true;}}if(changed)schedule();});
+   observer=new global.MutationObserver(mutations=>{
+    if(!active())return;let changed=false,removed=false;
+    for(const m of mutations){
+     if(m.target?.closest?.('[data-slink-chat-ff]'))continue;
+     if(m.type==='attributes'){
+      const entry=entries.get(m.target);if(entry&&playerId(m.target)!==entry.id)remove(m.target,entry);
+      consider(m.target);changed=true;
+     }else{
+      // Only structural changes can detach a sender or its badge. Text ticks
+      // elsewhere in chat must not measure every sender and force layout.
+      if([...m.removedNodes].some(n=>n.nodeType===1)){
+       removed=true;
+       for(const anchor of m.target?.querySelectorAll?.(selector)||[]){const entry=entries.get(anchor);if(entry?.row&&(entry.badge.parentElement!==anchor.parentElement||entry.badge.nextElementSibling!==anchor)&&eligible(anchor))paint(anchor,entry,entry.row);}
+      }
+      for(const node of m.addedNodes){if(node.nodeType!==1||node.matches?.('[data-slink-chat-ff]')||node.closest?.('[data-slink-chat-ff]'))continue;consider(node);changed=true;}
+     }
+    }
+    if(removed)for(const [anchor,entry]of entries)if(!anchor.isConnected||!root?.contains(anchor))remove(anchor,entry);
+    if(changed)schedule();
+   });
    observer.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['href']});consider(root);schedule();
   }
   function sync(){
@@ -89,7 +105,7 @@
     if(stopped||!enabled()){for(const [a,e]of entries)remove(a,e);remembered.clear();root=null;}
     return;
    }
-   if(active()&&root?.isConnected&&observer){consider(root);schedule();return;}
+   if(active()&&root?.isConnected&&observer)return;
    epoch++;observer?.disconnect();observer=null;discovery?.disconnect();discovery=null;visibility?.disconnect();visibility=null;global.clearTimeout(timer);timer=null;
    for(const [a,e]of entries)if(!a.isConnected||!root?.contains(a))remove(a,e);
    root=null;
@@ -97,11 +113,15 @@
    if(global.IntersectionObserver)visibility=new global.IntersectionObserver(changes=>{if(!active())return;for(const change of changes){const e=entries.get(change.target);if(e)e.visible=change.isIntersecting;}schedule();});
    attach();
    for(const [a,e]of entries){visibility?.observe(a);if(e.row&&eligible(a))paint(a,e,e.row);}
-   discovery=new global.MutationObserver(mutations=>{if(!active())return;if(!root?.isConnected){attach();}else if(mutations.some(m=>[...m.removedNodes].some(n=>n===root||n.contains?.(root)))){observer?.disconnect();root=null;attach();}});
-   discovery.observe(document.documentElement,{childList:true,subtree:true});
+   // Watch only the ancestor chain once chat exists. Attack/chat text changes
+   // cannot replace that chain and must not wake a whole-document observer.
+   discovery=new global.MutationObserver(()=>{if(active()&&document.getElementById('chatRoot')!==root){observer?.disconnect();root=null;attach();watchDiscovery();}});
+   function watchDiscovery(){discovery.disconnect();if(root){for(let parent=root.parentElement;parent;parent=parent.parentElement)discovery.observe(parent,{childList:true});}else discovery.observe(document.documentElement,{childList:true,subtree:true});}
+   watchDiscovery();
   }
   const unsubscribe=activity.subscribe(sync);sync();
   const controller={sync,stop(){stopped=true;unsubscribe?.();observer?.disconnect();discovery?.disconnect();visibility?.disconnect();epoch++;global.clearTimeout(timer);for(const [a,e]of entries)remove(a,e);remembered.clear();}};document.__slinkChatFfController=controller;return controller;
  }
  global.SLINK_CHAT_FF=Object.freeze({playerId,fromRow,fromIntelligence,createLookup,mount});
 })(globalThis);
+
