@@ -1,6 +1,6 @@
 # SLINK Browser Extension
 
-> **AUDIT TEST BRANCH — candidate 1.** This is not a stable release. Read [tester installation instructions](TESTING.md) and the [single running tester changelog](TESTER-CHANGELOG.md). Main is unchanged. Use a separate Chrome profile.
+Main includes Faction Rooms alongside Torn chat. See [what changed and what to test](TESTER-CHANGELOG.md).
 
 Chrome-first Manifest V3 client for Shared Live Intelligence NetworK systems.
 

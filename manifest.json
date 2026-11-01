@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.19.23",
-  "version_name": "0.19.23",
+  "version": "0.19.25",
+  "version_name": "0.19.25",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -18,6 +18,8 @@
     "https://weav3r.dev/*",
     "https://slinkyleveling.richard-johnson554.workers.dev/*",
     "https://slinkcontributionworker.richard-johnson554.workers.dev/*",
+    "https://slink-chat-central-test.richard-johnson554.workers.dev/*",
+    "https://slink-faction-node-46978-test.richard-johnson554.workers.dev/*",
     "https://slinkwarworker.richard-johnson554.workers.dev/*",
     "https://slinkmuggingworker.richard-johnson554.workers.dev/*",
     "https://yata.yt/*",
@@ -115,6 +117,10 @@
         "src/core/chat-inline-media.js",
         "src/core/chat-giphy.js",
         "src/core/chat-giphy-ui.js",
+        "src/core/faction-node-client.js",
+        "src/core/faction-node-ui.js",
+        "src/core/faction-node-settings.js",
+        "src/content/faction-rooms.js",
         "src/content/custom-chat-buttons.js",
         "src/content/chat-ff.js",
         "src/content/ui-shell.js",
@@ -136,6 +142,7 @@
         "src/modules/money-property.js",
         "src/modules/events.js",
         "src/modules/chat.js",
+        "src/modules/faction-rooms.js",
         "src/modules/faction-officers.js",
         "src/modules/contribution.js",
         "src/content/content-script.js"
@@ -143,4 +150,3 @@
     }
   ]
 }
-

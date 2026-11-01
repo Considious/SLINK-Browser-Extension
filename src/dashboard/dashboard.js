@@ -1310,7 +1310,7 @@
     }));
   }
 
-  const qualityModuleIds = Object.freeze(["racing","abroad-stocks","company","museums","money-property","events","faction-officers","chat"]);
+  const qualityModuleIds = Object.freeze(["racing","abroad-stocks","company","museums","money-property","events","faction-officers","chat","faction-rooms"]);
   const combatModuleIds = Object.freeze(['bounties','mugging','target-list']);
   let qualityActive = 'racing';
   let combatActive = 'overview';
@@ -2007,7 +2007,6 @@
   setInterval(() => { updateAdhdClock(); updateMarketClock(); updateMeritsClock(); updateDollarBazaarClock(); }, 1_000);
   addEventListener('pagehide', () => { void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {}); }, { once:true });
 })();
-
 
 
 

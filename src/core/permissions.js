@@ -55,6 +55,11 @@
       optional: false,
       origins: Object.freeze(['https://slinkwarworker.richard-johnson554.workers.dev/*'])
     }),
+    factionChatTest: Object.freeze({
+      label: 'SLINK Faction Chat Test Central',
+      optional: false,
+      origins: Object.freeze(['https://slink-chat-central-test.richard-johnson554.workers.dev/*'])
+    }),
     muggingWorker: Object.freeze({
       label: 'SLINK Mugging Service',
       optional: false,
