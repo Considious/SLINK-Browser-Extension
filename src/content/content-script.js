@@ -24,6 +24,7 @@
   } catch (error) { console.debug('[SLINK] Cached theme catalog rejected:', error); }
   const ui = SLINK.core.uiShell.createShell({ title:'SLINK', subtitle:'Shared Live Intelligence NetworK',
     themeId:startupValues[SLINK.core.themes.STORAGE_KEY], permissions:startupPermissions, preferences:startupValues });
+  global.SLINK_OPEN_FACTION_ROOMS=()=>ui.openModule('faction-rooms');
   ui.setThemePanelOpacity(startupValues[SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY] ?? SLINK.core.themes.DEFAULT_PANEL_OPACITY);
   let initialized = false;
   let restarting = null;

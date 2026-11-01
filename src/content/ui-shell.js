@@ -876,6 +876,7 @@
     }
     return Object.freeze({
       host,
+      openModule(id) { if(!views.has(id))throw Error('Room management is not ready. Open SLINK and try again.');hidden=false;collapsed=false;setActive(id,true);refreshShell(); },
       ready,
       createModuleView,
       dismissAlert,

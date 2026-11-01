@@ -30,6 +30,7 @@ const packageJson = JSON.parse(read('package.json'));
 
 assert(manifest.manifest_version === 3, 'The extension must use Manifest V3.');
 assert(manifest.version === packageJson.version, 'Manifest and package versions must match.');
+assert(!manifest.version_name || manifest.version_name === manifest.version, 'Chrome displayed version must match its update version.');
 assert(!JSON.stringify(manifest).includes('<all_urls>'), 'The extension must not request <all_urls>.');
 assert(manifest.permissions.includes('storage'), 'Storage permission is required.');
 assert(manifest.permissions.includes('alarms'), 'Alarms permission is required.');

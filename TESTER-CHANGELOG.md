@@ -2,17 +2,20 @@
 
 ## What changed
 
-- Rooms now waits for Torn's chat bar before restoring a saved window, instead of appearing in the top-left corner.
-- Rooms matches the visible gap between native Torn chats, including the outside frame and scaled chat layouts.
-- Reserving space no longer animates independently of the Rooms window. Torn's normal chat movement remains available.
-- Height, focus retention, room sounds, permissions and storage behavior are unchanged.
+- Fixed Chrome's stuck version label. The displayed version now follows the actual extension version.
+- Room management is a full-width GUI page, not a miniature chat window. Manage in chat opens that page.
+- Removed duplicate sound controls and the misleading settings text. Chat has one global Notification sounds toggle and one sound control to the right of each room.
+- Reply, Edit and Delete are now available by right-clicking a message, holding it on mobile, or using Shift+F10 from a focused message.
+- Compacted the message composer and moved connection/history tools under Info, leaving more space for messages. Chat window spacing and sizing are unchanged.
 
 ## What to test
 
-- [ ] Leave Rooms open and refresh Torn. It must reappear beside the chats without clicking it or flashing at the top left.
-- [ ] Open several Torn chats. Compare the native chat-to-chat gap with the gap beside Rooms; there should be no overlap.
-- [ ] Change chat size, resize the browser and try browser zoom. Confirm the gap stays even.
-- [ ] Switch to another app, return, then minimize and reopen Rooms. Check that spacing and height remain correct.
-- [ ] Open room controls in the dashboard; they should remain inside the dashboard rather than becoming a floating chat.
+- [ ] Check Chrome's extension version after reloading the updated files. It should show 0.19.28, not 0.19.25.
+- [ ] Open Manage from Rooms. Check that the full GUI opens, with room details, member access, timed restrictions and faction links—not another chat window.
+- [ ] Try management in the extension dashboard and PDA. Change rooms and permissions, click away and return, and confirm values remain saved. Non-Leaders must not gain management access.
+- [ ] Toggle global notification sounds, then mute one room. Confirm the per-room control sits beside the correct room, saves after reload, and does not mute other rooms.
+- [ ] Right-click or long-press messages. Own messages should offer Reply/Edit/Delete; other members' messages should not offer unauthorized actions.
+- [ ] Scroll on mobile without holding. It must not accidentally open the action menu. Test Escape and Shift+F10 with a keyboard.
+- [ ] Send a multiline message, open Info/history, and minimize/reopen Rooms. Check that the working gap beside Torn chats stays correct.
 
 If something fails, report your device, SLINK version and what you were doing. Do not clear storage or reinstall PDA to test.
