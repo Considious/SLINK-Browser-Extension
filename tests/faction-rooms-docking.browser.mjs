@@ -21,11 +21,13 @@ try{
   await page.waitForFunction(()=>Math.abs(document.querySelector('[data-slink-faction-node]').getBoundingClientRect().width-document.querySelector('.root___Ex8tg').getBoundingClientRect().width)<.6,{},{timeout:3000});
   const g=await geometry();assert(Math.abs(g.gap-g.nativeGap)<.6,`Rooms gap ${g.gap} must match Torn gap ${g.nativeGap}, including outer wrappers and zoom ${zoom}`);assert(g.gap>0);assert(g.top>0);
  }
+ await page.evaluate(()=>{document.querySelector('.item___fixture').remove();document.querySelectorAll('.item___fixture').forEach((el,i)=>{el.style.transform='translateX(-'+i*313+'px)';});});await page.waitForTimeout(300);
+ const closedNative=await geometry();assert(Math.abs(closedNative.gap-closedNative.nativeGap)<.6,'Closing a native chat must keep the gap after Torn finishes sliding the remaining chats');
  const before=await geometry();
  await page.evaluate(()=>{active=false;for(const f of callbacks)f();});await page.waitForTimeout(50);assert.deepEqual(await geometry(),before,'Blur must not release or reposition the reserved slot');
  await page.evaluate(()=>{active=true;for(const f of callbacks)f();});await page.locator('[data-close]').click();assert.equal(await page.locator('[data-slink-room-reserve]').count(),0);
  await page.locator('#slink-faction-node-button').click();const reopened=await geometry();assert(Math.abs(reopened.gap-reopened.nativeGap)<.6);
- assert.equal(await page.locator('.item___fixture').first().getAttribute('style'),'transform:translateX(-0px);transition-duration:150ms','Torn native transforms must be untouched');
+ assert.equal(await page.locator('.item___fixture').first().evaluate(el=>el.style.transform),'translateX(0px)','Torn native transforms must be untouched');
  await page.evaluate(()=>ui.dispose());
  const chatMarkup=await page.locator('#chatRoot').evaluate(el=>el.outerHTML);
  await page.evaluate(()=>{document.getElementById('chatRoot').remove();active=false;ui=SLINK_FACTION_NODE_UI.mount({client,activity:{eligible:()=>true,subscribe:()=>()=>{}},domActivity:{eligible:()=>active,subscribe:f=>{callbacks.add(f);return()=>callbacks.delete(f);}},view:{get:async()=>({visible:true,view:'home',userId:1,factionId:10}),save:async()=>{}}});});
