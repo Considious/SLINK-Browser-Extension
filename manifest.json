@@ -115,6 +115,10 @@
         "src/core/chat-inline-media.js",
         "src/core/chat-giphy.js",
         "src/core/chat-giphy-ui.js",
+        "src/core/faction-node-client.js",
+        "src/core/faction-node-ui.js",
+        "src/core/faction-node-settings.js",
+        "src/content/faction-rooms.js",
         "src/content/custom-chat-buttons.js",
         "src/content/chat-ff.js",
         "src/content/ui-shell.js",
@@ -136,6 +140,7 @@
         "src/modules/money-property.js",
         "src/modules/events.js",
         "src/modules/chat.js",
+        "src/modules/faction-rooms.js",
         "src/modules/faction-officers.js",
         "src/modules/contribution.js",
         "src/content/content-script.js"

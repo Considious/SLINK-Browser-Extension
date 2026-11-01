@@ -1310,7 +1310,7 @@
     }));
   }
 
-  const qualityModuleIds = Object.freeze(["racing","abroad-stocks","company","museums","money-property","events","faction-officers","chat"]);
+  const qualityModuleIds = Object.freeze(["racing","abroad-stocks","company","museums","money-property","events","faction-officers","chat","faction-rooms"]);
   const combatModuleIds = Object.freeze(['bounties','mugging','target-list']);
   let qualityActive = 'racing';
   let combatActive = 'overview';
