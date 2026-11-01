@@ -42,3 +42,12 @@ test('edit/delete promises wait for acknowledgement and reject errors without ch
 test('an account change clears old room state and does not reconnect it for the new user',async()=>{
   const f=fixture();f.client.setActive(true);await f.client.connect('general');f.welcome();f.client.send('general',{type:'text',text:'private old draft'});f.identity=2;f.advance(280000);await f.client.refresh();assert.equal(f.client.model.userId,2);assert.equal(f.client.room('general').pending.size,0);assert.equal(f.sockets[0].readyState,3);f.client.dispose();
 });
+test('rapid welcome/disconnect loops do not reset the reconnect limit forever',async()=>{
+ const f=fixture();f.client.setActive(true);await f.client.connect('general');
+ try{for(let i=0;i<4;i++){f.welcome();const socket=f.sockets.at(-1);socket.readyState=3;socket.onclose({code:1006});const retry=[...f.timers.entries()].find(([,timer])=>[1500,5000,15000].includes(timer.ms));if(i===3){assert.equal(retry,undefined);break;}assert.ok(retry);assert.equal(retry[1].ms,[1500,5000,15000][i]);f.timers.delete(retry[0]);retry[1].fn();await new Promise(resolve=>setImmediate(resolve));}}finally{f.client.dispose();}
+});
+
+test('a stable connection resets the retry budget, while rate rejection requires a cooldown',async()=>{
+ const f=fixture();f.client.setActive(true);await f.client.connect('general');f.welcome();f.client.room('general').attempts=3;f.advance(30000);f.sockets.at(-1).onclose({code:1006});assert.ok([...f.timers.values()].some(timer=>timer.ms===1500));
+ await f.client.connect('general',true);f.welcome();f.sockets.at(-1).onclose({code:4008});const count=f.sockets.length;await f.client.connect('general',true);assert.equal(f.sockets.length,count);assert.match(f.client.room('general').error,/Wait a minute/);assert.equal([...f.timers.values()].some(timer=>[1500,5000,15000].includes(timer.ms)),false);f.advance(60000);await f.client.connect('general',true);assert.equal(f.sockets.length,count+1);f.client.dispose();
+});
