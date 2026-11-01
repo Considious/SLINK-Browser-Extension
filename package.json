@@ -1,9 +1,10 @@
 {
   "name": "slink-browser-extension",
-  "version": "0.19.26",
+  "version": "0.19.27",
   "private": true,
   "description": "Chrome-first SLINK browser extension with Combat, Efficiency, and Quality of Life tools.",
   "scripts": {
+    "test:faction-node:docking": "node tests/faction-rooms-docking.browser.mjs",
     "test:faction-node:preferences": "node tests/faction-rooms-preferences.browser.mjs",
     "test:faction-node": "node --test tests/faction-node-client.test.mjs tests/faction-node-service.test.mjs tests/faction-rooms-activity.test.mjs",
     "test:faction-node:browser": "node tests/faction-node-ui.browser.mjs",

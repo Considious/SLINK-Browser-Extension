@@ -2,20 +2,17 @@
 
 ## What changed
 
-- Corrected the remaining overlap between Rooms and Torn chats. Chat height and focus behavior are unchanged.
-- Fixed the dashboard's unclickable message-sound checkbox.
-- Added a separate message-sound checkbox for each room. Muted rooms still show unread counts.
-- Added room controls and Leader management to the SLINK GUI and extension dashboard.
-- Rooms is offered by default, unless you already switched it off. A one-time notice explains that Rooms is independent third-party chat before it connects.
-- Updated the shared API/data terms to cover chat, media providers and the current API-backed tools. You will be asked to accept the updated terms.
+- Rooms now waits for Torn's chat bar before restoring a saved window, instead of appearing in the top-left corner.
+- Rooms matches the visible gap between native Torn chats, including the outside frame and scaled chat layouts.
+- Reserving space no longer animates independently of the Rooms window. Torn's normal chat movement remains available.
+- Height, focus retention, room sounds, permissions and storage behavior are unchanged.
 
 ## What to test
 
-- [ ] Open several Torn chats beside Rooms, resize them, and switch to another app. Confirm the gaps stay even with no overlap.
-- [ ] Change message sound in the SLINK GUI. Reload and confirm it stays saved.
-- [ ] Mute one room while leaving another audible. Receive messages in both; check sound and unread counts.
-- [ ] Open Rooms and Manage rooms from the GUI and extension dashboard. Check room descriptions, member permissions and timed restrictions. Non-Leaders must not gain management access.
-- [ ] Check the first-use notice. Cancelling must not connect; continuing should show rooms. An existing Rooms opt-out must stay off.
-- [ ] Accept the current terms and reload. Confirm existing keys, themes, alerts and settings remain saved, especially on PDA.
+- [ ] Leave Rooms open and refresh Torn. It must reappear beside the chats without clicking it or flashing at the top left.
+- [ ] Open several Torn chats. Compare the native chat-to-chat gap with the gap beside Rooms; there should be no overlap.
+- [ ] Change chat size, resize the browser and try browser zoom. Confirm the gap stays even.
+- [ ] Switch to another app, return, then minimize and reopen Rooms. Check that spacing and height remain correct.
+- [ ] Open room controls in the dashboard; they should remain inside the dashboard rather than becoming a floating chat.
 
 If something fails, report your device, SLINK version and what you were doing. Do not clear storage or reinstall PDA to test.
