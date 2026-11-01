@@ -14,6 +14,7 @@
     droqsTravel: 'https://droqsdb.com',
     slinkWorker: 'https://slinkyleveling.richard-johnson554.workers.dev',
     contributionWorker: 'https://slinkcontributionworker.richard-johnson554.workers.dev',
+    factionChatTest: 'https://slink-chat-central-test.richard-johnson554.workers.dev',
     warWorker: 'https://slinkwarworker.richard-johnson554.workers.dev',
     muggingWorker: 'https://slinkmuggingworker.richard-johnson554.workers.dev'
   });

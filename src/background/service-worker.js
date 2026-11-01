@@ -35,6 +35,7 @@ importScripts(
   'target-list-service.js',
   'theme-service.js',
   'permission-service.js',
+  '../core/faction-node-client.js',
   'faction-node-service.js',
   '../core/chat-giphy.js',
   'chat-config-service.js',
