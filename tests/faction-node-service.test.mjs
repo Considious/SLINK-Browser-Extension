@@ -10,8 +10,8 @@ function fixture(){
  const context=vm.createContext({SLINK_EXTENSION:extension,crypto,TextEncoder,URL,Date});vm.runInContext(client,context);vm.runInContext(source,context);
  return {routes:extension.services.factionNode.routes,values,calls,auth,get reserved(){return reserved;},set failures(value){failures=value;}};
 }
-test('new chat stays off by default and its setting is isolated from existing preferences',async()=>{
- const f=fixture();f.values.set('chat.settings.v1',{ffBubbles:true});assert.equal((await f.routes['factionNode.settings.get']()).enabled,false);assert.equal(f.calls.length,0);
+test('new chat is offered by default but does not authenticate before disclosure acceptance and its setting is isolated from existing preferences',async()=>{
+ const f=fixture();f.values.set('chat.settings.v1',{ffBubbles:true});assert.equal((await f.routes['factionNode.settings.get']()).enabled,true);assert.equal(f.calls.length,0);
  await f.routes['factionNode.settings.patch']({enabled:true});assert.equal(f.values.get('chat.settings.v1').ffBubbles,true);assert.equal(f.calls.length,0);
  await assert.rejects(f.routes['factionNode.settings.patch']({enabled:true,clearEverything:true}));
 });
@@ -22,19 +22,28 @@ test('message sound preference saves independently without disabling rooms or cl
  await f.routes['factionNode.settings.patch']({enabled:false});assert.equal((await f.routes['factionNode.settings.get']()).soundEnabled,false);
  await assert.rejects(f.routes['factionNode.settings.patch']({soundEnabled:'false'}));
 });
+
+test('per-room sound patches merge, preserve explicit opt-out and reject invalid preferences',async()=>{
+ const f=fixture();await f.routes['factionNode.settings.patch']({enabled:false,roomSounds:{general:false}});
+ await f.routes['factionNode.settings.patch']({roomSounds:{officers:true}});
+ const saved=await f.routes['factionNode.settings.get']();assert.equal(saved.enabled,false);assert.deepEqual({...saved.roomSounds},{general:false,officers:true});
+ await assert.rejects(f.routes['factionNode.settings.patch']({roomSounds:{general:'yes'}}));
+ await assert.rejects(f.routes['factionNode.settings.patch']({noticeAccepted:'not-the-current-notice'}));
+ await assert.rejects(f.routes['factionNode.ticket']({}));assert.equal(f.calls.length,0);
+});
 test('test chat uses an isolated session and sends the saved key only to test Central, never the customer node',async()=>{
- const f=fixture();await f.routes['factionNode.settings.patch']({enabled:true});await Promise.all([f.routes['factionNode.ticket']({}),f.routes['factionNode.ticket']({})]);assert.equal(f.calls.length,3);assert.equal(f.auth.length,0);assert.equal(f.reserved,1);
+ const f=fixture();await f.routes['factionNode.settings.patch']({enabled:true,noticeAccepted:'third-party-rooms-v1'});await Promise.all([f.routes['factionNode.ticket']({}),f.routes['factionNode.ticket']({})]);assert.equal(f.calls.length,3);assert.equal(f.auth.length,0);assert.equal(f.reserved,1);
  const login=f.calls.find(c=>c.url.endsWith('/auth')),ticket=f.calls.find(c=>c.url.endsWith('/api/chat/token'));assert.equal(JSON.parse(login.options.body).api_key,'synthetic-test-key');assert.equal(ticket.options.headers.Authorization,'Bearer test-permission-token');assert.equal(ticket.options.body,'{}');assert.ok(f.calls.every(c=>c.provider==='factionChatTest'&&c.url.startsWith('https://slink-chat-central-test.richard-johnson554.workers.dev/')));assert.equal(f.values.get('access.session.v1').token,'production-session-untouched');assert.deepEqual(f.values.get('permissions.access').scopes,['production-scope']);
 });
 test('stale identity refreshes once and repeated failure does not loop',async()=>{
- const f=fixture();await f.routes['factionNode.settings.patch']({enabled:true});f.failures=2;await assert.rejects(f.routes['factionNode.ticket']({}));assert.equal(f.calls.filter(c=>c.url.endsWith('/api/chat/token')).length,2);assert.equal(f.calls.filter(c=>c.url.endsWith('/auth')).length,2);assert.equal(f.values.get('access.session.v1').token,'production-session-untouched');
+ const f=fixture();await f.routes['factionNode.settings.patch']({enabled:true,noticeAccepted:'third-party-rooms-v1'});f.failures=2;await assert.rejects(f.routes['factionNode.ticket']({}));assert.equal(f.calls.filter(c=>c.url.endsWith('/api/chat/token')).length,2);assert.equal(f.calls.filter(c=>c.url.endsWith('/auth')).length,2);assert.equal(f.values.get('access.session.v1').token,'production-session-untouched');
 });
 
-test('disabled rooms and missing terms acceptance cannot trigger a test-key authentication',async()=>{
- const f=fixture();await assert.rejects(f.routes['factionNode.ticket']({}),/Enable Faction Rooms/);assert.equal(f.calls.length,0);await f.routes['factionNode.settings.patch']({enabled:true});f.values.delete('access.acceptedTerms.v1');await assert.rejects(f.routes['factionNode.ticket']({}),/accept the current SLINK terms/);assert.equal(f.calls.some(c=>c.url.endsWith('/auth')),false);
+test('unacknowledged Rooms notice and missing terms acceptance cannot trigger a test-key authentication',async()=>{
+ const f=fixture();await assert.rejects(f.routes['factionNode.ticket']({}),/Enable Faction Rooms/);assert.equal(f.calls.length,0);await f.routes['factionNode.settings.patch']({enabled:true,noticeAccepted:'third-party-rooms-v1'});f.values.delete('access.acceptedTerms.v1');await assert.rejects(f.routes['factionNode.ticket']({}),/accept the current SLINK terms/);assert.equal(f.calls.some(c=>c.url.endsWith('/auth')),false);
 });
 test('cached test authentication is reused but changing the saved key requires a fresh isolated sign-in',async()=>{
- const f=fixture();await f.routes['factionNode.settings.patch']({enabled:true});await f.routes['factionNode.ticket']({});await f.routes['factionNode.members']();assert.equal(f.reserved,1);f.values.set('access.settings.v1',{tornKey:'different-synthetic-key'});await f.routes['factionNode.ticket']({});assert.equal(f.reserved,2);assert.equal(f.values.get('access.session.v1').token,'production-session-untouched');
+ const f=fixture();await f.routes['factionNode.settings.patch']({enabled:true,noticeAccepted:'third-party-rooms-v1'});await f.routes['factionNode.ticket']({});await f.routes['factionNode.members']();assert.equal(f.reserved,1);f.values.set('access.settings.v1',{tornKey:'different-synthetic-key'});await f.routes['factionNode.ticket']({});assert.equal(f.reserved,2);assert.equal(f.values.get('access.session.v1').token,'production-session-untouched');
 });
 test('account changes during authentication reject the old response instead of caching it',async()=>{
  const context=vm.createContext({crypto,TextEncoder,URL,Date});vm.runInContext(client,context);let key='first-synthetic-key';const access=context.SLINK_FACTION_NODE.createTestAccess({context:async()=>({enabled:true,key,accepted:[{version:'v',sha256:'h'}]}),request:async(url)=>{if(url.endsWith('/terms'))return {terms:{version:'v',sha256:'h'}};if(url.endsWith('/auth')){key='changed-synthetic-key';return {session_token:'must-not-use',faction_id:46978,scopes:['slink.chat'],iat:Math.floor(Date.now()/1000),expires_at:new Date(Date.now()+7200000).toISOString()};}throw Error('Old authentication reached a chat request');}});await assert.rejects(access.central('token'),/changed during sign-in/);

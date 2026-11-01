@@ -5,8 +5,8 @@
   if (!SLINK) throw new Error('SLINK runtime must load before War helpers.');
 
   const WORKER_BASE = 'https://slinkwarworker.richard-johnson554.workers.dev';
-  const TERMS_VERSION = '2026-10-20';
-  const TERMS_SHA256 = '4386e2c662f273d7e89fbe803cc4e7038496d5b3f8eeab95eb44da137746f3a0';
+  const TERMS_VERSION = '2026-11-01';
+  const TERMS_SHA256 = '78f79d9d0f651932c1c9d68eeb76df09f7b02e19880edaeba3d93c33e0205797';
 
   function positiveInteger(value) {
     const number = Number(value);

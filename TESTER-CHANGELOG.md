@@ -2,22 +2,20 @@
 
 ## What changed
 
-- Added faction Rooms alongside Torn chat, with compact room buttons, descriptions and clearer message backgrounds.
-- Rooms follows Torn's chat width, height and spacing. Switching away from Torn no longer makes other chats slide underneath it.
-- Room messages keep arriving while Torn is unfocused. Switching to another Torn tab transfers the connection instead of running duplicate copies.
-- Enter sends; Shift+Enter adds a new line.
-- Messages show player names and Torn IDs, with unread badges and an optional saved message sound.
-- Leaders can control room access, speaking permissions and timed restrictions.
+- Corrected the remaining overlap between Rooms and Torn chats. Chat height and focus behavior are unchanged.
+- Fixed the dashboard's unclickable message-sound checkbox.
+- Added a separate message-sound checkbox for each room. Muted rooms still show unread counts.
+- Added room controls and Leader management to the SLINK GUI and extension dashboard.
+- Rooms is offered by default, unless you already switched it off. A one-time notice explains that Rooms is independent third-party chat before it connects.
+- Updated the shared API/data terms to cover chat, media providers and the current API-backed tools. You will be asked to accept the updated terms.
 
 ## What to test
 
-- [ ] Open several Torn chats beside Rooms. Change Torn's chat size, resize the screen, then minimize and reopen Rooms. Check alignment and spacing.
-- [ ] Click another app or tab, receive messages, and return. Check unread numbers, sounds and that chats have not overlapped.
-- [ ] Switch between several Torn tabs. Check for duplicate messages or sounds and unnecessary reconnects.
-- [ ] Send with Enter, add a line with Shift+Enter, and try sending while muted or read-only.
-- [ ] Check names and descriptions. Turn message sound off, reload, and confirm it stays off.
-- [ ] Have several members post, reply and reconnect. Confirm private/officer-only rooms stay restricted and timed mutes/access changes work.
-- [ ] Confirm existing keys, themes, alert settings and saved targets remain saved after reload.
+- [ ] Open several Torn chats beside Rooms, resize them, and switch to another app. Confirm the gaps stay even with no overlap.
+- [ ] Change message sound in the SLINK GUI. Reload and confirm it stays saved.
+- [ ] Mute one room while leaving another audible. Receive messages in both; check sound and unread counts.
+- [ ] Open Rooms and Manage rooms from the GUI and extension dashboard. Check room descriptions, member permissions and timed restrictions. Non-Leaders must not gain management access.
+- [ ] Check the first-use notice. Cancelling must not connect; continuing should show rooms. An existing Rooms opt-out must stay off.
+- [ ] Accept the current terms and reload. Confirm existing keys, themes, alerts and settings remain saved, especially on PDA.
 
 If something fails, report your device, SLINK version and what you were doing. Do not clear storage or reinstall PDA to test.
-

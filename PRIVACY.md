@@ -1,7 +1,7 @@
 # SLINK Browser Extension Privacy Policy
 
 **Effective date:** August 26, 2026  
-**Last updated:** September 5, 2026
+**Last updated:** November 1, 2026
 
 ## Scope and purpose
 
@@ -65,7 +65,7 @@ Depending on the enabled modules and API access level, SLINK may process:
   polling when the extension is idle.
 
 SLINK does not record keystrokes, mouse movement, or general browser activity.
-It does not read or retain faction-chat conversations. A faction callout is
+Visible Torn chat links and sender IDs can be processed locally for optional chat enhancements; Torn conversations are not uploaded to SLINK Rooms. A faction callout is
 placed into Torn's chat composer only after the user presses the relevant
 button.
 
@@ -220,3 +220,27 @@ practice begins where required.
 Privacy and support questions may be submitted through the
 [SLINK Browser Extension repository](https://github.com/Considious/SLINK-Browser-Extension).
 Do not post API keys or other secrets publicly.
+
+## SLINK Rooms and optional chat media
+
+SLINK Rooms are third-party, faction-hosted chat, not Torn chat. Connecting requires
+acknowledging the first-use notice. Central verifies identity, faction membership
+and a separate faction Chat license, and issues short-lived signed tickets. The
+faction node receives verified identity and the ticket, never the Torn API key.
+Rooms store messages, media links, replies/edits, read positions and moderation
+permissions. Authorized participants, administrators and the node operator can
+read them; messages are not end-to-end encrypted. Linked rooms share future
+messages with the linked faction. Default retention is 30 days / 10,000 messages
+per room; self-hosted operators can configure different limits.
+
+Users can disable Rooms or mute individual rooms. Third-party room connections
+may remain active when Torn loses focus, without scraping Torn in the background.
+GIF/sticker searches contact GIPHY and optionally ChatSticker; viewing external
+media contacts its host. Providers receive the search/media request and normal
+connection metadata. User-supplied provider keys remain local. Chat Fair Fight
+estimates use FFScouter with SLINK intelligence as fallback.
+
+The [unified SLINK API/data policy](https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/terms/2026-08-23/SLINK_API_Data_Terms_of_Service.md)
+covers API modules, shared observations, optional backups, media and self-hosted
+chat. Contact the faction node operator for room data or Considious for Central
+records. Removing the extension does not delete already shared chat messages.
