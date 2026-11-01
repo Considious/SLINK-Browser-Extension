@@ -575,7 +575,7 @@
         for (const [label, href] of alert.links || []) {
           const link = document.createElement('a'); link.className = 'button small secondary'; link.href = String(href); link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = String(label || 'Open'); actions.append(link);
         }
-        for (const [label, durationMs] of [['Snooze 5m', 5 * 60_000], ['Snooze 1h', 60 * 60_000]]) {
+        for (const [label, durationMs] of [['Snooze 5m', 5 * 60_000], ['Snooze 1h', 60 * 60_000], ['Snooze 12h', 12 * 60 * 60_000]]) {
           const snooze = document.createElement('button'); snooze.type = 'button'; snooze.className = 'small secondary'; snooze.textContent = label;
           snooze.addEventListener('click', () => runAdhdAction(snooze, async () => { adhd = await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }); renderAdhd(); }));
           actions.append(snooze);

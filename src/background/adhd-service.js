@@ -511,7 +511,11 @@
       await SLINK.services.factionOfficer.routes['faction.officer.alert.snooze'](input);
       return publicStatus(false);
     }
-    if (!ADHD.ALERT_DEFINITIONS.some(definition => definition.id === id) && !/^cityStock:\d+$/.test(id)) throw new Error('Unknown Efficiency alert.');
+    if (!ADHD.ALERT_DEFINITIONS.some(definition => definition.id === id) && !/^cityStock:\d+$/.test(id)) {
+      // Supplemental sources (including company addiction and onboarding) use the same snooze ledger.
+      const active = (await publicStatus(false)).activeAlerts;
+      if (!active.some(alert => alert.id === id)) throw new Error('This alert is no longer active. Refresh the Alerts page.');
+    }
     const durationMs = Math.min(ADHD.DAY_MS, Math.max(60_000, Number(input.durationMs) || 60 * 60_000));
     await mutateSettings(next => {
     next.snoozedUntil[id] = Date.now() + durationMs;
@@ -544,10 +548,11 @@
       ...(abroadSettings.settings.soundEnabled ? abroadAlerts : []),
       ...(moneyStatus.settings.soundEnabled ? moneyAlerts : [])
     ];
-    const activeIds = candidates.map(alert => alert.id).sort();
+    const audible = candidates.filter(alert => Number(currentSettings.snoozedUntil[alert.sourceId || alert.id] || 0) <= Date.now());
+    const activeIds = audible.map(alert => alert.id).sort();
     const activeSet = new Set((Array.isArray(previous?.activeIds) ? previous.activeIds : []).filter(id => activeIds.includes(id)));
     const pendingSet = new Set((Array.isArray(previous?.pendingIds) ? previous.pendingIds : []).filter(id => activeIds.includes(id)));
-    candidates.forEach(alert => { if (!activeSet.has(alert.id)) pendingSet.add(alert.id); });
+    audible.forEach(alert => { if (!activeSet.has(alert.id)) pendingSet.add(alert.id); });
     const pendingIds = [...pendingSet].sort();
     const now = Date.now();
     const play = pendingIds.length > 0 && now - Number(previous?.claimedAt || 0) >= 5_000;
@@ -617,7 +622,7 @@
         ...companyAlerts,
         ...moneyAlerts,
         ...onboardingAlerts
-      ],
+      ].filter(alert => Number(currentSettings.snoozedUntil[alert.id] || 0) <= Date.now()),
       city:snapshot ? ADHD.cityProgress(snapshot, currentSettings) : { bought:null, remaining:null, complete:false, manuallyDone:false },
       life:snapshot?.data?.bars?.life || null,
       crimeUniques:snapshot ? ADHD.crimeUniqueProgress(snapshot) : [],

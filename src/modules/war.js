@@ -461,13 +461,14 @@
       }
 
       function visibleRetals() {
+        if (current?.settings?.retalAlerts === false || Number(current?.settings?.retalSnoozedUntil || 0) > Date.now()) return [];
         const now = Math.floor(Date.now() / 1000);
         const termedOpponent = current?.sharedConfig?.mode === 'termed' ? Number(current?.activeWar?.opponentFactionId) || 0 : 0;
         const termedMembers = termedOpponent ? opponentMemberIds() : new Set();
         return (current?.runtime?.snapshot?.retals || []).filter(retal => {
           const expiresAt = Number(retal.expiresAt) || now + 300;
           const belongsToTermedOpponent = termedOpponent > 0 && (Number(retal.attackerFactionId) === termedOpponent || termedMembers.has(Number(retal.attackerId)));
-          return expiresAt > now && !belongsToTermedOpponent && !dismissedRetalMap[retalDismissKey(retal)] && !dismissedRetalMap[String(retal.attackId)];
+          return expiresAt > now && !belongsToTermedOpponent && Number(dismissedRetalMap[retalDismissKey(retal)] || 0) <= now && Number(dismissedRetalMap[String(retal.attackId)] || 0) <= now;
         });
       }
 
@@ -930,6 +931,33 @@
         </article>`).join('')}</div>`;
       }
 
+      function retalControls() {
+        const settings = current?.settings || {};
+        const until = Number(settings.retalSnoozedUntil) || 0;
+        return `<details class="slink-war-note" data-ui-key="war.retal-controls"><summary>Retal alert controls</summary><label><input type="checkbox" data-war-retal-pref="retalAlerts" ${settings.retalAlerts !== false ? 'checked' : ''}> Enable retal alerts</label><label><input type="checkbox" data-war-retal-pref="retalSound" ${settings.retalSound !== false ? 'checked' : ''}> Retal sound (also requires War alert sounds)</label><div class="slink-war-card-actions"><label>Snooze hours <input type="number" data-war-retal-hours min="0.1" max="168" step="0.1" value="12" style="width:5em"></label><button type="button" data-war-retal-pause="custom">Snooze</button><button type="button" data-war-retal-pause="12">Snooze 12h</button><button type="button" data-war-retal-pause="0">Resume retal alerts</button></div>${until > Date.now() ? `<div>Snoozed until ${escape(new Date(until).toLocaleString())}</div>` : ''}</details>`;
+      }
+
+      async function changeRetalPreferences(patch) {
+        // Fence older polling responses just like the main settings editor.
+        settingsRevision++;
+        try {
+          current = await requestWarStatus('war.settings.save', patch);
+          localError = '';
+          evaluateAlerts();
+          await renderHybridAlerts();
+          if (fullUi) render();
+        } catch (error) { localError = SLINK.core.format.errorMessage(error); if (fullUi) render(); }
+      }
+
+      async function snoozeRetal(retal, hours) {
+        if (!retal) return;
+        dismissedRetalMap[retalDismissKey(retal)] = Math.floor(Date.now() / 1000 + hours * 3600);
+        await SLINK.core.storage.set('war.dismissedRetals.v1', dismissedRetalMap);
+        evaluateAlerts();
+        await renderHybridAlerts();
+        if (fullUi) render();
+      }
+
       function retalCards() {
         const retals = visibleRetals();
         if (!retals.length) return '<div class="slink-war-empty">No active retaliation alerts.</div>';
@@ -943,7 +971,7 @@
           <div class="slink-war-card-head"><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">${escape(retal.attackerName || `Player ${retal.attackerId}`)} [${retal.attackerId}]</a><span>${duration(Number(retal.expiresAt) - now)}</span></div>
           <div class="slink-war-meta">${retal.isWar ? '<span class="slink-war-pill">⚔ War</span>' : ''}${retal.isRetal ? '<span class="slink-war-pill">🛡 Retal</span>' : ''}</div>
           <div class="slink-war-retal-report"><span>Faction</span><span>${escape(faction + tag)}</span><span>Attacked</span><span>${escape(retal.defenderName || `Player ${retal.defenderId}`)}${retal.defenderId ? ` [${retal.defenderId}]` : ''}</span><span>Status</span><span>${escape(status)}${readyAt ? ` • out ${escape(readyAt)} TCT` : ''}${retal.attackerStatusDescription ? ` • ${escape(retal.attackerStatusDescription)}` : ''}</span><span>Estimated BS</span><span>${Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : 'Unknown'}</span><span>Fair Fight</span><span>${escape(SLINK.core.format.fairFightLabel(retal))}</span></div>
-          <div class="slink-war-card-actions"><button data-war-retal-copy="${retal.attackId}" type="button">📋 Copy</button><button data-war-retal-send="${retal.attackId}" type="button" disabled title="Press Copy first. Send remains available for 30 seconds.">💬 Send</button><a class="slink-war-retal-attack" href="${attackUrl(retal.attackerId)}" data-war-attack="${retal.attackerId}" target="_blank" rel="noopener noreferrer">⚔ 【ATTACK】</a><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">Profile</a></div>
+          <div class="slink-war-card-actions">${[5/60,1,12].map(hours => `<button type="button" data-war-retal-snooze="${escape(retal.attackId)}" data-hours="${hours}">Snooze ${hours < 1 ? '5m' : hours + 'h'}</button>`).join('')}<button data-war-retal-copy="${retal.attackId}" type="button">📋 Copy</button><button data-war-retal-send="${retal.attackId}" type="button" disabled title="Press Copy first. Send remains available for 30 seconds.">💬 Send</button><a class="slink-war-retal-attack" href="${attackUrl(retal.attackerId)}" data-war-attack="${retal.attackerId}" target="_blank" rel="noopener noreferrer">⚔ 【ATTACK】</a><a href="${profileUrl(retal.attackerId)}" target="_blank" rel="noopener noreferrer">Profile</a></div>
         </article>`;
         }).join('');
       }
@@ -1037,7 +1065,7 @@
         const tabsRoot=root.querySelector('[data-war-tabs]');
         if (tabsRoot.innerHTML!==tabBar) tabsRoot.innerHTML=tabBar;
         const overview=root.querySelector('[data-war-overview]');
-        const overviewHtml=activeTab==='armory'?'':`<div class="slink-war-summary"><div class="slink-war-stat"><b>${Number(stats.attacks) || 0}</b><span>Attacks</span></div><div class="slink-war-stat"><b>${Number(stats.warAttacks) || 0}${insideCap ? `/${insideCap}` : ''}</b><span>War / cap</span></div><div class="slink-war-stat"><b>${Number(stats.mugs) || 0}</b><span>Mugs</span></div><div class="slink-war-stat"><b>${chain}</b><span>Chain</span></div></div><div class="slink-war-note slink-war-report"><span>${mugSummary}</span><button id="slink-war-copy-report" type="button">Copy report</button></div>${itemRequestCards()}${retals.length ? `<div class="slink-war-note"><strong>Active retals</strong>${retalCards()}</div>` : ''}${localError ? `<div class="slink-war-error">${escape(localError)}</div>` : ''}`;
+        const overviewHtml=activeTab==='armory'?'':`${retalControls()}<div class="slink-war-summary"><div class="slink-war-stat"><b>${Number(stats.attacks) || 0}</b><span>Attacks</span></div><div class="slink-war-stat"><b>${Number(stats.warAttacks) || 0}${insideCap ? `/${insideCap}` : ''}</b><span>War / cap</span></div><div class="slink-war-stat"><b>${Number(stats.mugs) || 0}</b><span>Mugs</span></div><div class="slink-war-stat"><b>${chain}</b><span>Chain</span></div></div><div class="slink-war-note slink-war-report"><span>${mugSummary}</span><button id="slink-war-copy-report" type="button">Copy report</button></div>${itemRequestCards()}${retals.length ? `<div class="slink-war-note"><strong>Active retals</strong>${retalCards()}</div>` : ''}${localError ? `<div class="slink-war-error">${escape(localError)}</div>` : ''}`;
         if (overview.innerHTML!==overviewHtml) overview.innerHTML=overviewHtml;
         patchWarBody(root.querySelector('[data-war-body]'),body);
         bindEvents();
@@ -1046,6 +1074,13 @@
 
       function bindEvents() {
         const root = context.ui.getContentElement();
+        for (const input of root.querySelectorAll('[data-war-retal-pref]')) bindControl(input,'change', () => void changeRetalPreferences({ [input.dataset.warRetalPref]:input.checked }));
+        for (const button of root.querySelectorAll('[data-war-retal-pause]')) bindControl(button,'click', () => {
+          const raw = button.dataset.warRetalPause === 'custom' ? root.querySelector('[data-war-retal-hours]')?.value : button.dataset.warRetalPause;
+          const hours = Math.min(168, Math.max(0, Number(raw) || 0));
+          void changeRetalPreferences({ retalSnoozedUntil:hours ? Date.now() + hours * 3600000 : 0 });
+        });
+        for (const button of root.querySelectorAll('[data-war-retal-snooze]')) bindControl(button,'click', () => void snoozeRetal((current?.runtime?.snapshot?.retals || []).find(row => String(row.attackId) === button.dataset.warRetalSnooze), Number(button.dataset.hours)));
         for (const button of root.querySelectorAll('[data-war-tab]')) bindControl(button,'click', () => {
           activeTab = button.dataset.warTab;
           void SLINK.core.storage.set('ui.war.activeTab.v1', activeTab);
@@ -1237,9 +1272,11 @@
         const turtleRemaining = Number(stats.turtle?.until) - Math.floor(Date.now() / 1000);
         const turtleDanger = settings.turtleAlert && stats.turtle?.hospitalized && turtleRemaining > 0 && turtleRemaining <= (Number(settings.turtleMinutes) || 5) * 60;
         const active = Boolean(retals.length || itemRequests.length || chainDanger || turtleDanger);
-        const signature = `${retals.map(retal => retal.attackId).join(',')}|${itemRequests.map(request => request.requestId).join(',')}|${chainDanger}|${turtleDanger}`;
-        if (active && signature !== lastAlertSignature && settings.alertSound) playAlertTone();
-        lastAlertSignature = active ? signature : '';
+        const audibleRetals = settings.retalSound === false ? [] : retals;
+        const soundActive = Boolean(audibleRetals.length || itemRequests.length || chainDanger || turtleDanger);
+        const signature = `${audibleRetals.map(retal => retal.attackId).join(',')}|${itemRequests.map(request => request.requestId).join(',')}|${chainDanger}|${turtleDanger}`;
+        if (soundActive && signature !== lastAlertSignature && settings.alertSound) playAlertTone();
+        lastAlertSignature = soundActive ? signature : '';
         if (fullUi) context.ui.getContentElement()?.closest('.window')?.classList.toggle('slink-war-alerting', active && settings.alertPanelFlash);
         context.ui.setAlertCount('war', retals.length + itemRequests.length, { group:'combat', label:'active War alerts' });
         context.ui.setBubbleAlert(retals.length ? 'retal' : itemRequests.length ? 'armory' : '', retals.length || itemRequests.length, 'war');
@@ -1262,7 +1299,7 @@
             title:'SLINK Retaliation',
             subtitle:`${retal.attackerName || `Player ${retal.attackerId}`} / ${duration(Number(retal.expiresAt) - Math.floor(Date.now() / 1000))}`,
             contentHtml:`<div><strong>${escape(retal.attackerName || `Player ${retal.attackerId}`)} [${retal.attackerId}]</strong></div><div>${escape(faction)}${retal.attackerFactionTag ? ` [${escape(retal.attackerFactionTag)}]` : ''}</div><div>${escape(flags || 'Retaliation available')}</div><div>Attacked: ${escape(retal.defenderName || `Player ${retal.defenderId}`)}${retal.defenderId ? ` [${retal.defenderId}]` : ''}</div><div>Status: ${escape(retal.attackerStatus || retal.attackerActivity || 'Unknown')}</div><div>Estimated BS: ${Number.isFinite(retal.battleStatsEstimate) ? SLINK.core.format.shortNumber(retal.battleStatsEstimate) : 'Unknown'} • FF: ${Number.isFinite(retal.fairFight) ? retal.fairFight.toFixed(2) : 'Unknown'}</div>`,
-            actions:[{ label:'Retaliate', href:attackUrl(retal.attackerId) }, { label:'Profile', href:profileUrl(retal.attackerId) }],
+            actions:[{ label:'Retaliate', href:attackUrl(retal.attackerId) }, { label:'Profile', href:profileUrl(retal.attackerId) }, ...[5/60,1,12].map(hours => ({ label:`Snooze ${hours < 1 ? '5m' : hours + 'h'}`, onClick:() => snoozeRetal(retal,hours) }))],
             onDismiss:async () => {
               dismissedRetalMap[retalDismissKey(retal)] = Number(retal.expiresAt) || Math.floor(Date.now() / 1000) + 300;
               await SLINK.core.storage.set('war.dismissedRetals.v1', dismissedRetalMap);
