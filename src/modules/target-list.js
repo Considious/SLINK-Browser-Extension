@@ -162,7 +162,7 @@
       function stakeoutAlertsHtml() {
         const alerts = Array.isArray(current.stakeout?.activeAlerts) ? current.stakeout.activeAlerts : [];
         if (!alerts.length) return '';
-        return `<div class="target-list-alerts">${alerts.map(alert => `<article class="target-list-alert"><strong>${escape(alert.title)}</strong><div>${escape(alert.detail)}</div><div class="target-list-actions">${(alert.links || []).map(([label, href]) => `<a href="${escape(href)}">${escape(label)}</a>`).join('')}<button type="button" data-stakeout-alert-id="${escape(alert.id)}" data-duration-ms="300000">Snooze 5m</button><button type="button" data-stakeout-alert-id="${escape(alert.id)}" data-duration-ms="3600000">Snooze 1h</button></div></article>`).join('')}</div>`;
+        return `<div class="target-list-alerts">${alerts.map(alert => `<article class="target-list-alert"><strong>${escape(alert.title)}</strong><div>${escape(alert.detail)}</div><div class="target-list-actions">${(alert.links || []).map(([label, href]) => `<a href="${escape(href)}">${escape(label)}</a>`).join('')}<button type="button" data-stakeout-alert-id="${escape(alert.id)}" data-duration-ms="300000">Snooze 5m</button><button type="button" data-stakeout-alert-id="${escape(alert.id)}" data-duration-ms="3600000">Snooze 1h</button><button type="button" data-stakeout-alert-id="${escape(alert.id)}" data-duration-ms="43200000">Snooze 12h</button></div></article>`).join('')}</div>`;
       }
 
       function render() {

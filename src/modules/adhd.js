@@ -172,7 +172,7 @@
             });
             links.append(copy, send);
           }
-          for (const [label, durationMs] of [['Snooze 5m', 5 * 60_000], ['Snooze 1h', 60 * 60_000]]) {
+          for (const [label, durationMs] of [['Snooze 5m', 5 * 60_000], ['Snooze 1h', 60 * 60_000], ['Snooze 12h', 12 * 60 * 60_000]]) {
             const snooze = document.createElement('button'); snooze.type = 'button'; snooze.textContent = label;
             snooze.addEventListener('click', () => runAlertAction(snooze, async () => {
               render(await SLINK.core.messaging.send('adhd.alert.snooze', { id:alert.id, durationMs }));
