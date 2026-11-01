@@ -15,6 +15,13 @@ test('new chat stays off by default and its setting is isolated from existing pr
  await f.routes['factionNode.settings.patch']({enabled:true});assert.equal(f.values.get('chat.settings.v1').ffBubbles,true);assert.equal(f.calls.length,0);
  await assert.rejects(f.routes['factionNode.settings.patch']({enabled:true,clearEverything:true}));
 });
+
+test('message sound preference saves independently without disabling rooms or clearing other settings',async()=>{
+ const f=fixture();await f.routes['factionNode.settings.patch']({enabled:true});await f.routes['factionNode.settings.patch']({soundEnabled:false});
+ const saved=await f.routes['factionNode.settings.get']();assert.equal(saved.enabled,true);assert.equal(saved.soundEnabled,false);
+ await f.routes['factionNode.settings.patch']({enabled:false});assert.equal((await f.routes['factionNode.settings.get']()).soundEnabled,false);
+ await assert.rejects(f.routes['factionNode.settings.patch']({soundEnabled:'false'}));
+});
 test('test chat uses an isolated session and sends the saved key only to test Central, never the customer node',async()=>{
  const f=fixture();await f.routes['factionNode.settings.patch']({enabled:true});await Promise.all([f.routes['factionNode.ticket']({}),f.routes['factionNode.ticket']({})]);assert.equal(f.calls.length,3);assert.equal(f.auth.length,0);assert.equal(f.reserved,1);
  const login=f.calls.find(c=>c.url.endsWith('/auth')),ticket=f.calls.find(c=>c.url.endsWith('/api/chat/token'));assert.equal(JSON.parse(login.options.body).api_key,'synthetic-test-key');assert.equal(ticket.options.headers.Authorization,'Bearer test-permission-token');assert.equal(ticket.options.body,'{}');assert.ok(f.calls.every(c=>c.provider==='factionChatTest'&&c.url.startsWith('https://slink-chat-central-test.richard-johnson554.workers.dev/')));assert.equal(f.values.get('access.session.v1').token,'production-session-untouched');assert.deepEqual(f.values.get('permissions.access').scopes,['production-scope']);
