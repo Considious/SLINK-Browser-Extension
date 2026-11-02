@@ -15,7 +15,7 @@ try{
   window.controller=await SLINK_FACTION_NODE_SETTINGS(document.getElementById('settings'),{...preferences,createManager:container=>SLINK_FACTION_NODE_UI.mountAdmin({client,container,preferences})});
  });
  await page.locator('[data-admin-form]').waitFor({state:'visible'});
- assert.equal(await page.locator('[data-node-enabled]').isChecked(),true);
+ assert.equal(await page.locator('[data-node-enabled]').isChecked(),true);assert.equal(await page.locator('[data-node-idle]').inputValue(),'0');await page.locator('[data-node-idle]').selectOption('15');await page.waitForFunction(()=>settings.idleMinutes===15);
  assert.equal(await page.locator('[data-node-sound],[data-room-sound],[data-node-open],[data-node-manage]').count(),0,'No duplicate chat sound controls or miniature-chat launchers in the GUI');
  assert.equal(await page.locator('[data-slink-faction-node],[data-draft],[data-messages]').count(),0,'GUI management must not create a chat window or composer');
  assert((await page.locator('[data-slink-room-management]').boundingBox()).width>900,'Management must use available dashboard width');

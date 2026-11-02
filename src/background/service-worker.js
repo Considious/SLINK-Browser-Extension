@@ -427,8 +427,8 @@ const routes = {
   ...SLINK.services.war.routes,
   ...SLINK.services.permissionAccess.routes,
   ...SLINK.services.factionNode.routes,
-  'factionNode.ticket':(input,sender)=>sender?.tab?.id===activeTornPageTabId?SLINK.services.factionNode.routes['factionNode.ticket'](input):Promise.reject(Error('Use faction chat on the active Torn page.')),
-  'factionNode.members':(input,sender)=>sender?.tab?.id===activeTornPageTabId?SLINK.services.factionNode.routes['factionNode.members'](input):Promise.reject(Error('Use faction chat on the active Torn page.')),
+  'factionNode.ticket':(input,sender)=>routeRoomRequest('factionNode.ticket',input,sender),
+  'factionNode.members':(input,sender)=>routeRoomRequest('factionNode.members',input,sender),
   ...SLINK.services.factionOfficer.routes,
   ...SLINK.services.travelSafety.routes,
   ...SLINK.services.company.routes,
@@ -471,6 +471,15 @@ async function eligibleTornPageTab() {
   } catch { return null; }
 }
 
+let roomOwnerTabId=null;
+const roomOwnerReady=Promise.resolve(chrome.storage?.session?.get('slink.roomOwnerTab')).then(saved=>{if(Number.isInteger(saved?.['slink.roomOwnerTab']))roomOwnerTabId=saved['slink.roomOwnerTab'];}).catch(()=>{});
+async function routeRoomRequest(type,input,sender){
+  await roomOwnerReady;const tab=sender?.tab;if(!Number.isInteger(tab?.id)||!/^https:\/\/www\.torn\.com(?:\/|$)/.test(tab.url||sender.url||''))throw Error('Open SLINK Rooms from Torn first.');
+  if(tab.id===activeTornPageTabId){roomOwnerTabId=tab.id;await chrome.storage?.session?.set({'slink.roomOwnerTab':tab.id});}
+  if(tab.id!==roomOwnerTabId)throw Error('Another Torn tab owns SLINK Rooms. Focus this tab to move the connection here.');
+  return SLINK.services.factionNode.routes[type](input);
+}
+chrome.tabs.onRemoved.addListener(tabId=>{void roomOwnerReady.then(()=>{if(roomOwnerTabId===tabId){roomOwnerTabId=null;void chrome.storage?.session?.remove('slink.roomOwnerTab');}});});
 function reconcileTornPageActivity(excludedTabId = null) {
   const revision = ++activityRevision;
   const task = activityQueue.then(async () => {

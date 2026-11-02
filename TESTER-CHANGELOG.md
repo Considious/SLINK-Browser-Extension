@@ -2,6 +2,9 @@
 
 ## What changed
 
+- Rooms settings now lets you choose when to disconnect while unfocused: 1, 5, 15 or 60 minutes, or Never for inactivity (the default). Fixed background sign-in renewal being rejected merely because Torn was unfocused. Only one Torn tab monitors Rooms; Torn scraping still stops when unfocused.
+- Devices using the HTTPS connection fallback check Rooms less frequently in the background and catch up when focus returns. Temporary sign-in outages retry with backoff rather than leaving monitoring permanently disconnected.
+- Chat Leaders and room moderators can right-click or long-press a local member’s message to mute them or remove their room access. Choose 15 minutes, 1 hour, 12 hours, 1 day, 1 week or Until restored, then confirm the member, room and duration. Chat Leaders are protected; only a Leader can restrict another room moderator. These actions affect SLINK Rooms only.
 - GIFs and stickers in Rooms now display automatically by default. Turn off **Show GIFs and stickers automatically** in Faction Rooms settings to use click-to-show instead.
 - Temporary access duration can be chosen before selecting members, including bulk grants. Expiring access applies to selected-member rooms; All members access remains available to the whole faction.
 - Leaving Torn’s focus no longer destroys the Rooms management form. Unfinished edits stay in place when you return, while background Torn collectors still stop.
@@ -23,6 +26,10 @@
 
 ## What to test
 
+- [ ] Leave Rooms monitoring while using another app for more than five minutes. With Never selected, check messages continue arriving. Choose a one-minute idle timeout, leave focus and verify it disconnects, then return and reconnect. Torn’s other background collectors should remain stopped.
+- [ ] Open Rooms in two Torn tabs and switch between them. Only the most recently focused tab should monitor Rooms. Reload the extension’s background worker if you know how, then confirm the owner can still renew while unfocused.
+- [ ] As a Chat Leader or room moderator, right-click/hold a member’s message, choose Mute and a duration, then cancel confirmation: nothing should change. Repeat and confirm; the member should still read but not send. Test timed removal in a test room and verify access returns after expiry on refresh. Restore any test restrictions afterward.
+- [ ] Ordinary members must not see moderation actions or gain them by sending their own request. Chat Leaders must remain protected, and linked-faction messages must not offer local kick/mute actions.
 - [ ] Send a GIF and sticker in Rooms. They should appear without pressing Show image. Switch automatic media off, reopen Rooms and verify previews require a click; reload and check the preference stays off.
 - [ ] In a selected-member test room, choose a temporary duration before picking members. Grant access and check the displayed expiry. Change a selected member’s duration and verify it saves. Restore permissions after testing.
 - [ ] Leave an unfinished room name or description in management, click another app or tab, then return. The form and draft should remain without a Loading saved state cycle.

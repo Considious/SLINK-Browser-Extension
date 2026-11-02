@@ -5,14 +5,14 @@ import vm from 'node:vm';
 const source=await readFile(new URL('../src/core/faction-node-client.js',import.meta.url),'utf8');
 function fixture({watchRooms=false,insecure=false,httpMuted=false}={}){
   let roomList=[{room_id:'general',name:'General',visibility:'faction'}];
-  let clock=1000000,next=0,ticketCalls=0,identity=1;const timers=new Map(),sockets=[],requests=[];
+  let clock=1000000,next=0,ticketCalls=0,identity=1,ticketFailures=0;const timers=new Map(),sockets=[],requests=[];
   const context=vm.createContext({URL,AbortSignal,fetch,crypto,setTimeout,clearTimeout});vm.runInContext(source,context);
   const client=context.SLINK_FACTION_NODE.create({watchRooms,now:()=>clock,later:(fn,ms)=>{const id=++next;timers.set(id,{fn,ms});return id;},cancel:id=>timers.delete(id),uuid:()=>`id-${++next}`,
-    ticket:async()=>{ticketCalls++;return {token:'test-token',expires_at:clock+300000,user_id:identity,user_name:'Considious',faction_id:10,node_id:'node',endpoint:'https://node.example.test'};},members:async()=>({members:[]}),
+    ticket:async()=>{ticketCalls++;if(ticketFailures-->0)throw Object.assign(Error('Temporary service failure'),{status:503});return {token:'test-token',expires_at:clock+300000,user_id:identity,user_name:'Considious',faction_id:10,node_id:'node',endpoint:'https://node.example.test'};},members:async()=>({members:[]}),
     request:async(url,options)=>{requests.push({url,options});if(url.includes('/sync?'))return {protocol:1,type:'welcome',access:{read:true,speak:!httpMuted},messages:[],unread:0,after:0,changed:clock,presence:[]};if(url.endsWith('/events')){const event=JSON.parse(options.body);return {events:[{protocol:1,type:event.type==='send'?'ack':'action_ack',client_id:event.client_id,command_id:event.command_id,message:{message_id:'http-message',seq:1,revision:1,user_id:1,content:event.content}}]};}return {leader:true,rooms:roomList,messages:[],next_before:null};},
     socket:(url,protocols)=>{if(insecure)throw Object.assign(Error('The operation is insecure.'),{name:'SecurityError'});const socket={url,protocols,readyState:1,sent:[],send(raw){this.sent.push(JSON.parse(raw));},close(){this.readyState=3;},event(value){this.onmessage?.({data:JSON.stringify({protocol:1,...value})});}};sockets.push(socket);return socket;}
   });
-  return {client,timers,sockets,requests,set allowedRooms(value){roomList=value;},get ticketCalls(){return ticketCalls;},set identity(value){identity=value;},advance:ms=>{clock+=ms;},welcome:(socket=sockets.at(-1))=>socket.event({type:'welcome',messages:[],access:{read:true,speak:true},presence:[],next_before:null})};
+  return {client,timers,sockets,requests,set allowedRooms(value){roomList=value;},get ticketCalls(){return ticketCalls;},set ticketFailures(value){ticketFailures=value;},set identity(value){identity=value;},advance:ms=>{clock+=ms;},welcome:(socket=sockets.at(-1))=>socket.event({type:'welcome',messages:[],access:{read:true,speak:true},presence:[],next_before:null})};
 }
 test('inactive page makes no request; concurrent operations share one access fetch',async()=>{
   const f=fixture();await assert.rejects(f.client.refresh(),/active Torn page/);assert.equal(f.ticketCalls,0);
@@ -79,4 +79,14 @@ test('iPhone-style insecure WebSocket falls back to authenticated HTTPS and can 
 });
 test('HTTPS fallback keeps real server read-only permissions and discards a late welcome after suspension',async()=>{
  const f=fixture({insecure:true,httpMuted:true});f.client.setActive(true);await f.client.connect('general');assert.equal(f.client.room('general').access.speak,false);assert.throws(()=>f.client.send('general',{type:'text',text:'No'}),/not ready/);f.client.dispose();
+});
+
+test('HTTPS monitoring backs off in background and catches up immediately on focus',async()=>{
+ const f=fixture({insecure:true});f.client.setActive(true);await f.client.connect('general');f.client.setBackground(true);
+ const pending=[...f.timers].find(([,timer])=>timer.ms===5000);f.timers.delete(pending[0]);pending[1].fn();await new Promise(resolve=>setImmediate(resolve));assert([...f.timers.values()].some(timer=>timer.ms===30000));
+ const before=f.requests.length;f.client.setBackground(false);await new Promise(resolve=>setImmediate(resolve));assert(f.requests.length>before);assert([...f.timers.values()].some(timer=>timer.ms===5000));f.client.dispose();
+});
+test('temporary background auth failure reconnects after backoff without keeping expired sockets alive',async()=>{
+ const f=fixture();f.client.setActive(true);await f.client.connect('general');f.welcome();f.ticketFailures=1;f.advance(280000);[...f.timers.values()].find(timer=>timer.ms===280000).fn();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.sockets[0].readyState,3);
+ const retry=[...f.timers].find(([,timer])=>timer.ms===5000);assert(retry);f.timers.delete(retry[0]);retry[1].fn();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.sockets.length,2);f.welcome();assert.equal(f.client.room('general').status,'connected');f.client.dispose();
 });
