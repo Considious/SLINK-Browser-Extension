@@ -2,6 +2,8 @@
 
 ## What changed
 
+- PDA room management now keeps its own mounted form through repeated unrelated module updates, preserving unfinished text.
+- PDA's manual storage recovery now saves recovered data in smaller, verified pieces instead of another single growing record. Interrupted saves keep the last confirmed version. It can repair the reported failure recurring in the older recovery format, and no longer tries reading all old records as a fallback for recovered settings.
 - War settings, War display-mode changes and individual module visibility changes no longer rebuild unrelated panels. Room management keeps its form and unfinished text. The Rooms loading label now clears after initialization.
 - Fixed room management failing when the shared faction member-directory table was missing. Existing chat history, licenses and Leader assignments are unchanged. An empty member directory is not an online-user count.
 - PDA users with the specific native Null/String settings-read failure can manually choose **Recover saving from this page** under Access → Storage troubleshooting. Recovery saves and verifies the settings currently available on the page before selecting a fresh native record. Original records remain untouched. It does not run automatically or change healthy users' saved storage.
@@ -16,7 +18,7 @@
 
 - [ ] Leave room management open and type an unfinished room name. Change War preferences or its display mode from another SLINK window; confirm only War changes and the room form and draft remain. Hide/show another module and check that unrelated panels stay untouched too.
 - [ ] Open Faction Rooms in the dashboard and check that room management loads without the HTTP 500 error. Check that existing rooms still open normally.
-- [ ] If PDA has the native Null/String settings-read error, update the installed script, retry saving once, then open Access → Storage troubleshooting → Recover saving from this page. Review the confirmation. After success, reload and check your theme, terms acceptance and alert preferences remain. Settings missing from the current session are not automatically restored from the unreadable original.
+- [ ] If PDA has the native Null/String settings-read error, update the installed script to 0.4.154 or later and reload Torn. Open Access → Storage troubleshooting → Recover saving from this page. Review the confirmation. After success, reload, use several modules for a few minutes, then check your theme, terms acceptance and alert preferences still save. Settings missing from the current session are not automatically restored from unreadable originals. If recovery reports that its native allowance is full, follow that message rather than clearing data or repeatedly authenticating.
 - [ ] If recovery fails or is unavailable, use Copy storage report and send the result with the error. Do not clear saved data.
 - [ ] Receive a native Torn chat message while Rooms is open. Check that its unread badge is visible and clickable above Rooms.
 - [ ] Open Torn chat settings or a native popup near Rooms. Check that Rooms does not cover it.
