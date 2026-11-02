@@ -238,7 +238,12 @@
     const adhdVisibilityKey = SLINK.core.storage.fullKey('ui.modules.adhd.showInTorn');
     const marketVisibilityKey = SLINK.core.storage.fullKey('ui.modules.market.showInTorn');
     const warSettingsKey = SLINK.core.storage.fullKey('war.settings.v1');
-    if (initialized && runtimeActive && modulesRunning && (changes[levelingVisibilityKey] || changes[adhdVisibilityKey] || changes[marketVisibilityKey] || changes[warSettingsKey])) {
+    // Ordinary War preferences are handled by War itself. Rebuilding every
+    // module for those writes destroys unrelated room-management forms.
+    const warPresentation = value => value?.displayMode === 'extension' ? 'headless-extension' : value?.displayMode === 'hybrid' ? 'headless' : 'full';
+    const warPresentationChanged = changes[warSettingsKey]
+      && warPresentation(changes[warSettingsKey].oldValue) !== warPresentation(changes[warSettingsKey].newValue);
+    if (initialized && runtimeActive && modulesRunning && (changes[levelingVisibilityKey] || changes[adhdVisibilityKey] || changes[marketVisibilityKey] || warPresentationChanged)) {
       void restartModules().catch(error => console.error('[SLINK] Could not apply the Torn GUI mode in place:', error));
     }
     const permissionsKey = SLINK.core.storage.fullKey('permissions.snapshot');

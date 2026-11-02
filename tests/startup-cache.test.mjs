@@ -55,9 +55,24 @@ assert.equal(themeRequests,1,'Do not perform duplicate serialized theme requests
 for(const listener of storageListeners)listener({'slink.permissions.snapshot':{oldValue:product,newValue:{...product,issuedAt:Date.now()+1,expiresAt:Date.now()+120000}}});
 await Promise.resolve();await Promise.resolve();
 assert.equal(stops,0,'Timestamp-only permission renewals must not restart modules');
+for(let index=0;index<12;index++)for(const listener of storageListeners)listener({'slink.war.settings.v1':{oldValue:{displayMode:'torn',minFF:1},newValue:{displayMode:'torn',minFF:1+index/10,retalAlerts:index%2===0}}});
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(stops,0,'Repeated unrelated War preference writes must not destroy room-management forms');
+assert.equal(starts,1,'Routine storage updates must not trigger new settings/member-directory requests');
+for(const listener of storageListeners)listener({'slink.war.settings.v1':{oldValue:{},newValue:{displayMode:'torn'}}});
+await new Promise(resolve=>setImmediate(resolve));assert.equal(stops,0,'Default and explicit Torn display mode are the same presentation');
+for(const listener of storageListeners)listener({'slink.war.settings.v1':{oldValue:{displayMode:'torn'},newValue:{displayMode:'hybrid'}}});
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(stops,1,'A real War display-mode change must still reconcile the module presentation');assert.equal(starts,2);
 await new Promise(resolve=>{
   // The first runtime listener handles ownership.
   runtimeListeners[0]({channel:'slink-page-activity',type:'active-state',active:false},null,resolve);
 });
-assert.equal(stops,1,'Inactive tabs must still pause workers');
+assert.equal(stops,2,'Inactive tabs must still pause workers');
+let roomDefinition,finishRoomSettings;const roomStatuses=[],roomInstance={stop(){}};
+const roomContext=vm.createContext({SLINK_EXTENSION:{modules:{register:definition=>{roomDefinition=definition;}}},SLINK_FACTION_NODE_SETTINGS:()=>new Promise(resolve=>{finishRoomSettings=resolve;})});
+vm.runInContext(read('src/modules/faction-rooms.js'),roomContext);
+const roomStart=roomDefinition.start({ui:{getContentElement:()=>({}),setStatus:value=>roomStatuses.push(value)}});
+assert.equal(roomStatuses.length,0,'Do not clear loading before saved settings finish initializing');
+finishRoomSettings(roomInstance);assert.equal(await roomStart,roomInstance);assert.deepEqual(roomStatuses,[''],'Clear the stale Loading saved state label once settings are mounted');
 console.log('Cached startup, stalled remote services, batched UI preferences, permission write deduplication/expiry and activity suspension passed.');
