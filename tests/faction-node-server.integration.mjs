@@ -14,9 +14,10 @@ const mf=new Miniflare({modules:true,script:bundle.outputFiles[0].text,compatibi
 const context=vm.createContext({URL,crypto,AbortSignal,setTimeout,clearTimeout});vm.runInContext(await readFile(new URL('../src/core/faction-node-client.js',import.meta.url),'utf8'),context);
 const clients=[];
 async function waitFor(predicate){const start=Date.now();while(Date.now()-start<5000){const value=await predicate();if(value)return value;await new Promise(resolve=>setTimeout(resolve,15));}assert.fail('Client/server result was not received.');}
-async function client(user){
+async function client(user,insecure=false){
  const token=await sign({iss:issuer,aud:'node',kind:'chat_access',protocol:1,iat:now,exp:now+300,user_id:user,user_name:'User '+user,faction_id:10,scopes:['slink.chat']},privateKey);
  const instance=context.SLINK_FACTION_NODE.create({ticket:async()=>({token,user_id:user,faction_id:10,node_id:'node',endpoint:origin,expires_at:(now+300)*1000}),members:async()=>({members:[]}),request:async(url,options)=>{const response=await mf.dispatchFetch(url,options),value=await response.json();if(!response.ok)throw Error(value.error);return value;},socket:(url,protocols)=>{
+   if(insecure)throw Object.assign(Error('The operation is insecure.'),{name:'SecurityError'});
    let native;const proxy={readyState:0,send:raw=>native.send(raw),close(){proxy.readyState=3;native?.close();}};
    void mf.dispatchFetch(url.replace(/^wss:/,'https:'),{headers:{Upgrade:'websocket','Sec-WebSocket-Protocol':protocols.join(', ')}}).then(response=>{assert.equal(response.status,101);native=response.webSocket;native.addEventListener('message',event=>proxy.onmessage?.(event));native.addEventListener('close',event=>{proxy.readyState=3;proxy.onclose?.(event);});proxy.readyState=1;native.accept();}).catch(error=>{proxy.onerror?.(error);proxy.onclose?.({code:1011});});return proxy;
  }});clients.push(instance);instance.setActive(true);await instance.refresh();return instance;
@@ -30,5 +31,11 @@ try{
  await waitFor(()=>member.room('general').access.speak===true);member.setActive(false);assert.equal(member.room('general').messages.size,1);member.setActive(true);await waitFor(()=>member.room('general').status==='connected');assert.equal(member.room('general').messages.size,1);
  await member.action('general',{type:'delete',message_id:message.message_id});assert.ok(member.room('general').messages.get(message.message_id).deleted_at);
  await leader.api('/api/admin',{action:'member.set',room_id:'general',user_id:2,blocked:true});await waitFor(()=>member.room('general').access.read===false);
+ const iphone=await client(3,true);await iphone.connect('general');assert.equal(iphone.room('general').status,'connected');assert.equal(iphone.room('general').access.speak,true);
+ iphone.send('general',{type:'text',text:'HTTPS fallback round-trip'});await waitFor(()=>iphone.room('general').pending.size===0&&[...iphone.room('general').messages.values()].some(message=>message.content?.text==='HTTPS fallback round-trip'));
+ const httpMessage=[...iphone.room('general').messages.values()].find(message=>message.content?.text==='HTTPS fallback round-trip');
+ await iphone.action('general',{type:'edit',message_id:httpMessage.message_id,content:{type:'text',text:'HTTPS edit'}});assert.equal(iphone.room('general').messages.get(httpMessage.message_id).content.text,'HTTPS edit');
+ await iphone.action('general',{type:'delete',message_id:httpMessage.message_id});assert(iphone.room('general').messages.get(httpMessage.message_id).deleted_at);
+ await leader.api('/api/admin',{action:'member.set',room_id:'general',user_id:3,muted:true});await iphone.connect('general',true);assert.equal(iphone.room('general').access.speak,false);assert.throws(()=>iphone.send('general',{type:'text',text:'No bypass'}),/not ready/);
  console.log('Real client/server round-trip passed: Leader/member discovery, socket history, send/ack, edit/delete, timed mute, pause/resume without duplicates, and access revocation.');
 }finally{for(const client of clients)client.dispose();await mf.dispose();}

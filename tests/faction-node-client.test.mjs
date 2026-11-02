@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 const source=await readFile(new URL('../src/core/faction-node-client.js',import.meta.url),'utf8');
-function fixture({watchRooms=false}={}){
+function fixture({watchRooms=false,insecure=false,httpMuted=false}={}){
   let roomList=[{room_id:'general',name:'General',visibility:'faction'}];
   let clock=1000000,next=0,ticketCalls=0,identity=1;const timers=new Map(),sockets=[],requests=[];
   const context=vm.createContext({URL,AbortSignal,fetch,crypto,setTimeout,clearTimeout});vm.runInContext(source,context);
   const client=context.SLINK_FACTION_NODE.create({watchRooms,now:()=>clock,later:(fn,ms)=>{const id=++next;timers.set(id,{fn,ms});return id;},cancel:id=>timers.delete(id),uuid:()=>`id-${++next}`,
     ticket:async()=>{ticketCalls++;return {token:'test-token',expires_at:clock+300000,user_id:identity,user_name:'Considious',faction_id:10,node_id:'node',endpoint:'https://node.example.test'};},members:async()=>({members:[]}),
-    request:async(url,options)=>{requests.push({url,options});return {leader:true,rooms:roomList,messages:[],next_before:null};},
-    socket:(url,protocols)=>{const socket={url,protocols,readyState:1,sent:[],send(raw){this.sent.push(JSON.parse(raw));},close(){this.readyState=3;},event(value){this.onmessage?.({data:JSON.stringify({protocol:1,...value})});}};sockets.push(socket);return socket;}
+    request:async(url,options)=>{requests.push({url,options});if(url.includes('/sync?'))return {protocol:1,type:'welcome',access:{read:true,speak:!httpMuted},messages:[],unread:0,after:0,changed:clock,presence:[]};if(url.endsWith('/events')){const event=JSON.parse(options.body);return {events:[{protocol:1,type:event.type==='send'?'ack':'action_ack',client_id:event.client_id,command_id:event.command_id,message:{message_id:'http-message',seq:1,revision:1,user_id:1,content:event.content}}]};}return {leader:true,rooms:roomList,messages:[],next_before:null};},
+    socket:(url,protocols)=>{if(insecure)throw Object.assign(Error('The operation is insecure.'),{name:'SecurityError'});const socket={url,protocols,readyState:1,sent:[],send(raw){this.sent.push(JSON.parse(raw));},close(){this.readyState=3;},event(value){this.onmessage?.({data:JSON.stringify({protocol:1,...value})});}};sockets.push(socket);return socket;}
   });
   return {client,timers,sockets,requests,set allowedRooms(value){roomList=value;},get ticketCalls(){return ticketCalls;},set identity(value){identity=value;},advance:ms=>{clock+=ms;},welcome:(socket=sockets.at(-1))=>socket.event({type:'welcome',messages:[],access:{read:true,speak:true},presence:[],next_before:null})};
 }
@@ -65,4 +65,18 @@ test('rapid welcome/disconnect loops do not reset the reconnect limit forever',a
 test('a stable connection resets the retry budget, while rate rejection requires a cooldown',async()=>{
  const f=fixture();f.client.setActive(true);await f.client.connect('general');f.welcome();f.client.room('general').attempts=3;f.advance(30000);f.sockets.at(-1).onclose({code:1006});assert.ok([...f.timers.values()].some(timer=>timer.ms===1500));
  await f.client.connect('general',true);f.welcome();f.sockets.at(-1).onclose({code:4008});const count=f.sockets.length;await f.client.connect('general',true);assert.equal(f.sockets.length,count);assert.match(f.client.room('general').error,/Wait a minute/);assert.equal([...f.timers.values()].some(timer=>[1500,5000,15000].includes(timer.ms)),false);f.advance(60000);await f.client.connect('general',true);assert.equal(f.sockets.length,count+1);f.client.dispose();
+});
+
+test('iPhone-style insecure WebSocket falls back to authenticated HTTPS and can send/edit without duplicates',async()=>{
+ const f=fixture({insecure:true});f.client.setActive(true);await f.client.connect('general');
+ assert.equal(f.client.room('general').status,'connected');assert.equal(f.client.room('general').access.speak,true);assert.equal(f.sockets.length,0);
+ const id=f.client.send('general',{type:'text',text:'Hello from HTTPS'});await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(f.client.room('general').pending.has(id),false);assert.equal(f.client.room('general').messages.get('http-message').content.text,'Hello from HTTPS');
+ await f.client.action('general',{type:'edit',message_id:'http-message',content:{type:'text',text:'Edited'}});
+ assert.equal(f.requests.find(request=>request.url.includes('/sync?')).options.headers.Authorization,'Bearer test-token');
+ assert(!f.requests.some(request=>request.url.includes('test-token')),'Never put chat tokens in URLs');
+ f.client.setActive(false);assert.equal(f.timers.size,0,'No polling left after page ownership ends');f.client.dispose();
+});
+test('HTTPS fallback keeps real server read-only permissions and discards a late welcome after suspension',async()=>{
+ const f=fixture({insecure:true,httpMuted:true});f.client.setActive(true);await f.client.connect('general');assert.equal(f.client.room('general').access.speak,false);assert.throws(()=>f.client.send('general',{type:'text',text:'No'}),/not ready/);f.client.dispose();
 });

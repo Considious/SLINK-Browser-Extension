@@ -13,7 +13,7 @@
     'factionNode.settings.get':async()=>global.SLINK_FACTION_NODE.roomSettings(await SLINK.core.storage.get(KEY,{})),
     'factionNode.settings.patch':input=>{const task=patchQueue.catch(()=>{}).then(async()=>{const current=await SLINK.core.storage.get(KEY,{});const saved=await SLINK.core.storage.set(KEY,global.SLINK_FACTION_NODE.patchRoomSettings(current,input));if(!saved.enabled)access.clear();return saved;});patchQueue=task;return task;},
     'factionNode.ticket':async input=>{if(loading)return loading;loading=access.central('token',input.force===true);try{return await loading;}finally{loading=null;}},
-    'factionNode.members':()=>access.central('members')
+    'factionNode.members':input=>access.central('members',input?.refresh===true)
   };
   SLINK.define('services','factionNode',Object.freeze({routes}));
 })(globalThis);

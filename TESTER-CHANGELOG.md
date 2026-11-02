@@ -2,6 +2,9 @@
 
 ## What changed
 
+- Rooms now has a secure connection fallback for devices such as iPhone PDA that reject its live connection. Members can still send, reply, edit and delete; mutes and room restrictions still apply.
+- Room management now uses the Armory Recaller-style searchable checkbox list: find people by name, ID or faction role, then select or clear the shown members. Refresh members loads a missing faction directory instead of leaving search silently empty.
+- Rooms can be open to All members, selected members or selected faction roles. Role access does not grant Chat Leader powers, and individual restrictions still apply.
 - Affected PDA users can now explicitly choose **Delete unreadable records and rebuild** in Access → Storage troubleshooting. It deletes only SLINK settings records confirmed to have the native Null/String read failure, plus their associated pieces and pointers, then verifies a clean saved copy of the settings on the current page. Readable records, saved targets, Torn's browser storage and other scripts are left alone. This never runs automatically. Deleted records cannot be recovered.
 - PDA room management now keeps its own mounted form through repeated unrelated module updates, preserving unfinished text.
 - PDA's manual storage recovery now saves recovered data in smaller, verified pieces instead of another single growing record. Interrupted saves keep the last confirmed version. It can repair the reported failure recurring in the older recovery format, and no longer tries reading all old records as a fallback for recovered settings.
@@ -17,6 +20,9 @@
 
 ## What to test
 
+- [ ] On the affected iPhone, open Rooms, send a message and confirm another member receives it. Reply, edit and delete your own message. Leave/reopen Rooms and check messages are not duplicated. The fallback can take a few seconds to receive new messages.
+- [ ] In Manage rooms, search for a name, ID and faction role. Check the visible results match. Try Select shown/Clear shown in a restricted test room, and verify only those members change. Refresh members should populate an empty directory or display an actual error.
+- [ ] Give a test room access to a faction role; check a member in that role can read and send, while an unassigned member cannot enter. Mute that member and verify they can read but cannot send. Restore their permissions afterward.
 - [ ] For the recurring native Null/String settings error only: update the installed PDA script to 0.4.155, reload Torn and open Access → Storage troubleshooting. Choose **Delete unreadable records and rebuild** and carefully review the permanent-deletion confirmation. Keep the page open until success. Reload, navigate between pages and use SLINK for several minutes; check your theme, accepted terms and preferences remain saved. Cancelling must change nothing. If the option is hidden, Copy storage report checks whether this specific repair is applicable. Do not clear all storage.
 - [ ] Leave room management open and type an unfinished room name. Change War preferences or its display mode from another SLINK window; confirm only War changes and the room form and draft remain. Hide/show another module and check that unrelated panels stay untouched too.
 - [ ] Open Faction Rooms in the dashboard and check that room management loads without the HTTP 500 error. Check that existing rooms still open normally.
