@@ -41,6 +41,11 @@ try{
   await page.evaluate(()=>{client.room('general').access.speak=true;emit();window.mediaOpens=0;window.SLINK_GIPHY_PANEL=()=>({host:document.createElement('div'),open:async()=>{mediaOpens++;},suspend(){},stop(){}});});
   await page.locator('[data-gifs]').click();await page.locator('[data-close]').click();await page.locator('#slink-faction-node-button').click();assert.equal(await page.locator('[data-media-view]').isVisible(),true);assert.equal(await page.evaluate(()=>mediaOpens),2);
   await page.locator('[data-close]').click();await page.waitForFunction(()=>restoreSaved?.visible===false);
+  await page.evaluate(()=>{ui.dispose();client.model.userId=null;client.model.factionId=null;client.refresh=async()=>{throw Error('SLINK_TERMS_NOT_VERIFIED');};window.failedView={visible:true,view:'chat',userId:1,factionId:10,roomId:'general'};window.ui=SLINK_FACTION_NODE_UI.mount({client,activity:{eligible:()=>true,subscribe:()=>()=>{}},view:{get:async()=>failedView,save:async value=>{failedView={...failedView,...value};}}});});
+  await page.locator('[data-slink-faction-node]').waitFor({state:'visible'});await page.locator('[data-close]').click();await page.waitForFunction(()=>failedView.visible===false);
+  assert.equal(await page.evaluate(()=>failedView.userId),1,'Unauthenticated minimize preserves saved identity');
+  await page.evaluate(()=>{ui.dispose();window.ui=SLINK_FACTION_NODE_UI.mount({client,activity:{eligible:()=>true,subscribe:()=>()=>{}},view:{get:async()=>failedView,save:async value=>{failedView={...failedView,...value};}}});});
+  await page.locator('#slink-faction-node-button').waitFor();assert.equal(await page.locator('[data-slink-faction-node]:visible').count(),0,'Minimized Rooms must not reopen on navigation when terms fail');
   await page.evaluate(()=>ui.dispose());assert.equal(await page.locator('#slink-faction-node-button').count(),0);assert.equal(await page.locator('#people_panel_button').count(),1);
   console.log('Faction room browser checks passed: chat-row placement, mobile bounds, retained focused draft, text safety, mute, activity, independent permissions and native controls.');
 }finally{await browser.close();}

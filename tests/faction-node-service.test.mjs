@@ -72,3 +72,12 @@ test('acceptance saved while policy metadata is in flight is re-read before auth
 test('different fingerprints for the same policy date report a service mismatch',async()=>{
  const f=fixture({termsVersion:'2026-11-01',termsHash:'different-policy'});f.values.set('access.acceptedTerms.v1',{version:'2026-11-01',sha256:'accepted-policy'});await f.routes['factionNode.settings.patch']({noticeAccepted:'third-party-rooms-v1'});await assert.rejects(f.routes['factionNode.ticket']({}),/SLINK_TERMS_SERVICE_MISMATCH/);assert.equal(f.reserved,0);
 });
+
+test('minimize is saved without authentication and preserves the previous room identity',async()=>{
+ const f=fixture(),record={visible:true,view:'chat',userId:3853023,factionId:46978,roomId:'general'};
+ f.values.set('ui.factionNodeView.v1',record);
+ await f.routes['factionNode.view.save']({visible:false});
+ assert.deepEqual(JSON.parse(JSON.stringify(f.values.get('ui.factionNodeView.v1'))),{...record,visible:false});
+ assert.equal(f.calls.length,0,'Layout-only minimize never authenticates or accepts terms');
+ await assert.rejects(f.routes['factionNode.view.save']({visible:true}));
+});
