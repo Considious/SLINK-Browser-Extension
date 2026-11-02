@@ -38,6 +38,8 @@
   let activityGeneration = 0;
   let claimGeneration = 0;
   let activityNeedsCleanup = false;
+  let moduleViewUpdates = Promise.resolve();
+  let modulePermissionRevision = 0;
 
   ui.setHidden(Boolean(startupValues['ui.pagePanelHidden']));
 
@@ -53,15 +55,19 @@
     return 'full';
   }
 
-  async function startModules(permissions) {
-    return SLINK.modules.startAll({
+  function moduleContext(permissions) {
+    return {
       url:new URL(global.location.href),
       permissions,
       ui,
       modulePresentation,
       moduleVisible: module => SLINK.core.storage.get(`ui.modules.${module.id}.showInTorn`, module.defaultShowInTorn),
       isActive: () => runtimeActive && SLINK.core.pageActivity.eligible()
-    });
+    };
+  }
+
+  async function startModules(permissions) {
+    return SLINK.modules.startAll(moduleContext(permissions));
   }
 
   function readSharedApiLedger() {
@@ -220,6 +226,22 @@
 
   // SLINK must never navigate or refresh Torn. Storage changes are applied in
   // place where that is safe; everything else waits for normal user navigation.
+  function updateModuleViews(ids) {
+    const revision=activityGeneration;
+    const permissionRevision=modulePermissionRevision;
+    const task=moduleViewUpdates.catch(()=>{}).then(async()=>{
+      if(restarting)await restarting;
+      await activityTransition;
+      const active=()=>revision===activityGeneration&&permissionRevision===modulePermissionRevision&&runtimeActive&&modulesRunning&&SLINK.core.pageActivity.eligible();
+      if(!active())return;
+      const permissions=await SLINK.core.messaging.send('permissions.get');
+      for(const id of new Set(ids)){
+        if(!active())return;
+        await SLINK.modules.restartOne(id,{...moduleContext(permissions),isActive:active});
+      }
+    });
+    moduleViewUpdates=task;return task;
+  }
   chrome.storage.onChanged.addListener(changes => {
     const apiLedgerKey = SLINK.core.storage.fullKey('core.tornApiLedger.v1');
     if (changes[apiLedgerKey]) {
@@ -234,17 +256,19 @@
     if (changes[collapsedKey]) void ui.setCollapsed(Boolean(changes[collapsedKey].newValue), false);
     const minimizedModeKey = SLINK.core.storage.fullKey('ui.main.minimizedMode');
     if (changes[minimizedModeKey]) void ui.setMinimizedMode(changes[minimizedModeKey].newValue, false);
-    const levelingVisibilityKey = SLINK.core.storage.fullKey('ui.modules.leveling.showInTorn');
-    const adhdVisibilityKey = SLINK.core.storage.fullKey('ui.modules.adhd.showInTorn');
-    const marketVisibilityKey = SLINK.core.storage.fullKey('ui.modules.market.showInTorn');
+    const changedViews=SLINK.modules.list().filter(module=>{
+      const change=changes[SLINK.core.storage.fullKey(`ui.modules.${module.id}.showInTorn`)];
+      return change&&Boolean(change.oldValue??module.defaultShowInTorn)!==Boolean(change.newValue??module.defaultShowInTorn);
+    }).map(module=>module.id);
     const warSettingsKey = SLINK.core.storage.fullKey('war.settings.v1');
     // Ordinary War preferences are handled by War itself. Rebuilding every
     // module for those writes destroys unrelated room-management forms.
     const warPresentation = value => value?.displayMode === 'extension' ? 'headless-extension' : value?.displayMode === 'hybrid' ? 'headless' : 'full';
     const warPresentationChanged = changes[warSettingsKey]
       && warPresentation(changes[warSettingsKey].oldValue) !== warPresentation(changes[warSettingsKey].newValue);
-    if (initialized && runtimeActive && modulesRunning && (changes[levelingVisibilityKey] || changes[adhdVisibilityKey] || changes[marketVisibilityKey] || warPresentationChanged)) {
-      void restartModules().catch(error => console.error('[SLINK] Could not apply the Torn GUI mode in place:', error));
+    if(warPresentationChanged)changedViews.push('war');
+    if (initialized && runtimeActive && modulesRunning && changedViews.length) {
+      void updateModuleViews(changedViews).catch(error => console.error('[SLINK] Could not update the affected module view:', error));
     }
     const permissionsKey = SLINK.core.storage.fullKey('permissions.snapshot');
     const themeKey = SLINK.core.storage.fullKey(SLINK.core.themes.STORAGE_KEY);
@@ -256,6 +280,7 @@
     }
     if (changes[permissionsKey] && initialized && runtimeActive && modulesRunning
       && permissionAccessKey(changes[permissionsKey].oldValue) !== permissionAccessKey(changes[permissionsKey].newValue)) {
+      modulePermissionRevision += 1;
       void restartModules().catch(error => console.error('[SLINK] Could not apply refreshed permissions in place:', error));
       return;
     }

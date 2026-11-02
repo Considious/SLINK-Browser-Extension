@@ -6,6 +6,7 @@
 
   const registry = new Map();
   const running = new Map();
+  const moduleUpdates = new Map();
   let generation = 0;
 
   function bindAction(button, action, { active = () => true, onError = error => console.error('[SLINK] Action:', error) } = {}) {
@@ -126,6 +127,7 @@
     const planned = [];
 
     for (const module of registry.values()) {
+      if (context.moduleIds && !context.moduleIds.includes(module.id)) continue;
       if (!current()) break;
       if (running.has(module.id)) {
         skipped.push({ id: module.id, reason: 'already-running' });
@@ -205,6 +207,26 @@
     }
   }
 
+  function restartOne(id, context) {
+    if (!registry.has(id)) return Promise.reject(new Error('Unknown SLINK module: '+id));
+    const startedGeneration=generation;
+    const active=()=>startedGeneration===generation&&context.isActive?.()!==false;
+    const task=(moduleUpdates.get(id)||Promise.resolve()).catch(()=>{}).then(async()=>{
+      if(!active())return;
+      const previous=running.get(id);
+      if(previous){
+        running.delete(id);previous.lifecycle?.dispose();
+        try{await stopEntry(previous);}catch(error){console.error('[SLINK] Module cleanup:',id,error);}
+        if(!active())return;
+        previous.moduleUi?.remove?.();
+      }
+      if(active())return startAll({...context,moduleIds:[id]});
+    });
+    moduleUpdates.set(id,task);
+    void task.finally(()=>{if(moduleUpdates.get(id)===task)moduleUpdates.delete(id);}).catch(()=>{});
+    return task;
+  }
+
   SLINK.define('modules', 'register', register);
   SLINK.define('modules', 'bindAction', bindAction);
   SLINK.define('modules', 'list', list);
@@ -213,4 +235,5 @@
   SLINK.define('modules', 'invalidate', invalidate);
   SLINK.define('modules', 'startAll', startAll);
   SLINK.define('modules', 'stopAll', stopAll);
+  SLINK.define('modules', 'restartOne', restartOne);
 })(globalThis);

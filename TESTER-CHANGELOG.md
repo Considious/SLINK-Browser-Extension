@@ -2,7 +2,7 @@
 
 ## What changed
 
-- Ordinary War settings changes no longer rebuild unrelated panels, which could interrupt room management and bring back “Loading saved state.” The Rooms loading label now clears after initialization.
+- War settings, War display-mode changes and individual module visibility changes no longer rebuild unrelated panels. Room management keeps its form and unfinished text. The Rooms loading label now clears after initialization.
 - Fixed room management failing when the shared faction member-directory table was missing. Existing chat history, licenses and Leader assignments are unchanged. An empty member directory is not an online-user count.
 - PDA users with the specific native Null/String settings-read failure can manually choose **Recover saving from this page** under Access → Storage troubleshooting. Recovery saves and verifies the settings currently available on the page before selecting a fresh native record. Original records remain untouched. It does not run automatically or change healthy users' saved storage.
 - **Copy storage report** remains available in Access for investigating save failures without sharing your keys or saved settings.
@@ -14,7 +14,7 @@
 
 ## What to test
 
-- [ ] Leave room management open and type an unfinished room name. Change an ordinary War preference from another SLINK window and confirm the form and draft remain. Changing War's actual display mode should still take effect.
+- [ ] Leave room management open and type an unfinished room name. Change War preferences or its display mode from another SLINK window; confirm only War changes and the room form and draft remain. Hide/show another module and check that unrelated panels stay untouched too.
 - [ ] Open Faction Rooms in the dashboard and check that room management loads without the HTTP 500 error. Check that existing rooms still open normally.
 - [ ] If PDA has the native Null/String settings-read error, update the installed script, retry saving once, then open Access → Storage troubleshooting → Recover saving from this page. Review the confirmation. After success, reload and check your theme, terms acceptance and alert preferences remain. Settings missing from the current session are not automatically restored from the unreadable original.
 - [ ] If recovery fails or is unavailable, use Copy storage report and send the result with the error. Do not clear saved data.
