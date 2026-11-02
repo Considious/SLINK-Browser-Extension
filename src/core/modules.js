@@ -77,10 +77,11 @@
     return entry.stopping;
   }
 
-  function invalidate() {
+  function invalidate(options={}) {
     generation += 1;
     for (const entry of running.values()) {
       entry.lifecycle?.dispose();
+      if(options.pause&&entry.module.retainOnPause&&entry.instance&&!entry.startFailed&&!entry.stopping){entry.paused=true;entry.instance.suspend?.();continue;}
       void stopEntry(entry).catch(error => console.error('[SLINK] Module cleanup:', entry.module.id, error));
     }
   }
@@ -98,6 +99,7 @@
       group:String(definition.group || 'other'),
       groupTitle:String(definition.groupTitle || definition.group || 'Other'),
       defaultShowInTorn: definition.defaultShowInTorn !== false,
+      retainOnPause: definition.retainOnPause === true,
       requiredScopes: Object.freeze([...(definition.requiredScopes || [])]),
       permissionTest: typeof definition.permissionTest === 'function' ? definition.permissionTest : null,
       matches: typeof definition.matches === 'function' ? definition.matches : () => true,
@@ -130,6 +132,13 @@
       if (context.moduleIds && !context.moduleIds.includes(module.id)) continue;
       if (!current()) break;
       if (running.has(module.id)) {
+        const entry=running.get(module.id);
+        if(entry.paused){
+          const presentation=typeof context.modulePresentation==='function'?await context.modulePresentation(module):typeof context.moduleVisible==='function'&&!await context.moduleVisible(module)?'hidden':'full';
+          if(!current())break;
+          if(!module.matches(context.url)||!canAccess(module,context.permissions)||presentation!=='full'){running.delete(module.id);await stopEntry(entry);entry.moduleUi?.remove?.();continue;}
+          entry.lifecycle=lifecycle({...context,module,ui:entry.moduleUi,presentation});entry.paused=false;entry.instance.resume?.();started.push(module.id);continue;
+        }
         skipped.push({ id: module.id, reason: 'already-running' });
         continue;
       }
@@ -197,8 +206,9 @@
 
   async function stopAll(options = {}) {
     const preserveUi = Boolean(options.preserveUi);
-    invalidate();
+    invalidate(options);
     for (const [id, entry] of [...running.entries()].reverse()) {
+      if(options.pause&&entry.paused)continue;
       running.delete(id);
       try {
         await stopEntry(entry);

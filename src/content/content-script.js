@@ -131,11 +131,11 @@
     // Revoke synchronously: do not wait for a slow module start/stop queue.
     runtimeActive = next;
     SLINK.core.pageActivity.setGranted(next);
-    if (!next) { activityNeedsCleanup = true; stopRuntimeTimers(); SLINK.modules.invalidate?.(); }
+    if (!next) { activityNeedsCleanup = true; stopRuntimeTimers(); SLINK.modules.invalidate?.({pause:true}); }
     activityTransition = activityTransition.then(async () => {
       if (generation !== activityGeneration) return;
       if (activityNeedsCleanup) {
-        await SLINK.modules.stopAll({ preserveUi:true });
+        await SLINK.modules.stopAll({ preserveUi:true,pause:true });
         modulesRunning = false;
         activityNeedsCleanup = false;
         if (generation !== activityGeneration) return;
@@ -144,7 +144,7 @@
         stopRuntimeTimers();
         // Yield network/DOM workers to the newly active Torn tab without
         // destroying this tab's mounted shell, selected page, or cached data.
-        if (modulesRunning) { await SLINK.modules.stopAll({ preserveUi:true }); modulesRunning = false; }
+        if (modulesRunning) { await SLINK.modules.stopAll({ preserveUi:true,pause:true }); modulesRunning = false; }
         return;
       }
       if (!initialized || modulesRunning) return;
@@ -153,7 +153,7 @@
       await startModules(permissions);
       modulesRunning = true;
       if (!runtimeActive || generation !== activityGeneration) {
-        await SLINK.modules.stopAll({ preserveUi:true }); modulesRunning = false; return;
+        await SLINK.modules.stopAll({ preserveUi:true,pause:true }); modulesRunning = false; return;
       }
       await startRuntimeTimers();
     }).catch(error => console.error('[SLINK] Page activity transition:', error));

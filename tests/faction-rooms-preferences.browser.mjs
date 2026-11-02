@@ -21,6 +21,7 @@ try{
  assert((await page.locator('[data-slink-room-management]').boundingBox()).width>900,'Management must use available dashboard width');
  assert.equal(await page.locator('[data-slink-room-management]').evaluate(el=>getComputedStyle(el).position),'static');
  assert.equal(await page.locator('[data-name]').inputValue(),'General');assert.match(await page.locator('[data-leaders]').textContent(),/Considious/);
+ assert.equal(await page.locator('[data-node-media]').isChecked(),true);await page.locator('[data-node-media]').uncheck();await page.waitForFunction(()=>settings.autoMedia===false);assert.equal(await page.evaluate(()=>settings.soundEnabled),false);
  await page.locator('[data-node-enabled]').uncheck();await page.waitForFunction(()=>settings.enabled===false);assert.equal(await page.evaluate(()=>settings.soundEnabled),false,'Showing chat and its global sound preference remain separate saved values');
  await page.locator('[data-name]').fill('Updated room');await page.locator('[data-description]').fill('Officers coordinate here');await page.locator('[data-save-room]').click();await page.waitForFunction(()=>calls.some(c=>c.payload?.name==='Updated room'));
  await page.locator('[data-name]').fill('Unsent draft');await page.evaluate(()=>window.dispatchEvent(new Event('blur')));assert.equal(await page.locator('[data-name]').inputValue(),'Unsent draft');assert.equal(await page.locator('[data-admin-form]').isVisible(),true);

@@ -81,3 +81,10 @@ test('minimize is saved without authentication and preserves the previous room i
  assert.equal(f.calls.length,0,'Layout-only minimize never authenticates or accepts terms');
  await assert.rejects(f.routes['factionNode.view.save']({visible:true}));
 });
+
+test('automatic media defaults on, saves independently and validates its input',async()=>{
+ const f=fixture();assert.equal((await f.routes['factionNode.settings.get']()).autoMedia,true);
+ await f.routes['factionNode.settings.patch']({soundEnabled:false,roomSounds:{general:false}});
+ await f.routes['factionNode.settings.patch']({autoMedia:false});const saved=await f.routes['factionNode.settings.get']();assert.equal(saved.autoMedia,false);assert.equal(saved.soundEnabled,false);assert.equal(saved.roomSounds.general,false);assert.equal(saved.enabled,true);
+ await assert.rejects(f.routes['factionNode.settings.patch']({autoMedia:'yes'}));assert.equal(f.calls.length,0,'Changing media display does not authenticate or call Torn');
+});

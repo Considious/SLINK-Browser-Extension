@@ -134,6 +134,6 @@ test('inactive Torn tabs stop workers without destroying the cached interface', 
   assert.match(modulesSource, /stopAll\(options = \{\}\)/);
   assert.match(modulesSource, /const preserveUi = Boolean\(options\.preserveUi\)/);
   assert.match(modulesSource, /!preserveUi && typeof entry\.moduleUi\?\.remove/);
-  assert.match(contentScriptSource, /stopAll\(\{ preserveUi:true \}\)/);
+  assert.match(contentScriptSource, /stopAll\(\{ preserveUi:true,pause:true \}\)/);
   assert.doesNotMatch(contentScriptSource, /if \(modulesRunning\) \{ await SLINK\.modules\.stopAll\(\); modulesRunning = false; \}/);
 });

@@ -2,6 +2,9 @@
 
 ## What changed
 
+- GIFs and stickers in Rooms now display automatically by default. Turn off **Show GIFs and stickers automatically** in Faction Rooms settings to use click-to-show instead.
+- Temporary access duration can be chosen before selecting members, including bulk grants. Expiring access applies to selected-member rooms; All members access remains available to the whole faction.
+- Leaving Torn’s focus no longer destroys the Rooms management form. Unfinished edits stay in place when you return, while background Torn collectors still stop.
 - Rooms now has a secure connection fallback for devices such as iPhone PDA that reject its live connection. Members can still send, reply, edit and delete; mutes and room restrictions still apply.
 - Room management now uses the Armory Recaller-style searchable checkbox list: find people by name, ID or faction role, then select or clear the shown members. Refresh members loads a missing faction directory instead of leaving search silently empty.
 - Rooms can be open to All members, selected members or selected faction roles. Role access does not grant Chat Leader powers, and individual restrictions still apply.
@@ -20,6 +23,9 @@
 
 ## What to test
 
+- [ ] Send a GIF and sticker in Rooms. They should appear without pressing Show image. Switch automatic media off, reopen Rooms and verify previews require a click; reload and check the preference stays off.
+- [ ] In a selected-member test room, choose a temporary duration before picking members. Grant access and check the displayed expiry. Change a selected member’s duration and verify it saves. Restore permissions after testing.
+- [ ] Leave an unfinished room name or description in management, click another app or tab, then return. The form and draft should remain without a Loading saved state cycle.
 - [ ] On the affected iPhone, open Rooms, send a message and confirm another member receives it. Reply, edit and delete your own message. Leave/reopen Rooms and check messages are not duplicated. The fallback can take a few seconds to receive new messages.
 - [ ] In Manage rooms, search for a name, ID and faction role. Check the visible results match. Try Select shown/Clear shown in a restricted test room, and verify only those members change. Refresh members should populate an empty directory or display an actual error.
 - [ ] Give a test room access to a faction role; check a member in that role can read and send, while an unassigned member cannot enter. Mute that member and verify they can read but cannot send. Restore their permissions afterward.
