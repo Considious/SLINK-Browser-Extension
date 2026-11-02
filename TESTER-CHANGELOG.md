@@ -2,6 +2,7 @@
 
 ## What changed
 
+- Fixed room management failing when the shared faction member-directory table was missing. Existing chat history, licenses and Leader assignments are unchanged. An empty member directory is not an online-user count.
 - PDA users with the specific native Null/String settings-read failure can manually choose **Recover saving from this page** under Access → Storage troubleshooting. Recovery saves and verifies the settings currently available on the page before selecting a fresh native record. Original records remain untouched. It does not run automatically or change healthy users' saved storage.
 - **Copy storage report** remains available in Access for investigating save failures without sharing your keys or saved settings.
 - Torn's chat bar, unread badges and native popups now appear above Rooms instead of being covered by it. Room position, spacing and size are unchanged.
@@ -12,6 +13,7 @@
 
 ## What to test
 
+- [ ] Open Faction Rooms in the dashboard and check that room management loads without the HTTP 500 error. Check that existing rooms still open normally.
 - [ ] If PDA has the native Null/String settings-read error, update the installed script, retry saving once, then open Access → Storage troubleshooting → Recover saving from this page. Review the confirmation. After success, reload and check your theme, terms acceptance and alert preferences remain. Settings missing from the current session are not automatically restored from the unreadable original.
 - [ ] If recovery fails or is unavailable, use Copy storage report and send the result with the error. Do not clear saved data.
 - [ ] Receive a native Torn chat message while Rooms is open. Check that its unread badge is visible and clickable above Rooms.
