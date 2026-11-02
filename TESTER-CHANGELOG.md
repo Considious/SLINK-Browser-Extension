@@ -2,6 +2,7 @@
 
 ## What changed
 
+- Affected PDA users can now explicitly choose **Delete unreadable records and rebuild** in Access → Storage troubleshooting. It deletes only SLINK settings records confirmed to have the native Null/String read failure, plus their associated pieces and pointers, then verifies a clean saved copy of the settings on the current page. Readable records, saved targets, Torn's browser storage and other scripts are left alone. This never runs automatically. Deleted records cannot be recovered.
 - PDA room management now keeps its own mounted form through repeated unrelated module updates, preserving unfinished text.
 - PDA's manual storage recovery now saves recovered data in smaller, verified pieces instead of another single growing record. Interrupted saves keep the last confirmed version. It can repair the reported failure recurring in the older recovery format, and no longer tries reading all old records as a fallback for recovered settings.
 - War settings, War display-mode changes and individual module visibility changes no longer rebuild unrelated panels. Room management keeps its form and unfinished text. The Rooms loading label now clears after initialization.
@@ -16,6 +17,7 @@
 
 ## What to test
 
+- [ ] For the recurring native Null/String settings error only: update the installed PDA script to 0.4.155, reload Torn and open Access → Storage troubleshooting. Choose **Delete unreadable records and rebuild** and carefully review the permanent-deletion confirmation. Keep the page open until success. Reload, navigate between pages and use SLINK for several minutes; check your theme, accepted terms and preferences remain saved. Cancelling must change nothing. If the option is hidden, Copy storage report checks whether this specific repair is applicable. Do not clear all storage.
 - [ ] Leave room management open and type an unfinished room name. Change War preferences or its display mode from another SLINK window; confirm only War changes and the room form and draft remain. Hide/show another module and check that unrelated panels stay untouched too.
 - [ ] Open Faction Rooms in the dashboard and check that room management loads without the HTTP 500 error. Check that existing rooms still open normally.
 - [ ] If PDA has the native Null/String settings-read error, update the installed script to 0.4.154 or later and reload Torn. Open Access → Storage troubleshooting → Recover saving from this page. Review the confirmation. After success, reload, use several modules for a few minutes, then check your theme, terms acceptance and alert preferences still save. Settings missing from the current session are not automatically restored from unreadable originals. If recovery reports that its native allowance is full, follow that message rather than clearing data or repeatedly authenticating.
