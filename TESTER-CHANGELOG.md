@@ -2,6 +2,9 @@
 
 ## What changed
 
+- Market Watch stays visible when locked, with a working Refresh permissions button. Access also has a Refresh Market permissions button, so newly granted access can be picked up without hunting for a hidden tab.
+- Museum cannot add Market watches without a current Market Watch permission. The same check applies to other watch-creation and activation paths, including Weaver selections.
+- When Market access expires or is removed, saved watches stop checking prices and stop producing alerts from old results. Your watches are kept for when access returns.
 - Rooms settings now lets you choose when to disconnect while unfocused: 1, 5, 15 or 60 minutes, or Never for inactivity (the default). Fixed background sign-in renewal being rejected merely because Torn was unfocused. Only one Torn tab monitors Rooms; Torn scraping still stops when unfocused.
 - Devices using the HTTPS connection fallback check Rooms less frequently in the background and catch up when focus returns. Temporary sign-in outages retry with backoff rather than leaving monitoring permanently disconnected.
 - Chat Leaders and room moderators can right-click or long-press a local member’s message to mute them or remove their room access. Choose 15 minutes, 1 hour, 12 hours, 1 day, 1 week or Until restored, then confirm the member, room and duration. Chat Leaders are protected; only a Leader can restrict another room moderator. These actions affect SLINK Rooms only.
@@ -26,6 +29,9 @@
 
 ## What to test
 
+- [ ] With no Market Watch permission, confirm Market is visible but locked. Museum's Add Market watch control should be disabled. Existing watches must not check prices or produce alerts.
+- [ ] Grant Market Watch access, then use Refresh permissions in Market or Refresh Market permissions in Access. Market controls should become usable immediately; adding a Museum watch should work.
+- [ ] Remove or let Market Watch access expire while watches are saved. Confirm checks and alerts stop, then restore access and refresh permissions. Saved watches should still be there. Test the extension dashboard and PDA too.
 - [ ] Leave Rooms monitoring while using another app for more than five minutes. With Never selected, check messages continue arriving. Choose a one-minute idle timeout, leave focus and verify it disconnects, then return and reconnect. Torn’s other background collectors should remain stopped.
 - [ ] Open Rooms in two Torn tabs and switch between them. Only the most recently focused tab should monitor Rooms. Reload the extension’s background worker if you know how, then confirm the owner can still renew while unfocused.
 - [ ] As a Chat Leader or room moderator, right-click/hold a member’s message, choose Mute and a duration, then cancel confirmation: nothing should change. Repeat and confirm; the member should still read but not send. Test timed removal in a test room and verify access returns after expiry on refresh. Restore any test restrictions afterward.

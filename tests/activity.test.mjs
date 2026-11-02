@@ -19,7 +19,8 @@ function runtimeFor(source, initial = {}) {
       },
       market:{
         normalizeSettings(value) { return value || {}; }
-      }
+      },
+      adhd:{ marketWatchLimit:permissions => permissions.scopes?.includes('slink.adhd.marketwatch.5') ? 5 : 0 }
     },
     services:{},
     define(group, name, value) {
@@ -105,7 +106,9 @@ test('contribution yields at the safety boundary while interactive high priority
 });
 
 test('Market Watch activity expires independently after five minutes', async () => {
-  const { api, values, alarms } = runtimeFor(marketServiceSource);
+  const { api, values, alarms } = runtimeFor(marketServiceSource, {
+    'access.session.v1':{token:'synthetic',expiresAt:Date.now()+60_000,scopes:['slink.adhd.marketwatch.5']}
+  });
   const market = api.services.market;
   assert.equal((await market.activityStatus()).active, false);
   const touched = await market.touchActivity();

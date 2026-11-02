@@ -729,6 +729,10 @@
 
   function renderMarket() {
     if (!market) return;
+    for(const control of document.querySelectorAll('[data-market-permission-locked]')){
+      control.disabled=false;
+      delete control.dataset.marketPermissionLocked;
+    }
     const settings = SLINK.core.market.normalizeSettings(market.settings || {});
     const watches = settings.watches || [];
     const deals = Array.isArray(market.opportunities) ? market.opportunities : [];
@@ -803,7 +807,8 @@
       actions.append(link, dismiss); card.append(copy, actions); return card;
     }) : [Object.assign(document.createElement('div'), { className:'adhd-empty', textContent:market.fetchedAt ? 'No watched listing is currently below its target.' : 'Refresh after adding a watch.' })]));
     updateMarketClock();
-    void claimMarketSound();
+    if(!market.permitted)for(const control of document.querySelectorAll('[data-efficiency-panel="market"] button,[data-efficiency-panel="market"] input,[data-efficiency-panel="market"] select')){if(control.id!=='market-permissions-refresh'&&!control.disabled){control.dataset.marketPermissionLocked='true';control.disabled=true;}}
+    if(market.permitted)void claimMarketSound();
   }
 
   function updateDollarBazaarClock() {
@@ -1674,6 +1679,7 @@
     catch (error) { byId('dollar-bazaars-error').textContent = errorText(error); byId('dollar-bazaars-error').hidden = false; }
     finally { setBusy(button, false); }
   });
+  byId('access-market-permissions-refresh').addEventListener('click',async event=>{const button=event.currentTarget;setBusy(button,true);try{market=await SLINK.core.messaging.send('market.permissions.refresh');renderMarket();byId('access-message').textContent=market.permitted?'Market Watch access refreshed: '+market.marketWatchLimit+' slots.':'Permissions refreshed. No Market Watch tier is currently assigned.';}catch(error){byId('access-message').textContent=errorText(error);}finally{setBusy(button,false);}});
   byId('market-permissions-refresh').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('market-error').hidden = true;
     try { market = await requestEditorStatus('market','market.permissions.refresh'); renderMarket(); }

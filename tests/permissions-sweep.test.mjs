@@ -67,5 +67,6 @@ for (const path of ['src/modules/contribution.js', 'src/modules/travel-safety.js
   assert.ok(source.includes('requiredScopes:[]'), `${path} must make its no-permission disposition explicit.`);
   assert.ok(!source.includes('permissionTest:'), `${path} unexpectedly adds a permission gate.`);
 }
-assert.ok(text('src/modules/market.js').includes('marketWatchLimit(permissions) > 0'), 'Market Watch must retain its per-tier permission gate.');
+assert.ok(!text('src/modules/market.js').includes('permissionTest:'), 'Locked Market tab must remain reachable without a tier.');
+assert.ok(text('src/modules/market.js').includes('if(!status?.permitted)'), 'Market operations remain gated inside the visible module.');
 console.log('Permission sweep validation passed.');

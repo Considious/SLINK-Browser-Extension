@@ -103,7 +103,7 @@
             // enough of this item. Only authoritative row removal deletes it.
             if (editor) {
               editor.querySelector('input').dataset.museumPrice = item.itemId;
-              const button = editor.querySelector('button');button.dataset.museumMarket = item.itemId;button.dataset.museumSet = set.id;button.dataset.museumItem = key;button.disabled = actionBusy || !item.itemId;
+              const button = editor.querySelector('button');button.dataset.museumMarket = item.itemId;button.dataset.museumSet = set.id;button.dataset.museumItem = key;button.disabled = actionBusy || !item.itemId || status.marketWatchPermitted!==true;button.title=status.marketWatchPermitted===true?'':'Market Watch permission required';editor.querySelector('input').disabled=status.marketWatchPermitted!==true;
             }
           }
           for (const [key,row] of panel.rows) if (!presentItems.has(key)) {row.node.remove();panel.rows.delete(key);}

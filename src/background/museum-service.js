@@ -87,6 +87,7 @@
     return {
       permitted,
       requiredScope:MUSEUM.SCOPE,
+      marketWatchPermitted:(await SLINK.services.market.accessState()).permitted===true,
       fetchedAt:Number(current.fetchedAt) || 0,
       lastError:String(current.lastError || ''),
       ...progress
@@ -106,6 +107,7 @@
     const priority = String(payload.priority || 'normal');
     if (!Number.isSafeInteger(itemId) || itemId < 1 || !Number.isSafeInteger(maxPrice) || maxPrice < 1) throw new Error('Choose a museum item and enter a positive maximum price.');
     await SLINK.services.permissionAccess.ensureSession(false, MUSEUM.SCOPE);
+    if(!(await SLINK.services.market.accessState({authenticate:true})).permitted)throw Error('Market Watch permission is required to add a Museum watch.');
     const result = await SLINK.services.market.routes['market.watch.save']({
       marketType:'item',
       itemId,

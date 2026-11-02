@@ -36,7 +36,7 @@ console.log('museum tests passed');
 // Actual Museum action boundary: capture before authorization, retain the
 // existing Market owner/permissions, and acknowledge the specific stored watch.
 const marketCalls=[];let authorizationCalls=0;
-sandbox.SLINK_EXTENSION.services={permissionAccess:{ensureSession:async()=>{authorizationCalls++;}},market:{routes:{'market.watch.save':async payload=>{marketCalls.push(payload);return {settings:{watches:[{marketType:'item',itemId:payload.itemId,maxPrice:payload.maxPrice}]}};}}},abroadStocks:{addItemWatches:async names=>({added:names.length,matched:names.length})}};
+sandbox.SLINK_EXTENSION.services={permissionAccess:{ensureSession:async()=>{authorizationCalls++;}},market:{accessState:async()=>({permitted:true}),routes:{'market.watch.save':async payload=>{marketCalls.push(payload);return {settings:{watches:[{marketType:'item',itemId:payload.itemId,maxPrice:payload.maxPrice}]}};}}},abroadStocks:{addItemWatches:async names=>({added:names.length,matched:names.length})}};
 vm.runInNewContext(fs.readFileSync(new URL('../src/background/museum-service.js',import.meta.url),'utf8'),sandbox);
 const museumRoutes=sandbox.SLINK_EXTENSION.services.museum.routes;
 const receipt=await museumRoutes['museum.market.add']({itemId:100,maxPrice:1234.9});
@@ -78,3 +78,6 @@ const lateRead=controller.load(true);controller.stopped=true;const oldRenders=co
 reads.at(-1).resolve({summary:{completed:1,total:1},sets:[]});await lateRead;
 assert.equal(controller.renders,oldRenders);assert.equal(controller.statusUpdates,oldUpdates);
 console.log('Museum controller: duplicate refresh guard, failed-read recovery and stopped-response isolation passed.');
+
+// Museum authorization alone must never authorize a Market watch.
+sandbox.SLINK_EXTENSION.services.market.accessState=async()=>({permitted:false});const beforeDenied=marketCalls.length;await assert.rejects(()=>museumRoutes['museum.market.add']({itemId:101,maxPrice:100}),/Market Watch permission/);assert.equal(marketCalls.length,beforeDenied);

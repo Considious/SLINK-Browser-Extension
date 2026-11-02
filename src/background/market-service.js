@@ -16,6 +16,7 @@
     const prepared=Promise.resolve().then(prepare);void prepared.catch(()=>{});
     const operation=settingsQueue.catch(()=>{}).then(()=>prepared).then(async context=>{
       const raw=await SLINK.core.storage.get(KEYS.settings,{}),previous=MARKET.normalizeSettings(raw);
+      const proof=context?.access||context;if(proof?.permitted===true&&!(await accessState()).permitted)throw Error('Your Market Watch permission expired or was removed. No watch was saved.');
       const changed=update(previous,context);
       if(!changed)return {settings:previous,context};
       const normalized=MARKET.normalizeSettings(changed);
@@ -40,7 +41,7 @@
   async function touchActivity() {
     const activity = { lastActiveAt:Date.now() };
     await SLINK.core.storage.set(KEYS.activity, activity);
-    await scheduleAlarm(Date.now() + 1_000);
+    if((await accessState()).permitted)await scheduleAlarm(Date.now() + 1_000);else await chrome.alarms.clear(ALARM);
     return activityStatus(activity.lastActiveAt);
   }
   async function runtime() {
@@ -74,10 +75,11 @@
 
   async function accessState({ authenticate = false, force = false } = {}) {
     const session = authenticate ? await SLINK.services.permissionAccess.ensureSession(force, '') : await SLINK.core.storage.get('access.session.v1', null);
-    const active = session?.token && Number(session?.expiresAt) > Date.now();
-    const permissions = active ? session : await SLINK.core.storage.get('permissions.snapshot', {});
+    const active = Boolean(session?.token && Number(session?.expiresAt) > Date.now());
+    // A cached combined snapshot is not a current signed Market grant.
+    const permissions = active ? session : {};
     const limit = SLINK.core.adhd.marketWatchLimit(permissions || {});
-    return { limit, permitted:limit > 0, userId:Number(permissions?.userId || session?.userId) || null };
+    return { limit, permitted:active&&limit > 0, expiresAt:active?Number(session.expiresAt):0, userId:Number(permissions?.userId || session?.userId) || null };
   }
 
   function assertActiveSlotLimit(settingsValue, access) {
@@ -96,8 +98,10 @@
   }
 
   async function tornJson(url, key, endpoint, priority = 'normal') {
+    if(!(await accessState()).permitted)throw Error('A current signed Market Watch permission is required.');
     const normalized = MARKET.normalizePriority(priority);
     await SLINK.core.tornApiLimiter.reserve({ wait:false, limit:MARKET.TORN_PRIORITY_LIMITS[normalized], script:'SLINK Market Watch', priority:normalized, endpoint });
+    if(!(await accessState()).permitted)throw Error('Market Watch permission expired before the price check.');
     return SLINK.core.http.requestJson('tornApi', url, { headers:{ Authorization:`ApiKey ${key}` }, cache:'no-store' });
   }
 
@@ -146,6 +150,7 @@
       const kind = current.weaver.cooldownUntil === retryAt ? current.weaver.cooldownReason : 'minute';
       throw weaverLimitError(kind, retryAt - now);
     }
+    if(!url.includes('/api/dollar-bazaars/')&&!(await accessState()).permitted)throw Error('A current signed Market Watch permission is required.');
     current.weaver.events.push(now);
     try { return await SLINK.core.http.requestJson('weaver', url, { cache:'no-store' }); }
     catch (error) {
@@ -353,13 +358,14 @@
   async function scheduleAlarm(when = 0) { await chrome.alarms.create(ALARM, { when:Math.max(Date.now() + 1_000, Number(when) || Date.now() + 60_000) }); }
 
   async function buildStatus(currentSettings, current, access) {
+    if(!(await accessState()).permitted)access={...access,permitted:false,limit:0};
     const usage = await SLINK.core.tornApiLimiter.getUsage(); const allowed = currentSettings.watches.filter(watch => watch.enabled);
     const activity = await activityStatus();
-    const nextRefreshAt = nextAt(currentSettings, current, access.limit || 0);
-    if (activity.active) await scheduleAlarm(nextRefreshAt);
+    const nextRefreshAt = access.permitted?nextAt(currentSettings,current,access.limit):0;
+    if (activity.active&&access.permitted&&currentSettings.enabled) await scheduleAlarm(nextRefreshAt);
     else await chrome.alarms.clear(ALARM);
     const dismissals = await activeDismissals();
-    const opportunities = MARKET.opportunityRows({ ...current, catalog:current.catalog }, { ...currentSettings, watches:allowed })
+    const opportunities = (access.permitted ? MARKET.opportunityRows({ ...current, catalog:current.catalog }, { ...currentSettings, watches:allowed }) : [])
       .map(row => ({ ...row, dismissKey:dealDismissKey(row) }))
       .filter(row => !dismissals[row.dismissKey]);
     return { configured:Boolean((await SLINK.services.permissionAccess.settings()).enabled), permitted:access.permitted, marketWatchLimit:access.limit,
@@ -374,7 +380,8 @@
   async function refresh(force = false) {
     if (refreshing) return refreshing;
     refreshing = (async () => {
-      let currentSettings = await settings(); const access = await accessState({ authenticate:true }); const current = await runtime();
+      let currentSettings = await settings();const cachedAccess=await accessState();if(!force&&!cachedAccess.permitted)return buildStatus(currentSettings,await runtime(),cachedAccess);
+      const access = await accessState({ authenticate:true }); const current = await runtime();
       if (!access.permitted) throw new Error('Your account does not have a SLINK Market Watch tier.');
       if (!currentSettings.enabled) return buildStatus(currentSettings, current, access);
       const key = await tornKey();
@@ -486,10 +493,12 @@
   }
 
   async function claimSound() {
-    const [currentSettings, current, access, previous, adhdSettings] = await Promise.all([
-      settings(), runtime(), accessState(), SLINK.core.storage.get(KEYS.soundState, { activeKeys:[], pendingKeys:[] }),
+    const access=await accessState();if(!access.permitted)return {play:false,dealKeys:[]};
+    const [currentSettings, current, previous, adhdSettings] = await Promise.all([
+      settings(), runtime(), SLINK.core.storage.get(KEYS.soundState, { activeKeys:[], pendingKeys:[] }),
       SLINK.core.storage.get('adhd.settings.v1', {})
     ]);
+    if(!access.permitted)return {play:false,dealKeys:[]};
     const allowed = currentSettings.watches.filter(watch => watch.enabled);
     const dismissals = await activeDismissals();
     const opportunities = MARKET.opportunityRows({ ...current, catalog:current.catalog }, { ...currentSettings, watches:allowed })
@@ -614,7 +623,7 @@
 
   async function ensureAlarm() {
     const activity = await activityStatus();
-    if (!activity.active) { await chrome.alarms.clear(ALARM); return null; }
+    if (!activity.active||!(await accessState()).permitted) { await chrome.alarms.clear(ALARM); return null; }
     if (!await chrome.alarms.get(ALARM)) await scheduleAlarm(Date.now() + 1_000);
     return chrome.alarms.get(ALARM);
   }
@@ -641,5 +650,5 @@
     'market.deal.dismiss':payload => withActivity(dismissDeal, payload),
     'market.sound.claim':claimSound, 'market.sound.ack':acknowledgeSound
   });
-  SLINK.define('services', 'market', Object.freeze({ ALARM, DOLLAR_ALARM, INACTIVE_AFTER_MS, activityStatus, dollarStatus, ensureAlarm, ensureDollarAlarm, publicStatus, refresh, routes, touchActivity }));
+  SLINK.define('services', 'market', Object.freeze({ ALARM, DOLLAR_ALARM, INACTIVE_AFTER_MS, accessState, activityStatus, dollarStatus, ensureAlarm, ensureDollarAlarm, publicStatus, refresh, routes, touchActivity }));
 })(globalThis);

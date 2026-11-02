@@ -17,7 +17,6 @@
     shortTitle:'Market',
     group:'efficiency',
     groupTitle:'Efficiency',
-    permissionTest:permissions => SLINK.core.adhd.marketWatchLimit(permissions) > 0,
     defaultShowInTorn:true,
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {
@@ -70,6 +69,7 @@
       }
 
       async function claimMarketSound() {
+        if(!current?.permitted)return;
         try { await SLINK.core.messaging.send('audio.flush'); } catch {}
       }
 
@@ -78,6 +78,7 @@
       }
 
       async function touchMarketActivity(force = false) {
+        if(!current?.permitted)return;
         if (!moduleVisible()) return false;
         const now = Date.now();
         if (!force && now - lastActivityTouchAt < 10_000) return true;
@@ -91,7 +92,7 @@
       }
 
       function syncMarketVisibility() {
-        if (!moduleVisible()) return;
+        if (!current?.permitted || !moduleVisible()) return;
         void touchMarketActivity(true).then(() => {
           if (stopped) return;
           void load(false);
@@ -153,7 +154,7 @@
       }
 
       function onPurchaseOpportunityPage() {
-        return onBazaarPage() || onItemMarketPage();
+        return Boolean(current?.permitted)&&(onBazaarPage() || onItemMarketPage());
       }
 
       function targetedBazaarListing() {
@@ -1206,7 +1207,8 @@
       function render(status) {
         if (stopped || context.signal?.aborted) return;
         current = status;
-        syncPurchaseCatalog(status); updateStatus();
+        updateStatus();if(!status?.permitted){ui.setAlertCount('market',0,{group:'efficiency',label:'active Market Watch deals'});observer?.disconnect();mounted=false;root.innerHTML='<p class="slink-market-locked">Market Watch permission is required. Saved watches are paused. Use Refresh permissions after access is granted.</p>';ui.setActions(marketActions.filter(action=>action.id==='permissions'));return;}
+        ui.setActions(marketActions);if(document.body)observer?.observe(document.body,{childList:true,subtree:true});syncPurchaseCatalog(status);
         const deals = Array.isArray(status?.opportunities) ? status.opportunities : [];
         ui.setAlertCount('market', deals.length, {group:'efficiency',label:'active Market Watch deals'});
         if (!mounted) {
@@ -1278,7 +1280,7 @@
 
       const marketActions = [
         { id:'refresh', label:'Refresh', onClick:async event => { event.currentTarget.disabled = true; try { await soundPreferences.flush(); await touchMarketActivity(true); render(await SLINK.core.messaging.send('market.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
-        { id:'permissions', label:'Refresh permissions', onClick:async event => { event.currentTarget.disabled = true; try { await touchMarketActivity(true); render(await SLINK.core.messaging.send('market.permissions.refresh')); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
+        { id:'permissions', label:'Refresh permissions', onClick:async event => { event.currentTarget.disabled = true; try { await touchMarketActivity(true); render(await SLINK.core.messaging.send('market.permissions.refresh'));await touchMarketActivity(true); } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); } finally { event.currentTarget.disabled = false; } } },
         { id:'settings', label:'Settings', onClick:async () => { await touchMarketActivity(true); return SLINK.core.messaging.send('ui.dashboard.open', { page:'alerts', efficiencyView:'market' }); } }
       ];
       if (marketDomTestAllowed) marketActions.push({
@@ -1314,7 +1316,7 @@
       }
       syncMarketVisibility();
       timer = global.setInterval(() => {
-        if (!stopped && moduleVisible() && Date.now() - lastActivityTouchAt <= INACTIVE_AFTER_MS) void load(true);
+        if (!stopped && current?.permitted && moduleVisible() && Date.now() - lastActivityTouchAt <= INACTIVE_AFTER_MS) void load(true);
       }, 5_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
       return { async stop() { stopped = true; await soundPreferences.stop(); if (previousExplicit === undefined) delete root.dataset.uiExplicitCommit; else root.dataset.uiExplicitCommit = previousExplicit; observer?.disconnect(); visibilityObserver?.disconnect(); if (timer) global.clearInterval(timer); if (clockTimer) global.clearInterval(clockTimer); moduleView?.removeEventListener('click', noteMarketInteraction, true); moduleView?.removeEventListener('input', noteMarketInteraction, true); moduleView?.removeEventListener('change', noteMarketInteraction, true); global.removeEventListener('slink:api-usage', updateApiUsage); global.removeEventListener('hashchange', schedulePurchaseOpportunityFormatting); global.removeEventListener('popstate', schedulePurchaseOpportunityFormatting); global.removeEventListener('resize', scheduleQuickPurchaseControlSync); global.removeEventListener('scroll', scheduleQuickPurchaseControlSync, true); document.removeEventListener('click', handleHighlightedQuickPurchaseClick, true); document.removeEventListener('click', handleBazaarPurchaseClick, true); ui.setAlertCount('market', 0); clearPurchaseOpportunityFormatting(); } };
