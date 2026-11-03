@@ -2,6 +2,7 @@
 
 ## What changed
 
+- Museum no longer offers whole-category tracking for flowers, plushies or other sets. Individual-item Market Watch controls remain. Existing watches are unchanged.
 - PDA's Market cleanup now shows imported Weaver price-list watches as well as individually saved price watches, including while access is locked. You can stop the imported watches or clear all Market watches from that screen. Clearing asks for confirmation and does not change your price list on Weaver.
 - Switching Market price checks off also stops alerts from cached Market results.
 - PDA's locked Market view now lists saved watches with a Remove button. Access has a Manage saved Market watches shortcut. Opening Market also reaches the permission-refresh step when no current grant is cached, rather than returning before checking newly assigned access.
@@ -33,6 +34,7 @@
 
 ## What to test
 
+- [ ] Open Museum in PDA and the extension. Flower/plushie category headers should have no bulk watch button. Individual missing items should still offer Add to Market Watch when permitted. Existing saved watches should remain unchanged.
 - [ ] Open Access → Manage saved Market watches in PDA. Check individually saved and imported Weaver watches are listed separately, even without a Market tier. Stop the imported watches and check that source stops alerting.
 - [ ] Try Clear all Market watches, then cancel: nothing should change. Confirm it next, reload and verify the saved list is cleared, imported watches are stopped, and Market stays off. Switching Market off must not leave cached price alerts firing. Do not use this test with watches you want to keep.
 - [ ] In PDA, open Access → Manage saved Market watches. Remove a test watch, reload and confirm it stays removed. This must work without a Market tier; adding watches and price checks must remain locked. Assign access and reopen Market to check it picks up the new grant.

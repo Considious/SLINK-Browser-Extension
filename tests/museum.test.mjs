@@ -58,11 +58,14 @@ await assert.rejects(()=>museumRoutes['museum.market.add']({itemId:101,maxPrice:
 sandbox.SLINK_EXTENSION.services.permissionAccess.ensureSession=async()=>{throw Error('Museum permission denied');};
 await assert.rejects(()=>museumRoutes['museum.market.add']({itemId:101,maxPrice:100}),/Museum permission denied/);
 sandbox.SLINK_EXTENSION.services.permissionAccess.ensureSession=async()=>{};
-assert.equal((await museumRoutes['museum.abroad.track']({setId:'plushies'})).added,museum.setById('plushies').items.length);
-await assert.rejects(()=>museumRoutes['museum.abroad.track']({setId:'senet'}),/does not use Abroad/);
-console.log('Museum service: captured/validated action intent, specific watch receipts, permission/slot failures and explicit Abroad delegation passed.');
+let bulkWatchCalls=0;sandbox.SLINK_EXTENSION.services.abroadStocks.addItemWatches=async()=>{bulkWatchCalls++;};
+for(const setId of ['plushies','flowers','senet'])await assert.rejects(()=>museumRoutes['museum.abroad.track']({setId}),/Category-wide Museum tracking has been removed/);
+assert.equal(bulkWatchCalls,0,'An older cached category button must not create watches');
+console.log('Museum service: captured/validated action intent, specific watch receipts, permission/slot failures and category-wide tracking rejection passed.');
 
 const moduleSource=fs.readFileSync(new URL('../src/modules/museums.js',import.meta.url),'utf8');
+assert(!moduleSource.includes('data-museum-abroad'),'No set-wide Abroad Stocks control remains');
+assert(moduleSource.includes("send('museum.market.add', { itemId, maxPrice, priority:'normal' })"),'Individual-item Market watches remain available');
 const loadStart=moduleSource.indexOf('      async function load('),loadEnd=moduleSource.indexOf("      context.listen(root, 'click'",loadStart);
 assert(loadStart>=0&&loadEnd>loadStart);
 const reads=[];

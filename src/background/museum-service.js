@@ -95,10 +95,8 @@
   }
 
   async function trackAbroad(payload = {}) {
-    await SLINK.services.permissionAccess.ensureSession(false, MUSEUM.SCOPE);
-    const definition = MUSEUM.setById(payload.setId);
-    if (!definition?.travel) throw new Error('That museum set does not use Abroad Stocks.');
-    return SLINK.services.abroadStocks.addItemWatches(definition.items.map(entry => entry.name));
+    // Reject requests from an older cached Museum UI as well as removing its button.
+    throw new Error('Category-wide Museum tracking has been removed. Choose one item in Abroad Stocks instead.');
   }
 
   async function addMarketWatch(payload = {}) {

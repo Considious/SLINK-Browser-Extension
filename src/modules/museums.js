@@ -79,9 +79,6 @@
           const summaryHtml = `<span class="${set.complete ? 'slink-museum-good' : 'slink-museum-missing'}">${set.complete ? 'Complete' : 'Needs items'}</span> · ${escapeHtml(set.name)} · ${set.points.toLocaleString()} points`;
           if (summary.innerHTML !== summaryHtml) summary.innerHTML = summaryHtml;
           text(panel.node.querySelector('.slink-museum-head small'),`${set.completeSets} complete set${set.completeSets === 1 ? '' : 's'} in inventory`);
-          let abroad = panel.node.querySelector('[data-museum-abroad]');
-          if (set.travel && !abroad) {abroad = document.createElement('button');abroad.type = 'button';abroad.dataset.museumAbroad = set.id;abroad.textContent = 'Track in Abroad Stocks';panel.node.querySelector('.slink-museum-head').append(abroad);}
-          if (!set.travel) abroad?.remove();
           const presentItems = new Set();
           for (const item of set.items) {
             const key = item.name;presentItems.add(key);
@@ -109,7 +106,6 @@
           for (const [key,row] of panel.rows) if (!presentItems.has(key)) {row.node.remove();panel.rows.delete(key);}
         }
         for (const [id,panel] of panels) if (!presentSets.has(id)) {panel.node.remove();panels.delete(id);}
-        root.querySelectorAll('[data-museum-abroad]').forEach(button => {button.disabled = actionBusy;});
       }
 
       async function load(force = false) {
@@ -131,19 +127,6 @@
         if (stopped || context.signal?.aborted) return;
         if (event.target.closest('[data-museum-refresh]')) { void load(true); return; }
         if (actionBusy) return;
-        const abroad = event.target.closest('[data-museum-abroad]');
-        if (abroad) {
-          const setId = abroad.dataset.museumAbroad;
-          actionBusy = true;notice = '';render();
-          try {
-            const result = await SLINK.core.messaging.send('museum.abroad.track', { setId });
-            if (stopped || context.signal?.aborted) return;
-            if (!Number.isInteger(result?.added) || result.added < 0) throw new Error('Abroad Stocks did not confirm the new watches. Check Abroad Stocks before trying again.');
-            notice = result.added ? `Added ${result.added} Abroad Stocks watch${result.added === 1 ? '' : 'es'}.` : 'All matching Abroad Stocks rows are already tracked. Refresh Abroad Stocks first if no rows were available.';
-          } catch (error) { if (!stopped && !context.signal?.aborted) notice = SLINK.core.format.errorMessage(error); }
-          finally {actionBusy = false;render();}
-          return;
-        }
         const market = event.target.closest('[data-museum-market]');
         if (market) {
           const row = panels.get(market.dataset.museumSet)?.rows.get(market.dataset.museumItem);
