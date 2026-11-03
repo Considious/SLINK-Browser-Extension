@@ -2,6 +2,8 @@
 
 ## What changed
 
+- PDA's Market cleanup now shows imported Weaver price-list watches as well as individually saved price watches, including while access is locked. You can stop the imported watches or clear all Market watches from that screen. Clearing asks for confirmation and does not change your price list on Weaver.
+- Switching Market price checks off also stops alerts from cached Market results.
 - PDA's locked Market view now lists saved watches with a Remove button. Access has a Manage saved Market watches shortcut. Opening Market also reaches the permission-refresh step when no current grant is cached, rather than returning before checking newly assigned access.
 - GIFs and stickers default to enabled when no preference has been saved. A saved off setting stays off, but the chat picker now offers an Enable button instead of an unexplained dead search box. Settings-load/save errors and Retry stay visible inside the picker; API-key settings remain in QOL > Chat.
 - Market Watch stays visible when locked, with a working Refresh permissions button. Access also has a Refresh Market permissions button, so newly granted access can be picked up without hunting for a hidden tab.
@@ -31,6 +33,8 @@
 
 ## What to test
 
+- [ ] Open Access → Manage saved Market watches in PDA. Check individually saved and imported Weaver watches are listed separately, even without a Market tier. Stop the imported watches and check that source stops alerting.
+- [ ] Try Clear all Market watches, then cancel: nothing should change. Confirm it next, reload and verify the saved list is cleared, imported watches are stopped, and Market stays off. Switching Market off must not leave cached price alerts firing. Do not use this test with watches you want to keep.
 - [ ] In PDA, open Access → Manage saved Market watches. Remove a test watch, reload and confirm it stays removed. This must work without a Market tier; adding watches and price checks must remain locked. Assign access and reopen Market to check it picks up the new grant.
 - [ ] Open the GIF/sticker picker inside Torn chat. Type a search, try GIFs and Stickers, close/reopen and try again. If media was switched off, Enable should save that choice and make search available. A settings failure should show a readable error and Retry, not a silently disabled box.
 - [ ] With no Market Watch permission, confirm Market is visible but locked. Museum's Add Market watch control should be disabled. Existing watches must not check prices or produce alerts.
