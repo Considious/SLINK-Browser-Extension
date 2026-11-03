@@ -2,6 +2,8 @@
 
 ## What changed
 
+- PDA's locked Market view now lists saved watches with a Remove button. Access has a Manage saved Market watches shortcut. Opening Market also reaches the permission-refresh step when no current grant is cached, rather than returning before checking newly assigned access.
+- GIFs and stickers default to enabled when no preference has been saved. A saved off setting stays off, but the chat picker now offers an Enable button instead of an unexplained dead search box. Settings-load/save errors and Retry stay visible inside the picker; API-key settings remain in QOL > Chat.
 - Market Watch stays visible when locked, with a working Refresh permissions button. Access also has a Refresh Market permissions button, so newly granted access can be picked up without hunting for a hidden tab.
 - Museum cannot add Market watches without a current Market Watch permission. The same check applies to other watch-creation and activation paths, including Weaver selections.
 - When Market access expires or is removed, saved watches stop checking prices and stop producing alerts from old results. Your watches are kept for when access returns.
@@ -29,6 +31,8 @@
 
 ## What to test
 
+- [ ] In PDA, open Access → Manage saved Market watches. Remove a test watch, reload and confirm it stays removed. This must work without a Market tier; adding watches and price checks must remain locked. Assign access and reopen Market to check it picks up the new grant.
+- [ ] Open the GIF/sticker picker inside Torn chat. Type a search, try GIFs and Stickers, close/reopen and try again. If media was switched off, Enable should save that choice and make search available. A settings failure should show a readable error and Retry, not a silently disabled box.
 - [ ] With no Market Watch permission, confirm Market is visible but locked. Museum's Add Market watch control should be disabled. Existing watches must not check prices or produce alerts.
 - [ ] Grant Market Watch access, then use Refresh permissions in Market or Refresh Market permissions in Access. Market controls should become usable immediately; adding a Museum watch should work.
 - [ ] Remove or let Market Watch access expire while watches are saved. Confirm checks and alerts stop, then restore access and refresh permissions. Saved watches should still be there. Test the extension dashboard and PDA too.

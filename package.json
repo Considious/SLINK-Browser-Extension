@@ -1,9 +1,10 @@
 {
   "name": "slink-browser-extension",
-  "version": "0.19.36",
+  "version": "0.19.37",
   "private": true,
   "description": "Chrome-first SLINK browser extension with Combat, Efficiency, and Quality of Life tools.",
   "scripts": {
+    "test:chat-media-browser": "node tests/chat-media-access.browser.mjs",
     "test:faction-node:docking": "node tests/faction-rooms-docking.browser.mjs",
     "test:faction-node:preferences": "node tests/faction-rooms-preferences.browser.mjs",
     "test:rooms-pause": "node --test tests/faction-rooms-pause.test.mjs",
