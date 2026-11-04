@@ -117,7 +117,7 @@
       const ffConfig=await SLINK.core.messaging.send('chat.ff.get');
       if(!allowed())return {stop(){}};
       const ffPanel=document.createElement('section');ffPanel.className='slink-chat-card';
-      ffPanel.innerHTML='<h3>Fair Fight in chat</h3><label><input type="checkbox" data-chat-ff-toggle> Show Fair Fight beside chat names</label><label><input type="checkbox" data-chat-ff-mentions> Show Fair Fight next to player mentions</label><p>† marks cached backup data; hover for its source and age.</p><span role="status" data-chat-ff-state></span>';
+      ffPanel.innerHTML='<h3>Fair Fight in chat</h3><label><input type="checkbox" data-chat-ff-toggle> Show Fair Fight beside chat names</label><br><label><input type="checkbox" data-chat-ff-mentions> Show Fair Fight next to player mentions</label><p>† marks cached backup data; hover for its source and age.</p><span role="status" data-chat-ff-state></span>';
       root.querySelector('.slink-chat-stack').append(ffPanel);
       for(const [key,selector] of [['enabled','[data-chat-ff-toggle]'],['mentions','[data-chat-ff-mentions]']]){
         const toggle=ffPanel.querySelector(selector),status=ffPanel.querySelector('[data-chat-ff-state]');toggle.checked=ffConfig[key]===true;

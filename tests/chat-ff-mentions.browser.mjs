@@ -17,6 +17,9 @@ try{
   assert.deepEqual(await page.evaluate(()=>batches),[[2272745]]);
   assert.equal(await page.locator('#mixed').textContent(),'Check [2272745]2.25 before Attack2.25 and Profile2.25 now');
   assert.equal(await page.locator('#bare a').getAttribute('href'),'https://www.torn.com/profiles.php?XID=2272745');
+  const styles=await page.locator('[data-slink-chat-ff]').evaluateAll(nodes=>nodes.map(node=>{const s=getComputedStyle(node);return [s.border,s.borderRadius,s.padding,s.font,s.color,s.backgroundColor,s.textDecorationLine];}));
+  for(const style of styles)assert.deepEqual(style,styles[0]);
+  assert.equal(await page.locator('#bare a').evaluate(node=>getComputedStyle(node).pointerEvents),'auto');
   assert.equal(await page.locator('#price [data-slink-chat-ff]').count(),0);
   await page.evaluate(()=>{live=false;controller.sync();});
   assert.equal(await page.locator('#mixed [data-slink-chat-ff]:not([hidden])').count(),3);
