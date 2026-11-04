@@ -36,6 +36,15 @@ assert.equal(container.children[0].children[1], firstInput, 'Refresh must not re
 assert.equal(firstInput.checked, false, 'A user-edited checkbox must not be overwritten by a status refresh.');
 assert.equal(secondInput.checked, true, 'Untouched checkboxes should follow the latest saved settings.');
 
+const crimes = new FakeNode(); crimes.id='crimes-alert-toggles';
+context.adhdSettingsDirty.clear();
+context.renderAdhdToggleRows(crimes, definitions, settings, 'alert');
+const [, crimeEnabled, crimeSound] = crimes.children[1].children;
+assert.equal(crimeEnabled.checked,true,'Existing sound-only trackers are still enabled');
+assert.equal(crimeSound.checked,true);
+crimeEnabled.checked=false;crimeEnabled.listeners.change();
+assert.equal(crimeSound.checked,false,'Disabling a crime tracker disables sound-driven polling too');
+
 const input = new FakeNode(); input.value = 'edited';
 elements.set('draft-field', input);
 context.adhdSettingsDirty.add('draft-field');

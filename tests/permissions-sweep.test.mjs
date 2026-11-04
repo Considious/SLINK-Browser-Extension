@@ -40,13 +40,15 @@ for(const [path,scope]of expected){
   if(existsSync(new URL('../'+core,import.meta.url)))vm.runInContext(text(core),context,{filename:core});
   const count=slink.modules.list().length;
   vm.runInContext(text(path),context,{filename:path});
-  assert.equal(slink.modules.list().length,count+1,`${path} must register its module`);
-  const module=slink.modules.list().at(-1);
+  const registered=slink.modules.list().slice(count);
+  assert.equal(registered.length,path==='src/modules/adhd.js'?2:1,`${path} must register its modules`);
+  for(const module of registered){
   assert.deepEqual(Array.from(module.requiredScopes),[scope],`${path} resolved the wrong registered scope`);
   assert.equal(slink.modules.canAccess(module,{scopes:[]}),false,`${path} allowed a denied user`);
   assert.equal(slink.modules.canAccess(module,{scopes:['unrelated.scope']}),false);
   assert.equal(slink.modules.canAccess(module,{scopes:[scope]}),true,`${path} rejected its exact grant`);
   assert.equal(slink.modules.canAccess(module,{userId:123,scopes:['admin.*']}),true,`${path} rejected a backend-issued admin grant`);
+  }
 }
 vm.runInContext(text('src/core/travel-safety.js'),context);
 vm.runInContext(text('src/modules/travel-safety.js'),context);

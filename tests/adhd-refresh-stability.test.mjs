@@ -25,7 +25,7 @@ const status = {
   settings: { soundEnabled:{}, enabled:{}, snoozedUntil:{}, soundChoice:'chime' },
   city:{ bought:0 }, configured:true, fetchedAt:1000, tornApiUsage:{ count:3, limit:60 }
 };
-const api = { core:{ adhD:null, adhd:{ ALERT_SCOPE:'slink.adhd.alerts', normalizeSettings:value=>({ ...value, soundEnabled:value.soundEnabled||{}, enabled:value.enabled||{} }), reminderControls:()=>new FakeNode('reminders'), updateReminderClock(){} }, factionChat:{ isPrimed:()=>false } }, modules:{ register(definition){ this.definition=definition; } }, services:{} };
+const api = { core:{ format:{errorMessage:error=>error.message}, factionChat:{ isPrimed:()=>false } }, define(group,key,value){this[group][key]=value;}, modules:{ definitions:new Map(), register(definition){ this.definitions.set(definition.id,definition); } }, services:{} };
 api.core.messaging = { send:async name=>{ calls.push(name); return name==='adhd.status'||name==='adhd.refresh' ? status : {}; } };
 const context = vm.createContext({
   console, URL, setTimeout, clearTimeout, setInterval:()=>1, clearInterval(){},
@@ -34,12 +34,14 @@ const context = vm.createContext({
   SLINK_EXTENSION:api
 });
 context.globalThis = context;
+vm.runInContext(read('src/core/adhd.js'), context);
+api.core.adhd={...api.core.adhd,reminderControls:()=>new FakeNode('reminders'),updateReminderClock(){}};
 vm.runInContext(read('src/modules/adhd.js'), context);
 const ui = {
   setModuleStyles(){}, getContentElement:()=>root, setThemeHealth(){}, setAlertCount(){}, setStatus(){},
   setBubbleAlert(){}, setActions(actions){ this.actions=actions; }
 };
-const controller = await api.modules.definition.start({ ui, signal:{aborted:false} });
+const controller = await api.modules.definitions.get('adhd').start({ ui, signal:{aborted:false} });
 const findButton = (node, text) => {
   if (node.tagName === 'button' && node.textContent === text) return node;
   for (const child of node.children || []) { const found = findButton(child, text); if (found) return found; }
@@ -53,5 +55,11 @@ assert.equal(root.children.length, initialReplaceCount, 'An unchanged timer refr
 assert.equal(findButton(root, 'Snooze 5m'), snooze, 'The in-place alert action must retain its DOM identity across an unchanged refresh.');
 assert.equal(calls.filter(name => name === 'adhd.status' || name === 'adhd.refresh').length, 2);
 controller.stop();
+const ring={id:'clusterRing',clusterRingAvailable:true};
+const common=[{id:'medicalCooldown'},{id:'arsonUnique'},{id:'clusterRing',clusterRingAvailable:false}];
+assert.equal(api.core.adhd.alertsForView(common).map(row=>row.id).join(','),'medicalCooldown');
+assert.equal(api.core.adhd.alertsForView(common,true).map(row=>row.id).join(','),'arsonUnique,clusterRing');
+assert.equal(api.core.adhd.alertsForView([ring])[0].title,'Cluster Ring opportunity');
+assert.equal(api.core.adhd.alertsForView([ring],true)[0],ring);
 
 console.log('Torn Efficiency retains alert controls across an unchanged periodic refresh.');

@@ -10,10 +10,10 @@
     return seconds < 60 ? `${seconds}s ago` : seconds < 3600 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s ago` : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m ago`;
   }
 
-  SLINK.modules.register({
-    id:'adhd',
-    title:'SLINK Efficiency',
-    shortTitle:'Alerts',
+  for (const crimes of [false,true]) SLINK.modules.register({
+    id:crimes?'crimes':'adhd',
+    title:crimes?'Crimes':'SLINK Efficiency',
+    shortTitle:crimes?'Crimes':'Alerts',
     group:'efficiency',
     groupTitle:'Efficiency',
     requiredScopes:[SLINK.core.adhd.ALERT_SCOPE],
@@ -81,8 +81,8 @@
       function render(status) {
         current = status;
         ui.setThemeHealth?.(status?.life?.current, status?.life?.maximum);
-        const alerts = Array.isArray(status?.activeAlerts) ? status.activeAlerts : [];
-        ui.setAlertCount('adhd', alerts.length, { group:'efficiency', label:'active Efficiency reminders' });
+        const alerts = SLINK.core.adhd.alertsForView(status?.activeAlerts || [], crimes);
+        ui.setAlertCount(crimes?'crimes':'adhd', alerts.length, { group:'efficiency', label:'active Efficiency reminders' });
         updateStatus();
         const root = ui.getContentElement();
         const signature = JSON.stringify({
@@ -96,7 +96,7 @@
           if (cells[1]) cells[1].textContent = String(status?.city?.bought ?? '—');
           const apiUsage = cells[2];
           if (apiUsage) apiUsage.textContent = `${status?.tornApiUsage?.count || 0}/${status?.tornApiUsage?.limit || 60}`;
-          ui.setBubbleAlert('adhd', alerts.length, 'adhd');
+          if (!crimes) ui.setBubbleAlert('adhd', alerts.length, 'adhd');
           return;
         }
         lastRenderSignature = signature;
@@ -116,23 +116,31 @@
           cell.append(strong, small); summary.append(cell);
         }
         root.append(summary);
-        root.append(SLINK.core.adhd.reminderControls(status.settings || {},
+        if (crimes) {
+          const progress = document.createElement('p');
+          progress.textContent = 'Manage each crime tracker in Settings.'; root.append(progress);
+          for (const row of status?.crimeUniques || []) {
+            if (status.settings?.enabled?.[row.id] === false) continue;
+            const line=document.createElement('p'); line.textContent=`${row.label} · ${row.completed}/${row.total || '—'} uniques`;root.append(line);
+          }
+        }
+        if (!crimes) root.append(SLINK.core.adhd.reminderControls(status.settings || {},
           async action => render(await SLINK.core.messaging.send('adhd.reminder.control', { action })),
           error => ui.setStatus(SLINK.core.format.errorMessage(error), 'error')));
         const soundToggle = document.createElement('label'); soundToggle.className = 'slink-sound-toggle';
         const soundInput = document.createElement('input'); soundInput.type = 'checkbox';
         soundInput.dataset.uiAutosave = 'true';
         const normalizedSettings = SLINK.core.adhd.normalizeSettings(status?.settings || {});
-        soundInput.checked = Object.values(normalizedSettings.soundEnabled).some(Boolean);
+        soundInput.checked = Object.entries(normalizedSettings.soundEnabled).some(([id,value])=>!SLINK.core.adhd.isCrimeAlert(id)&&value);
         soundInput.addEventListener('change', async () => {
           soundInput.disabled = true;
           try {
             const trackingIds = new Set(SLINK.core.adhd.CRIME_UNIQUE_DEFINITIONS.filter(definition => definition.mode === 'tracking').map(definition => definition.id));
-            const soundEnabled = Object.fromEntries(Object.keys(normalizedSettings.soundEnabled).map(id => [id, soundInput.checked && !trackingIds.has(id)]));
+            const soundEnabled = Object.fromEntries(Object.keys(normalizedSettings.soundEnabled).filter(id=>!SLINK.core.adhd.isCrimeAlert(id)).map(id => [id, soundInput.checked && !trackingIds.has(id)]));
             render(await SLINK.core.messaging.send('adhd.settings.save', { soundEnabled }));
           } catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); soundInput.disabled = false; }
         });
-        soundToggle.append(soundInput, document.createTextNode('Play alert sounds')); root.append(soundToggle);
+        soundToggle.append(soundInput, document.createTextNode('Play alert sounds')); if (!crimes) root.append(soundToggle);
         const list = document.createElement('div');
         list.className = 'slink-adhd-list';
         if (!alerts.length) {
@@ -215,13 +223,13 @@
         }
         root.append(list);
         updateChatButtons(root);
-        ui.setBubbleAlert('adhd', alerts.length, 'adhd');
+        if (!crimes) ui.setBubbleAlert('adhd', alerts.length, 'adhd');
       }
 
       async function load(refreshIfDue = true) {
         try {
           render(await SLINK.core.messaging.send('adhd.status', { refreshIfDue }));
-          await claimAlertSound();
+          if (!crimes) await claimAlertSound();
         }
         catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
       }
@@ -231,7 +239,7 @@
           event.currentTarget.disabled = true;
           try {
             render(await SLINK.core.messaging.send('adhd.refresh'));
-            await claimAlertSound();
+            if (!crimes) await claimAlertSound();
           }
           catch (error) { ui.setStatus(SLINK.core.format.errorMessage(error), 'error'); }
           finally { event.currentTarget.disabled = false; }
@@ -239,7 +247,7 @@
         { id:'settings', label:'Settings', onClick:async event => {
           event.currentTarget.disabled = true;
           try {
-            await SLINK.core.messaging.send('ui.dashboard.open', { page:'alerts', efficiencyView:'alerts' });
+            await SLINK.core.messaging.send('ui.dashboard.open', { page:'alerts', efficiencyView:crimes?'crimes':'alerts' });
           }
           catch (error) { ui.setStatus(`Could not open settings: ${SLINK.core.format.errorMessage(error)}`, 'error'); }
           finally { event.currentTarget.disabled = false; }
@@ -247,7 +255,7 @@
       ]);
       await load(false);
       global.addEventListener('slink:api-usage', updateApiUsage);
-      timer = global.setInterval(() => { if (!stopped) void load(true); }, 15_000);
+      timer = global.setInterval(() => { if (!stopped) void load(!crimes); }, 15_000);
       clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
       return {
         stop() {
@@ -255,8 +263,8 @@
           if (timer) global.clearInterval(timer);
           if (clockTimer) global.clearInterval(clockTimer);
           global.removeEventListener('slink:api-usage', updateApiUsage);
-          ui.setBubbleAlert('', 0, 'adhd');
-          ui.setAlertCount('adhd', 0);
+          if (!crimes) ui.setBubbleAlert('', 0, 'adhd');
+          ui.setAlertCount(crimes?'crimes':'adhd', 0);
         },
         status:() => current
       };

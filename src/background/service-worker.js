@@ -392,7 +392,7 @@ const routes = {
       : await SLINK.core.storage.get('ui.dashboard.activePage','workspace');
     await SLINK.core.storage.set('ui.dashboard.activePage', page);
     if (page === 'alerts') {
-      const efficiencyView = ['alerts', 'market', 'merits', 'dollar'].includes(String(payload.efficiencyView))
+      const efficiencyView = ['alerts', 'crimes', 'market', 'merits', 'dollar'].includes(String(payload.efficiencyView))
         ? String(payload.efficiencyView)
         : 'alerts';
       await SLINK.core.storage.set('ui.efficiency.activeView', efficiencyView);

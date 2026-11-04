@@ -625,7 +625,7 @@
       ].filter(alert => Number(currentSettings.snoozedUntil[alert.id] || 0) <= Date.now()),
       city:snapshot ? ADHD.cityProgress(snapshot, currentSettings) : { bought:null, remaining:null, complete:false, manuallyDone:false },
       life:snapshot?.data?.bars?.life || null,
-      crimeUniques:snapshot ? ADHD.crimeUniqueProgress(snapshot) : [],
+      crimeUniques:snapshot ? ADHD.crimeUniqueProgress(snapshot, ({id}) => currentSettings.enabled[id] !== false || currentSettings.soundEnabled[id] === true) : [],
       lastPurchase:currentRuntime.lastPurchase,
       fetchedAt:Number(currentRuntime.fetchedAt) || 0,
       nextRefreshAt:Number(currentRuntime.nextRefreshAt) || 0,

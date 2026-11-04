@@ -2,6 +2,8 @@
 
 ## What changed
 
+- Efficiency → Crimes now houses crime reminders and unique trackers, including Pickpocketing progress. A matching Cluster Ring opportunity is also shown in regular Alerts; the two views share the same alert and snooze. Turn individual crime trackers off in Crimes settings to stop their checks.
+
 - Museum no longer offers whole-category tracking for flowers, plushies or other sets. Individual-item Market Watch controls remain. Existing watches are unchanged.
 - PDA's Market cleanup now shows imported Weaver price-list watches as well as individually saved price watches, including while access is locked. You can stop the imported watches or clear all Market watches from that screen. Clearing asks for confirmation and does not change your price list on Weaver.
 - Switching Market price checks off also stops alerts from cached Market results.
