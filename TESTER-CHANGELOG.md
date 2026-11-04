@@ -2,6 +2,8 @@
 
 ## What changed
 
+- Arson can remember a successful recipe on this device. With Arson Help enabled, finish a job from Breach through Collect, then open Arson Help on another job with the same scenario and requirements. Look for “Previously successful on this device.” Jobs already in progress when the helper starts and failed jobs should not create recipes.
+
 - Chat can show Fair Fight beside player IDs, profile links and attack links right inside the message. Turn on “Show Fair Fight next to player mentions” in Chat settings. Try a bracketed ID mid-sentence, a message containing just an ID, and a Torn attack link. The badge on a plain ID opens the profile when clicked or tapped; the original attack link still works as before.
 
 - Efficiency → Crimes now has a subtab for each supported crime. Arson has an opt-in helper preview with observed requirements, damage and nerve information, and cautious burn guidance. It does not perform game actions or present unvalidated full recipes.

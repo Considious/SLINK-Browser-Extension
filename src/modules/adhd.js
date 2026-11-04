@@ -28,7 +28,11 @@
       let lastRenderSignature = null;
       let activeCrime='searchCashUnique';
       let arsonEnabled=false;
-      const arson=crimes?SLINK.core.arsonPage?.connect({eligible:()=>!stopped&&!context.signal?.aborted&&context.isActive?.()!==false}):null;
+      const arsonPage=crimes&&SLINK.core.arsonPage;
+      const arson=arsonPage?arsonPage.connect({
+        eligible:()=>!stopped&&!context.signal?.aborted&&context.isActive?.()!==false,
+        journal:arsonPage.recipeJournal({load:()=>SLINK.core.storage.get('crimes.recipes.v1',{}),save:value=>SLINK.core.storage.set('crimes.recipes.v1',value)})
+      }):null;
       function applyArson(value){
         arsonEnabled=value===true;
         arson?.setEnabled(arsonEnabled);

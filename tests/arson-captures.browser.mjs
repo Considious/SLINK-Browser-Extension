@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE || 'playwright');
 const captures=process.argv.slice(2);
-assert([9,14].includes(captures.length),'Supply the nine base captures, optionally followed by the five requirement captures.');
+assert([9,14,16].includes(captures.length),'Supply nine base captures, optionally five requirement captures and the two Collect captures.');
 const browser=await chromium.launch({headless:true,executablePath:process.env.SLINK_BROWSER_EXECUTABLE});
 try{
   const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -45,7 +45,7 @@ try{
   assert(picker.some(item=>item.name==='Blanket'&&!item.selectable&&item.ownedQty===null));
   assert(picker.some(item=>item.name==='Windproof Lighter'&&!item.selectable&&item.ownedQty===null));
   assert(picker.filter(item=>item.locked).every(item=>item.name===null&&item.ownedQty===null&&item.selectable===false));
-  if(captures.length===14){
+  if(captures.length>=14){
     const expectedRequests=[
       [['Business'],['accidental']],
       [['Fraud'],['accidental','insurance']],
@@ -53,7 +53,7 @@ try{
       [['Ideological'],['visibility:high']],
       [['Ideological'],['family:gas']]
     ];
-    for(const [index,path] of captures.slice(9).entries()){
+    for(const [index,path] of captures.slice(9,14).entries()){
       const result=await page.evaluate(html=>{
         const doc=new DOMParser().parseFromString(html,'text/html');
         const {context,requirements}=SLINK_EXTENSION.core.arsonPage.readRequests(doc);
@@ -118,5 +118,25 @@ try{
   await page.evaluate(()=>location.hash='/arson');await button.waitFor();
   await page.evaluate(()=>connection.setEnabled(false));await button.waitFor({state:'detached'});
   await page.evaluate(()=>connection.dispose());assert.deepEqual(errors,[]);
+  if(captures.length===16){
+    await page.addScriptTag({path:fileURLToPath(new URL('../src/core/arson-page.js',import.meta.url))});
+    const result=await page.evaluate(([before,after])=>{
+      const {readJob,captureArson}=globalThis.SLINK_EXTENSION?.core.arsonPage||globalThis.SLINK_ARSON_PAGE;
+      const doc=new DOMParser().parseFromString(before,'text/html'),row=doc.createElement('div');
+      row.innerHTML=doc.body.innerHTML;
+      const ready=readJob(row),job=(action,selected=null)=>({...ready,action,selected,damage:0});
+      const saved=[],capture=captureArson({record:(...args)=>saved.push(args)});
+      const change=(text)=>{row.innerHTML='<div class="entered___fixture"><div class="outcome-content crimes-outcome-success">'+text+'</div></div>';};
+      row.innerHTML='';capture.click(row,job('breach'));change('Breach');capture.inspect(row,job('place'));
+      capture.click(row,job('place','Fuel'));change('Place');capture.inspect(row,job('ignite'));
+      capture.click(row,job('ignite','Lighter'));change('Ignite');capture.inspect(row,ready);
+      row.innerHTML=doc.body.innerHTML;capture.click(row,ready);capture.inspect(row,readJob(row));
+      const beforeCount=saved.length;
+      row.innerHTML=new DOMParser().parseFromString(after,'text/html').querySelector('.virtual-item').innerHTML;
+      capture.inspect(row,readJob(row));
+      return [ready.nerveCost,beforeCount,saved.length,saved[0]?.[2].length];
+    },captures.slice(14).map(path=>fs.readFileSync(path,'utf8')));
+    assert.deepEqual(result,[2,0,1,2]);
+  }
   console.log(captures.length+' Arson captures parsed. Damage boundaries, picker inventory, requirements, help interactions, live updates and cleanup passed.');
 }finally{await browser.close();}
