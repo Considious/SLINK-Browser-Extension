@@ -31,6 +31,7 @@
     Object.freeze({ id:'arsonUnique', crimeId:13, label:'Arson daily unique check', mode:'daily' })
   ]);
   const CRIME_ALERT_IDS = new Set(CRIME_UNIQUE_DEFINITIONS.map(row => row.id));
+  const CRIME_TABS=Object.freeze({searchCashUnique:'Search for Cash',bootleggingUniques:'Bootlegging',graffitiUniques:'Graffiti',clusterRing:'Shoplifting',pickpocketingUniques:'Pickpocketing',burglaryUniques:'Burglary',disposalUnique:'Disposal',arsonUnique:'Arson'});
   const isCrimeAlert = id => CRIME_ALERT_IDS.has(id);
   function alertsForView(alerts, crimes = false) {
     return alerts.flatMap(alert => crimes ? (isCrimeAlert(alert.id) ? [alert] : [])
@@ -708,7 +709,7 @@
     MARKET_TIERS,
     buildAlerts,
     addictionPercentFromBattleStats,
-    isCrimeAlert, alertsForView,
+    CRIME_TABS, isCrimeAlert, alertsForView,
     clusterRingAchieved,
     clusterRingReady,
     shopliftingUniqueOpportunities,

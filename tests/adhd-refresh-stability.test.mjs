@@ -4,7 +4,8 @@ import vm from 'node:vm';
 
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 class FakeNode {
-  constructor(tag = 'div') { this.tagName = tag; this.children = []; this.listeners = {}; this.dataset = {}; this.className = ''; this.textContent = ''; this.disabled = false; this.isConnected = true; }
+  constructor(tag = 'div') { this.tagName = tag; this.children = []; this.listeners = {}; this.dataset = {}; this.style={}; this.className = ''; this.textContent = ''; this.disabled = false; this.isConnected = true; }
+  setAttribute(name,value){this[name]=value;}
   append(...nodes) { this.children.push(...nodes); }
   replaceChildren(...nodes) { this.children = nodes; }
   addEventListener(type, callback) { this.listeners[type] = callback; }
@@ -61,5 +62,14 @@ assert.equal(api.core.adhd.alertsForView(common).map(row=>row.id).join(','),'med
 assert.equal(api.core.adhd.alertsForView(common,true).map(row=>row.id).join(','),'arsonUnique,clusterRing');
 assert.equal(api.core.adhd.alertsForView([ring])[0].title,'Cluster Ring opportunity');
 assert.equal(api.core.adhd.alertsForView([ring],true)[0],ring);
+status.activeAlerts=[{id:'arsonUnique',title:'Arson reminder',links:[]},{id:'searchCashUnique',title:'Search reminder',links:[]}];
+const crimeController=await api.modules.definitions.get('crimes').start({ui,signal:{aborted:false}});
+const content=node=>[node.textContent,...node.children.map(content)].join(' ');
+assert.match(content(root),/Search reminder/);
+assert.doesNotMatch(content(root),/Arson reminder/);
+findButton(root,'Arson').onclick();
+assert.match(content(root),/Arson reminder/);
+assert.doesNotMatch(content(root),/Search reminder/);
+crimeController.stop();
 
 console.log('Torn Efficiency retains alert controls across an unchanged periodic refresh.');

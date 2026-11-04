@@ -26,6 +26,22 @@
       let clockTimer = null;
       let current = null;
       let lastRenderSignature = null;
+      let activeCrime='searchCashUnique';
+      let arsonEnabled=false;
+      const arson=crimes?SLINK.core.arsonPage?.connect({eligible:()=>!stopped&&!context.signal?.aborted&&context.isActive?.()!==false}):null;
+      function applyArson(value){
+        arsonEnabled=value===true;
+        arson?.setEnabled(arsonEnabled);
+        if(current&&!stopped)render(current);
+      }
+      function arsonStorageChanged(changes,area){
+        const key=SLINK.STORAGE_PREFIX+'crimes.arson.enabled';
+        if(area==='local'&&Object.hasOwn(changes,key))applyArson(changes[key].newValue);
+      }
+      if(arson){
+        try{applyArson(await SLINK.core.storage.get('crimes.arson.enabled',false));}catch{}
+        global.chrome?.storage?.onChanged?.addListener(arsonStorageChanged);
+      }
 
       ui.setModuleStyles(`
         .slink-adhd-summary{display:grid;grid-template-columns:repeat(3,minmax(0,110px));justify-content:start;align-items:start;gap:5px;width:100%;min-width:0;max-width:100%}
@@ -82,11 +98,12 @@
         current = status;
         ui.setThemeHealth?.(status?.life?.current, status?.life?.maximum);
         const alerts = SLINK.core.adhd.alertsForView(status?.activeAlerts || [], crimes);
+        const selectedAlerts=crimes?alerts.filter(row=>row.id===activeCrime):alerts;
         ui.setAlertCount(crimes?'crimes':'adhd', alerts.length, { group:'efficiency', label:'active Efficiency reminders' });
         updateStatus();
         const root = ui.getContentElement();
         const signature = JSON.stringify({
-          alerts, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
+          alerts, activeCrime, arsonEnabled, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
           life:status?.life, configured:status?.configured, lastError:status?.lastError
         });
         if (signature === lastRenderSignature) {
@@ -117,10 +134,22 @@
         }
         root.append(summary);
         if (crimes) {
+          const nav=document.createElement('nav');nav.className='slink-adhd-links';nav.setAttribute('aria-label','Crime tools');
+          for(const [id,label] of Object.entries(SLINK.core.adhd.CRIME_TABS)){
+            const tab=document.createElement('button');tab.type='button';tab.textContent=label;tab.setAttribute('aria-pressed',String(id===activeCrime));
+            if(id===activeCrime)tab.style.fontWeight='700';
+            tab.onclick=()=>{activeCrime=id;render(current);};nav.append(tab);
+          }
+          root.append(nav);
+          if(activeCrime==='arsonUnique'&&arson){
+            const label=document.createElement('label');const toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=arsonEnabled;
+            toggle.onchange=async()=>{toggle.disabled=true;try{await SLINK.core.storage.set('crimes.arson.enabled',toggle.checked);applyArson(toggle.checked);}catch(error){toggle.checked=arsonEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
+            label.append(toggle,document.createTextNode(' Enable Arson Helper (preview)'));root.append(label);
+          }
           const progress = document.createElement('p');
           progress.textContent = 'Manage each crime tracker in Settings.'; root.append(progress);
           for (const row of status?.crimeUniques || []) {
-            if (status.settings?.enabled?.[row.id] === false) continue;
+            if (row.id!==activeCrime || status.settings?.enabled?.[row.id] === false) continue;
             const line=document.createElement('p'); line.textContent=`${row.label} · ${row.completed}/${row.total || '—'} uniques`;root.append(line);
           }
         }
@@ -143,12 +172,12 @@
         soundToggle.append(soundInput, document.createTextNode('Play alert sounds')); if (!crimes) root.append(soundToggle);
         const list = document.createElement('div');
         list.className = 'slink-adhd-list';
-        if (!alerts.length) {
+        if (!selectedAlerts.length) {
           const empty = document.createElement('div'); empty.className = 'slink-adhd-empty';
           empty.textContent = status?.fetchedAt ? 'You’re caught up. No active API reminders.' : 'Refresh after setup to load your timers.';
           list.append(empty);
         }
-        for (const alert of alerts) {
+        for (const alert of selectedAlerts) {
           const card = document.createElement('article'); card.className = 'slink-adhd-alert'; card.dataset.tone = alert.tone || '';
           const title = document.createElement('strong'); title.textContent = alert.title || 'Reminder';
           const detail = document.createElement('span'); detail.textContent = alert.detail || '';
@@ -260,6 +289,8 @@
       return {
         stop() {
           stopped = true;
+          arson?.dispose();
+          if(arson)global.chrome?.storage?.onChanged?.removeListener(arsonStorageChanged);
           if (timer) global.clearInterval(timer);
           if (clockTimer) global.clearInterval(clockTimer);
           global.removeEventListener('slink:api-usage', updateApiUsage);

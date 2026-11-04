@@ -2,6 +2,8 @@
 
 ## What changed
 
+- Efficiency → Crimes now has a subtab for each supported crime. Arson has an opt-in helper preview with observed requirements, damage and nerve information, and cautious burn guidance. It does not perform game actions or present unvalidated full recipes.
+
 - Efficiency → Crimes now houses crime reminders and unique trackers, including Pickpocketing progress. A matching Cluster Ring opportunity is also shown in regular Alerts; the two views share the same alert and snooze. Turn individual crime trackers off in Crimes settings to stop their checks.
 
 - Museum no longer offers whole-category tracking for flowers, plushies or other sets. Individual-item Market Watch controls remain. Existing watches are unchanged.
