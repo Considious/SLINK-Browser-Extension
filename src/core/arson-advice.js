@@ -205,6 +205,39 @@
       starters:(isInsurance(prepared[index].requirements)||isAccidental(prepared[index].requirements)||visibilityLevels(prepared[index].requirements).length||
         prepared[index].requirements?.some(requirement=>requirement?.kind==='damage'))&&!row.recommended?[]:prepared[index].starters}));
   }
-  const api=Object.freeze({materials,describe,remainingCost,rankJobs,generateJobFormulas});
+  function observedFormula(job,inventory,records){
+    if(!inventory.size)return {reason:'Open the material picker to check what you have unlocked and in stock.'};
+    const requirements=job.requirements||[];
+    if(requirements.some(row=>!requirementKey(row)))return {reason:'No formula can be checked against all of this job’s requirements.'};
+    if(job.phase==='burning'||job.phase==='collection')return {reason:'A full recipe starts before ignition. Use the current damage and fire guidance below.'};
+    const choices=[];
+    for(const record of records||[]){
+      if(!record.steps?.length||!record.steps.some(step=>step.action==='ignite'))continue;
+      const used=new Map();let valid=true;
+      for(const step of record.steps){
+        const item=materials[step.item],stock=inventory.get(step.item);
+        if(!item||!stock||stock.locked!==false||suspicionBlocks(step.item,requirements)){valid=false;break;}
+        if(['liquid','solid','gas'].includes(item.family)&&requirements.some(row=>row.kind==='family'&&row.family!==item.family)){valid=false;break;}
+        const quantity=item.consumed?(used.get(step.item)||0)+1:1;
+        const owned=stock.ownedQty??(!item.consumed&&stock.locked===false&&/ is unavailable at this stage$/.test(stock.disabledReason||'')?1:null);
+        if(!Number.isSafeInteger(owned)||owned<quantity){valid=false;break;}
+        used.set(step.item,quantity);
+      }
+      if(!valid)continue;
+      // A full recorded recipe is a starting plan; an already prepared row
+      // has an unknown placed-material history and must not replay it.
+      if(job.action==='ignite')continue;
+      if(job.action==='place'){
+        const first=record.steps[0];
+        if(first.action!=='place'||inventory.get(first.item)?.selectable!==true)continue;
+      }
+      choices.push(record);
+    }
+    if(!choices.length)return {reason:'No successful recipe is confirmed for this job with the materials you have. Don’t start it based on an unverified substitution.'};
+    choices.sort((a,b)=>b.successes-a.successes||a.steps.length-b.steps.length);
+    return {record:choices[0]};
+  }
+  const api=Object.freeze({materials,describe,remainingCost,rankJobs,generateJobFormulas,observedFormula});
   if(global.SLINK_EXTENSION?.define)global.SLINK_EXTENSION.define('core','arsonAdvice',api);
+  else global.SLINK_ARSON_ADVICE=api;
 })(globalThis);

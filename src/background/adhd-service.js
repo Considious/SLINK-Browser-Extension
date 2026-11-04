@@ -663,7 +663,7 @@
     return recipeSync;
   }
   const routes = Object.freeze({
-    async 'crimes.recipes.find'(input){if(!await recipeSession()||typeof input?.key!=='string')return null;return recipes.find('arson',input.key);},
+    async 'crimes.recipes.candidates'(input){if(!await recipeSession()||typeof input?.key!=='string')return [];return recipes.candidates('arson',input.key);},
     async 'crimes.recipes.record'(input,sender){
       const owner=String((await recipeSession())?.userId||'');
       if(!owner||!sender?.tab?.active||!await SLINK.core.storage.get('crimes.arson.enabled',false)||typeof input?.key!=='string'||input.key.length>1500||!Array.isArray(input.steps)||!input.steps.length||input.steps.length>24)return;

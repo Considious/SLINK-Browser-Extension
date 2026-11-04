@@ -31,7 +31,7 @@
       const arsonPage=crimes&&SLINK.core.arsonPage;
       const arson=arsonPage?arsonPage.connect({
         eligible:()=>!stopped&&!context.signal?.aborted&&context.isActive?.()!==false,
-        journal:{find:(_crime,key)=>SLINK.core.messaging.send('crimes.recipes.find',{key}),record:(_crime,key,steps)=>SLINK.core.messaging.send('crimes.recipes.record',{key,steps})}
+        journal:{candidates:(_crime,key)=>SLINK.core.messaging.send('crimes.recipes.candidates',{key}),record:(_crime,key,steps)=>SLINK.core.messaging.send('crimes.recipes.record',{key,steps})}
       }):null;
       function applyArson(value){
         arsonEnabled=value===true;

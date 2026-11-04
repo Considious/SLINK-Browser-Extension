@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.19.44",
+  "version": "0.19.45",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -91,6 +91,7 @@
         "src/core/target-list.js",
         "src/core/adhd.js",
         "src/core/arson-ledger.js",
+        "src/core/arson-advice.js",
         "src/core/arson-page.js",
         "src/core/market.js",
         "src/core/merits.js",
