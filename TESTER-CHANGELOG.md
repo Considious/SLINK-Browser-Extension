@@ -2,6 +2,8 @@
 
 ## What changed
 
+- Chat can show Fair Fight beside player IDs, profile links and attack links right inside the message. Turn on “Show Fair Fight next to player mentions” in Chat settings. Try a bracketed ID mid-sentence, a message containing just an ID, and a Torn attack link. The badge on a plain ID opens the profile when clicked or tapped; the original attack link still works as before.
+
 - Efficiency → Crimes now has a subtab for each supported crime. Arson has an opt-in helper preview with observed requirements, damage and nerve information, and cautious burn guidance. It does not perform game actions or present unvalidated full recipes.
 
 - Efficiency → Crimes now houses crime reminders and unique trackers, including Pickpocketing progress. A matching Cluster Ring opportunity is also shown in regular Alerts; the two views share the same alert and snooze. Turn individual crime trackers off in Crimes settings to stop their checks.
