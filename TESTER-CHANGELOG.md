@@ -2,7 +2,9 @@
 
 ## What changed
 
-- Arson can share newly confirmed recipes with SLINK up to twice a day while you’re active. Turn on sharing under Efficiency → Crimes → Arson. Turn it off to discard unsent uploads and keep saving recipes on this device.
+- Crimes now has three fixed tabs: Arson, Cracking (coming soon), and Uniques. Turn unique trackers on or off directly in Uniques.
+- Hover over or tap the fire icon on an Arson job to see the Arsonist’s Ledger formula, costs, payout, nerve, timing and notes. Try a job near the top and bottom of the screen; the popup should stay readable and not clip into the row.
+- Turning on the Arson helper also shares newly confirmed recipe details up to twice a day. Turning the helper off pauses sharing.
 
 - Arson can remember a successful recipe on this device. With Arson Help enabled, finish a job from Breach through Collect, then open Arson Help on another job with the same scenario and requirements. Look for “Previously successful on this device.” Jobs already in progress when the helper starts and failed jobs should not create recipes.
 

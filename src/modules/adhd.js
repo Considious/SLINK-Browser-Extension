@@ -26,7 +26,7 @@
       let clockTimer = null;
       let current = null;
       let lastRenderSignature = null;
-      let activeCrime='searchCashUnique';
+      let activeCrime='arson';
       let arsonEnabled=false;
       const arsonPage=crimes&&SLINK.core.arsonPage;
       const arson=arsonPage?arsonPage.connect({
@@ -102,7 +102,7 @@
         current = status;
         ui.setThemeHealth?.(status?.life?.current, status?.life?.maximum);
         const alerts = SLINK.core.adhd.alertsForView(status?.activeAlerts || [], crimes);
-        const selectedAlerts=crimes?alerts.filter(row=>row.id===activeCrime):alerts;
+        const selectedAlerts=crimes?(activeCrime==='uniques'?alerts:[]):alerts;
         ui.setAlertCount(crimes?'crimes':'adhd', alerts.length, { group:'efficiency', label:'active Efficiency reminders' });
         updateStatus();
         const root = ui.getContentElement();
@@ -138,27 +138,25 @@
         }
         root.append(summary);
         if (crimes) {
-          const nav=document.createElement('nav');nav.className='slink-adhd-links';nav.setAttribute('aria-label','Crime tools');
+          const nav=document.createElement('nav');nav.className='slink-adhd-links';nav.style.cssText='display:grid;grid-template-columns:repeat(3,minmax(0,1fr))';nav.setAttribute('aria-label','Crime tools');
           for(const [id,label] of Object.entries(SLINK.core.adhd.CRIME_TABS)){
             const tab=document.createElement('button');tab.type='button';tab.textContent=label;tab.setAttribute('aria-pressed',String(id===activeCrime));
             if(id===activeCrime)tab.style.fontWeight='700';
             tab.onclick=()=>{activeCrime=id;render(current);};nav.append(tab);
           }
           root.append(nav);
-          if(activeCrime==='arsonUnique'&&arson){
+          if(activeCrime==='arson'&&arson){
             const label=document.createElement('label');const toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=arsonEnabled;
             toggle.onchange=async()=>{toggle.disabled=true;try{await SLINK.core.storage.set('crimes.arson.enabled',toggle.checked);applyArson(toggle.checked);}catch(error){toggle.checked=arsonEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
             label.append(toggle,document.createTextNode(' Enable Arson Helper (preview)'));root.append(label);
-            const sharing=document.createElement('label'),share=document.createElement('input');share.type='checkbox';share.disabled=true;
-            sharing.append(share,document.createTextNode(' Share successful Arson recipes with SLINK (materials, actions and job requirements only)'));root.append(sharing);
-            SLINK.core.messaging.send('crimes.recipes.get').then(result=>{share.checked=result.share;share.disabled=false;}).catch(()=>{});
-            share.onchange=async()=>{const value=share.checked;share.disabled=true;try{await SLINK.core.messaging.send('crimes.recipes.share',{share:value});}catch(error){share.checked=!value;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{share.disabled=false;}};
+            const note=document.createElement('p');note.textContent='Hover over the fire icon in Torn. Enabling Arson Help also shares confirmed recipe details with SLINK.';root.append(note);
           }
-          const progress = document.createElement('p');
-          progress.textContent = 'Manage each crime tracker in Settings.'; root.append(progress);
-          for (const row of status?.crimeUniques || []) {
-            if (row.id!==activeCrime || status.settings?.enabled?.[row.id] === false) continue;
-            const line=document.createElement('p'); line.textContent=`${row.label} · ${row.completed}/${row.total || '—'} uniques`;root.append(line);
+          if(activeCrime==='cracking'){const note=document.createElement('p');note.textContent='Cracking helper coming soon.';root.append(note);}
+          if(activeCrime==='uniques')for(const definition of SLINK.core.adhd.CRIME_UNIQUE_DEFINITIONS){
+            const row=(status?.crimeUniques||[]).find(entry=>entry.id===definition.id);
+            const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=status?.settings?.enabled?.[definition.id]!==false;
+            label.style.display='block';label.append(toggle,document.createTextNode(' '+definition.label+(row?.total?' · '+row.completed+'/'+row.total:'')));root.append(label);
+            toggle.onchange=async()=>{const value=toggle.checked;toggle.disabled=true;try{render(await SLINK.core.messaging.send('adhd.settings.save',{enabled:{[definition.id]:value},...(value?{}:{soundEnabled:{[definition.id]:false}})}));}catch(error){toggle.checked=!value;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
           }
         }
         if (!crimes) root.append(SLINK.core.adhd.reminderControls(status.settings || {},

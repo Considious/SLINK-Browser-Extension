@@ -21,7 +21,7 @@
   let accessExpanded = null;
   let targetView = 'leveling';
   let efficiencyActive='alerts';
-  let activeCrime='searchCashUnique';
+  let activeCrime='arson';
   const visiblePage=()=>document.visibilityState!=='hidden'?document.querySelector('[data-dashboard-page]:not([hidden])')?.dataset.dashboardPage:null;
   let adminUser = null;
   let activeTheme = SLINK.core.themes.get();
@@ -563,13 +563,16 @@
     setAdhdControl('adhd-open-new-tab', settings.openLinksInNewTab === true, 'checked');
     renderAdhdToggleRows(byId('adhd-alert-toggles'), SLINK.core.adhd.ALERT_DEFINITIONS.filter(row=>!SLINK.core.adhd.isCrimeAlert(row.id)), settings, 'alert');
     const crimeNav=byId('crime-subtabs');
+    crimeNav.style.cssText='display:grid;grid-template-columns:repeat(3,minmax(0,1fr))';
     if(!crimeNav.children.length)for(const [id,label] of Object.entries(SLINK.core.adhd.CRIME_TABS)){
       const tab=document.createElement('button');tab.type='button';tab.className='efficiency-tab';tab.textContent=label;tab.dataset.crimeTab=id;
       tab.onclick=()=>{activeCrime=id;renderAdhd();};crimeNav.append(tab);
     }
     for(const tab of crimeNav.children){tab.classList.toggle('active',tab.dataset.crimeTab===activeCrime);tab.setAttribute('aria-pressed',String(tab.dataset.crimeTab===activeCrime));}
     byId('crime-panel-title').textContent=SLINK.core.adhd.CRIME_TABS[activeCrime];
-    byId('arson-helper-setting').hidden=activeCrime!=='arsonUnique';
+    byId('arson-helper-setting').hidden=activeCrime!=='arson';
+    byId('crime-cracking-note').hidden=activeCrime!=='cracking';
+    byId('crime-unique-controls').hidden=activeCrime!=='uniques';
     const crimeToggles=byId('crimes-alert-toggles');
     renderAdhdToggleRows(crimeToggles, SLINK.core.adhd.CRIME_UNIQUE_DEFINITIONS, settings, 'alert');
     for(const row of crimeToggles.children)row.style.display=row.dataset.alertDefinition===activeCrime?'':'none';
@@ -637,7 +640,7 @@
     }
     }
     renderCards(list, alerts);
-    renderCards(byId('crimes-alert-list'), SLINK.core.adhd.alertsForView(allAlerts,true).filter(row=>row.id===activeCrime));
+    renderCards(byId('crimes-alert-list'), SLINK.core.adhd.alertsForView(allAlerts,true).filter(()=>activeCrime==='uniques'));
     void claimAdhdSound();
   }
 
@@ -1897,13 +1900,6 @@
     for (const eventName of ['input','change']) byId(id).addEventListener(eventName, () => markAdhdSettingDirty(key));
   }
   const arsonToggle=byId('arson-helper-enabled');
-  const shareLabel=document.createElement('label'),shareToggle=document.createElement('input');shareToggle.type='checkbox';shareToggle.disabled=true;
-  shareLabel.append(shareToggle,document.createTextNode(' Share successful Arson recipes with SLINK (materials, actions and job requirements only)'));
-  const arsonSettings=document.createElement('div'),helperLabel=arsonToggle.closest('label');
-  helperLabel.replaceWith(arsonSettings);arsonSettings.id='arson-helper-setting';arsonSettings.hidden=helperLabel.hidden;
-  helperLabel.removeAttribute('id');helperLabel.hidden=false;arsonSettings.append(helperLabel,document.createElement('br'),shareLabel);
-  SLINK.core.messaging.send('crimes.recipes.get').then(result=>{shareToggle.checked=result.share;shareToggle.disabled=false;}).catch(()=>{});
-  shareToggle.onchange=async()=>{const value=shareToggle.checked;shareToggle.disabled=true;try{await SLINK.core.messaging.send('crimes.recipes.share',{share:value});}catch(error){shareToggle.checked=!value;byId('crimes-message').textContent=errorText(error);}finally{shareToggle.disabled=false;}};
   arsonToggle.disabled=true;
   SLINK.core.storage.get('crimes.arson.enabled',false).then(value=>{arsonToggle.checked=value===true;arsonToggle.disabled=false;}).catch(error=>{byId('crimes-message').textContent=errorText(error);});
   arsonToggle.onchange=async()=>{
@@ -1917,15 +1913,16 @@
     try{adhd=await SLINK.core.messaging.send('adhd.refresh');renderAdhd();message.textContent=adhd?.lastError || 'Refreshed.';}
     catch(error){message.textContent=errorText(error);}finally{setBusy(button,false);}
   };
-  byId('crimes-save').onclick=async event=>{
-    const button=event.currentTarget;setBusy(button,true);const message=byId('crimes-message');
+  byId('crimes-alert-toggles').addEventListener('change',async event=>{
+    const input=event.target,id=input.dataset.alertVisibleId||input.dataset.alertSoundId;if(!id)return;
+    const sound=!!input.dataset.alertSoundId,key='alert:'+(sound?'sound:':'visible:')+id;
+    const value=input.checked,message=byId('crimes-message');input.disabled=true;
     try{
-      const root=byId('crimes-alert-toggles');
-      const enabled=Object.fromEntries([...root.querySelectorAll('[data-alert-visible-id]')].map(input=>[input.dataset.alertVisibleId,input.checked]));
-      const soundEnabled=Object.fromEntries([...root.querySelectorAll('[data-alert-sound-id]')].map(input=>[input.dataset.alertSoundId,input.checked]));
-      adhd=await SLINK.core.messaging.send('adhd.settings.save',{enabled,soundEnabled});for(const id of Object.keys(enabled)){adhdSettingsDirty.delete('alert:visible:'+id);adhdSettingsDirty.delete('alert:sound:'+id);}renderAdhd();message.textContent='Saved.';
-    }catch(error){message.textContent=errorText(error);}finally{setBusy(button,false);}
-  };
+      adhd=await SLINK.core.messaging.send('adhd.settings.save',sound?{soundEnabled:{[id]:value},...(value?{enabled:{[id]:true}}:{})}:{enabled:{[id]:value},...(value?{}:{soundEnabled:{[id]:false}})});
+      adhdSettingsDirty.delete(key);if(!sound&&!value)adhdSettingsDirty.delete('alert:sound:'+id);
+      renderAdhd();message.textContent='';
+    }catch(error){message.textContent=errorText(error);input.checked=!value;}finally{input.disabled=false;}
+  });
   byId('adhd-save-settings').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true); byId('adhd-settings-message').textContent = '';
     try {
