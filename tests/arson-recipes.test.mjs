@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
 for(const source of ['../src/core/arson-page.js',...process.argv.slice(2)]){
- const context=vm.createContext({});
+ const context=vm.createContext({crypto});
  vm.runInContext(fs.readFileSync(new URL(source,import.meta.url),'utf8'),context);
  const {captureArson,recipeJournal}=context.SLINK_ARSON_PAGE;
  let stored={},writes=0,t=1,outcome=null;
@@ -29,5 +29,25 @@ for(const source of ['../src/core/arson-page.js',...process.argv.slice(2)]){
  prepare();capture.click(row,ready);outcome=result('Failure',false);await capture.inspect(row,done);assert.equal(writes,1);
  prepare();capture.click(row,ready);t+=16000;outcome=result('Reward',true,true);await capture.inspect(row,done);assert.equal(writes,1);
  prepare();capture.click(row,ready);capture.clear();outcome=result('Reward',true,true);await capture.inspect(row,done);assert.equal(writes,1);
+ assert.equal(stored.sharing,undefined,'Local capture alone never queues an upload');
+ const steps=(await journal.find('arson',key)).steps,owner='42',halfDay=12*60*60*1000;
+ await journal.record('arson',key,steps,owner);await journal.record('arson',key,steps,owner);
+ assert.equal(stored.sharing.pending.length,1);
+ let batch,uploads=0,clock=halfDay*10;
+ const send=async payload=>{uploads++;batch=payload;throw Error('Lost response');};
+ await journal.sync('99',send,()=>true,()=>clock);assert.equal(uploads,0);
+ await journal.sync(owner,send,()=>true,()=>clock);assert.equal(uploads,1);
+ assert.equal(stored.sharing.pending.length,1);
+ await journal.sync(owner,send,()=>true,()=>clock);assert.equal(uploads,1,'Retry is backed off');
+ clock+=16*60*1000;
+ await journal.sync(owner,async payload=>{assert.deepEqual(payload,batch);return {ok:true,slot:payload.slot,accepted:[]};},()=>true,()=>clock);
+ assert.equal(stored.sharing.pending.length,1,'Incomplete acknowledgment retains the batch');
+ clock+=16*60*1000;
+ const ack=async payload=>{uploads++;return {ok:true,slot:payload.slot,accepted:payload.records.map(row=>row.id)};};
+ await journal.sync(owner,ack,()=>true,()=>clock);assert.equal(stored.sharing.pending.length,0);
+ await journal.record('arson',key,steps,owner);await journal.sync(owner,ack,()=>true,()=>clock);assert.equal(uploads,2,'No second successful batch in the same window');
+ clock+=halfDay;await journal.sync(owner,ack,()=>false,()=>clock);assert.equal(uploads,2);
+ await journal.sync(owner,ack,()=>true,()=>clock);assert.equal(uploads,3);
+ await journal.record('arson',key,steps,owner);await journal.discard();assert.equal(stored.sharing,undefined);assert.ok(await journal.find('arson',key));
 }
 console.log('Arson recipes: complete successful run, partial run, stale outcome, failure and lifecycle guards passed.');

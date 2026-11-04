@@ -31,7 +31,7 @@
       const arsonPage=crimes&&SLINK.core.arsonPage;
       const arson=arsonPage?arsonPage.connect({
         eligible:()=>!stopped&&!context.signal?.aborted&&context.isActive?.()!==false,
-        journal:arsonPage.recipeJournal({load:()=>SLINK.core.storage.get('crimes.recipes.v1',{}),save:value=>SLINK.core.storage.set('crimes.recipes.v1',value)})
+        journal:{find:(_crime,key)=>SLINK.core.messaging.send('crimes.recipes.find',{key}),record:(_crime,key,steps)=>SLINK.core.messaging.send('crimes.recipes.record',{key,steps})}
       }):null;
       function applyArson(value){
         arsonEnabled=value===true;
@@ -149,6 +149,10 @@
             const label=document.createElement('label');const toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=arsonEnabled;
             toggle.onchange=async()=>{toggle.disabled=true;try{await SLINK.core.storage.set('crimes.arson.enabled',toggle.checked);applyArson(toggle.checked);}catch(error){toggle.checked=arsonEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
             label.append(toggle,document.createTextNode(' Enable Arson Helper (preview)'));root.append(label);
+            const sharing=document.createElement('label'),share=document.createElement('input');share.type='checkbox';share.disabled=true;
+            sharing.append(share,document.createTextNode(' Share successful Arson recipes with SLINK (materials, actions and job requirements only)'));root.append(sharing);
+            SLINK.core.messaging.send('crimes.recipes.get').then(result=>{share.checked=result.share;share.disabled=false;}).catch(()=>{});
+            share.onchange=async()=>{const value=share.checked;share.disabled=true;try{await SLINK.core.messaging.send('crimes.recipes.share',{share:value});}catch(error){share.checked=!value;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{share.disabled=false;}};
           }
           const progress = document.createElement('p');
           progress.textContent = 'Manage each crime tracker in Settings.'; root.append(progress);

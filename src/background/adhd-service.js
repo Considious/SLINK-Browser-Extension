@@ -640,7 +640,46 @@
     return chrome.alarms.get(ALARM);
   }
 
+  const recipeKey='crimes.recipes.v1',recipeConsent='crimes.recipes.share.v1';
+  const recipes=SLINK.core.arsonPage?.recipeJournal({load:()=>SLINK.core.storage.get(recipeKey,{}),save:value=>SLINK.core.storage.set(recipeKey,value)});
+  async function recipeSession(){
+    const session=await SLINK.core.storage.get('access.session.v1',null);
+    return session?.token&&session.userId&&Number(session.expiresAt)>Date.now()&&SLINK.core.permissions.hasScope(session,ADHD.ALERT_SCOPE)?session:null;
+  }
+  const recipeOptedIn=async owner=>!!owner&&await SLINK.core.storage.get(recipeConsent,null)===owner;
+  let recipeSync=null;
+  function syncRecipes(){
+    if(recipeSync)return recipeSync;
+    recipeSync=(async()=>{
+      const session=await recipeSession();
+      const owner=String(session?.userId||'');
+      const allowed=async()=>await recipeOptedIn(owner)&&await SLINK.core.storage.get('crimes.arson.enabled',false)===true&&String((await recipeSession())?.userId||'')===owner;
+      if(!recipes||!await allowed())return;
+      await recipes.sync(owner,async batch=>{
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+        try{return await SLINK.core.http.requestJson('contributionWorker',SLINK.core.http.CAPABILITY_ORIGINS.contributionWorker+'/api/crime-recipes',{method:'POST',headers:{Authorization:'Bearer '+session.token,'Content-Type':'application/json'},body:JSON.stringify({...batch,client:'extension'}),signal:controller.signal,cache:'no-store'});}
+        finally{clearTimeout(timer);}
+      },allowed);
+    })().finally(()=>{recipeSync=null;});
+    return recipeSync;
+  }
   const routes = Object.freeze({
+    async 'crimes.recipes.get'(){return {share:await recipeOptedIn(String((await recipeSession())?.userId||''))};},
+    async 'crimes.recipes.share'(input){
+      const owner=String((await recipeSession())?.userId||'');
+      if(!owner&&input?.share===true)throw Error('Verify SLINK access before sharing recipes.');
+      const share=input?.share===true;
+      await SLINK.core.storage.set(recipeConsent,share?owner:null);
+      if(!share)await recipes.discard();
+      return {share};
+    },
+    async 'crimes.recipes.find'(input){if(!await recipeSession()||typeof input?.key!=='string')return null;return recipes.find('arson',input.key);},
+    async 'crimes.recipes.record'(input,sender){
+      const owner=String((await recipeSession())?.userId||'');
+      if(!owner||!sender?.tab?.active||!await SLINK.core.storage.get('crimes.arson.enabled',false)||typeof input?.key!=='string'||input.key.length>1500||!Array.isArray(input.steps)||!input.steps.length||input.steps.length>24)return;
+      await recipes.record('arson',input.key,input.steps,await recipeOptedIn(owner)?owner:null);
+      void syncRecipes().catch(()=>{});
+    },
     'adhd.status':payload => publicStatus(payload?.refreshIfDue !== false),
     'adhd.refresh':() => refresh(true),
     'adhd.settings.save':saveSettings,
@@ -653,7 +692,7 @@
     'adhd.sound.ack':acknowledgeSound
   });
 
-  SLINK.define('services', 'adhd', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, refreshMobility, refreshCrimeWindows, routes }));
+  SLINK.define('services', 'adhd', Object.freeze({ ALARM, ensureAlarm, publicStatus, refresh, refreshMobility, refreshCrimeWindows, routes,syncRecipes }));
 })(globalThis);
 
 

@@ -2,6 +2,8 @@
 
 ## What changed
 
+- Arson can share newly confirmed recipes with SLINK up to twice a day while you’re active. Turn on sharing under Efficiency → Crimes → Arson. Turn it off to discard unsent uploads and keep saving recipes on this device.
+
 - Arson can remember a successful recipe on this device. With Arson Help enabled, finish a job from Breach through Collect, then open Arson Help on another job with the same scenario and requirements. Look for “Previously successful on this device.” Jobs already in progress when the helper starts and failed jobs should not create recipes.
 
 - Chat can show Fair Fight beside player IDs, profile links and attack links right inside the message. Turn on “Show Fair Fight next to player mentions” in Chat settings. Try a bracketed ID mid-sentence, a message containing just an ID, and a Torn attack link. The badge on a plain ID opens the profile when clicked or tapped; the original attack link still works as before.

@@ -1897,6 +1897,13 @@
     for (const eventName of ['input','change']) byId(id).addEventListener(eventName, () => markAdhdSettingDirty(key));
   }
   const arsonToggle=byId('arson-helper-enabled');
+  const shareLabel=document.createElement('label'),shareToggle=document.createElement('input');shareToggle.type='checkbox';shareToggle.disabled=true;
+  shareLabel.append(shareToggle,document.createTextNode(' Share successful Arson recipes with SLINK (materials, actions and job requirements only)'));
+  const arsonSettings=document.createElement('div'),helperLabel=arsonToggle.closest('label');
+  helperLabel.replaceWith(arsonSettings);arsonSettings.id='arson-helper-setting';arsonSettings.hidden=helperLabel.hidden;
+  helperLabel.removeAttribute('id');helperLabel.hidden=false;arsonSettings.append(helperLabel,document.createElement('br'),shareLabel);
+  SLINK.core.messaging.send('crimes.recipes.get').then(result=>{shareToggle.checked=result.share;shareToggle.disabled=false;}).catch(()=>{});
+  shareToggle.onchange=async()=>{const value=shareToggle.checked;shareToggle.disabled=true;try{await SLINK.core.messaging.send('crimes.recipes.share',{share:value});}catch(error){shareToggle.checked=!value;byId('crimes-message').textContent=errorText(error);}finally{shareToggle.disabled=false;}};
   arsonToggle.disabled=true;
   SLINK.core.storage.get('crimes.arson.enabled',false).then(value=>{arsonToggle.checked=value===true;arsonToggle.disabled=false;}).catch(error=>{byId('crimes-message').textContent=errorText(error);});
   arsonToggle.onchange=async()=>{

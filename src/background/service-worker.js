@@ -17,6 +17,7 @@ importScripts(
   'local-vault.js',
   '../core/permissions.js',
   '../core/adhd.js',
+  '../core/arson-page.js',
   '../core/market.js',
   '../core/merits.js',
   '../core/themes.js',
@@ -551,6 +552,7 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
   if (alarm.name === SLINK.services.adhd.ALARM) {
+    if(activeTornPageTabId!=null)void SLINK.services.adhd.syncRecipes?.().catch(()=>{});
     void Promise.all([
       SLINK.services.adhd.publicStatus(true),
       SLINK.services.moneyProperty.publicStatus(true)
