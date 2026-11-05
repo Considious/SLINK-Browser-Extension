@@ -2,6 +2,8 @@
 
 ## What changed
 
+- Arson can show a starting formula using materials you own even before you’ve recorded a successful run. An untested substitution is labeled, and strict job requirements still need a confirmed recipe.
+
 - Personal room grants now enable room creation on the connected faction node. In Rooms, check that a granted user can create, rename, invite faction members to, and archive their own room, but cannot manage faction-sponsored rooms or rooms owned by someone else.
 
 - Pin faction rooms beside the Rooms button in Torn’s chat bar. Pick an icon and color for each shortcut and check that its unread count updates. Personal rooms are listed as unavailable; faction-sponsored rooms are unchanged.

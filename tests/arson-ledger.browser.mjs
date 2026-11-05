@@ -27,6 +27,15 @@ try{
  await portal.getByText('Windproof Lighter',{exact:true}).waitFor();
  for(const value of ['Per nerve','Cost','Nerve','Place','Ignite'])assert.ok((await portal.textContent()).includes(value),value);
  assert.doesNotMatch(await portal.textContent(),/Flamethrower/);
+  const plans=await page.evaluate(()=>{
+    const steps=SLINK_ARSON_LEDGER.starterSteps('Beach Bum');
+    const stock=new Map([['Gasoline',{ownedQty:8,locked:false,selectable:true}],['Windproof Lighter',{ownedQty:null,locked:false,disabledReason:'Igniting is unavailable at this stage'}]]);
+    const job={phase:'preparation',action:'place',requirements:[]};
+    return [SLINK_ARSON_ADVICE.observedFormula(job,stock,[],steps),SLINK_ARSON_ADVICE.observedFormula({...job,requirements:[{kind:'insurance'}]},stock,[],steps)];
+  });
+  assert.deepEqual(plans[0].record.steps.map(step=>step.item),['Gasoline','Gasoline','Windproof Lighter']);
+  assert.equal(plans[0].provisional,true);
+  assert.equal(plans[1].record,undefined);
  const box=await portal.boundingBox();assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<=390&&box.y+box.height<=600);
  const row=await page.locator('#fixture').boundingBox();assert.ok(box.y<row.y,'Popup is not clipped to the job row');
  await icon.click();await portal.getByText('Building stats',{exact:true}).click();assert.ok(await portal.locator('details').evaluate(node=>node.open));
