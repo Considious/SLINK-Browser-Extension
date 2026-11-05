@@ -40,6 +40,17 @@ try{
   assert.equal(plans[1].record,undefined);
   for(const plan of plans.slice(2,6)){assert.equal(plan.modified,true);assert.equal(plan.record.steps.length,3);}
   assert.equal(plans[7],true);
+  const totalBurn=await page.evaluate(()=>{
+    const job={name:'Beach Hut',scenario:'Naked Aggression',phase:'preparation',action:'place',requirements:[{kind:'damage',limit:{kind:'total',label:'Total destruction required'}}]};
+    const stock=new Map([['Gasoline',{ownedQty:8,locked:false,selectable:true}],['Windproof Lighter',{ownedQty:null,locked:false,disabledReason:'Igniting is unavailable at this stage'}]]);
+    const steps=SLINK_ARSON_LEDGER.starterSteps(job.scenario),building=SLINK_ARSON_LEDGER.building(job.name);
+    const plan=SLINK_ARSON_ADVICE.observedFormula(job,stock,[],steps,building);
+    const strict=SLINK_ARSON_ADVICE.observedFormula({...job,requirements:[...job.requirements,{kind:'visibility',level:'low'}]},stock,[],steps,building);
+    return {plan,strict,rendered:SLINK_ARSON_LEDGER.render(job,plan).textContent};
+  });
+  assert.deepEqual(totalBurn.plan.record.steps.map(({action,item})=>[action,item]),[['place','Gasoline'],['place','Gasoline'],['ignite','Windproof Lighter'],['stoke','Gasoline']]);
+  assert.match(totalBurn.rendered,/Gasoline ×2/);assert.match(totalBurn.rendered,/stalls below 100%/);assert.doesNotMatch(totalBurn.rendered,/Flamethrower/);
+  assert.equal(totalBurn.strict.record,undefined);
  const box=await portal.boundingBox();assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<=390&&box.y+box.height<=600);
  const row=await page.locator('#fixture').boundingBox();assert.ok(box.y<row.y,'Popup is not clipped to the job row');
  await icon.click();await portal.getByText('Building stats',{exact:true}).click();assert.ok(await portal.locator('details').evaluate(node=>node.open));
