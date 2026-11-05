@@ -14,7 +14,7 @@ try{
   window.client={model:{status:'idle',rooms:[room],leader:true,userId:1,factionId:10},setActive(){},dispose(){},members:async()=>({members:[{user_id:1,user_name:'Considious'}]}),async refresh(){refreshes++;this.model.status='ready';},api:async(path,payload)=>{calls.push({path,payload});if(payload?.action==='room.update')Object.assign(room,payload);return {rooms:[room],leaders:[1]};}};
   window.controller=await SLINK_FACTION_NODE_SETTINGS(document.getElementById('settings'),{...preferences,createManager:container=>SLINK_FACTION_NODE_UI.mountAdmin({client,container,preferences})});
  });
- await page.locator('[data-admin-form]').waitFor({state:'visible'});
+ await page.locator('[data-admin-form]').waitFor({state:'visible',timeout:5000}).catch(async error=>{throw Error((await page.locator('[data-node-save]').textContent())||error.message);});
  assert.equal(await page.locator('[data-node-enabled]').isChecked(),true);assert.equal(await page.locator('[data-node-idle]').inputValue(),'0');await page.locator('[data-node-idle]').selectOption('15');await page.waitForFunction(()=>settings.idleMinutes===15);
  assert.equal(await page.locator('[data-node-sound],[data-room-sound],[data-node-open],[data-node-manage]').count(),0,'No duplicate chat sound controls or miniature-chat launchers in the GUI');
  assert.equal(await page.locator('[data-slink-faction-node],[data-draft],[data-messages]').count(),0,'GUI management must not create a chat window or composer');

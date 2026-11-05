@@ -2,6 +2,9 @@
 
 ## What changed
 
+- Rooms has a searchable hub and separate Torn-style chat windows. Open two rooms, minimize one to its chat-bar button, then close it completely and reopen it from the hub. Room windows and minimized state are remembered when changing pages.
+- The Rooms design was inspired by [Torn Rooms by Manuel Cecchetto](https://github.com/manuelcecchetto/torn-rooms). SLINK uses its own code and artwork.
+
 - Naked Aggression and similar single-area total-destruction jobs can now show a starting plan with a lighter and fuel when the Flamethrower is locked. Stoke only if the fire is still burning and damage has stalled below 100%.
 
 - Arson remembers picker inventory when you click away and groups repeated actions, such as “Place Gasoline ×6.” Modified jobs can show an inventory-matched starting formula, with a warning when the modifier outcome is unverified.
