@@ -2,6 +2,8 @@
 
 ## What changed
 
+- Personal room grants now enable room creation on the connected faction node. In Rooms, check that a granted user can create, rename, invite faction members to, and archive their own room, but cannot manage faction-sponsored rooms or rooms owned by someone else.
+
 - Pin faction rooms beside the Rooms button in Torn’s chat bar. Pick an icon and color for each shortcut and check that its unread count updates. Personal rooms are listed as unavailable; faction-sponsored rooms are unchanged.
 - On devices that use the HTTPS fallback, Rooms checks less often when quiet or minimized. Try reopening a room after a pause and check that unread messages and edits catch up.
 

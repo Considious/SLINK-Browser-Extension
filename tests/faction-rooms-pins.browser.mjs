@@ -11,6 +11,7 @@ try{
   window.opens=[];
   window.state={unread:3,access:{read:true,speak:true},messages:new Map(),pending:new Map(),status:'connected'};
   const client={model:{rooms:[{room_id:'general',name:'Alliance',visibility:'faction'}],status:'ready',userId:1,factionId:2},room:()=>state,setActive(){},setViewedRoom(){},dispose(){},subscribe(fn){window.emit=fn;return()=>{};},async refresh(){},async connect(id){opens.push(id);},command(){}};
+  window.testClient=client;
   window.roomsUi=SLINK_FACTION_NODE_UI.mount({client,activity:{eligible:()=>true,subscribe:()=>()=>{}},preferences:{get:async()=>saved,patch:async change=>saved=SLINK_FACTION_NODE.patchRoomSettings(saved,change)}});
  });
  await page.locator('#slink-faction-node-button').click();
@@ -26,6 +27,19 @@ try{
  const message=(id,seq)=>({message_id:id,seq,revision:1,user_id:2,created_at:Date.now(),content:{type:'text',text:id}});
  for(const [id,seq] of [['first',1],['second',2]])await page.evaluate(value=>{state.messages.set(value.message_id,value);emit({type:'room',id:'general',message:value});},message(id,seq));
  assert.equal(await page.locator('[data-messages] [data-message-id]').count(),2);
+ await page.evaluate(()=>{
+  if(!crypto.randomUUID)crypto.randomUUID=()=> 'fixture-request-id';
+  testClient.model.personal={used:0,limit:1,rooms:[]};
+  testClient.api=async (path,input)=>{window.personalCall={path,input};testClient.model.personal={used:1,limit:1,rooms:[{room_id:'mine',name:input.name,description:'',members:[]}]};};
+  testClient.refresh=async()=>emit({type:'list'});
+ });
+ await page.getByRole('button',{name:'Room list',exact:true}).click();
+ await page.locator('[data-personal-rooms] summary').filter({hasText:'Create personal room'}).click();
+ await page.getByLabel('Room name').fill('My group');
+ await page.getByRole('button',{name:'Create personal room'}).click();
+ await page.getByText('Manage My group',{exact:true}).waitFor();
+ const call=await page.evaluate(()=>personalCall);assert.equal(call.path,'/api/personal-rooms');assert.equal(call.input.action,'create');assert.equal(call.input.name,'My group');assert.ok(call.input.request_id);
+ assert(await page.getByRole('button',{name:'Create personal room'}).isDisabled());
  await page.evaluate(()=>roomsUi.dispose());assert.equal(await pin.count(),0);assert.deepEqual(errors,[]);
  console.log('Room pins, saved colors, unread, no extra connection, message append and disabled personal rooms passed.');
 }finally{await browser.close();}
