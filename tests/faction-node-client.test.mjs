@@ -82,9 +82,18 @@ test('HTTPS fallback keeps real server read-only permissions and discards a late
 });
 
 test('HTTPS monitoring backs off in background and catches up immediately on focus',async()=>{
- const f=fixture({insecure:true});f.client.setActive(true);await f.client.connect('general');f.client.setBackground(true);
+ const f=fixture({insecure:true});f.client.setActive(true);f.client.setViewedRoom('general');await f.client.connect('general');f.client.setBackground(true);
  const pending=[...f.timers].find(([,timer])=>timer.ms===5000);f.timers.delete(pending[0]);pending[1].fn();await new Promise(resolve=>setImmediate(resolve));assert([...f.timers.values()].some(timer=>timer.ms===30000));
  const before=f.requests.length;f.client.setBackground(false);await new Promise(resolve=>setImmediate(resolve));assert(f.requests.length>before);assert([...f.timers.values()].some(timer=>timer.ms===5000));f.client.dispose();
+});
+test('HTTPS polling slows for quiet and unselected rooms',async()=>{
+ const f=fixture({insecure:true});f.client.setActive(true);f.client.setViewedRoom('general');await f.client.connect('general');await f.client.connect('other');
+ assert([...f.timers.values()].some(t=>t.ms===30000),'Unselected room must not poll quickly');
+ f.advance(61000);
+ const next=[...f.timers].find(([,t])=>t.ms===5000);f.timers.delete(next[0]);next[1].fn();await new Promise(resolve=>setImmediate(resolve));
+ assert([...f.timers.values()].some(t=>t.ms===15000),'Quiet visible room backs off');
+ assert(f.requests.some(r=>r.url.includes('/sync?delta=1&')));
+ f.client.dispose();
 });
 test('temporary background auth failure reconnects after backoff without keeping expired sockets alive',async()=>{
  const f=fixture();f.client.setActive(true);await f.client.connect('general');f.welcome();f.ticketFailures=1;f.advance(280000);[...f.timers.values()].find(timer=>timer.ms===280000).fn();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.sockets[0].readyState,3);

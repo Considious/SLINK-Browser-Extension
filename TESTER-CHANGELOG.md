@@ -2,6 +2,9 @@
 
 ## What changed
 
+- Pin faction rooms beside the Rooms button in Torn’s chat bar. Pick an icon and color for each shortcut and check that its unread count updates. Personal rooms are listed as unavailable; faction-sponsored rooms are unchanged.
+- On devices that use the HTTPS fallback, Rooms checks less often when quiet or minimized. Try reopening a room after a pause and check that unread messages and edits catch up.
+
 - Crimes now has three fixed tabs: Arson, Cracking (coming soon), and Uniques. Turn unique trackers on or off directly in Uniques.
 - Hover over or tap the fire icon beside the Arson material picker. Open the picker to let SLINK check your stock. SLINK shows a previously successful recipe only if you have the required materials; it no longer shows the Ledger’s preset recipe as a recommendation.
 - Turning on the Arson helper also shares newly confirmed recipe details up to twice a day. Turning the helper off pauses sharing.
