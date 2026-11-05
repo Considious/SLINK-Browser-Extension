@@ -12,7 +12,7 @@ try{
   window.opens=[];
   window.state={unread:3,access:{read:true,speak:true},messages:new Map(),pending:new Map(),status:'connected'};
   const callbacks=new Set();window.emit=event=>{for(const fn of [...callbacks])fn(event);};
-  const client={model:{rooms:[{room_id:'general',name:'Alliance',visibility:'faction'},{room_id:'war',name:'War',visibility:'faction'}],status:'ready',userId:1,factionId:2},room:()=>state,setActive(){},setViewedRoom(){},dispose(){},subscribe(fn){callbacks.add(fn);return()=>callbacks.delete(fn);},async refresh(){},async connect(id){opens.push(id);},command(){}};
+  const client={model:{rooms:[{room_id:'general',name:'Alliance',visibility:'faction'},{room_id:'war',name:'War',visibility:'faction',color:'#784442',icon:'★'}],status:'ready',userId:1,factionId:2},room:()=>state,setActive(){},setViewedRoom(){},dispose(){},subscribe(fn){callbacks.add(fn);return()=>callbacks.delete(fn);},async refresh(){},async connect(id){opens.push(id);},command(){}};
   window.testClient=client;
   window.savedView={};window.mountRooms=()=>SLINK_FACTION_NODE_UI.mount({client,activity:{eligible:()=>true,subscribe:()=>()=>{}},preferences:{get:async()=>saved,patch:async change=>saved=SLINK_FACTION_NODE.patchRoomSettings(saved,change)},view:{get:async()=>savedView,save:async record=>{savedView=record;}}});
   window.roomsUi=mountRooms();
@@ -48,6 +48,11 @@ try{
  });
  await page.getByRole('button',{name:'War, 3 unread'}).click();
  assert.equal(await page.locator('[data-chat-view]:visible').count(),2);
+ const red=page.locator('header:visible').filter({has:page.locator('[data-window-title]',{hasText:'War'})});
+ assert.equal(await red.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(120, 68, 66)');
+ assert.equal(await red.locator('[data-header-icon]').textContent(),'★');
+ const hub=await page.getByRole('searchbox',{name:'Search your rooms'}).boundingBox();
+ for(const composer of await page.locator('[data-draft]:visible').all())assert((await composer.boundingBox()).x<hub.x,'Room must open to the left of the hub');
  if(process.env.SLINK_ROOMS_SCREENSHOT)await page.screenshot({path:process.env.SLINK_ROOMS_SCREENSHOT});
  const war=page.locator('[data-room-pin="war"]');
  await war.click();

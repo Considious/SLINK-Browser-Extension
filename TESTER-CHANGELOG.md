@@ -2,6 +2,11 @@
 
 ## What changed
 
+- Choose an icon and color when creating or editing a room. Reopen it and check that the room icon and chat header match on desktop and PDA.
+
+- Arson Help stays enabled when leaving and returning to Arson, uses remembered picker stock, and lets the material picker sit above the formula popup.
+- Open room windows now sit to the left of the Rooms hub, with opaque chat surfaces closer to Torn’s native windows. SLINK admins can create up to five personal rooms on the connected faction node.
+
 - Rooms has a searchable hub and separate Torn-style chat windows. Open two rooms, minimize one to its chat-bar button, then close it completely and reopen it from the hub. Room windows and minimized state are remembered when changing pages.
 - The Rooms design was inspired by [Torn Rooms by Manuel Cecchetto](https://github.com/manuelcecchetto/torn-rooms). SLINK uses its own code and artwork.
 

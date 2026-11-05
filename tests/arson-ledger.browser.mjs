@@ -20,11 +20,13 @@ try{
  assert.equal(await page.locator('.fireMeter___fixture [data-slink-arson]').count(),1);
  assert.equal(await page.locator('.crime-image [data-slink-arson]').count(),0);
  await page.evaluate(()=>{
-  const picker=document.createElement('div');picker.className='itemSelector___fixture';
+  const picker=document.createElement('div');picker.className='itemSelector___fixture';picker.style.cssText='position:relative;z-index:600';
   picker.innerHTML='<div class="group___fixture"><span class="heading___fixture">Liquids</span><div class="itemCellWrap___fixture"><button aria-label="Gasoline 8 owned" aria-disabled="false"></button></div></div><div class="group___fixture"><span class="heading___fixture">Igniters</span><div class="itemCellWrap___fixture"><button aria-label="Windproof Lighter Igniting is unavailable at this stage" aria-disabled="true"></button></div><div class="itemCellWrap___fixture"><button aria-label="Item locked" aria-disabled="true"></button></div></div>';
   document.body.append(picker);document.querySelector('.itemButton___fixture').setAttribute('aria-expanded','true');
  });
  await portal.getByText('Windproof Lighter',{exact:true}).waitFor();
+ assert.equal(await page.locator('[data-slink-arson-portal]').evaluate(node=>node.style.zIndex),'599');
+ assert.equal(await portal.evaluate(node=>getComputedStyle(node).pointerEvents),'none');
  for(const value of ['Per nerve','Cost','Nerve','Place','Ignite'])assert.ok((await portal.textContent()).includes(value),value);
  assert.doesNotMatch(await portal.textContent(),/Flamethrower/);
   const plans=await page.evaluate(()=>{
@@ -53,13 +55,27 @@ try{
   assert.equal(totalBurn.strict.record,undefined);
  const box=await portal.boundingBox();assert.ok(box.x>=0&&box.y>=0&&box.x+box.width<=390&&box.y+box.height<=600);
  const row=await page.locator('#fixture').boundingBox();assert.ok(box.y<row.y,'Popup is not clipped to the job row');
+ await page.evaluate(()=>{document.querySelector('.itemSelector___fixture').remove();document.querySelector('.itemButton___fixture').setAttribute('aria-expanded','false');});
  await icon.click();await portal.getByText('Building stats',{exact:true}).click();assert.ok(await portal.locator('details').evaluate(node=>node.open));
  await page.keyboard.press('Escape');await portal.waitFor({state:'detached'});
- await page.evaluate(()=>{document.querySelector('.itemSelector___fixture').remove();document.querySelector('.itemButton___fixture').setAttribute('aria-expanded','false');window.arsonFocused=false;dispatchEvent(new Event('blur'));});
+ await page.evaluate(()=>{window.arsonFocused=false;dispatchEvent(new Event('blur'));});
  assert.equal(await icon.count(),0);
  await page.evaluate(()=>{window.arsonFocused=true;dispatchEvent(new Event('focus'));});
  await icon.hover();await portal.getByText('Windproof Lighter',{exact:true}).waitFor();
  await page.evaluate(()=>stop());assert.equal(await icon.count(),0);
+ const markup=await page.locator('#fixture').innerHTML();
+ await page.route('https://www.torn.com/page.php*',route=>route.fulfill({contentType:'text/html',body:'<main id="fixture" class="arson-root">'+markup+'</main>'}));
+ await page.goto('https://www.torn.com/page.php?sid=crimes#/arson');
+ await page.evaluate(()=>{
+   const api={core:{pageActivity:{eligible:()=>true,subscribe(){}},storage:{get:async key=>key==='crimes.arson.enabled'?true:{expiresAt:Date.now()+60000}},permissions:{hasScope:()=>true},messaging:{send:async()=>[]}},define(group,key,value){this[group][key]=value;}};
+   window.SLINK_EXTENSION=api;window.chrome={storage:{onChanged:{addListener(){}}}};
+   sessionStorage.setItem('slink.arson.picker-stock.v1',JSON.stringify([['Gasoline',{ownedQty:8,locked:false,selectable:true,observedAction:'place'}],['Flamethrower',{ownedQty:1,locked:false}]]));
+ });
+ for(const f of ['core/arson-ledger','core/arson-advice','core/arson-page','content/arson-helper'])await page.addScriptTag({content:readFileSync(new URL('../src/'+f+'.js',import.meta.url),'utf8')});
+ await icon.waitFor();
+ await page.evaluate(()=>{location.hash='/pickpocketing';});await icon.waitFor({state:'detached'});
+ await page.evaluate(()=>{location.hash='/arson';});await icon.waitFor();
+ await icon.hover();await portal.getByText('Gasoline ×2',{exact:true}).waitFor();
  assert.deepEqual(errors,[]);
  console.log('Ledger source catalog, original formula layout, unclipped mobile-width popup, pinned details and cleanup passed.');
 }finally{await browser.close();}

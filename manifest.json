@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK",
-  "version": "0.19.54",
+  "version": "0.19.55",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -125,6 +125,7 @@
         "src/content/faction-rooms.js",
         "src/content/custom-chat-buttons.js",
         "src/content/chat-ff.js",
+        "src/content/arson-helper.js",
         "src/content/ui-shell.js",
         "src/modules/leveling.js",
         "src/modules/bounties.js",

@@ -29,13 +29,9 @@
       let activeCrime='arson';
       let arsonEnabled=false;
       const arsonPage=crimes&&SLINK.core.arsonPage;
-      const arson=arsonPage?arsonPage.connect({
-        eligible:()=>!stopped&&!context.signal?.aborted&&context.isActive?.()!==false,
-        journal:{candidates:(_crime,key)=>SLINK.core.messaging.send('crimes.recipes.candidates',{key}),record:(_crime,key,steps)=>SLINK.core.messaging.send('crimes.recipes.record',{key,steps})}
-      }):null;
+      const arson=Boolean(arsonPage);
       function applyArson(value){
         arsonEnabled=value===true;
-        arson?.setEnabled(arsonEnabled);
         if(current&&!stopped)render(current);
       }
       function arsonStorageChanged(changes,area){
@@ -295,7 +291,6 @@
       return {
         stop() {
           stopped = true;
-          arson?.dispose();
           if(arson)global.chrome?.storage?.onChanged?.removeListener(arsonStorageChanged);
           if (timer) global.clearInterval(timer);
           if (clockTimer) global.clearInterval(clockTimer);
