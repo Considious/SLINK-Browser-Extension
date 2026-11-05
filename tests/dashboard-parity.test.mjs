@@ -94,3 +94,24 @@ const save=editorContext.saveEditor();editorContext.editorDraft[0].message='Newe
 assert.equal(closed,0,'A pending macro save must not close newer typing.');
 const secondSave=editorContext.saveEditor();releaseSave();await secondSave;assert.equal(closed,1);
 console.log('Dashboard host: exact/admin/denied access, revocation, visibility, stale startup, Recaller handoff and safe macro migration passed.');
+
+// Load the actual dashboard script sequence for Mugging, not the bubble bundle.
+{
+const muggingContext=vm.createContext({console,URL,AbortController,location:{href:'https://dashboard.test/'}});
+const muggingFiles=new Set(['core/runtime.js','core/errors.js','core/format.js','core/modules.js','core/mugging-ff.js','modules/mugging.js']);
+for(const [,path] of read('src/dashboard/dashboard.html').matchAll(/<script src="\.\.\/([^"]+)"/g)){
+  if(muggingFiles.has(path))vm.runInContext(read('src/'+path),muggingContext,{filename:path});
+}
+const muggingApi=muggingContext.SLINK_EXTENSION;
+const target={id:42,name:'Saved Target Fixture',fairFight:1.75,battleStatsEstimate:100000};
+muggingApi.define('core','storage',{get:async key=>key.includes('settings')?{enabled:true}:{targets:[target]}});
+muggingApi.define('core','messaging',{send:async()=>({targets:[target]})});
+const content={dataset:{},querySelector:()=>null,querySelectorAll:()=>[],closest:()=>null};
+let html='';
+const module=muggingApi.modules.list().find(row=>row.id==='mugging');
+const mounted=await module.start({ui:{setTitle(){},setModuleStyles(){},getContentElement:()=>content,setSubtitle(){},setStatus(){},setActions(){},setContentHtml:value=>{html=value;}}});
+assert.match(html,/Saved Target Fixture/);
+assert.match(html,/1\.75/);
+mounted.stop();
+console.log('Dashboard Mugging loaded and rendered a saved target with Fair Fight.');
+}
