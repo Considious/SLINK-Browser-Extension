@@ -2,6 +2,8 @@
 
 ## What changed
 
+- Rooms now uses a compact chat-bar icon and a window styled to sit beside Torn chats. The open room name is in the header and the send, GIF and sticker controls sit beside the message box. Room management stays in the SLINK dashboard.
+
 - Arson can show a starting formula using materials you own even before you’ve recorded a successful run. An untested substitution is labeled, and strict job requirements still need a confirmed recipe.
 
 - Personal room grants now enable room creation on the connected faction node. In Rooms, check that a granted user can create, rename, invite faction members to, and archive their own room, but cannot manage faction-sponsored rooms or rooms owned by someone else.

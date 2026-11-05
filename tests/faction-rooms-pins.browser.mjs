@@ -24,6 +24,10 @@ try{
  await page.getByLabel('color for Alliance').selectOption('#20516d');
  await page.waitForFunction(()=>saved.pins[0].color==='#20516d');
  await pin.click();assert.deepEqual(await page.evaluate(()=>opens),['general']);
+ assert.equal(await pin.getAttribute('aria-pressed'),'true');
+ assert.equal(await page.locator('[data-window-title]').textContent(),'Alliance');
+ assert.equal(await page.locator('[data-send] svg').count(),1);
+ assert.equal(await page.locator('#slink-faction-node-button svg').count(),1);
  const message=(id,seq)=>({message_id:id,seq,revision:1,user_id:2,created_at:Date.now(),content:{type:'text',text:id}});
  for(const [id,seq] of [['first',1],['second',2]])await page.evaluate(value=>{state.messages.set(value.message_id,value);emit({type:'room',id:'general',message:value});},message(id,seq));
  assert.equal(await page.locator('[data-messages] [data-message-id]').count(),2);
