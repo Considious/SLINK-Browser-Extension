@@ -67,7 +67,7 @@
   }
 
   async function tornJson(url, key) {
-    await SLINK.core.tornApiLimiter.reserve({ wait:true });
+    await SLINK.core.tornApiLimiter.reserve({ wait:true, priority:'alerts', script:'SLINK General Alerts' });
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },
       cache:'no-store'

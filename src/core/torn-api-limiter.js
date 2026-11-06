@@ -101,13 +101,37 @@
     return usageFromLedger(await storedLedger(), limit);
   }
 
+  // Reserve forecast foreground demand, not a fixed contribution allowance.
+  async function foregroundDemand() {
+    const [settings,activity,session] = await Promise.all([
+      SLINK.core.storage.get('market.settings.v1',{}),
+      SLINK.core.storage.get('market.activity.v1',{}),
+      SLINK.core.storage.get('access.session.v1',null)
+    ]);
+    const now=Date.now(),valid=Boolean(session?.token&&Number(session.expiresAt)>now);
+    const scopes=valid&&Array.isArray(session.scopes)?session.scopes:[];
+    const alerts=scopes.some(s=>s==='admin.*'||s==='slink.adhd.*'||s==='slink.adhd.alerts')?5:0;
+    const marketAllowed=valid&&(SLINK.core.adhd?.marketWatchLimit?.(session)>0);
+    const active=Number(activity?.lastActiveAt)>0&&now-Number(activity.lastActiveAt)<=5*60_000;
+    const market=marketAllowed&&active&&settings.enabled!==false&&settings.listedItemsEnabled!==false
+      ? (settings.watches||[]).filter(w=>w.enabled!==false&&Number(w.maxPrice)>0&&(w.marketType==='points'||w.marketEnabled!==false)).length*2 : 0;
+    return {market,alerts};
+  }
+  function protectedCapacity(ledger,demand={},priority='normal') {
+    const count=p=>ledger.events.filter(e=>e.priority===p||(p==='market'&&/^\/v2\/market(?:\/|\?|$)/.test(e.endpoint))).length;
+    const market=Math.max(0,Number(demand.market||0)-count('market'));
+    const alerts=Math.max(0,Number(demand.alerts||0)-count('alerts'));
+    return {market,alerts,reserved:priority==='alerts'?0:priority==='market'?alerts:market+alerts};
+  }
+
   function contributionCapacityFromLedger(value, options = {}) {
     const ledger = normalizeLedger(value, Number(options.now) || Date.now());
-    const limit = Math.max(1, Number(options.limit) || DEFAULT_LIMIT);
+    const limit = Math.min(DEFAULT_LIMIT, Math.max(1, Number(options.limit) || DEFAULT_LIMIT));
     const ceiling = Math.max(0, Number(options.ceiling) || CONTRIBUTION_CEILING);
     const interactiveReserve = Math.max(0, Number(options.interactiveReserve) || INTERACTIVE_RESERVE);
     const contributionCount = ledger.events.filter(event => event.priority === 'contribution').length;
-    const totalHeadroom = Math.max(0, limit - interactiveReserve - ledger.events.length);
+    const foreground=protectedCapacity(ledger,options.demand);
+    const totalHeadroom = Math.max(0, limit - interactiveReserve - foreground.reserved - ledger.events.length);
     const contributionHeadroom = Math.max(0, ceiling - contributionCount);
     return Object.freeze({
       available:Math.min(totalHeadroom, contributionHeadroom),
@@ -116,94 +140,50 @@
       limit,
       ceiling,
       interactiveReserve,
-      cooldownUntil:ledger.cooldownUntil
+      cooldownUntil:ledger.cooldownUntil,
+      foregroundReserved:foreground.reserved
     });
   }
 
   async function getContributionCapacity(options = {}) {
-    return contributionCapacityFromLedger(await storedLedger(), options);
+    return contributionCapacityFromLedger(await storedLedger(), {...options,demand:await foregroundDemand()});
   }
 
   async function reserve(options = {}) {
-    return serialize(async () => {
-      const limit = Math.max(1, Number(options.limit) || DEFAULT_LIMIT);
-      const wait = options.wait !== false;
-      while (true) {
-        const now = Date.now();
-        const ledger = await storedLedger(now);
-        if (ledger.cooldownUntil <= now && ledger.events.length < limit) {
-          ledger.events.push({
-            at:now,
-            id:eventId('slink-extension'),
-            script:String(options.script || 'SLINK Extension').slice(0, 80),
-            priority:String(options.priority || 'normal').slice(0, 24),
-            method:String(options.method || 'GET').slice(0, 12),
-            endpoint:String(options.endpoint || 'unknown').slice(0, 180),
-            tabId:'extension'
-          });
-          await saveLedger(ledger);
-          return Object.freeze({ reservedAt:now, count:ledger.events.length, limit });
+    const wait=options.wait!==false,priority=String(options.priority||'normal');
+    while(true) {
+      const result=await serialize(async()=>{
+        const now=Date.now(),ledger=await storedLedger(now),demand=await foregroundDemand();
+        const protectedSlots=protectedCapacity(ledger,demand,priority);
+        const limit=Math.min(Math.max(1,Number(options.limit)||DEFAULT_LIMIT),Math.max(0,DEFAULT_LIMIT-protectedSlots.reserved));
+        if(ledger.cooldownUntil<=now&&ledger.events.length<limit){
+          ledger.events.push({at:now,id:eventId('slink-extension'),script:String(options.script||'SLINK Extension').slice(0,80),priority,method:String(options.method||'GET').slice(0,12),endpoint:String(options.endpoint||'unknown').slice(0,180),tabId:'extension'});
+          await saveLedger(ledger);return {reservedAt:now,count:ledger.events.length,limit};
         }
-        const nextEvent = ledger.events[0]?.at + WINDOW_MS + 25 || now + 250;
-        if (!wait) {
-          const error = new Error('The shared Torn API limit is currently full.');
-          error.code = 'SLINK_TORN_API_LIMIT';
-          error.retryAfterMs = Math.max(50, Math.max(nextEvent, ledger.cooldownUntil || 0) - now);
-          error.usage = ledger.events.length;
-          error.limit = limit;
-          throw error;
-        }
-        const delay = Math.max(50, Math.min(5_000, Math.max(nextEvent, ledger.cooldownUntil || 0) - now));
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    });
+        return {retryAfterMs:Math.max(50,Math.max(ledger.events[0]?.at+WINDOW_MS+25||now+250,ledger.cooldownUntil)-now),count:ledger.events.length,limit};
+      });
+      if(result.reservedAt)return Object.freeze(result);
+      if(!wait){const error=new Error('Waiting for shared Torn API capacity; alerts and Market Watch have priority.');Object.assign(error,{code:'SLINK_TORN_API_LIMIT',retryAfterMs:result.retryAfterMs,usage:result.count,limit:result.limit});throw error;}
+      // Never hold the reservation queue while sleeping: alerts can pass a waiting low-priority caller.
+      await new Promise(resolve=>setTimeout(resolve,Math.min(5000,result.retryAfterMs)));
+    }
   }
 
   async function reserveContribution(options = {}) {
-    return serialize(async () => {
-      const wait = options.wait === true;
-      while (true) {
-        const now = Date.now();
-        const ledger = await storedLedger(now);
-        const capacity = contributionCapacityFromLedger(ledger, {
-          ...options,
-          now
-        });
-        if (ledger.cooldownUntil <= now && capacity.available > 0) {
-          ledger.events.push({
-            at:now,
-            id:eventId('slink-extension'),
-            script:String(options.script || 'SLINK Shared Contribution').slice(0, 80),
-            priority:'contribution',
-            method:String(options.method || 'GET').slice(0, 12),
-            endpoint:String(options.endpoint || 'unknown').slice(0, 180),
-            tabId:'extension'
-          });
-          await saveLedger(ledger);
-          return Object.freeze({
-            reservedAt:now,
-            count:ledger.events.length,
-            limit:capacity.limit,
-            contributionCount:capacity.contributionCount + 1,
-            contributionCeiling:capacity.ceiling,
-            interactiveReserve:capacity.interactiveReserve
-          });
+    while(true){
+      const result=await serialize(async()=>{
+        const now=Date.now(),ledger=await storedLedger(now);
+        const capacity=contributionCapacityFromLedger(ledger,{...options,now,demand:await foregroundDemand()});
+        if(ledger.cooldownUntil<=now&&capacity.available>0){
+          ledger.events.push({at:now,id:eventId('slink-extension'),script:String(options.script||'SLINK Shared Contribution').slice(0,80),priority:'contribution',method:String(options.method||'GET').slice(0,12),endpoint:String(options.endpoint||'unknown').slice(0,180),tabId:'extension'});
+          await saveLedger(ledger);return {reservedAt:now,count:ledger.events.length,limit:capacity.limit,contributionCount:capacity.contributionCount+1,contributionCeiling:capacity.ceiling,interactiveReserve:capacity.interactiveReserve};
         }
-        const nextEvent = ledger.events[0]?.at + WINDOW_MS + 25 || now + 250;
-        if (!wait) {
-          const error = new Error('No spare Torn API capacity is currently available for shared contribution.');
-          error.code = 'SLINK_TORN_API_LIMIT';
-          error.retryAfterMs = Math.max(50, Math.max(nextEvent, ledger.cooldownUntil || 0) - now);
-          error.usage = ledger.events.length;
-          error.limit = capacity.limit;
-          error.contributionUsage = capacity.contributionCount;
-          error.contributionCeiling = capacity.ceiling;
-          throw error;
-        }
-        const delay = Math.max(50, Math.min(5_000, Math.max(nextEvent, ledger.cooldownUntil || 0) - now));
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    });
+        return {retryAfterMs:Math.max(50,Math.max(ledger.events[0]?.at+WINDOW_MS+25||now+250,ledger.cooldownUntil)-now),usage:ledger.events.length,limit:capacity.limit,contributionUsage:capacity.contributionCount,contributionCeiling:capacity.ceiling};
+      });
+      if(result.reservedAt)return Object.freeze(result);
+      if(options.wait!==true){const error=new Error('No excess Torn API capacity is available after alerts, Market Watch and interactive work.');Object.assign(error,result,{code:'SLINK_TORN_API_LIMIT'});throw error;}
+      await new Promise(resolve=>setTimeout(resolve,Math.min(5000,result.retryAfterMs)));
+    }
   }
 
   async function syncShared(input = {}) {
@@ -217,6 +197,6 @@
 
   SLINK.define('core', 'tornApiLimiter', Object.freeze({
     CONTRIBUTION_CEILING, DEFAULT_LIMIT, INTERACTIVE_RESERVE, SHARED_LEDGER_KEY, SHARED_LOCK_NAME, WINDOW_MS,
-    contributionCapacityFromLedger, getContributionCapacity, getUsage, mergeLedgers, normalizeLedger, prune, reserve, reserveContribution, syncShared
+    protectedCapacity, foregroundDemand, contributionCapacityFromLedger, getContributionCapacity, getUsage, mergeLedgers, normalizeLedger, prune, reserve, reserveContribution, syncShared
   }));
 })(globalThis);

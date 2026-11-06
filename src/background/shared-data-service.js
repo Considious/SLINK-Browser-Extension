@@ -8,7 +8,7 @@
     normalizeItems:body => SLINK.core.market.catalogItems(body),
     async request(kind, key) {
       const endpoint = kind === 'personal' ? '/v2/user?selections=battlestats%2Cbasic' : '/v2/torn/items?cat=All&sort=ASC';
-      await SLINK.core.tornApiLimiter.reserve({ wait:true, priority:'high', endpoint });
+      await SLINK.core.tornApiLimiter.reserve({ wait:true, priority:kind==='catalog'?'market':'high', endpoint });
       return SLINK.core.http.requestJson('tornApi', 'https://api.torn.com' + endpoint + '&comment=SLINK%20shared%20data', {
         headers:{ Authorization:`ApiKey ${key}` }, cache:'no-store'
       });

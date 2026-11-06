@@ -100,7 +100,7 @@
   async function tornJson(url, key, endpoint, priority = 'normal') {
     if(!(await accessState()).permitted)throw Error('A current signed Market Watch permission is required.');
     const normalized = MARKET.normalizePriority(priority);
-    await SLINK.core.tornApiLimiter.reserve({ wait:false, limit:MARKET.TORN_PRIORITY_LIMITS[normalized], script:'SLINK Market Watch', priority:normalized, endpoint });
+    await SLINK.core.tornApiLimiter.reserve({ wait:false, limit:MARKET.TORN_PRIORITY_LIMITS[normalized], script:'SLINK Market Watch', priority:'market', endpoint });
     if(!(await accessState()).permitted)throw Error('Market Watch permission expired before the price check.');
     return SLINK.core.http.requestJson('tornApi', url, { headers:{ Authorization:`ApiKey ${key}` }, cache:'no-store' });
   }
@@ -168,7 +168,7 @@
   async function ensureCatalog({ force = false, key = '', current = null } = {}) {
     const state = current || await runtime();
     if (!(await accessState({ authenticate:true })).permitted) throw new Error('A signed SLINK Market Watch permission is required.');
-    const catalog = await SLINK.services.sharedData.catalog({ key:key || await tornKey(), force, maxAgeMs:CATALOG_MAX_AGE_MS, needPrices:true });
+    const catalog = await SLINK.services.sharedData.catalog({ key:key || await tornKey(), force, maxAgeMs:CATALOG_MAX_AGE_MS, needPrices:false });
     if (state.catalog?.metadataAt !== catalog.metadataAt || state.catalog?.pricesAt !== catalog.pricesAt) {
       state.catalog = catalog;
       await saveRuntime(state);
@@ -188,12 +188,12 @@
       const stale = cache.cacheTimestamp > 0 && cache.cacheTimestamp === Number(previous?.market?.cacheTimestamp);
       const cacheRetryCount = stale ? Number(previous?.market?.cacheRetryCount || 0) + 1 : 0;
       next.market = { fetchedAt:now, listings:MARKET.itemMarketListings(body), ...cache, cacheRetryCount,
-        nextCheckAt:stale ? now + MARKET.staleRetryMs({ cacheRetryCount }) : MARKET.itemMarketNextCheckAt({ fetchedAt:now, ...cache }) };
+        nextCheckAt:MARKET.itemMarketNextCheckAt({ fetchedAt:now, ...cache }) };
       delete next.errors.market;
       return null;
     } catch (error) {
       next.errors.market = SLINK.core.format.errorMessage(error);
-      next.market = { ...(previous?.market || {}), nextCheckAt:Date.now() + (Number(error?.retryAfterMs) || 5_000) };
+      next.market = { ...(previous?.market || {}), nextCheckAt:Date.now() + (Number(error?.retryAfterMs) || 30_000) };
       return error?.code === 'SLINK_TORN_API_LIMIT' ? { blockedUntil:next.market.nextCheckAt } : null;
     }
   }
@@ -207,7 +207,7 @@
       return null;
     } catch (error) {
       next.errors.points = SLINK.core.format.errorMessage(error);
-      next.points = { ...(previous?.points || {}), nextCheckAt:Date.now() + (Number(error?.retryAfterMs) || 5_000) };
+      next.points = { ...(previous?.points || {}), nextCheckAt:Date.now() + (Number(error?.retryAfterMs) || 30_000) };
       return error?.code === 'SLINK_TORN_API_LIMIT' ? { blockedUntil:next.points.nextCheckAt } : null;
     }
   }
@@ -235,7 +235,7 @@
   }
 
   async function ensureWeaverSummary(current, force = false, maxAgeMs = MARKET.WEAVER_SUMMARY_REFRESH_MS) {
-    if (!force && current.weaverSummary?.items?.length && Date.now() - Number(current.weaverSummary.fetchedAt) < maxAgeMs) return current.weaverSummary;
+    if (!force && Number(current.weaverSummary?.fetchedAt) > 0 && Date.now() - Number(current.weaverSummary.fetchedAt) < maxAgeMs) return current.weaverSummary;
     const body = await weaverJson('https://weav3r.dev/api/marketplace', current); const now = Date.now();
     current.weaverSummary = { fetchedAt:now, items:MARKET.weaverMarketplaceItems(body) };
     return current.weaverSummary;
@@ -282,7 +282,7 @@
     let summary;
     try { summary = await ensureWeaverSummary(current, force, MARKET.WEAVER_SUMMARY_REFRESH_MS); }
     catch (error) {
-      const retryAt = Date.now() + (Number(error?.retryAfterMs) || 5_000);
+      const retryAt = Date.now() + (Number(error?.retryAfterMs) || 30_000);
       for (const target of targets) storeWeaverResult(target, allowed, current, { nextCheckAt:retryAt, listings:[] });
       throw error;
     }
@@ -307,7 +307,7 @@
           listings:MARKET.weaverListings(body, target.itemId)
         });
       } catch (error) {
-        const retry = Date.now() + (Number(error?.retryAfterMs) || 5_000);
+        const retry = Date.now() + (Number(error?.retryAfterMs) || 30_000);
         storeWeaverResult(target, allowed, current, {
           fetchedAt:now, nextCheckAt:retry, screenedAt:summary.fetchedAt,
           lowestPrice:currentLowest, listings:[]

@@ -2,6 +2,9 @@
 
 ## What changed
 
+- Market Watch waits for Torn’s next price-cache refresh plus one second instead of repeatedly checking unchanged prices. Weaver checks its market summary every 10 seconds and only looks up matching deals. Try five watches and check that prices and alerts keep updating without repeated API-limit messages.
+- General alerts get API priority, followed by Market Watch. Background contributions use the capacity left over.
+
 - Rooms now uses Manuel’s Torn Rooms interface: icon tabs, searchable room cards, native chat windows, a searchable icon grid and color swatches. Choose a room icon and header color, send a message, minimize/close rooms, and check your notification preferences on desktop and PDA. SLINK room access and paid limits are unchanged.
 
 - Choose an icon and color when creating or editing a room. Reopen it and check that the room icon and chat header match on desktop and PDA.

@@ -7,11 +7,11 @@
   const PRIORITIES = Object.freeze({ high:0, normal:1, low:2 });
   const TORN_PRIORITY_LIMITS = Object.freeze({ high:60, normal:50, low:40 });
   const WEAVER_REFRESH_MS = Object.freeze({ high:35_000, normal:70_000, low:140_000 });
-  const WEAVER_SUMMARY_REFRESH_MS = 5_000;
+  const WEAVER_SUMMARY_REFRESH_MS = 10_000;
   const ITEM_MARKET_FALLBACK_MS = 30_000;
   const ITEM_MARKET_CACHE_SAFETY_MS = 1_000;
-  const ITEM_MARKET_STALE_RETRY_MIN_MS = 2_000;
-  const ITEM_MARKET_STALE_RETRY_MAX_MS = 5_000;
+  const ITEM_MARKET_STALE_RETRY_MIN_MS = 30_000;
+  const ITEM_MARKET_STALE_RETRY_MAX_MS = 30_000;
   const POINTS_MARKET_REFRESH_MS = 30_000;
   const WEAVER_RATE_LIMIT = 80;
   const WEAVER_RATE_WINDOW_MS = 60_000;
@@ -122,7 +122,7 @@
   function itemMarketCache(body = {}) {
     const market = body?.itemmarket || body?.data?.itemmarket || body;
     const cacheTimestamp = Math.max(0, Math.trunc(Number(market?.cache_timestamp) || 0));
-    const delaySeconds = Number(market?.cache_delay);
+    const delaySeconds = market?.cache_delay == null ? NaN : Number(market.cache_delay);
     return { cacheTimestamp, cacheDelayMs:Number.isFinite(delaySeconds) && delaySeconds >= 0 ? Math.ceil(delaySeconds * 1_000) : null };
   }
 
@@ -132,12 +132,16 @@
     const fetchedAt = Number(result?.fetchedAt) || 0;
     if (!fetchedAt) return 0;
     const timestamp = Number(result?.cacheTimestamp) || 0;
-    const delayMs = Number(result?.cacheDelayMs);
+    const delayMs = result?.cacheDelayMs == null ? NaN : Number(result.cacheDelayMs);
     return timestamp > 0 && Number.isFinite(delayMs) && delayMs >= 0
-      ? Math.max(timestamp * 1_000 + delayMs + ITEM_MARKET_CACHE_SAFETY_MS, fetchedAt + ITEM_MARKET_CACHE_SAFETY_MS)
+      ? nextGlobalCacheCheck(timestamp * 1_000 + delayMs + ITEM_MARKET_CACHE_SAFETY_MS, fetchedAt)
       : fetchedAt + ITEM_MARKET_FALLBACK_MS;
   }
 
+  // A late/unchanged cache advances to the next global 30-second cycle; never hammer stale data.
+  function nextGlobalCacheCheck(deadline, now) {
+    return deadline > now ? deadline : deadline + (Math.floor((now - deadline) / ITEM_MARKET_FALLBACK_MS) + 1) * ITEM_MARKET_FALLBACK_MS;
+  }
   function staleRetryMs(result = {}) {
     const count = Math.max(1, Math.trunc(Number(result?.cacheRetryCount) || 1));
     return Math.min(ITEM_MARKET_STALE_RETRY_MAX_MS, ITEM_MARKET_STALE_RETRY_MIN_MS + (count - 1) * 1_000);
