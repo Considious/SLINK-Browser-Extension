@@ -21,6 +21,7 @@ importScripts(
   '../core/market.js',
   '../core/merits.js',
   '../core/christmas-theme.js',
+  '../core/candy-theme.js',
   '../core/themes.js',
   '../core/messaging.js',
   '../core/http.js',

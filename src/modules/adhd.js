@@ -182,6 +182,7 @@
         for (const alert of selectedAlerts) {
           const card = document.createElement('article'); card.className = 'slink-adhd-alert'; card.dataset.tone = alert.tone || '';
           global.SLINK_CHRISTMAS_THEME?.markAlert(card,alert.id);
+          global.SLINK_CANDY_THEME?.markAlert(card,alert.id);
           const title = document.createElement('strong'); title.textContent = alert.title || 'Reminder';
           const detail = document.createElement('span'); detail.textContent = alert.detail || '';
           const links = document.createElement('div'); links.className = 'slink-adhd-links';
@@ -254,6 +255,7 @@
           card.append(title, detail, links); list.append(card);
         }
         root.append(list);
+        global.SLINK_CANDY_THEME?.refresh(ui.host);
         updateChatButtons(root);
         if (!crimes) ui.setBubbleAlert('adhd', alerts.length, 'adhd');
       }

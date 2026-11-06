@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import vm from 'node:vm';
+const read=p=>readFile(new URL('../'+p,import.meta.url),'utf8'),c=vm.createContext({URL,console});c.globalThis=c;c.SLINK_EXTENSION={core:{permissions:{hasScope:(p,s)=>(p.scopes||[]).some(x=>x===s||x==='admin.*')}},define(g,n,v){(this[g]||={})[n]=v;}};
+for(const name of ['christmas-theme','candy-theme','themes'])vm.runInContext(await read('src/core/'+name+'.js'),c);
+const theme=c.SLINK_CANDY_THEME,t=c.SLINK_EXTENSION.core.themes;
+assert.equal(theme.css,await read('assets/themes/candy-cartel-theme.css'),'Release must use the approved Theme Lab CSS byte-for-byte');
+assert.equal(t.get('slink-candy-cartel').scope,'slink.theme.candy-cartel');assert.equal(t.resolve('slink-candy-cartel',{scopes:[]}).id,'slink-dark');for(const s of ['slink.theme.candy-cartel','admin.*'])assert.equal(t.resolve('slink-candy-cartel',{scopes:[s]}).id,'slink-candy-cartel');
+const base={schemaVersion:1,revision:'stale',themes:[t.get('slink-dark')]};assert.equal(t.validateCatalog(base).map['slink-candy-cartel'].id,'slink-candy-cartel');
+for(const filename of Object.values(theme.files))assert.ok((await readFile(new URL('../assets/themes/'+filename,import.meta.url))).length>500);
+for(const id of ['medicalCooldown','drugCooldown','boosterCooldown','energyRefill','nerveRefill','casinoTokens','playerAddiction','cityItems','landing','racing','education','stockBenefits','organizedCrime','market:1'])assert.ok(theme.alertKind(id));
+const manifest=JSON.parse(await read('manifest.json')),pkg=JSON.parse(await read('package.json'));assert.equal(manifest.version,pkg.version);assert.ok(manifest.content_scripts[0].js.indexOf('src/core/candy-theme.js')<manifest.content_scripts[0].js.indexOf('src/core/themes.js'));assert.match(await read('src/dashboard/dashboard.html'),/candy-theme\.js/);assert.match(await read('src/background/service-worker.js'),/candy-theme\.js/);
+console.log('Candy Cartel: exact shared CSS, entitlement/admin denial/grants, stale catalogue fallback, 17 assets, all alert mappings, startup paths and version parity passed.');

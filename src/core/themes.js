@@ -199,6 +199,7 @@
   }
 
   const THEMES = Object.freeze({
+    ...(global.SLINK_CANDY_THEME ? { 'slink-candy-cartel':Object.freeze(global.SLINK_CANDY_THEME.definition) } : {}),
     ...(global.SLINK_CHRISTMAS_THEME ? { 'slink-naughty-list':Object.freeze(global.SLINK_CHRISTMAS_THEME.definition) } : {}),
     [DEFAULT_THEME_ID]: Object.freeze({
       id: DEFAULT_THEME_ID,
@@ -360,6 +361,7 @@
     }
     if (!next[DEFAULT_THEME_ID] || next[DEFAULT_THEME_ID].scope !== null) throw new Error('Theme catalog is missing the free fallback.');
     if (global.SLINK_CHRISTMAS_THEME && !next['slink-naughty-list']) next['slink-naughty-list']=Object.freeze(global.SLINK_CHRISTMAS_THEME.definition);
+    if (global.SLINK_CANDY_THEME && !next['slink-candy-cartel']) next['slink-candy-cartel']=Object.freeze(global.SLINK_CANDY_THEME.definition);
     return Object.freeze({
       schemaVersion:1,
       revision,
@@ -422,6 +424,7 @@
     if (!element?.style) throw new TypeError('A styleable element is required to apply SLINK panel opacity.');
     const opacity = normalizePanelOpacity(value);
     for (const [name, setting] of Object.entries(panelOpacityVariables(opacity))) element.style.setProperty(name, setting);
+    global.SLINK_CANDY_THEME?.refresh(element);
     return opacity;
   }
 
@@ -443,6 +446,7 @@
     for (const [name, value] of Object.entries(theme.tokens)) element.style.setProperty(name, value);
     for (const [name, value] of Object.entries(assetVariables(theme))) element.style.setProperty(name, value);
     global.SLINK_CHRISTMAS_THEME?.apply(element,theme.id);
+    global.SLINK_CANDY_THEME?.apply(element,theme.id);
     return theme;
   }
 

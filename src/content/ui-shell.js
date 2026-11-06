@@ -175,6 +175,7 @@
       themeStyle.textContent = `:host{${SLINK.core.themes.cssVariables(theme.id, permissions)}}`;
       chatButtonTheme = theme;
       global.SLINK_CHRISTMAS_THEME?.apply(host,theme.id);
+      global.SLINK_CANDY_THEME?.apply(host,theme.id);
       SLINK.core.themes.applyHealthToElement(host, theme, themeHealth.current, themeHealth.maximum);
       applyChatButtonTheme(chatButton, theme);
       tornPageTheme?.update({theme,settings:tornThemeSettings,assetCss:{...SLINK.core.themes.assetVariables(theme),...SLINK.core.themes.healthAssetVariables(theme,themeHealth.current,themeHealth.maximum)}});
@@ -790,8 +791,8 @@
         setHidden(value) { hidden = Boolean(value); refreshShell(); },
         setTitle(value) { element.querySelector('strong').textContent = String(value || module.title); },
         setSubtitle(value) { status.title = String(value || ''); },
-        setModuleStyles(value) { moduleStyle.textContent = String(value || ''); },
-        setContentHtml(value) { content.innerHTML = String(value || ''); },
+        setModuleStyles(value) { moduleStyle.textContent = String(value || '');global.SLINK_CANDY_THEME?.refresh(host); },
+        setContentHtml(value) { content.innerHTML = String(value || '');global.SLINK_CANDY_THEME?.refresh(host); },
         getContentElement() { return content; },
         setStatus(message, tone = 'normal') { status.textContent = tone==='error'&&message?SLINK.core.format.errorMessage(message):String(message || ''); status.dataset.tone = String(tone || 'normal'); },
         setRows(rows) {
@@ -839,6 +840,7 @@
       if (groupPreference === module.id || (!groupPreference && preferredActiveId === module.id)) activeId = module.id;
       updateNavigationAlerts();
       refreshShell();
+      global.SLINK_CANDY_THEME?.refresh(host);
       return view.api;
     }
 
