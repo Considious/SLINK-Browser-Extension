@@ -5,7 +5,7 @@
 const LIMITS={roomName:60,description:300};
 type PostPolicy='everyone'|'admins';
 type Visibility='faction'|'selected'|'leaders';
-import { h, roomIcon, ROOM_ICON_NAMES, text } from './dom';
+import { h, roomIcon, ROOM_ICON_NAMES, CHRISTMAS_ROOM_ICONS, text } from './dom';
 
 import { backView, checkbox, setting, tabList, textInput, tornBtn } from './forms';
 
@@ -22,6 +22,7 @@ export interface RoomFormValues {
 export function roomForm(opts: {
   backTitle: string;
   personal?: boolean;
+  christmasIcons?: boolean;
   onChange?: (v: RoomFormValues) => void;
   submitTitle: string;
   initial?: RoomFormValues;
@@ -103,6 +104,7 @@ export function roomForm(opts: {
     const draw = (q: string) =>
       grid.replaceChildren(
         ...['', ...ROOM_ICON_NAMES]
+          .filter(n=>!CHRISTMAS_ROOM_ICONS.includes(n)||opts.christmasIcons===true)
           .filter((n) => !q || n.includes(q.toLowerCase()))
           .map((n) =>
             h('div', { role: 'button', tabindex:'0', 'aria-label':'Use '+(n||'default')+' icon', title: n || 'default', on: { click: () => ((v.icon = n), changed(), main()), keydown:(e:KeyboardEvent)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();v.icon=n;changed();main();}} } }, roomIcon(n, '', n || 'default')),

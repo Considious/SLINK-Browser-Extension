@@ -20,6 +20,7 @@ importScripts(
   '../core/arson-page.js',
   '../core/market.js',
   '../core/merits.js',
+  '../core/christmas-theme.js',
   '../core/themes.js',
   '../core/messaging.js',
   '../core/http.js',

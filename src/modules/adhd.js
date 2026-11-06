@@ -181,6 +181,7 @@
         }
         for (const alert of selectedAlerts) {
           const card = document.createElement('article'); card.className = 'slink-adhd-alert'; card.dataset.tone = alert.tone || '';
+          global.SLINK_CHRISTMAS_THEME?.markAlert(card,alert.id);
           const title = document.createElement('strong'); title.textContent = alert.title || 'Reminder';
           const detail = document.createElement('span'); detail.textContent = alert.detail || '';
           const links = document.createElement('div'); links.className = 'slink-adhd-links';

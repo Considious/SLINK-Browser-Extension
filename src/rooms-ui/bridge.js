@@ -149,7 +149,7 @@
     async function savePins(next){if(pinSaving)return;pinSaving=true;try{const saved=await preferences.patch({pins:next});pins=saved?.pins||next;paintList();}catch(error){notice('Not saved: '+error.message);paintList();}finally{pinSaving=false;}}
     function pinControls(item){
       const pin=pins.find(row=>row.id===item.room_id),box=node('span');
-      box.append(TR.actionButton('settings','Shortcut style',()=>{personalEditor='shortcut';$('[data-room-list-scroll]').hidden=true;$('[data-search-slot]').hidden=true;let holder=$('[data-personal-form]');if(!holder){holder=node('div');holder.dataset.personalForm='';holder.style.cssText='display:flex;min-height:0;flex:1;overflow:auto';$('[data-home-view]').append(holder);}holder.replaceChildren(TR.roomForm({personal:true,backTitle:'Back to rooms',submitTitle:'Save shortcut style',initial:{name:item.name,description:item.description||'',...roomLook(item,pin),visibility:'selected',postPolicy:'everyone',showFactionTags:false},onBack:()=>setHubTab(hubTab),onSubmit:async v=>{if(!pin&&pins.length>=5)throw Error('You can customize up to five room shortcuts.');await savePins([...pins.filter(p=>p.id!==item.room_id),{id:item.room_id,icon:v.icon,color:v.color}]);for(const {ui}of roomWindows.values())ui.sync();setHubTab(hubTab);}}));}));
+      box.append(TR.actionButton('settings','Shortcut style',()=>{personalEditor='shortcut';$('[data-room-list-scroll]').hidden=true;$('[data-search-slot]').hidden=true;let holder=$('[data-personal-form]');if(!holder){holder=node('div');holder.dataset.personalForm='';holder.style.cssText='display:flex;min-height:0;flex:1;overflow:auto';$('[data-home-view]').append(holder);}holder.replaceChildren(TR.roomForm({christmasIcons:client.model.christmasIcons===true,personal:true,backTitle:'Back to rooms',submitTitle:'Save shortcut style',initial:{name:item.name,description:item.description||'',...roomLook(item,pin),visibility:'selected',postPolicy:'everyone',showFactionTags:false},onBack:()=>setHubTab(hubTab),onSubmit:async v=>{if(!pin&&pins.length>=5)throw Error('You can customize up to five room shortcuts.');await savePins([...pins.filter(p=>p.id!==item.room_id),{id:item.room_id,icon:v.icon,color:v.color}]);for(const {ui}of roomWindows.values())ui.sync();setHubTab(hubTab);}}));}));
       return box;
     }
     function setHubTab(tab){
@@ -169,7 +169,7 @@
       $('[data-room-list-scroll]').hidden=true;$('[data-search-slot]').hidden=true;
       let holder=$('[data-personal-form]');if(!holder){holder=node('div');holder.dataset.personalForm='';holder.style.cssText='display:flex;min-height:0;flex:1;overflow:auto';$('[data-home-view]').append(holder);}
       let request=null,fingerprint='';
-      holder.replaceChildren(TR.roomForm({
+      holder.replaceChildren(TR.roomForm({christmasIcons:client.model.christmasIcons===true,
         personal:true,backTitle:'Back to rooms',submitTitle:room?'Save room':'Create personal room',
         initial:{name:room?.name||'',description:room?.description||'',icon:room?.icon||'group',color:room?.color||'#20516d',visibility:'selected',postPolicy:'everyone',showFactionTags:false},
         onBack:()=>setHubTab(hubTab),
@@ -351,7 +351,7 @@
     $('[data-save-room]').hidden=true;metadataGroup.prepend(metadataHost);
     function metadataValues(){return {name:$('[data-name]').value,description:$('[data-description]').value,icon:$('[data-room-icon]').value||'group',color:$('[data-room-color]').value||'#20516d',visibility:$('[data-visibility]').value||'selected',postPolicy:'everyone',showFactionTags:false};}
     function setMetadata(v){$('[data-name]').value=v.name;$('[data-description]').value=v.description;$('[data-room-icon]').value=v.icon;$('[data-room-color]').value=v.color;$('[data-visibility]').value=v.visibility;$('[data-position-grants]').hidden=v.visibility!=='selected';}
-    function paintMetadata(){const key=adminRoom||'new';if(key===metadataKey)return;metadataKey=key;metadataHost.replaceChildren(TR.roomForm({initial:metadataValues(),backTitle:'Room settings',submitTitle:'Save room',onBack:()=>metadataHost.querySelector('input')?.focus(),onChange:setMetadata,onSubmit:async v=>{setMetadata(v);await saveRoomDetails();}}));}
+    function paintMetadata(){const key=adminRoom||'new';if(key===metadataKey)return;metadataKey=key;metadataHost.replaceChildren(TR.roomForm({christmasIcons:client.model.christmasIcons===true,initial:metadataValues(),backTitle:'Room settings',submitTitle:'Save room',onBack:()=>metadataHost.querySelector('input')?.focus(),onChange:setMetadata,onSubmit:async v=>{setMetadata(v);await saveRoomDetails();}}));}
     // SLINK-specific faction grants keep their original behavior, using the same native form controls.
     for(const field of root.querySelectorAll('label.field')){field.classList.add(...TR.cx('setting___nsZNm withDivider___kz3yv').split(' '));const title=field.querySelector(':scope>span');if(title)title.classList.add(...TR.cx('root___XpplE body___HxuJg title___KbB7I').split(' '));}
     for(const label of root.querySelectorAll('.checks label'))label.classList.add(...TR.cx('root___XpplE subtitle___u4sr8 root___D4fXT').split(' '));

@@ -174,6 +174,7 @@
       host.dataset.slinkBrandIcon = theme.assets?.brandIcon ? 'true' : 'false';
       themeStyle.textContent = `:host{${SLINK.core.themes.cssVariables(theme.id, permissions)}}`;
       chatButtonTheme = theme;
+      global.SLINK_CHRISTMAS_THEME?.apply(host,theme.id);
       SLINK.core.themes.applyHealthToElement(host, theme, themeHealth.current, themeHealth.maximum);
       applyChatButtonTheme(chatButton, theme);
       tornPageTheme?.update({theme,settings:tornThemeSettings,assetCss:{...SLINK.core.themes.assetVariables(theme),...SLINK.core.themes.healthAssetVariables(theme,themeHealth.current,themeHealth.maximum)}});
@@ -189,6 +190,7 @@
     setTheme(options.themeId || SLINK.core.themes.DEFAULT_THEME_ID, options.permissions || {});
 
     const main = createWindow('main', options.title || 'SLINK', options.subtitle || 'Extension systems');
+    global.SLINK_CHRISTMAS_THEME?.apply(host,chatButtonTheme?.id);
     const mainSizeMemory = rememberMainSize(main.element, main.mover);
     main.element.querySelector('.hide').textContent = '−';
     main.element.querySelector('.hide').title = 'Collapse SLINK to a movable bubble';

@@ -1,0 +1,8 @@
+import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8'),c=vm.createContext({URL,console});c.globalThis=c;c.SLINK_EXTENSION={core:{permissions:{hasScope:(p,s)=>(p.scopes||[]).some(x=>x===s||x==='admin.*')}},define(g,n,v){(this[g]||={})[n]=v;}};
+vm.runInContext(read('src/core/christmas-theme.js'),c);vm.runInContext(read('src/core/themes.js'),c);const themes=c.SLINK_EXTENSION.core.themes;
+assert.equal(themes.get('slink-naughty-list').scope,'slink.theme.christmas2026');assert.equal(themes.resolve('slink-naughty-list',{scopes:[]}).id,'slink-dark');for(const scope of ['slink.theme.christmas2026','admin.*'])assert.equal(themes.resolve('slink-naughty-list',{scopes:[scope]}).id,'slink-naughty-list');
+assert.equal(c.SLINK_CHRISTMAS_THEME.alertKind('medicalCooldown'),'medical');assert.equal(c.SLINK_CHRISTMAS_THEME.alertKind('energyRefill'),'drug');assert.equal(c.SLINK_CHRISTMAS_THEME.alertKind('nerveRefill'),'booster');assert.equal(c.SLINK_CHRISTMAS_THEME.alertKind('casinoTokens'),'casino');
+const manifest=JSON.parse(read('manifest.json')),pkg=JSON.parse(read('package.json'));assert.equal(manifest.version,pkg.version);assert.ok(manifest.content_scripts[0].js.indexOf('src/core/christmas-theme.js')<manifest.content_scripts[0].js.indexOf('src/core/themes.js'));
+for(const name of Object.values(c.SLINK_CHRISTMAS_THEME.files))assert.ok(readFileSync(new URL('../assets/themes/'+name,import.meta.url)).length>0);
+console.log('Christmas theme: entitlement/admin gates, alert mappings, bundled assets, load order and version parity passed.');

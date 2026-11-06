@@ -25,6 +25,7 @@
   const HEALTH_STATES = Object.freeze(['100', '075', '050', '025', '004']);
   const ASSET_ORIGIN = 'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/';
   const PACKAGED_ASSET_FILES = new Set([
+'christmas2026-background.webp','christmas2026-brand.svg','christmas2026-frame.webp','christmas2026-buttonChain.webp','christmas2026-sideRail.webp','christmas2026-note.webp','christmas2026-prop-medical.webp','christmas2026-prop-drug.webp','christmas2026-prop-booster.webp','christmas2026-prop-casino.webp','christmas2026-prop-addiction.webp','christmas2026-prop-shopping.webp','christmas2026-prop-flight.webp','christmas2026-prop-racing.webp','christmas2026-prop-education.webp','christmas2026-prop-stocks.webp','christmas2026-prop-oc.webp','christmas2026-prop-market.webp',
     'halloween-2026-background.png',
     'halloween-2026-icons.png',
     'halloween-2026-brand.png',
@@ -198,6 +199,7 @@
   }
 
   const THEMES = Object.freeze({
+    ...(global.SLINK_CHRISTMAS_THEME ? { 'slink-naughty-list':Object.freeze(global.SLINK_CHRISTMAS_THEME.definition) } : {}),
     [DEFAULT_THEME_ID]: Object.freeze({
       id: DEFAULT_THEME_ID,
       label: 'SLINK Dark',
@@ -357,6 +359,7 @@
       });
     }
     if (!next[DEFAULT_THEME_ID] || next[DEFAULT_THEME_ID].scope !== null) throw new Error('Theme catalog is missing the free fallback.');
+    if (global.SLINK_CHRISTMAS_THEME && !next['slink-naughty-list']) next['slink-naughty-list']=Object.freeze(global.SLINK_CHRISTMAS_THEME.definition);
     return Object.freeze({
       schemaVersion:1,
       revision,
@@ -439,6 +442,7 @@
     element.dataset.slinkBrandIcon = theme.assets?.brandIcon ? 'true' : 'false';
     for (const [name, value] of Object.entries(theme.tokens)) element.style.setProperty(name, value);
     for (const [name, value] of Object.entries(assetVariables(theme))) element.style.setProperty(name, value);
+    global.SLINK_CHRISTMAS_THEME?.apply(element,theme.id);
     return theme;
   }
 
