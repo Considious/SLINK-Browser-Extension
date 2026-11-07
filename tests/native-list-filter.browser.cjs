@@ -65,7 +65,34 @@ const roster='<div class="members-list"><ul class="table-body">'+rows+'</ul></di
      await page.getByText('1 of 2 loaded '+kind,{exact:true}).waitFor();
      await page.getByRole('button',{name:'Save preset'}).click();
    }
+   await page.unroute('https://www.torn.com/**');
+   const directoryRows='<li><a href="/profiles.php?XID=123">Alice</a><div class="info-wrap"><span class="level"><span class="value">10</span></span><span class="time"><i>Ends in</i>1h 25m</span></div><button class="revive reviveNotAvailable" type="button">Revive</button></li><li><a href="/profiles.php?XID=456">Bob</a><div class="info-wrap"><span class="level">20</span><span class="time">45m</span></div><button class="revive" type="button">Revive</button></li>';
+   await page.route('https://www.torn.com/**',r=>{
+     const userlist=r.request().url().includes('sid=UserList');
+     return r.fulfill({contentType:'text/html',body:'<main id="mainContainer"><div class="userlist-wrapper"><ul class="'+(userlist?'user-info-list-wrap':'users-list')+'">'+directoryRows+'<li class="loader"><span class="ajax-preloader">Loading</span></li></ul></div></main>'});
+   });
+   for(const [url,noun] of [['hospitalview.php','hospital patients'],['jailview.php','jail inmates'],['page.php?sid=UserList','users']]){
+     await page.goto('https://www.torn.com/'+url);await install();
+     await page.getByRole('button',{name:'Filter '+noun,exact:true}).click();
+     const count=page.getByText('1 of 2 loaded '+noun,{exact:true});
+     const row=page.locator('.userlist-wrapper ul > li:not(.loader):visible');
+     if(noun==='users'){
+       await page.getByLabel('Level min',{exact:true}).fill('15');await count.waitFor();
+       assert.match(await row.innerText(),/^Bob/);
+     }else{
+       await page.getByLabel('Time left (min) min',{exact:true}).fill('60');await count.waitFor();
+       assert.match(await row.innerText(),/^Alice/);
+       await reset.click();
+       await page.getByRole('combobox',{name:'Sort '+noun}).selectOption('minutes-asc');
+       await page.waitForFunction(()=>document.querySelector('.users-list > li:nth-child(2)').getBoundingClientRect().top<document.querySelector('.users-list > li:first-child').getBoundingClientRect().top);
+       if(noun==='hospital patients'){
+         await page.getByLabel('Revive availability',{exact:true}).selectOption('yes');await row.filter({hasText:'Bob'}).waitFor();await count.waitFor();assert.match(await row.innerText(),/^Bob/);
+       }
+     }
+     assert.equal(await page.locator('.userlist-wrapper > ul').count(),1);
+     assert.equal(await page.locator('.loader').getAttribute('data-slink-faction-filtered'),null);
+   }
    await page.close();
  }}finally{await browser.close();}
- console.log('Faction filter passed: desktop and mobile layout, name/ID/role, empty/reset, preset, replaced roster and disabled state');
+ console.log('Native list filters passed on desktop/mobile: roster, personal lists, Hospital, Jail and User List');
 })().catch(e=>{console.error(e);process.exitCode=1;});

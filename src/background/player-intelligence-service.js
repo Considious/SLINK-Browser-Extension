@@ -86,8 +86,8 @@
   async function factionMemberIntel(input = {}, sender) {
     if (!sender?.tab?.url || !Array.isArray(input.ids) || input.ids.length > 200) return {};
     const page=new URL(sender.tab.url);
-    if(page.origin!=='https://www.torn.com'||!(page.pathname==='/factions.php'||(
-      page.pathname==='/page.php'&&page.searchParams.get('sid')==='list'&&['friends','enemies','targets'].includes(page.searchParams.get('type'))
+    if(page.origin!=='https://www.torn.com'||!(['/factions.php','/hospitalview.php','/jailview.php'].includes(page.pathname)||(
+      page.pathname==='/page.php'&&(page.searchParams.get('sid')?.toLowerCase()==='userlist'||(page.searchParams.get('sid')==='list'&&['friends','enemies','targets'].includes(page.searchParams.get('type'))))
     )))return {};
     const session=await SLINK.core.storage.get('access.session.v1',null);
     if (!session?.userId || !(session.expiresAt>Date.now())) return {};
