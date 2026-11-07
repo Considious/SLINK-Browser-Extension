@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+await import('../src/content/inline-status.js');
+const {timers}=globalThis.SLINK_INLINE_STATUS;
+const now=1700000000000,at=now-60_000;
+const body={cooldowns:{medical:120,booster:30,drug:null},education:{current:{until:now/1000+400}},organizedcrime:{ready_at:now/1000+600}};
+const war={startedAt:now+500_000,detectedAt:at},virus={at,seconds:180};
+const all=timers({alerts:{data:body,fetchedAt:at},war,virus},now);
+assert.deepEqual(Object.keys(all),['medical','education','oc','war','virus']);
+assert.equal(all.medical.end,now+60_000);
+assert.equal(all.education.end,now+400_000);
+assert.equal(timers({alerts:{body,at}},now).oc.end,now+600_000);
+assert.deepEqual(timers({alerts:{data:body,fetchedAt:now-61*60000},war:{...war,detectedAt:0},virus:{...virus,seconds:5}},now),{});
+assert.equal(timers({alerts:{data:{organizedcrime:{...body.organizedcrime,executed_at:now/1000-5}},fetchedAt:at}},now).oc,undefined);
+console.log('Inline status: expiry, stale snapshots, timestamps and missing values passed');

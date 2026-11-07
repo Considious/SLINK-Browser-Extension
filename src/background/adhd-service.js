@@ -663,6 +663,13 @@
     return recipeSync;
   }
   const routes = Object.freeze({
+    'inline-status.virus':async()=>{
+      await requireAccess();
+      const key=await accessKey();
+      if(!key)throw Error('Enable Efficiency and save your Torn API key first.');
+      const result=await tornJson('https://api.torn.com/v2/user/virus?comment=SLINK%20virus%20timer',key);
+      return {virus:result?.virus===null?null:{time_left:result?.virus?.time_left}};
+    },
     async 'crimes.recipes.candidates'(input){if(!await recipeSession()||typeof input?.key!=='string')return [];return recipes.candidates('arson',input.key);},
     async 'crimes.recipes.record'(input,sender){
       const owner=String((await recipeSession())?.userId||'');
