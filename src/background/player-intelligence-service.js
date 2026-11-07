@@ -88,7 +88,7 @@
     const page=new URL(sender.tab.url);
     if(page.origin!=='https://www.torn.com'||!(['/factions.php','/hospitalview.php','/jailview.php'].includes(page.pathname)||(
       page.pathname==='/page.php'&&(page.searchParams.get('sid')?.toLowerCase()==='userlist'||(page.searchParams.get('sid')==='list'&&['friends','enemies','targets'].includes(page.searchParams.get('type'))))
-    )))return {};
+    )||(page.pathname==='/index.php'&&page.searchParams.get('page')==='people')))return {};
     const session=await SLINK.core.storage.get('access.session.v1',null);
     if (!session?.userId || !(session.expiresAt>Date.now())) return {};
     const providers=await SLINK.core.storage.get('shared.providers.v1',{});

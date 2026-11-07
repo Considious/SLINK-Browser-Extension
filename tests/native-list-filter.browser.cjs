@@ -92,6 +92,31 @@ const roster='<div class="members-list"><ul class="table-body">'+rows+'</ul></di
      assert.equal(await page.locator('.userlist-wrapper > ul').count(),1);
      assert.equal(await page.locator('.loader').getAttribute('data-slink-faction-filtered'),null);
    }
+   await page.unroute('https://www.torn.com/**');
+   const travel='<ul class="stockTableWrapper___x"><li><div class="row___x"><span class="itemName___x">Orchid</span><span>Type: Flower</span><span>Cost: $1,000</span><span>Stock: 25</span></div></li><li><div class="row___x"><span class="itemName___x">Bear</span><span>Type: Plushie</span><span>$500</span><span>Stock: 0</span></div></li><li class="purchase"><div class="buyPanel___x">Confirm purchase</div></li></ul>';
+   const city='<div class="buy-items-wrap"><ul class="items-list"><li><div class="item" itemid="2"><span class="name">Hammer</span></div><span class="price">$100</span><span class="instock">50</span></li><li><div class="item" itemid="3"><span class="name">Saw</span></div><span class="price">$2,500</span><span class="instock">0</span></li></ul></div>';
+   const people='<div class="userlist-wrapper"><ul class="users-list"><li><a href="/profiles.php?XID=123">Alice</a><span class="status"><i></i><span>Okay</span></span></li><li><a href="/profiles.php?XID=456">Bob</a><span class="status"><i></i><span>Hospital</span></span></li></ul></div>';
+   await page.route('https://www.torn.com/**',r=>r.fulfill({contentType:'text/html',body:'<main id="mainContainer">'+(r.request().url().includes('sid=travel')?travel:r.request().url().includes('shops.php')?city:people)+'</main>'}));
+   await page.goto('https://www.torn.com/index.php?page=people');await install();
+   await page.getByRole('button',{name:'Filter people abroad'}).click();
+   await page.getByLabel('Status',{exact:true}).selectOption('Hospital');
+   await page.getByText('1 of 2 loaded people abroad',{exact:true}).waitFor();
+   assert.match(await page.locator('.users-list li:visible').innerText(),/^Bob/);
+   for(const [url,item] of [['page.php?sid=travel','Orchid'],['shops.php','Hammer']]){
+     await page.goto('https://www.torn.com/'+url);await install();
+     await page.getByRole('button',{name:'Filter items',exact:true}).click();
+     await page.getByLabel('Minimum stock').fill('1');
+     await page.getByText('1 of 2 loaded items',{exact:true}).waitFor();
+     await page.locator('li:visible').filter({hasText:item}).waitFor();
+     if(item==='Orchid'){
+       await page.locator('.purchase:visible').waitFor();
+       await reset.click();await page.getByLabel('Item type').selectOption('Plushie');
+       await page.locator('li:visible').filter({hasText:'Bear'}).waitFor();
+     }
+     await page.getByLabel('Max price').fill('50');
+     await page.getByText('0 of 2 loaded items',{exact:true}).waitFor();
+     await reset.click();await page.getByText('2 of 2 loaded items',{exact:true}).waitFor();
+   }
    await page.close();
  }}finally{await browser.close();}
  console.log('Native list filters passed on desktop/mobile: roster, personal lists, Hospital, Jail and User List');
