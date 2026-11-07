@@ -27,12 +27,20 @@ const roster='<div class="members-list"><ul class="table-body">'+rows+'</ul></di
    await page.getByText('Special flags',{exact:true}).click();
    await page.getByLabel('Is Donator',{exact:true}).selectOption('yes');await visible(1);
    await reset.click();await visible(2);
-   const sort=page.getByLabel('Sort members'),rank=page.getByRole('list',{name:'Sorted faction members'});
-   await sort.selectOption('level-desc');await rank.getByText('Bob').waitFor();assert.match(await rank.locator('li').first().innerText(),/^Bob/);
-   await sort.selectOption('ff-desc');await rank.getByText('2.4',{exact:false}).waitFor();assert.match(await rank.locator('li').first().innerText(),/^Alice/);
-   await sort.selectOption('stats-desc');await rank.getByText('20,000',{exact:false}).waitFor();assert.match(await rank.locator('li').first().innerText(),/^Bob/);
+   const sort=page.getByLabel('Sort members');
+   const first=async name=>page.waitForFunction(expected=>{
+     const rows=Array.from(document.querySelectorAll('.table-body > li'));
+     rows.sort((a,b)=>a.getBoundingClientRect().top-b.getBoundingClientRect().top);
+     return rows[0]?.querySelector('a')?.textContent===expected;
+   },name);
+   await sort.selectOption('level-desc');await first('Bob');
+   await sort.selectOption('stats-desc');await first('Bob');
+   await sort.selectOption('ff-desc');await first('Alice');
+   assert.equal(await page.getByRole('list',{name:'Sorted faction members'}).count(),0);
+   assert.equal(await page.locator('.table-body > li').first().locator('a').innerText(),'Alice');
    await page.getByLabel('Fair Fight min',{exact:true}).fill('2');await visible(1);
-   await reset.click();await visible(2);
+   await reset.click();await visible(2);await first('Alice');
+   assert.equal(await page.locator('[data-slink-roster-sorted]').count(),0);
    await role.selectOption('Officer');await visible(1);
    await page.getByRole('button',{name:'Save preset'}).click();
    await page.reload();await install();await visible(1);
