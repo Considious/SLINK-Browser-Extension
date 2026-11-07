@@ -195,6 +195,18 @@
   }
 
   const routes = Object.freeze({
+    'stocks.preview.load':async()=>{
+      await SLINK.services.permissionAccess.ensureSession(false, CORE.SCOPE);
+      const key=await tornKey();
+      if(!key)throw Error('Save your Torn API key in Access first.');
+      const base='https://api.torn.com/v2/';
+      const [holdings,market,money]=await Promise.all([
+        tornJson(base+'user/stocks?comment=SLINK%20Stocks',key),
+        tornJson(base+'torn/stocks?comment=SLINK%20Stocks',key),
+        tornJson(base+'user/money?comment=SLINK%20Stocks',key).catch(()=>null)
+      ]);
+      return {holdings:holdings.stocks,market:market.stocks,cash:money?.money?.cash,fetchedAt:Date.now()};
+    },
     'money-property.status':payload => publicStatus(payload?.refreshIfDue !== false),
     'money-property.refresh':() => refresh(true),
     'money-property.settings.save':saveSettings,

@@ -299,8 +299,11 @@ function bankComparison(input, amount) {
       else {
         const base = tiers[tiers.length - 1];
         if (!base.benefit.repeatable) return [];
-        const nextIncrement = Math.max(1, integer(holding.bonus?.increment) + 1, Math.floor(sharesOwned / base.requirement) + 1);
-        threshold = base.requirement * nextIncrement;
+        if (base.benefit.passive === true) return [];
+        threshold = base.requirement;
+        const cap = stock.acronym === 'MCS' ? 10 : 53;
+        for (let block=1; threshold<=sharesOwned && block<cap; block++) threshold=threshold*2+base.requirement;
+        if (!Number.isSafeInteger(threshold) || threshold<=sharesOwned) return [];
         next = base;
       }
       const sharesNeeded = Math.max(0, threshold - sharesOwned);
