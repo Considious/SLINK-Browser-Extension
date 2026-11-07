@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),path=require('node:path');
 const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE||'playwright');
-const row=(id,name,ranked,prof)=>'<li><span class="name">'+name+'</span><div class="loaned"><a href="/profiles.php?XID='+id+'">Borrower '+id+'</a></div><div class="img-wrap"><img class="torn-item '+(ranked?'glow-yellow':'')+'"></div>'+(prof?'<i class="bonus-attachment-experience"></i>':'')+'<div class="item-action"><button data-role="retrieve" class="active" onclick="this.dataset.opens=(Number(this.dataset.opens)||0)+1;this.closest(\'li\').querySelector(\'.retrieve-cont\').hidden=false">Retrieve</button></div><div class="retrieve-cont" hidden><button class="retrieve-yes" onclick="this.dataset.confirmed=1;this.closest(\'li\').remove()">Yes</button></div></li>';
+const row=(id,name,ranked,prof)=>'<li><span class="name">'+name+'</span><div class="loaned"><a href="/profiles.php?XID='+id+'">Borrower '+id+'</a></div><div class="img-wrap"><img class="torn-item '+(ranked?'glow-yellow':'')+'"></div>'+(prof?'<i class="bonus-attachment-experience"></i>':'')+'<div class="item-action"><button data-role="retrieve" class="active" onclick="this.dataset.opens=(Number(this.dataset.opens)||0)+1;this.closest(\'li\').querySelector(\'.retrieve-cont\').hidden=false">Retrieve</button></div><div class="retrieve-cont" hidden><button class="retrieve-yes" onclick="window.confirmed=(window.confirmed||0)+1;this.closest(\'li\').remove()">Yes</button></div></li>';
 (async()=>{
  const browser=await chromium.launch({channel:'msedge'});
  try{for(const pda of [false,true]){
@@ -26,16 +26,19 @@ const row=(id,name,ranked,prof)=>'<li><span class="name">'+name+'</span><div cla
    const regular=page.locator('li').filter({hasText:'Regular'}), prof=page.locator('li').filter({hasText:'Proficient'});
    await prof.waitFor({state:'hidden'});
    await page.getByRole('button',{name:'Recall next',exact:true}).click();
-   await regular.getByRole('button',{name:'Yes',exact:true}).waitFor();
-   assert.equal(await page.locator('[data-opens]').count(),1);
+   await regular.waitFor({state:'detached'});
+   await page.getByText('One recall submitted to Torn.').waitFor();
+   assert.equal(await page.evaluate(()=>window.confirmed),1);
+   await page.getByLabel('Recall mode',{exact:true}).selectOption('ranked-all');
+   await prof.waitFor({state:'visible'});
+   await prof.getByRole('button',{name:'Retrieve'}).evaluate(n=>n.addEventListener('click',()=>{window.allowed=false;},{once:true}));
    await page.getByRole('button',{name:'Recall next',exact:true}).click();
-   await page.getByText('Finish or cancel the open Torn recall first.').waitFor();
-   assert.equal(await regular.getByRole('button',{name:'Retrieve',exact:true}).getAttribute('data-opens'),'1');
-   assert.equal(await page.locator('[data-confirmed]').count(),0);
-   await page.evaluate(()=>{window.allowed=false;window.dispatchEvent(new Event('focus'));});
+   await page.getByText('Access, filters, or the loan changed before confirmation.',{exact:false}).waitFor();
+   assert.equal(await page.evaluate(()=>window.confirmed),1);
+   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
    await panel.waitFor({state:'detached'});
    assert.equal(await page.locator('[data-slink-armory-filtered]').count(),0);
    await page.close();
  }}finally{await browser.close();}
- console.log('Native Armory filter: officer-only, ranked mode, whitelist, one prompt, manual confirmation, and revocation passed');
+ console.log('Native Armory filter: officer-only, ranked mode, whitelist, one recall per press, and revocation before confirmation passed');
 })().catch(e=>{console.error(e);process.exitCode=1;});
