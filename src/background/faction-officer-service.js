@@ -280,6 +280,20 @@
     return {...stock,onboarding,definitions:{armory:CORE.ARMORY_ITEMS,oc:CORE.OC_ITEMS}};
   }
   const routes=Object.freeze({
+    'faction.officer.armory.roster':async(_input,sender)=>{
+      const page=new URL(sender?.tab?.url||'https://invalid.invalid');
+      if(!sender?.tab?.active||page.origin!=='https://www.torn.com'||page.pathname!=='/factions.php'||page.searchParams.get('step')!=='your'||!page.hash.includes('tab=armoury'))throw Error('Open your faction armory to load members.');
+      const access=await session(CORE.ARMORY_SCOPE),owner=OC.identity(access),key=await accessKey();
+      if(!owner||!key)throw Error('Verify faction Armory access first.');
+      const response=await tornJson('/v2/faction/members?comment=SLINK%20Armory%20roster',key);
+      if(owner!==await ocOwner())throw Error('Faction access changed while loading members.');
+      const source=response?.members??response?.faction?.members??[];
+      const rows=Array.isArray(source)?source:Object.entries(source).map(([id,row])=>({id,...row}));
+      return {fetchedAt:Date.now(),members:rows.filter(row=>Number.isSafeInteger(Number(row?.id??row?.user_id))&&Number(row?.id??row?.user_id)>0).map(row=>{
+        const id=String(row.id??row.user_id);
+        return {id,name:String(row.name||('Player '+id)),level:Number(row.level)||0,rank:String(row.position?.name??row.position_name??row.position??'Member')};
+      }).sort((a,b)=>a.rank.localeCompare(b.rank)||a.name.localeCompare(b.name))};
+    },
     'faction.onboarding.status':payload=>status(payload?.refreshIfDue!==false),
     'faction.onboarding.refresh':()=>refresh(true),
     'faction.onboarding.verify':verify,
