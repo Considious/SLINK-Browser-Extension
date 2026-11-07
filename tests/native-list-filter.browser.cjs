@@ -47,6 +47,24 @@ const roster='<div class="members-list"><ul class="table-body">'+rows+'</ul></di
    await page.evaluate(html=>document.querySelector('.members-list').outerHTML=html,roster);await visible(1);
    assert.equal(await field.count(),1);
    await page.getByRole('button',{name:'Hide member filter'}).click();await visible(2);
+   await page.unroute('https://www.torn.com/**');
+   const personal='<main id="mainContainer"><div class="tableWrapper"><ul><li><a href="/profiles.php?XID=123">Alice</a><span class="level__x">10</span><img class="userOnlineStatusIcon___x" alt="Online"></li><li><a href="/profiles.php?XID=456">Bob</a><span class="level__x">20</span><img class="userOnlineStatusIcon___x" alt="Offline"></li></ul></div></main>';
+   await page.route('https://www.torn.com/**',r=>r.fulfill({contentType:'text/html',body:personal}));
+   for(const kind of ['friends','enemies','targets']){
+     await page.goto('https://www.torn.com/page.php?sid=list&type='+kind);await install();
+     await page.getByRole('button',{name:'Filter '+kind,exact:true}).click();
+     const native=page.locator('.tableWrapper > ul > li:visible');
+     await page.getByRole('combobox',{name:'Activity',exact:true}).selectOption('Offline');
+     await page.getByText('1 of 2 loaded '+kind,{exact:true}).waitFor();
+     assert.match(await native.innerText(),/^Bob/);
+     await reset.click();
+     await page.getByRole('combobox',{name:'Sort '+kind}).selectOption('level-desc');
+     await page.waitForFunction(()=>document.querySelector('.tableWrapper > ul > li:last-child').getBoundingClientRect().top<document.querySelector('.tableWrapper > ul > li:first-child').getBoundingClientRect().top);
+     assert.equal(await page.locator('.tableWrapper > ul').count(),1);
+     await field.fill('Alice');
+     await page.getByText('1 of 2 loaded '+kind,{exact:true}).waitFor();
+     await page.getByRole('button',{name:'Save preset'}).click();
+   }
    await page.close();
  }}finally{await browser.close();}
  console.log('Faction filter passed: desktop and mobile layout, name/ID/role, empty/reset, preset, replaced roster and disabled state');
