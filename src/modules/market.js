@@ -103,6 +103,7 @@
       function syncPurchaseCatalog(status = current) {
         const catalog = status?.catalog && typeof status.catalog === 'object' ? status.catalog : { fetchedAt:0, items:[] };
         purchaseState.itemCatalog = {
+          schema:catalog.schema,
           fetchedAt:Number(catalog.fetchedAt) || 0,
           items:(Array.isArray(catalog.items) ? catalog.items : []).map(item => ({
             ...item,
@@ -185,6 +186,11 @@
             outline: 4px solid #ff4fbd !important;
             outline-offset: 2px !important;
             box-shadow: 0 0 18px 5px rgba(255,79,189,.68), inset 0 0 0 2px rgba(255,79,189,.48) !important;
+          }
+          [data-tdd-bazaar-overseas-profit], [data-tdd-item-market-overseas-profit] {
+            outline: 4px solid #24d6df !important;
+            outline-offset: 2px !important;
+            box-shadow: 0 0 14px 3px rgba(36,214,223,.58) !important;
           }
           #tdd-quick-buy-layer {
             position: fixed;
@@ -306,27 +312,26 @@
       }
 
       function catalogItemForBazaarCard(card) {
-        return catalogItemById(bazaarCardItemId(card)) || catalogItemBySearch(bazaarCardItemName(card));
+        const id = bazaarCardItemId(card);
+        return id ? catalogItemById(id) : catalogItemBySearch(bazaarCardItemName(card));
       }
 
-      function itemCatalogHasSellPrices() {
-        return purchaseState.itemCatalog.items.some((item) => Object.hasOwn(item, 'sellPrice'));
-      }
 
       function requestPurchaseSellPriceCatalog() {
-        if ((itemCatalogFresh() && itemCatalogHasSellPrices()) || purchaseState.itemCatalogLoading || !purchaseState.settings.apiKey || !ownsDashboardNetworkLease()) return;
+        if ((purchaseState.itemCatalog.schema === 2 && itemCatalogFresh()) || purchaseState.itemCatalogLoading || !purchaseState.settings.apiKey || !ownsDashboardNetworkLease()) return;
         if (Date.now() - Number(purchaseState.bazaarCatalogRequestedAt || 0) < 5 * 60_000) return;
         purchaseState.bazaarCatalogRequestedAt = Date.now();
-        void loadItemCatalog({ force: true }).then(() => schedulePurchaseOpportunityFormatting(0));
+        void loadItemCatalog().then(() => schedulePurchaseOpportunityFormatting(0)).catch(() => {});
       }
 
       function bazaarPurchaseOpportunity(card) {
         const price = bazaarCardPrice(card);
         const available = !bazaarCardUnavailable(card);
-        const sellPrice = Number(catalogItemForBazaarCard(card)?.sellPrice) || 0;
+        const item = purchaseState.itemCatalog.schema === 2 && itemCatalogFresh() ? catalogItemForBazaarCard(card) : null;
+        const sellPrice = Number(item?.sellPrice) || 0;
         const oneDollar = available && price === 1;
         const shopProfit = available && !oneDollar && price !== null && sellPrice > 0 && price < sellPrice;
-        return { oneDollar, shopProfit };
+        return { oneDollar, shopProfit, overseasProfit:available && !oneDollar && price !== null && Number(item?.overseasSellPrice) > Math.max(price, sellPrice) };
       }
 
       function clearMarketDomTestMarks(kind = '') {
@@ -368,14 +373,16 @@
         document.querySelectorAll('[data-tdd-bazaar-one-dollar]').forEach((card) => {
           if (!cards.has(card)) card.removeAttribute('data-tdd-bazaar-one-dollar');
         });
-        document.querySelectorAll('[data-tdd-bazaar-shop-profit]').forEach((card) => {
+        document.querySelectorAll('[data-tdd-bazaar-shop-profit], [data-tdd-bazaar-overseas-profit]').forEach((card) => {
           if (!cards.has(card)) card.removeAttribute('data-tdd-bazaar-shop-profit');
+          if (!cards.has(card)) card.removeAttribute('data-tdd-bazaar-overseas-profit');
         });
         cards.forEach((card) => {
-          const { oneDollar, shopProfit } = bazaarPurchaseOpportunity(card);
+          const { oneDollar, shopProfit, overseasProfit } = bazaarPurchaseOpportunity(card);
           card.toggleAttribute('data-tdd-bazaar-targeted', bazaarCardMatchesTarget(card, target));
           card.toggleAttribute('data-tdd-bazaar-one-dollar', oneDollar);
           card.toggleAttribute('data-tdd-bazaar-shop-profit', shopProfit);
+          card.toggleAttribute('data-tdd-bazaar-overseas-profit', overseasProfit);
         });
       }
 
@@ -463,7 +470,8 @@
       }
 
       function catalogItemForItemMarketRow(row) {
-        return catalogItemById(itemMarketRowItemId(row)) || catalogItemBySearch(itemMarketRowItemName(row));
+        const id = itemMarketRowItemId(row);
+        return id ? catalogItemById(id) : catalogItemBySearch(itemMarketRowItemName(row));
       }
 
       function fillItemMarketPurchaseMaximum(row, price) {
@@ -501,10 +509,11 @@
         if (!focusedTornPage() || !onItemMarketPage()) return;
         const rows = new Set(itemMarketSellerRows());
         marketDomTestTarget('item-market', rows);
-        document.querySelectorAll('[data-tdd-item-market-one-dollar], [data-tdd-item-market-shop-profit]').forEach((row) => {
+        document.querySelectorAll('[data-tdd-item-market-one-dollar], [data-tdd-item-market-shop-profit], [data-tdd-item-market-overseas-profit]').forEach((row) => {
           if (!rows.has(row)) {
             row.removeAttribute('data-tdd-item-market-one-dollar');
             row.removeAttribute('data-tdd-item-market-shop-profit');
+            row.removeAttribute('data-tdd-item-market-overseas-profit');
           }
         });
         if (!rows.size) return;
@@ -513,11 +522,13 @@
         rows.forEach((row) => {
           const price = itemMarketRowPrice(row);
           const available = !itemMarketRowUnavailable(row);
-          const sellPrice = Number(catalogItemForItemMarketRow(row)?.sellPrice) || 0;
+          const item = purchaseState.itemCatalog.schema === 2 && itemCatalogFresh() ? catalogItemForItemMarketRow(row) : null;
+          const sellPrice = Number(item?.sellPrice) || 0;
           const oneDollar = available && price === 1;
           const shopProfit = available && !oneDollar && price !== null && sellPrice > 0 && price < sellPrice;
           row.toggleAttribute('data-tdd-item-market-one-dollar', oneDollar);
           row.toggleAttribute('data-tdd-item-market-shop-profit', shopProfit);
+          row.toggleAttribute('data-tdd-item-market-overseas-profit', available && !oneDollar && price !== null && Number(item?.overseasSellPrice) > Math.max(price, sellPrice));
           if (oneDollar || shopProfit) fillItemMarketPurchaseMaximum(row, price);
           else row.removeAttribute('data-tdd-item-market-max-applied');
         });
@@ -1147,7 +1158,7 @@
         purchaseState.quickPurchaseFlow = null;
         purchaseState.pendingBazaarPurchase = null;
         const attributes = [
-          'data-tdd-bazaar-targeted', 'data-tdd-bazaar-one-dollar', 'data-tdd-bazaar-shop-profit',
+          'data-tdd-bazaar-targeted', 'data-tdd-bazaar-one-dollar', 'data-tdd-bazaar-shop-profit', 'data-tdd-bazaar-overseas-profit', 'data-tdd-item-market-overseas-profit',
           'data-tdd-item-market-one-dollar', 'data-tdd-item-market-shop-profit', 'data-tdd-item-market-max-applied',
           'data-tdd-purchase-reason', 'data-tdd-market-dom-test'
         ];

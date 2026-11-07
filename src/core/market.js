@@ -87,10 +87,13 @@
 
   function shopSellDetails(item = {}) {
     const shops = Array.isArray(item?.value?.shops) ? item.value.shops : [];
-    const candidates = shops.map(shop => ({
+    const domestic = country => /^(?:torn|torn city)$/i.test(String(country || '').trim());
+    const candidates = shops.filter(shop => domestic(shop?.country) && String(shop?.shop || '').trim()).map(shop => ({
       price:finite(shop?.sell_price), shop:String(shop?.shop || '').trim(), country:String(shop?.country || '').trim()
     })).filter(row => row.price !== null && row.price > 0);
     if (candidates.length) return candidates.sort((left, right) => right.price - left.price)[0];
+    // An explicit shops list is authoritative, including when it is empty.
+    if (Array.isArray(item?.value?.shops) || !domestic(item?.value?.vendor?.country) || !String(item?.value?.vendor?.name || '').trim()) return { price:0, shop:'', country:'' };
     const legacy = finite(item?.value?.sell_price);
     return legacy !== null && legacy > 0
       ? { price:legacy, shop:String(item?.value?.vendor?.name || 'Torn shop'), country:String(item?.value?.vendor?.country || '') }
@@ -102,10 +105,14 @@
     return rows.filter(item => Number(item?.id) > 0 && item?.name && item?.is_tradable !== false && item?.is_masked !== true)
       .map(item => {
         const sell = shopSellDetails(item);
+        const overseas = (Array.isArray(item?.value?.shops) ? item.value.shops : []).filter(shop => String(shop?.country || '').trim() && !/^(?:torn|torn city)$/i.test(String(shop.country).trim()) && String(shop?.shop || '').trim() && finite(shop?.sell_price) > 0).sort((a,b) => Number(b.sell_price) - Number(a.sell_price))[0];
+        // Big Al's documented Grenade buyback is $7,000; never advertise profit above it.
+        if (Number(item.id) === 220) sell.price = Math.min(sell.price, 7000);
         return {
           id:Math.trunc(Number(item.id)), name:String(item.name), type:String(item.type || 'Other'), image:String(item.image || ''),
           marketPrice:Math.max(0, Math.trunc(Number(item?.value?.market_price) || 0)),
-          shopSellPrice:Math.max(0, Math.trunc(Number(sell.price) || 0)), shopSellName:sell.shop, shopSellCountry:sell.country
+          shopSellPrice:Math.max(0, Math.trunc(Number(sell.price) || 0)), shopSellName:sell.shop, shopSellCountry:sell.country,
+          overseasSellPrice:Math.trunc(Number(overseas?.sell_price) || 0), overseasSellCountry:String(overseas?.country || '')
         };
       }).sort((left, right) => left.name.localeCompare(right.name));
   }

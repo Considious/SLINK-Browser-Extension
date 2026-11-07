@@ -169,7 +169,7 @@
     const state = current || await runtime();
     if (!(await accessState({ authenticate:true })).permitted) throw new Error('A signed SLINK Market Watch permission is required.');
     const catalog = await SLINK.services.sharedData.catalog({ key:key || await tornKey(), force, maxAgeMs:CATALOG_MAX_AGE_MS, needPrices:false });
-    if (state.catalog?.metadataAt !== catalog.metadataAt || state.catalog?.pricesAt !== catalog.pricesAt) {
+    if (state.catalog?.schema !== catalog.schema || state.catalog?.metadataAt !== catalog.metadataAt || state.catalog?.pricesAt !== catalog.pricesAt) {
       state.catalog = catalog;
       await saveRuntime(state);
     }
@@ -424,7 +424,7 @@
     const configured = Boolean((await SLINK.services.permissionAccess.settings()).enabled);
     const activity = await activityStatus();
     if (refreshIfDue && activity.active && configured && access.permitted && currentSettings.enabled) {
-      if (!current.catalog?.items?.length || Date.now() - Number(current.catalog?.fetchedAt) >= CATALOG_MAX_AGE_MS) {
+      if (current.catalog?.schema !== 2 || !current.catalog?.items?.length || Date.now() - Number(current.catalog?.fetchedAt) >= CATALOG_MAX_AGE_MS) {
         try { current.catalog = await ensureCatalog({ current }); } catch (error) { current.lastError = SLINK.core.format.errorMessage(error); await saveRuntime(current); }
       }
       if (nextAt(currentSettings, current, access.limit) <= Date.now()) return refresh(false);

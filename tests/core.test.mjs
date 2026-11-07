@@ -149,6 +149,17 @@ const marketCatalog = SLINK.core.market.catalogItems({ items:[
 ] });
 assert(marketCatalog[0].shopSellPrice === 125 && marketCatalog[0].shopSellName === 'Bits n Bobs', 'Market catalog did not use the current Torn value.shops[] sell price.');
 assert(marketCatalog[1].shopSellPrice === 220, 'Legacy shop-price compatibility fallback failed.');
+
+const normalizeShopCases = SLINK.core.market.catalogItems;
+const shopCases = { items:[
+  {id:220,name:'Grenade',value:{shops:[{country:'Torn',shop:'Big Al',sell_price:8000},{country:'United Kingdom',shop:'Abroad',sell_price:10000}]}},
+  {id:221,name:'Foreign only',value:{shops:[{country:'Mexico',shop:'Market',sell_price:10000}]}},
+  {id:222,name:'Empty',value:{shops:[],sell_price:9000,vendor:{country:'Torn',name:'Legacy'}}},
+  {id:223,name:'Buy only',value:{shops:[{country:'Torn',shop:'Shop',buy_price:9000,sell_price:null}]}},
+  {id:224,name:'Mixed',value:{shops:[{country:'Torn',shop:'Shop',sell_price:6000},{country:'Japan',shop:'Abroad',sell_price:10000}]}}
+] };
+const buybacks = Object.fromEntries(normalizeShopCases(shopCases).map(item => [item.id,item.shopSellPrice]));
+for (const [id,price] of [[220,7000],[221,0],[222,0],[223,0],[224,6000]]) if (buybacks[id] !== price) throw Error('Incorrect city-shop buyback for '+id);
 assert(SLINK.core.market.listingHighlightState({ price:80, shopSellPrice:125 }).shopProfit, 'A listing below its city shop sell price was not marked for highlighting.');
 assert(!SLINK.core.market.listingHighlightState({ price:125, shopSellPrice:125 }).highlighted, 'A listing at its city shop sell price was incorrectly marked as profitable.');
 assert(SLINK.core.market.listingHighlightState({ price:500, shopSellPrice:125, targeted:true }).targeted, 'An API-targeted listing was not marked for highlighting.');
