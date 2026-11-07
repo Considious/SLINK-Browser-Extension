@@ -54,6 +54,8 @@ importScripts(
   'events-service.js',
   'mugging-service.js',
   'adhd-service.js',
+  '../core/qol.js',
+  'qol-service.js',
   'market-service.js',
   'merits-service.js',
   'player-stats-service.js',
@@ -315,6 +317,7 @@ async function requireAdminPermission() {
 }
 
 const routes = {
+  ...SLINK.services.pageTools.routes,
   async 'system.ping'() {
     return {
       ok: true,
