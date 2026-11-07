@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK — QoL feature preview",
-  "version": "0.19.68",
+  "version": "0.19.69",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -164,6 +164,16 @@
         "src/content/inline-status.js",
         "src/content/rehab-preview.js"
       ]
+    },
+    {
+      "matches": [
+        "https://www.torn.com/city.php*"
+      ],
+      "js": [
+        "src/content/city-items.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN"
     }
   ]
 }
