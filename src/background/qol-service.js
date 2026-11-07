@@ -5,7 +5,7 @@
   async function access(){const session=await S.services.permissionAccess.ensureSession(false);if(!S.core.permissions.hasScope(session,'slink.adhd.alerts'))throw Error('Page tools require your SLINK Efficiency permission.');return session;}
   async function owner(){const s=await access();const id=String(s.userId??s.user_id??'');if(!/^[1-9]\d*$/.test(id))throw Error('Verify your SLINK identity before using page tools.');return id;}
   async function cacheKey(){return CACHE+':'+await owner();}
-  async function api(path){await access();const settings=await S.services.permissionAccess.settings();await S.core.tornApiLimiter.reserve({wait:true,priority:'high',script:'SLINK page tools',endpoint:path});const result=await S.core.http.requestJson('tornApi','https://api.torn.com'+path,{headers:{Authorization:'ApiKey '+settings.tornKey},cache:'no-store'});if(result?.error)throw Error(result.error.message||result.error.error||'Torn did not return the requested information.');return result;}
+  async function api(path,scope){if(scope)await S.services.permissionAccess.ensureSession(false,scope);else await access();const settings=await S.services.permissionAccess.settings();await S.core.tornApiLimiter.reserve({wait:true,priority:'high',script:'SLINK page tools',endpoint:path});const result=await S.core.http.requestJson('tornApi','https://api.torn.com'+path,{headers:{Authorization:'ApiKey '+settings.tornKey},cache:'no-store'});if(result?.error)throw Error(result.error.message||result.error.error||'Torn did not return the requested information.');return result;}
   async function profile(force=false){
     const key=await cacheKey(),cache=await S.core.storage.get(key,{});if(!force&&cache.context&&Date.now()-cache.profileAt<30000)return cache.context;
     if(profileTask)return profileTask;
@@ -26,6 +26,13 @@
     releaseTask=(async()=>{let data;try{data=await S.core.http.requestJson('contributionWorker','https://slinkcontributionworker.richard-johnson554.workers.dev/api/releases',{cache:'no-store'});if(data?.schema!==1)throw Error('Update service unavailable.');}catch{data={schema:1,error:'Update information is temporarily unavailable.'};}await S.core.storage.set(UPDATES,{at:Date.now(),data});return data;})().finally(()=>releaseTask=null);return releaseTask;
   }
   S.define('services','pageTools',{routes:{
+    'qol.leaseCompare':(input,sender)=>{
+      const page=new URL(sender?.tab?.url||'https://invalid.invalid');
+      if(page.origin!=='https://www.torn.com'||page.pathname!=='/properties.php')throw Error('Open Torn Properties to compare leases.');
+      const type=input?.type;
+      if(!Number.isSafeInteger(type)||type<0)throw Error('Choose a property type.');
+      return api(type?'/v2/market/'+type+'/rentals?limit=50':'/v2/torn/properties','slink.qol.money-property');
+    },
     'qol.weaponExperience':async()=>{
       const id=await owner(),body=await api('/v2/user/weaponexp');
       if(await owner()!==id)throw Error('The signed-in account changed.');
