@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK — QoL feature preview",
-  "version": "0.19.82",
+  "version": "0.19.83",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -169,7 +169,8 @@
         "src/content/armory-filter.js",
         "src/content/qol-native-extras.js",
         "src/core/weapon-merits.js",
-        "src/content/weapon-merits.js"
+        "src/content/weapon-merits.js",
+        "src/content/gym-guide.js"
       ]
     },
     {
