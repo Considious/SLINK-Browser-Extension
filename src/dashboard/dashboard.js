@@ -592,6 +592,7 @@
         const card = document.createElement('article'); card.className = 'adhd-alert-card'; card.dataset.tone = alert.tone || '';
         globalThis.SLINK_CHRISTMAS_THEME?.markAlert(card,alert.id);
         globalThis.SLINK_CANDY_THEME?.markAlert(card,alert.id);
+          globalThis.SLINK_HALLOWEEN_THEME?.markAlert(card,alert.id);
         const copy = document.createElement('div');
         const title = document.createElement('strong'); title.textContent = alert.title || 'Reminder';
         const detail = document.createElement('p'); detail.textContent = alert.detail || '';
@@ -644,6 +645,7 @@
     renderCards(list, alerts);
     renderCards(byId('crimes-alert-list'), SLINK.core.adhd.alertsForView(allAlerts,true).filter(()=>activeCrime==='uniques'));
     globalThis.SLINK_CANDY_THEME?.refresh(document.documentElement);
+        globalThis.SLINK_HALLOWEEN_THEME?.refresh(document.documentElement);
     void claimAdhdSound();
   }
 

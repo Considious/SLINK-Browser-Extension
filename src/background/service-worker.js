@@ -22,6 +22,7 @@ importScripts(
   '../core/merits.js',
   '../core/christmas-theme.js',
   '../core/candy-theme.js',
+  '../core/halloween-theme.js',
   '../core/themes.js',
   '../core/messaging.js',
   '../core/http.js',
