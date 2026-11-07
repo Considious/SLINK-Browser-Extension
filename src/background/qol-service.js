@@ -1,6 +1,6 @@
 (function(global){
   'use strict';const S=global.SLINK_EXTENSION,Q=global.SLINK_QOL;
-  let queue=Promise.resolve(),infoTask=null,profileTask=null,releaseTask=null;
+  let queue=Promise.resolve(),infoTask=null,profileTask=null,releaseTask=null,weaponCatalogue=null;
   const KEY='qol.page-tools.v1',CACHE='qol.page-tools.info.v1',UPDATES='qol.release.v1';
   async function access(){const session=await S.services.permissionAccess.ensureSession(false);if(!S.core.permissions.hasScope(session,'slink.adhd.alerts'))throw Error('Page tools require your SLINK Efficiency permission.');return session;}
   async function owner(){const s=await access();const id=String(s.userId??s.user_id??'');if(!/^[1-9]\d*$/.test(id))throw Error('Verify your SLINK identity before using page tools.');return id;}
@@ -26,6 +26,18 @@
     releaseTask=(async()=>{let data;try{data=await S.core.http.requestJson('contributionWorker','https://slinkcontributionworker.richard-johnson554.workers.dev/api/releases',{cache:'no-store'});if(data?.schema!==1)throw Error('Update service unavailable.');}catch{data={schema:1,error:'Update information is temporarily unavailable.'};}await S.core.storage.set(UPDATES,{at:Date.now(),data});return data;})().finally(()=>releaseTask=null);return releaseTask;
   }
   S.define('services','pageTools',{routes:{
+    'qol.weaponMerits':async()=>{
+      const id=await owner(),model=global.SLINK_WEAPON_MERITS;
+      const cached=await S.core.storage.get('qol.weapon-classes.v1',{});
+      const classes=cached.at>Date.now()-86400000&&cached.classes?Promise.resolve(cached.classes):(weaponCatalogue??=(async()=>{
+        const data=model.catalogue(await api('/v2/torn/items?cat=Weapon'));
+        if(!Object.keys(data).length)throw Error('Torn did not return weapon classes.');
+        await S.core.storage.set('qol.weapon-classes.v1',{classes:data,at:Date.now()});return data;
+      })().finally(()=>{weaponCatalogue=null;}));
+      const [levels,catalogue]=await Promise.all([api('/v2/user/perks').then(model.perks),classes]);
+      if(await owner()!==id)throw Error('The signed-in account changed.');
+      return {levels,classes:catalogue};
+    },
     'qol.get':async()=>({allowed:true,settings:Q.normalize(await S.core.storage.get(KEY+':'+await owner(),{}))}),
     'qol.save':input=>{const task=queue.then(async()=>{const key=KEY+':'+await owner(),value=Q.normalize(input);await S.core.storage.set(key,value);return value;});queue=task.catch(()=>{});return task;},
     'qol.cached':async()=>S.core.storage.get(await cacheKey(),{}),'qol.info':input=>info(input?.force===true),'qol.profile':input=>profile(input?.force===true),'qol.updates':updates

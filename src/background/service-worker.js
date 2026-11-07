@@ -14,6 +14,7 @@ importScripts(
   '../core/money-property.js',
   '../core/events.js',
   '../core/faction-officers.js',
+  '../core/weapon-merits.js',
   '../core/oc-participants.js',
   'local-vault.js',
   '../core/permissions.js',
