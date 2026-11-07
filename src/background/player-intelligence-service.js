@@ -83,6 +83,21 @@
     };
   }
 
+  async function factionMemberIntel(input = {}, sender) {
+    if (!sender?.tab?.url || !/^https:\/\/www\.torn\.com\/factions\.php(?:[?#]|$)/.test(sender.tab.url)
+      || !Array.isArray(input.ids) || input.ids.length > 200) return {};
+    const session=await SLINK.core.storage.get('access.session.v1',null);
+    if (!session?.userId || !(session.expiresAt>Date.now())) return {};
+    const providers=await SLINK.core.storage.get('shared.providers.v1',{});
+    const own=Object.values(providers.personal||{}).filter(r=>Number(r.accountId)===Number(session.userId)&&r.source==='torn-v2-authenticated-battlestats').sort((a,b)=>b.statsAt-a.statsAt)[0];
+    const context={observerId:session.userId,ownStatsAt:own?.statsAt||0};
+    const ids=[...new Set(input.ids.map(CORE.validPlayerId).filter(Boolean))];
+    return Object.fromEntries(await Promise.all(ids.map(async id=>{
+      const {record}=await get({playerId:id});
+      return [id,{ff:CORE.contextualFairFight(record,context),stats:Number(record?.battleStatsEstimate)>0?Number(record.battleStatsEstimate):null}];
+    })));
+  }
+
   async function tornKey() {
     const [bounties, leveling, war, access] = await Promise.all([
       SLINK.core.storage.get('bounties.settings.v1', {}),
@@ -163,6 +178,7 @@
     observeMany,
     refresh,
     routes:Object.freeze({
+      'factionMembers.cachedIntel':factionMemberIntel,
       'playerIntelligence.get':get,
       'playerIntelligence.observe':observe,
       'playerIntelligence.refresh':refresh,
