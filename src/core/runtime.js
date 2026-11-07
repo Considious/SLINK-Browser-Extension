@@ -3,7 +3,7 @@
 
   if (global.SLINK_EXTENSION) return;
 
-  const VERSION = '0.19.65';
+  const VERSION = '0.19.66';
   const STORAGE_PREFIX = 'slink.';
 
   const runtime = {

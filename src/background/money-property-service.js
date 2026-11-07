@@ -195,6 +195,10 @@
   }
 
   const routes = Object.freeze({
+    'bank.preview.load':async()=>{
+      const result=await refresh(true);
+      return {planner:result?.status?.bankPlanner??null};
+    },
     'stocks.preview.load':async()=>{
       await SLINK.services.permissionAccess.ensureSession(false, CORE.SCOPE);
       const key=await tornKey();
