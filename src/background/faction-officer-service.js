@@ -2,6 +2,11 @@
   'use strict';
   const SLINK = global.SLINK_EXTENSION;
   const CORE = SLINK.core.factionOfficers;
+  const OC = global.SLINK_OC_PARTICIPANTS;
+  async function ocOwner(){
+    const access=await SLINK.core.storage.get('access.session.v1',null);
+    return access?.expiresAt>Date.now()?OC.identity(access):'';
+  }
   const BASE_URL = 'https://slinkcontributionworker.richard-johnson554.workers.dev';
   const REFRESH_MS = 5 * 60_000;
   const DAY_MS = 86_400_000;
@@ -157,6 +162,7 @@
       }
       if(runOc){
         try{
+          const owner=await ocOwner();
           const [crimePayload,memberPayload]=await Promise.all([
             fetchCurrentCrimes(key),
             tornJson('/v2/faction/members?comment=SLINK%20OC%20member%20names',key)
@@ -167,7 +173,9 @@
             next.itemCatalog=Array.isArray(catalogPayload?.items)?catalogPayload.items:Object.values(catalogPayload?.items||{});
             next.itemCatalogAt=Date.now();
           }
-          next.missingCrimeItems=CORE.missingCrimeItems(crimePayload,CORE.itemCatalog(catalogPayload),CORE.memberCatalog(memberPayload));
+          const items=CORE.itemCatalog(catalogPayload),members=CORE.memberCatalog(memberPayload);
+          next.missingCrimeItems=CORE.missingCrimeItems(crimePayload,items,members);
+          next.ocParticipants=owner&&owner===await ocOwner()?{owner,text:OC.summarize(crimePayload.crimes,items,members)}:null;
           next.lastOcCheckAt=Date.now();next.ocError='';
         }catch(error){next.ocError=SLINK.core.format.errorMessage(error);await saveStockRuntime(next);throw error;}
       }
@@ -183,6 +191,8 @@
     }
     if(current.lastArmoryCheckAt)current.armoryShortages=CORE.shortages(CORE.ARMORY_ITEMS,config.armory.thresholds,current.inventory,current.points);
     if(current.lastOcCheckAt)current.ocShortages=CORE.shortages(CORE.OC_ITEMS,config.oc.thresholds,current.inventory,current.points);
+    const owner=ocAllowed?await ocOwner():'';
+    current.ocParticipants=owner&&current.ocParticipants?.owner===owner?current.ocParticipants.text:null;
     return {settings:config,runtime:current,access:{armory:armoryAllowed,oc:ocAllowed,admin:adminAllowed}};
   }
   async function refresh(force=false){
