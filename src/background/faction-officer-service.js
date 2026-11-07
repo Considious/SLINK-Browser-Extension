@@ -140,6 +140,7 @@
       if(!runArmory&&!runOc)return stockStatus(false);
       const key=await accessKey();
       if(!key)throw new Error('Save a limited-access Torn API key before running officer checks.');
+      const exportOwner=await ocOwner();
       let next={...current};
       if(runArmory||runOc){
         try{
@@ -149,6 +150,7 @@
           if(runArmory){
             next.armoryShortages=CORE.shortages(CORE.ARMORY_ITEMS,config.armory.thresholds,next.inventory,next.points);
             next.lastArmoryCheckAt=Date.now();next.armoryError='';
+            next.armoryExportOwner=exportOwner;
           }
           if(runOc){
             next.ocShortages=CORE.shortages(CORE.OC_ITEMS,config.oc.thresholds,next.inventory,next.points);
@@ -177,6 +179,7 @@
           next.missingCrimeItems=CORE.missingCrimeItems(crimePayload,items,members);
           next.ocParticipants=owner&&owner===await ocOwner()?{owner,text:OC.summarize(crimePayload.crimes,items,members)}:null;
           next.lastOcCheckAt=Date.now();next.ocError='';
+          next.ocExportOwner=exportOwner;
         }catch(error){next.ocError=SLINK.core.format.errorMessage(error);await saveStockRuntime(next);throw error;}
       }
       await saveStockRuntime(next);
@@ -191,7 +194,9 @@
     }
     if(current.lastArmoryCheckAt)current.armoryShortages=CORE.shortages(CORE.ARMORY_ITEMS,config.armory.thresholds,current.inventory,current.points);
     if(current.lastOcCheckAt)current.ocShortages=CORE.shortages(CORE.OC_ITEMS,config.oc.thresholds,current.inventory,current.points);
-    const owner=ocAllowed?await ocOwner():'';
+    const owner=ocAllowed||armoryAllowed?await ocOwner():'';
+    current.armoryExportAllowed=Boolean(armoryAllowed&&owner&&current.armoryExportOwner===owner);
+    current.ocExportAllowed=Boolean(ocAllowed&&owner&&current.ocExportOwner===owner);
     current.ocParticipants=owner&&current.ocParticipants?.owner===owner?current.ocParticipants.text:null;
     return {settings:config,runtime:current,access:{armory:armoryAllowed,oc:ocAllowed,admin:adminAllowed}};
   }
