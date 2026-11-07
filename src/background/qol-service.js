@@ -26,6 +26,12 @@
     releaseTask=(async()=>{let data;try{data=await S.core.http.requestJson('contributionWorker','https://slinkcontributionworker.richard-johnson554.workers.dev/api/releases',{cache:'no-store'});if(data?.schema!==1)throw Error('Update service unavailable.');}catch{data={schema:1,error:'Update information is temporarily unavailable.'};}await S.core.storage.set(UPDATES,{at:Date.now(),data});return data;})().finally(()=>releaseTask=null);return releaseTask;
   }
   S.define('services','pageTools',{routes:{
+    'qol.weaponExperience':async()=>{
+      const id=await owner(),body=await api('/v2/user/weaponexp');
+      if(await owner()!==id)throw Error('The signed-in account changed.');
+      if(!Array.isArray(body?.weaponexp))throw Error('Torn did not return weapon experience.');
+      return Object.fromEntries(body.weaponexp.filter(r=>Number.isSafeInteger(r?.id)&&r.id>0&&Number.isInteger(r.exp)&&r.exp>=0&&r.exp<=100).map(r=>[r.id,r.exp]));
+    },
     'qol.weaponMerits':async()=>{
       const id=await owner(),model=global.SLINK_WEAPON_MERITS;
       const cached=await S.core.storage.get('qol.weapon-classes.v1',{});
