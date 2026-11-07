@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+await import('../src/content/rehab-preview.js');
+const {options,number,compare}=globalThis.SLINK_REHAB_PREVIEW;
+const rows=options('{"1":60,"2":30,"3":0}');
+assert.deepEqual(compare(rows,30,225000,450000),{best:{sessions:2,remaining:30,cost:450000},alternative:{sessions:1,remaining:60,cost:225000},lowest:{sessions:3,remaining:0,cost:675000},affordable:true});
+assert.equal(compare(rows,0,225000,450000).affordable,false);
+assert.equal(compare(rows,0,null,null).best.cost,null);
+assert.equal(compare(options('{"1":20}'),0,250000,0).best,null);
+assert.deepEqual(options('{"1":40,"2":60}'),[]);
+assert.deepEqual(options('{"1":"25"}'),[{sessions:1,remaining:25}]);
+assert.deepEqual(options('{"1":null}'),[]);
+assert.deepEqual(options('invalid'),[]);
+assert.equal(number(''),null);assert.equal(number('0'),0);
+console.log('Rehab preview: targets, discounts, insufficient cash, and missing or malformed page values passed');
