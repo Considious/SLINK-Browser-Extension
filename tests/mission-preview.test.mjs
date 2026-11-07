@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+await import('../src/content/mission-preview.js');
+const {hint,integer,reward}=globalThis.SLINK_MISSION_PREVIEW;
+const now=1700000000000, prices=new Map([[7,{marketPrice:200,priceAvailable:true,priceCheckedAt:now-1000}]]);
+const item='{"points":100,"image":7,"amount":3,"basicType":"Item"}';
+assert.match(hint(' Show Some Muscle * '),/don’t need to win/);
+assert.equal(hint('constructor'),null);
+assert.equal(integer('1,250'),1250);
+assert.equal(integer('12,50'),null);
+assert.deepEqual(reward(item,99,prices,now),{points:100,affordable:false,total:600,at:now-1000});
+assert.equal(reward(item,null,prices,now).affordable,null);
+assert.equal(reward(item,100,prices,now+86400000).total,null);
+assert.equal(reward(item.replace('Item','Ammo'),100,prices,now).total,null);
+assert.equal(reward('invalid',100,prices,now),null);
+console.log('Mission preview: verified hints, costs, cached prices, and unknown data passed');
