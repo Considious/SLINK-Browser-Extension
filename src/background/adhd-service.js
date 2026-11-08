@@ -663,6 +663,14 @@
     return recipeSync;
   }
   const routes = Object.freeze({
+    async 'crimes.cracking.contribute'(input,sender){
+      const session=await recipeSession();
+      if(!session||!sender?.tab?.active||!await SLINK.core.storage.get('crimes.cracking.enabled',false))throw Error('Cracking Helper is not active.');
+      if(input?.schema!==1||!Array.isArray(input.answers)||!input.answers.length||input.answers.length>20||!input.answers.every(word=>typeof word==='string'&&/^[A-Z0-9_.]{4,10}$/.test(word)))throw Error('Invalid Cracking batch.');
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+      try{return await SLINK.core.http.requestJson('contributionWorker',SLINK.core.http.CAPABILITY_ORIGINS.contributionWorker+'/api/cracking-dictionary/contribute',{method:'POST',headers:{Authorization:'Bearer '+session.token,'Content-Type':'application/json'},body:JSON.stringify({schema:1,answers:input.answers}),signal:controller.signal});}
+      finally{clearTimeout(timer);}
+    },
     async 'crimes.cracking.dictionary'(input){
       const {length,bucket,page}=input||{};
       if(!Number.isInteger(length)||length<4||length>10||!Number.isInteger(page)||page<0||page>15||typeof bucket!=='string'||!/^(?:common|dot|[A-Z0-9_])$/.test(bucket))throw Error('Invalid dictionary page.');

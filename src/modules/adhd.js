@@ -161,7 +161,7 @@
             const label=document.createElement('label'),toggle=document.createElement('input'),note=document.createElement('p');
             toggle.type='checkbox';toggle.checked=crackingEnabled;
             toggle.onchange=async()=>{const value=toggle.checked;toggle.disabled=true;try{await SLINK.core.storage.set('crimes.cracking.enabled',value);crackingEnabled=value;render(current);}catch(error){toggle.checked=crackingEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
-            label.append(toggle,document.createTextNode(' Enable Cracking Helper'));note.textContent='Shows dictionary matches and labeled variant guesses. Nothing is entered, submitted, or shared.';root.append(label,note);
+            label.append(toggle,document.createTextNode(' Enable Cracking Helper'));note.textContent='Shows dictionary matches and labeled variant guesses. While enabled, confirmed Torn game answers help build the shared dictionary. SLINK never enters or submits guesses.';root.append(label,note);
           }
           if(activeCrime==='uniques')for(const definition of SLINK.core.adhd.CRIME_UNIQUE_DEFINITIONS){
             const row=(status?.crimeUniques||[]).find(entry=>entry.id===definition.id);
