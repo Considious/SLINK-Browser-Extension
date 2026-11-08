@@ -1914,6 +1914,15 @@
     catch(error){pickpocketToggle.checked=!enabled;byId('crimes-message').textContent=errorText(error);}
     finally{pickpocketToggle.disabled=false;}
   };
+  const crackingToggle=byId('cracking-helper-enabled');
+  crackingToggle.disabled=true;
+  SLINK.core.storage.get('crimes.cracking.enabled',false).then(value=>{crackingToggle.checked=value===true;crackingToggle.disabled=false;}).catch(error=>{byId('crimes-message').textContent=errorText(error);});
+  crackingToggle.onchange=async()=>{
+    const enabled=crackingToggle.checked;crackingToggle.disabled=true;
+    try{await SLINK.core.storage.set('crimes.cracking.enabled',enabled);}
+    catch(error){crackingToggle.checked=!enabled;byId('crimes-message').textContent=errorText(error);}
+    finally{crackingToggle.disabled=false;}
+  };
   const arsonToggle=byId('arson-helper-enabled');
   arsonToggle.disabled=true;
   SLINK.core.storage.get('crimes.arson.enabled',false).then(value=>{arsonToggle.checked=value===true;arsonToggle.disabled=false;}).catch(error=>{byId('crimes-message').textContent=errorText(error);});

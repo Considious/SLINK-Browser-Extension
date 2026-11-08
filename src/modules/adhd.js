@@ -27,7 +27,7 @@
       let current = null;
       let lastRenderSignature = null;
       let activeCrime='arson';
-      let arsonEnabled=false,pickpocketEnabled=false;
+      let arsonEnabled=false,pickpocketEnabled=false,crackingEnabled=false;
       const arsonPage=crimes&&SLINK.core.arsonPage;
       const arson=Boolean(arsonPage);
       function applyArson(value){
@@ -39,9 +39,11 @@
         if(area==='local'&&Object.hasOwn(changes,key))applyArson(changes[key].newValue);
         const pickKey=SLINK.STORAGE_PREFIX+'crimes.pickpocket.enabled';
         if(area==='local'&&Object.hasOwn(changes,pickKey)){pickpocketEnabled=changes[pickKey].newValue===true;if(current&&!stopped)render(current);}
+        const crackKey=SLINK.STORAGE_PREFIX+'crimes.cracking.enabled';
+        if(area==='local'&&Object.hasOwn(changes,crackKey)){crackingEnabled=changes[crackKey].newValue===true;if(current&&!stopped)render(current);}
       }
       if(crimes){
-        try{const [a,p]=await Promise.all([SLINK.core.storage.get('crimes.arson.enabled',false),SLINK.core.storage.get('crimes.pickpocket.enabled',false)]);pickpocketEnabled=p===true;applyArson(a);}catch{}
+        try{const [a,p,c]=await Promise.all(['arson','pickpocket','cracking'].map(crime=>SLINK.core.storage.get('crimes.'+crime+'.enabled',false)));pickpocketEnabled=p===true;crackingEnabled=c===true;applyArson(a);}catch{}
         global.chrome?.storage?.onChanged?.addListener(arsonStorageChanged);
       }
 
@@ -105,7 +107,7 @@
         updateStatus();
         const root = ui.getContentElement();
         const signature = JSON.stringify({
-          alerts, activeCrime, arsonEnabled, pickpocketEnabled, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
+          alerts, activeCrime, arsonEnabled, pickpocketEnabled, crackingEnabled, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
           life:status?.life, configured:status?.configured, lastError:status?.lastError
         });
         if (signature === lastRenderSignature) {
@@ -155,7 +157,12 @@
             toggle.onchange=async()=>{const value=toggle.checked;toggle.disabled=true;try{await SLINK.core.storage.set('crimes.pickpocket.enabled',value);pickpocketEnabled=value;render(current);}catch(error){toggle.checked=pickpocketEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
             label.append(toggle,document.createTextNode(' Enable Pickpocket Helper'));note.textContent='Shows target ratings and filters on Torn’s Pickpocketing page. No API calls or automatic actions.';root.append(label,note);
           }
-          if(activeCrime==='cracking'){const note=document.createElement('p');note.textContent='Cracking helper coming soon.';root.append(note);}
+          if(activeCrime==='cracking'){
+            const label=document.createElement('label'),toggle=document.createElement('input'),note=document.createElement('p');
+            toggle.type='checkbox';toggle.checked=crackingEnabled;
+            toggle.onchange=async()=>{const value=toggle.checked;toggle.disabled=true;try{await SLINK.core.storage.set('crimes.cracking.enabled',value);crackingEnabled=value;render(current);}catch(error){toggle.checked=crackingEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
+            label.append(toggle,document.createTextNode(' Enable Cracking Helper'));note.textContent='Shows dictionary matches and labeled variant guesses. Nothing is entered, submitted, or shared.';root.append(label,note);
+          }
           if(activeCrime==='uniques')for(const definition of SLINK.core.adhd.CRIME_UNIQUE_DEFINITIONS){
             const row=(status?.crimeUniques||[]).find(entry=>entry.id===definition.id);
             const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=status?.settings?.enabled?.[definition.id]!==false;
