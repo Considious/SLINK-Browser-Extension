@@ -187,6 +187,7 @@
 
       async function findTargets() {
         if (finding || busy || stopped || context.signal?.aborted) return;
+        const excludeTargetIds = cache.targets.map(target => target.id);
         finding = true;
         const values = {
           enabled:contentRoot.querySelector('#mugging-enabled')?.checked === true,
@@ -200,7 +201,7 @@
         render();
         try {
           const saved = await persistSettings(patch, contentRoot.querySelector('.mugging-controls'));
-          if (saved) await refreshAssignments();
+          if (saved) await refreshAssignments(excludeTargetIds);
         } catch (caught) { saveError(caught); }
         finally { finding = false; render(); }
       }
@@ -233,7 +234,7 @@
         }).catch(() => null);
       }
 
-      async function refreshAssignments() {
+      async function refreshAssignments(excludeTargetIds) {
         if (busy || stopped || context.signal?.aborted) return;
         if (!settings.enabled) {
           error = 'Enable Mugging on this device before requesting assignments.';
@@ -243,7 +244,7 @@
         busy = true; error = ''; notice = ''; render();
         const revision = ++cacheRevision;
         try {
-          const value = await SLINK.core.messaging.send('mugging.assignments.refresh', { ...settings, forceBattleStats:true });
+          const value = await SLINK.core.messaging.send('mugging.assignments.refresh', { ...settings, forceBattleStats:true, excludeTargetIds });
           if (stopped || context.signal?.aborted || revision !== cacheRevision) return;
           cache = normalizeCache(value);
           notice = `Loaded ${cache.targets.length} rough Fair Fight assignments from cached Mugging intelligence.`;

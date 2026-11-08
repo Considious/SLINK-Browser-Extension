@@ -275,7 +275,7 @@
         : { tasks:[] };
       let fetched = 0, skipped = 0, errors = 0;
       const observations = [];
-      await fairFightChecks.check(Array.isArray(response?.tasks)?response.tasks:[]).catch(()=>null);
+      await fairFightChecks.check(Array.isArray(response?.estimate_tasks) ? response.estimate_tasks : (response?.tasks || [])).catch(()=>null);
       for (const task of (Array.isArray(response?.tasks) ? response.tasks : [])) {
         if (fetched >= capacity.available) break;
         try {
@@ -359,7 +359,11 @@
   }
 
   async function refresh(input = {}) {
-    if (refreshing) return refreshing;
+    if (refreshing) {
+      if (!Array.isArray(input.excludeTargetIds)) return refreshing;
+      try { await refreshing; } catch {}
+      return refresh(input);
+    }
     refreshing = (async () => {
       const session = await SLINK.services.permissionAccess.ensureSession(false, REQUIRED_SCOPE);
       if (!SLINK.core.permissions.hasScope(session, REQUIRED_SCOPE)) {
@@ -382,6 +386,7 @@
         cache:'no-store',
         body:JSON.stringify({
           user_battle_stats:userBattleStats,
+          exclude_target_ids:input.excludeTargetIds,
           min_fair_fight:Number(settings.minFairFight) || 1,
           max_fair_fight:Number(settings.maxFairFight) || 3,
           limit:Math.max(1, Math.min(100, Math.trunc(Number(settings.limit) || 50)))
