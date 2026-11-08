@@ -19,6 +19,14 @@ try{
  assert.doesNotMatch(content,/Flamethrower|Ledger reference prices/);
  assert.equal(await page.locator('.fireMeter___fixture [data-slink-arson]').count(),1);
  assert.equal(await page.locator('.crime-image [data-slink-arson]').count(),0);
+ assert.equal(await icon.evaluate(node=>getComputedStyle(node.parentElement).position),'absolute');
+ const parsed=await page.evaluate(()=>{
+   const root=document.createElement('div');
+   root.innerHTML='<div class="requestIcons___fixture"><div class="requestIcon___xZiBr" role="img" aria-label="Intimidation"></div><div class="requestIcon___xZiBr" role="img" aria-label="New Story Label"></div><div class="requestIcon___xZiBr" role="img" aria-label="Total destruction required"></div><div class="requestIcon___xZiBr" role="img" aria-label="Unknown outcome required"></div></div>';
+   return SLINK_ARSON_PAGE.readRequests(root);
+ });
+ assert.deepEqual(parsed.context,['Intimidation','New Story Label']);
+ assert.deepEqual(parsed.requirements.map(requirement=>requirement.kind),['damage','unknown']);
  await page.evaluate(()=>{
   const picker=document.createElement('div');picker.className='itemSelector___fixture';picker.style.cssText='position:relative;z-index:600';
   picker.innerHTML='<div class="group___fixture"><span class="heading___fixture">Liquids</span><div class="itemCellWrap___fixture"><button aria-label="Gasoline 8 owned" aria-disabled="false"></button></div></div><div class="group___fixture"><span class="heading___fixture">Igniters</span><div class="itemCellWrap___fixture"><button aria-label="Windproof Lighter Igniting is unavailable at this stage" aria-disabled="true"></button></div><div class="itemCellWrap___fixture"><button aria-label="Item locked" aria-disabled="true"></button></div></div>';
@@ -75,6 +83,9 @@ try{
  await icon.waitFor();
  await page.evaluate(()=>{location.hash='/pickpocketing';});await icon.waitFor({state:'detached'});
  await page.evaluate(()=>{location.hash='/arson';});await icon.waitFor();
+ await page.evaluate(()=>{const old=document.querySelector('.arson-root');const replacement=old.cloneNode(true);replacement.querySelectorAll('[data-slink-arson]').forEach(node=>node.remove());old.replaceWith(replacement);});
+ await icon.waitFor();
+ assert.equal(await icon.count(),1);
  await icon.hover();await portal.getByText('Gasoline ×2',{exact:true}).waitFor();
  assert.deepEqual(errors,[]);
  console.log('Ledger source catalog, original formula layout, unclipped mobile-width popup, pinned details and cleanup passed.');
