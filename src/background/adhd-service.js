@@ -663,6 +663,14 @@
     return recipeSync;
   }
   const routes = Object.freeze({
+    async 'crimes.cracking.dictionary'(input){
+      const {length,bucket,page}=input||{};
+      if(!Number.isInteger(length)||length<4||length>10||!Number.isInteger(page)||page<0||page>15||typeof bucket!=='string'||!/^(?:common|dot|[A-Z0-9_])$/.test(bucket))throw Error('Invalid dictionary page.');
+      if(!await SLINK.core.storage.get('crimes.cracking.enabled',false))throw Error('Cracking Helper is disabled.');
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+      try{return await SLINK.core.http.requestJson('contributionWorker',SLINK.core.http.CAPABILITY_ORIGINS.contributionWorker+'/api/cracking-dictionary/v1/'+length+'/'+bucket+'/'+page,{signal:controller.signal,credentials:'omit'});}
+      finally{clearTimeout(timer);}
+    },
     'inline-status.virus':async()=>{
       await requireAccess();
       const key=await accessKey();
