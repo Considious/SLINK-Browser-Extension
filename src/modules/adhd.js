@@ -27,7 +27,7 @@
       let current = null;
       let lastRenderSignature = null;
       let activeCrime='arson';
-      let arsonEnabled=false,pickpocketEnabled=false,crackingEnabled=false,disposalEnabled=false,forgeryEnabled=false;
+      let arsonEnabled=false,pickpocketEnabled=false,crackingEnabled=false,disposalEnabled=false,forgeryEnabled=false,hustlingEnabled=false;
       const arsonPage=crimes&&SLINK.core.arsonPage;
       const arson=Boolean(arsonPage);
       function applyArson(value){
@@ -41,13 +41,15 @@
         if(area==='local'&&Object.hasOwn(changes,pickKey)){pickpocketEnabled=changes[pickKey].newValue===true;if(current&&!stopped)render(current);}
         const disposalKey=SLINK.STORAGE_PREFIX+'crimes.disposal.enabled';
         const forgeryKey=SLINK.STORAGE_PREFIX+'crimes.forgery.enabled';
+        const hustlingKey=SLINK.STORAGE_PREFIX+'crimes.hustling.enabled';
         if(area==='local'&&Object.hasOwn(changes,disposalKey)){disposalEnabled=changes[disposalKey].newValue===true;if(current&&!stopped)render(current);}
         if(area==='local'&&Object.hasOwn(changes,forgeryKey)){forgeryEnabled=changes[forgeryKey].newValue===true;if(current&&!stopped)render(current);}
+        if(area==='local'&&Object.hasOwn(changes,hustlingKey)){hustlingEnabled=changes[hustlingKey].newValue===true;if(current&&!stopped)render(current);}
         const crackKey=SLINK.STORAGE_PREFIX+'crimes.cracking.enabled';
         if(area==='local'&&Object.hasOwn(changes,crackKey)){crackingEnabled=changes[crackKey].newValue===true;if(current&&!stopped)render(current);}
       }
       if(crimes){
-        try{const [a,p,c,d,f]=await Promise.all(['arson','pickpocket','cracking','disposal','forgery'].map(crime=>SLINK.core.storage.get('crimes.'+crime+'.enabled',false)));pickpocketEnabled=p===true;crackingEnabled=c===true;disposalEnabled=d===true;forgeryEnabled=f===true;applyArson(a);}catch{}
+        try{const [a,p,c,d,f,h]=await Promise.all(['arson','pickpocket','cracking','disposal','forgery','hustling'].map(crime=>SLINK.core.storage.get('crimes.'+crime+'.enabled',false)));pickpocketEnabled=p===true;crackingEnabled=c===true;disposalEnabled=d===true;forgeryEnabled=f===true;hustlingEnabled=h===true;applyArson(a);}catch{}
         global.chrome?.storage?.onChanged?.addListener(arsonStorageChanged);
       }
 
@@ -111,7 +113,7 @@
         updateStatus();
         const root = ui.getContentElement();
         const signature = JSON.stringify({
-          alerts, activeCrime, arsonEnabled, pickpocketEnabled, crackingEnabled, disposalEnabled, forgeryEnabled, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
+          alerts, activeCrime, arsonEnabled, pickpocketEnabled, crackingEnabled, disposalEnabled, forgeryEnabled, hustlingEnabled, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
           life:status?.life, configured:status?.configured, lastError:status?.lastError
         });
         if (signature === lastRenderSignature) {
@@ -178,6 +180,12 @@
             toggle.type='checkbox';toggle.checked=forgeryEnabled;
             toggle.onchange=async()=>{const value=toggle.checked;toggle.disabled=true;try{await SLINK.core.storage.set('crimes.forgery.enabled',value);forgeryEnabled=value;render(current);}catch(error){toggle.checked=forgeryEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
             label.append(toggle,document.createTextNode(' Show project difficulty in Torn'));note.textContent=SLINK.core.adhd.FORGERY_TIP;root.append(label,note);
+          }
+          if(activeCrime==='hustling'){
+            const label=document.createElement('label'),toggle=document.createElement('input'),note=document.createElement('p');
+            toggle.type='checkbox';toggle.checked=hustlingEnabled;
+            toggle.onchange=async()=>{const value=toggle.checked;toggle.disabled=true;try{await SLINK.core.storage.set('crimes.hustling.enabled',value);hustlingEnabled=value;render(current);}catch(error){toggle.checked=hustlingEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
+            label.append(toggle,document.createTextNode(' Show Hustling guidance in Torn'));note.textContent=SLINK.core.adhd.HUSTLING_TIP;root.append(label,note);
           }
           const guide=SLINK.core.adhd.CRIME_GUIDES[activeCrime];
           if(guide){const p=document.createElement('p'),a=document.createElement('a');a.textContent=guide[0];a.href='https://www.torn.com/forums.php?p=threads&f=61&t='+guide[1];a.target='_blank';a.rel='noopener noreferrer';p.append(a);root.append(p);}

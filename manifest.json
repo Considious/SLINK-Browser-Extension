@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK — QoL feature preview",
-  "version": "0.19.99",
+  "version": "0.19.100",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -136,6 +136,7 @@
         "src/content/cracking-helper.js",
         "src/content/disposal-helper.js",
         "src/content/forgery-helper.js",
+        "src/content/hustling-helper.js",
         "src/content/ui-shell.js",
         "src/core/qol.js",
         "src/core/qol-ui.js",
