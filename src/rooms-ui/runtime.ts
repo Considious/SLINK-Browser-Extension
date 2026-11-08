@@ -4,7 +4,7 @@
 // SLINK adaptation: no upstream API, login, store, transport or backend is included.
 import nativeCSS from '../../vendor/torn-rooms/userscript/src/generated/torn-chat.css';
 import extraCSS from '../../vendor/torn-rooms/userscript/src/extra.css';
-import {h,text,icon,roomIcon,componentIcon,badge,cx,ago} from './dom';
+import {h,text,icon,roomIcon,componentIcon,badge,cx,ago,themeAsset} from './dom';
 import {textInput,checkbox,setting,actionButton} from './forms';
 import {roomForm} from './roomForm';
 export {h,text,icon,roomIcon,componentIcon,badge,cx,ago,checkbox,setting,actionButton,roomForm};
@@ -24,6 +24,15 @@ export const css=nativeCSS+'\n'+extraCSS+`\n
 .tr-card{border:0;background:transparent;color:inherit;text-align:left;min-width:0}.tr-card .tr-card-icon{width:48px;height:48px}.tr-card .tr-card-icon svg{width:24px;height:24px}.tr-card .tr_wrapper___pXMZO{overflow:hidden}.tr-card .tr_content___LLeBK{max-width:none}.tr-card .tr_description____safi{margin:0}
 .room-row{display:flex;align-items:center;position:relative}.room-entry{flex:1;min-width:0}.room-options{position:relative;flex:none;margin-right:5px}.room-options>summary{cursor:pointer;list-style:none;padding:6px}.room-options[open]{position:absolute;right:4px;z-index:3;background:#333;border:1px solid #555;padding:6px;max-width:180px}.room-options label{display:flex;align-items:center;gap:5px}
 [data-home-view],[data-chat-view],[data-media-view]{flex:1;min-height:0}.tr-list{min-height:0}ol[data-messages]{padding:0;margin:0;list-style:none}.message{display:flex;flex-direction:column}.message .text{white-space:pre-wrap;overflow-wrap:anywhere}.message .meta{display:contents}.message .meta small{display:none}.message .meta a{color:inherit;font-weight:bold;text-decoration:none}.message .meta a:hover{text-decoration:underline}.message .preview{display:block;max-width:100%;max-height:180px;object-fit:contain}
+.message a[data-room-media]{color:#9cdaff;overflow-wrap:anywhere}.message a[data-room-media]:focus-visible{outline:2px solid currentColor}
+.tr-panel[data-room-theme] [data-scroller]{background:var(--tr-room-background) center/cover no-repeat;color:#f7f3ff}
+.tr-panel[data-room-theme] .tr_box___eWW6m{background:#15101deb;color:#f7f3ff}
+.tr-panel[data-room-theme] .tr_self___HgXOK .tr_box___eWW6m{background:#090711ed}
+.tr-panel[data-room-theme] .tr_root___aBCjE,.tr-panel[data-room-theme] [data-room-details]{background:#17101f;color:#f7f3ff}
+.tr-panel[data-room-theme] [data-draft]{color:#f7f3ff}
+.tr-panel[data-room-theme] [data-draft]::placeholder{color:#c8bbd0}
+.tr-panel[data-room-theme] .slink-chat-footer{color:#ddd;text-shadow:0 1px 3px #000}
+[aria-label="Room theme"]{max-width:100%;padding:5px;color:#eee;background:#222;border:1px solid #777;border-radius:4px}
 .tr_header___cccSy,.tr_root___tQsxi{flex:none;width:100%;height:38px;min-height:38px}.tr_header___cccSy .tr_title___ptIMK{min-width:0}.tr_header___cccSy .tr_actionButton___CPUK5{min-width:0;flex:1}.tr_header___cccSy [data-header-icon]{display:flex;flex:none}.tr_header___cccSy [data-header-icon] svg{width:22px;height:22px}
 .slink-media-button{color:#ccc;padding:0 5px;font-size:10px;border:0;background:transparent;flex:none}.slink-media-button:hover{color:white}.slink-rooms-header-icon{margin-right:8px}
 .tr_root___aBCjE .tr_textarea___JRbO5{box-sizing:content-box;height:26px;min-height:26px;max-height:72px}.tr_root___aBCjE{flex:none;min-height:42px}.slink-chat-footer{padding:8px 4px;text-align:center;color:#888;font-size:11px}
@@ -90,4 +99,20 @@ export function message(name:string,id:number,mine:boolean){
  const box=h('div',{c:'box___eWW6m'},meta,body),bubble=h('div',{c:cx('root___EP_Dq first___icNlg',mine&&'self___HgXOK')},box),row=h('li',{c:'virtualItem___eIUjo message',style:'margin-bottom:5px'},bubble);
  return {row,meta,profile,body:body.firstChild as HTMLElement,box};
 }
-export function look(panel:HTMLElement,look:any){panel.classList.toggle('tr-colored',!!look.color);panel.style.setProperty('--tr-room',look.color||'#20516d');const slot=panel.querySelector('[data-header-icon]');if(slot&&(slot as HTMLElement).dataset.icon!==look.icon){slot.replaceChildren(roomIcon(look.icon,'icon___MBR1e'));(slot as HTMLElement).dataset.icon=look.icon;}}
+const roomPalettes:Record<string,{background:string,art?:string}>={
+ 'slinky-pursuit':{background:'linear-gradient(145deg,#142d43,#0c1722)'},
+ 'slinky-underglow':{background:'radial-gradient(ellipse at bottom,#51276e,#10243a 65%,#121021)'},
+ 'slinky-black-chrome':{background:'linear-gradient(145deg,#32383e,#14171c 45%,#222831)'},
+ 'halloween-2026':{background:'linear-gradient(#150b24aa,#100b18bf)',art:'halloween-2026-haunted-background-v1.webp'},
+ 'slink-naughty-list':{background:'linear-gradient(#180c14aa,#180d18bf)',art:'christmas2026-background.webp'},
+ 'slink-candy-cartel':{background:'linear-gradient(#261335aa,#190d22bf)',art:'candy-cartel-background.webp'}
+};
+export function look(panel:HTMLElement,look:any){
+ panel.classList.toggle('tr-colored',!!look.color);panel.style.setProperty('--tr-room',look.color||'#20516d');
+ const slot=panel.querySelector('[data-header-icon]');if(slot&&(slot as HTMLElement).dataset.icon!==look.icon){slot.replaceChildren(roomIcon(look.icon,'icon___MBR1e'));(slot as HTMLElement).dataset.icon=look.icon;}
+ const theme=Object.hasOwn(roomPalettes,look.theme)?look.theme:'';
+ if((panel.dataset.roomTheme||'')!==theme){
+   if(theme){const palette=roomPalettes[theme];panel.dataset.roomTheme=theme;panel.style.setProperty('--tr-room-background',palette.background+(palette.art?', url("'+themeAsset(palette.art)+'"), #161019':''));}
+   else {delete panel.dataset.roomTheme;panel.style.removeProperty('--tr-room-background');}
+ }
+}

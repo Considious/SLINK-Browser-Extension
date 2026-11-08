@@ -5,7 +5,12 @@
 const LIMITS={roomName:60,description:300};
 type PostPolicy='everyone'|'admins';
 type Visibility='faction'|'selected'|'leaders';
-import { h, roomIcon, ROOM_ICON_NAMES, CHRISTMAS_ROOM_ICONS, text } from './dom';
+import { h, roomIcon, ROOM_ICON_NAMES, roomIconTheme, text } from './dom';
+
+export const ROOM_THEME_LABELS:Record<string,string>={
+ 'slinky-pursuit':'Slinky Pursuit','slinky-underglow':'Slinky Underglow','slinky-black-chrome':'Slinky Black Chrome',
+ 'halloween-2026':'Halloween 2026','slink-naughty-list':'Naughty List','slink-candy-cartel':'Candy Cartel'
+};
 
 import { backView, checkbox, setting, tabList, textInput, tornBtn } from './forms';
 
@@ -14,6 +19,7 @@ export interface RoomFormValues {
   description: string;
   icon: string;
   color: string;
+  theme?: string;
   visibility: Visibility;
   postPolicy: PostPolicy;
   showFactionTags: boolean;
@@ -23,6 +29,8 @@ export function roomForm(opts: {
   backTitle: string;
   personal?: boolean;
   christmasIcons?: boolean;
+  roomThemes?: string[];
+  themeEditable?: boolean;
   onChange?: (v: RoomFormValues) => void;
   submitTitle: string;
   initial?: RoomFormValues;
@@ -31,6 +39,7 @@ export function roomForm(opts: {
 }): HTMLElement {
   const v: RoomFormValues = opts.initial ? { ...opts.initial } : { name: '', description: '', icon: '', color: '', visibility: 'selected', postPolicy: 'everyone', showFactionTags: false };
   const host = h('div', { style: 'display: contents;' });
+  const themes=(opts.roomThemes||[]).filter(id=>Object.hasOwn(ROOM_THEME_LABELS,id));
 
   const changed=()=>opts.onChange?.({...v});
   const main = () => {
@@ -48,6 +57,12 @@ export function roomForm(opts: {
       h('div', { c: 'iconWrapper___N1Bnd' }, roomIcon(v.icon, 'icon___eo4eO')),
     );
     const accessOptions: { value: Visibility; title: string; icon: 'accessPrivate' | 'accessPublic' }[] = [{value:'selected',title:'Selected members',icon:'accessPrivate'},{value:'faction',title:'All members',icon:'accessPublic'},{value:'leaders',title:'Leaders only',icon:'accessPrivate'}];
+    const currentTheme=v.theme||'';
+    const themeSelect=h('select',{'aria-label':'Room theme',on:{change:(e:Event)=>{v.theme=(e.target as HTMLSelectElement).value;changed();}}},
+      h('option',{value:''},'Torn default'),
+      ...themes.map(id=>h('option',{value:id},ROOM_THEME_LABELS[id])),
+      ...(currentTheme&&!themes.includes(currentTheme)?[h('option',{value:currentTheme,disabled:true},ROOM_THEME_LABELS[currentTheme]||'Saved theme')]:[])) as HTMLSelectElement;
+    themeSelect.value=currentTheme;
 
     const form = h(
       'form',
@@ -76,6 +91,7 @@ export function roomForm(opts: {
         ),
         setting('Room description', [h('div', { c: 'row___gZZ09' }, desc.root)]),
         setting('Color', [colorPicker(v.color, (c) => ((v.color = c),changed()))]),
+        opts.themeEditable===true&&setting('Room theme',[themeSelect,h('small',{},'Everyone in this room sees the selected theme.')]),
         !opts.personal && setting('Access control', [tabList(accessOptions, v.visibility, (x) => ((v.visibility = x),changed()))]),
         /* SLINK write/moderation grants remain in its member management controls. */
         false && setting('Who can write', [
@@ -104,7 +120,7 @@ export function roomForm(opts: {
     const draw = (q: string) =>
       grid.replaceChildren(
         ...['', ...ROOM_ICON_NAMES]
-          .filter(n=>!CHRISTMAS_ROOM_ICONS.includes(n)||opts.christmasIcons===true)
+          .filter(n=>{const theme=roomIconTheme(n);return !theme||themes.includes(theme)||(theme==='slink-naughty-list'&&opts.christmasIcons===true);})
           .filter((n) => !q || n.includes(q.toLowerCase()))
           .map((n) =>
             h('div', { role: 'button', tabindex:'0', 'aria-label':'Use '+(n||'default')+' icon', title: n || 'default', on: { click: () => ((v.icon = n), changed(), main()), keydown:(e:KeyboardEvent)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();v.icon=n;changed();main();}} } }, roomIcon(n, '', n || 'default')),

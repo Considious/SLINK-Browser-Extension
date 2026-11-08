@@ -89,12 +89,21 @@ export const retryIcon = (cls = '') => svg(RETRY, cls);
 export const icon = (name: IconName, cls = '', label?: string) => svg(ICONS[name], cls, label);
 export const componentIcon = (name: keyof typeof COMPONENT_ICONS, cls = '') => svg(COMPONENT_ICONS[name], cls);
 // Original SLINK artwork; only these fixed IDs can select premium raster icons.
-export const CHRISTMAS_ROOM_ICONS=['medical','drug','booster','casino','addiction','shopping','flight','racing','education','stocks','oc','market'].map(id=>'naughty_'+id);
+const props=['medical','drug','booster','casino','addiction','shopping','flight','racing','education','stocks','oc','market'];
+export const CHRISTMAS_ROOM_ICONS=props.map(id=>'naughty_'+id);
+const roomArtwork=new Map(props.flatMap(id=>[
+ ['naughty_'+id,['slink-naughty-list','christmas2026-prop-'+id+'.webp']],
+ ['haunt_'+id,['halloween-2026','halloween-2026-'+id+'-v2.webp']],
+ ['cartel_'+id,['slink-candy-cartel','candy-cartel-'+id+'.webp']]
+] as [string,[string,string]][]));
+export const roomIconTheme=(name:string)=>roomArtwork.get(name)?.[0];
+export const themeAsset=(filename:string)=>{const runtime=(globalThis as any).chrome?.runtime;return runtime?.getURL?runtime.getURL('assets/themes/'+filename):'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/'+filename;};
 export const roomIcon = (name: string, cls = '', label?: string) => {
- if(CHRISTMAS_ROOM_ICONS.includes(name)){const filename='christmas2026-prop-'+name.slice(8)+'.webp',runtime=(globalThis as any).chrome?.runtime;const url=runtime?.getURL?runtime.getURL('assets/themes/'+filename):'https://raw.githubusercontent.com/Considious/SLINK-Cloudflare-Services/main/themes/assets/'+filename;return svg({viewBox:'0 0 360 360',inner:'<image href="'+url+'" width="360" height="360" preserveAspectRatio="xMidYMid meet"/>'},cls,label);}
+ const art=roomArtwork.get(name);
+ if(art)return svg({viewBox:'0 0 360 360',inner:'<image href="'+themeAsset(art[1])+'" width="360" height="360" preserveAspectRatio="xMidYMid meet"/>'},cls,label);
  return svg(ROOM_ICONS[name] ?? ICONS.chats, cls, label);
 };
-export const ROOM_ICON_NAMES = [...Object.keys(ROOM_ICONS),...CHRISTMAS_ROOM_ICONS];
+export const ROOM_ICON_NAMES = [...Object.keys(ROOM_ICONS),...roomArtwork.keys()];
 
 type Variant = 'headingH1' | 'subtitle' | 'body' | 'error' | 'success' | 'placeholder' | 'link1' | 'link2' | 'divider1' | 'divider2';
 const VARIANT: Record<Variant, string> = {
