@@ -3,7 +3,7 @@ const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE||'playwright');
 const rows='<li><a href="/profiles.php?XID=123">Alice</a><div class="position"><span class="ellipsis">Officer</span></div><div class="lvl">10</div><div class="status">Okay</div><i title="Online"></i><ul><li id="icon3_fixture"></li></ul></li><li><a href="/profiles.php?XID=456">Bob</a><div class="position">Member</div><div class="lvl">20</div><div class="status">Hospital</div><i title="Offline"></i></li>';
 const roster='<div class="members-list"><ul class="table-body">'+rows+'</ul></div>';
 (async()=>{
- const browser=await chromium.launch({channel:'msedge'});
+ const browser=await chromium.launch(process.env.SLINK_BROWSER_EXECUTABLE?{executablePath:process.env.SLINK_BROWSER_EXECUTABLE}:{channel:'msedge'});
  try{for(const width of [390,1100]){
    const page=await browser.newPage({viewport:{width,height:800}});
    await page.route('https://www.torn.com/**',r=>r.fulfill({contentType:'text/html',body:'<main id="mainContainer"><div class="faction-info-wrap">'+roster+'</div></main>'}));

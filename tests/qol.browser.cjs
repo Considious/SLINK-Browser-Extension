@@ -1,7 +1,7 @@
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE || 'playwright');
 (async()=>{
- const browser=await chromium.launch({headless:true,channel:'msedge'});
+ const browser=await chromium.launch(process.env.SLINK_BROWSER_EXECUTABLE?{executablePath:process.env.SLINK_BROWSER_EXECUTABLE}:{channel:'msedge'});
  try{for(const width of [380,1000]){
   const page=await browser.newPage({viewport:{width,height:850}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('https://www.torn.com/**',route=>route.fulfill({contentType:'text/html',body:`<html><head></head><body><aside id="sidebar"></aside><main id="mainContainer" class="content-wrapper" role="main"><ul><li data-item="206" data-category="Drug"><span class="name">Xanax</span><span class="qty">5</span></li><li data-item="733" data-category="Medical"><span class="name">Blood Bag : A+</span><span class="qty">10</span></li></ul></main><div id="manager"></div></body></html>`}));
@@ -19,6 +19,12 @@ const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE || 'playwright');
   await page.waitForFunction(()=>saved.favorites.length===2);
   await page.locator('#manager .slink-qol-row').filter({hasText:'Blood Bag : A+ · inventory'}).getByRole('button',{name:'Move up'}).click();
   await page.waitForFunction(()=>saved.favorites[0].id==='733');
+  await page.getByRole('button',{name:'Xanax ×5',exact:true}).evaluate(button=>{
+    window.originalFavorite=button;
+    button.closest('section').parentElement.append(document.createElement('aside'));
+  });
+  await page.waitForTimeout(200);
+  assert.equal(await page.getByRole('button',{name:'Xanax ×5',exact:true}).evaluate(button=>window.originalFavorite===button),true,'Unrelated page edits must not replace favorites');
   await page.getByRole('button',{name:'Xanax ×5',exact:true}).click();await page.waitForFunction(()=>requests.length===1);
   assert.match((await page.evaluate(()=>requests[0].body)),/step=useItem/);
   await page.waitForTimeout(250);assert.equal(await page.evaluate(()=>requests.length),1,'no auto-repeat');

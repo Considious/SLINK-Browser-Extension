@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),path=require('node:path');
 const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE||'playwright');
 (async()=>{
- const browser=await chromium.launch({channel:'msedge'});
+ const browser=await chromium.launch(process.env.SLINK_BROWSER_EXECUTABLE?{executablePath:process.env.SLINK_BROWSER_EXECUTABLE}:{channel:'msedge'});
  try{for(const pda of [false,true]){
   const page=await browser.newPage({viewport:{width:pda?390:1100,height:800}});
   await page.route('https://www.torn.com/**',r=>r.fulfill({contentType:'text/html',body:`<section class="giver-cont-wrap"><div id="mission1"><h2 class="title-black">Show Some Muscle <span>*</span></h2><div class="max-height-fix"><button>Accept</button></div></div></section><p class="total-mission-points">125</p><ul class="rewards-list"><li data-ammo-info='{"points":100,"image":7,"amount":3,"basicType":"Item"}'><div class="act-wrap"><button>Buy</button></div></li></ul>`}));
