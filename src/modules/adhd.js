@@ -27,7 +27,7 @@
       let current = null;
       let lastRenderSignature = null;
       let activeCrime='arson';
-      let arsonEnabled=false;
+      let arsonEnabled=false,pickpocketEnabled=false;
       const arsonPage=crimes&&SLINK.core.arsonPage;
       const arson=Boolean(arsonPage);
       function applyArson(value){
@@ -37,9 +37,11 @@
       function arsonStorageChanged(changes,area){
         const key=SLINK.STORAGE_PREFIX+'crimes.arson.enabled';
         if(area==='local'&&Object.hasOwn(changes,key))applyArson(changes[key].newValue);
+        const pickKey=SLINK.STORAGE_PREFIX+'crimes.pickpocket.enabled';
+        if(area==='local'&&Object.hasOwn(changes,pickKey)){pickpocketEnabled=changes[pickKey].newValue===true;if(current&&!stopped)render(current);}
       }
-      if(arson){
-        try{applyArson(await SLINK.core.storage.get('crimes.arson.enabled',false));}catch{}
+      if(crimes){
+        try{const [a,p]=await Promise.all([SLINK.core.storage.get('crimes.arson.enabled',false),SLINK.core.storage.get('crimes.pickpocket.enabled',false)]);pickpocketEnabled=p===true;applyArson(a);}catch{}
         global.chrome?.storage?.onChanged?.addListener(arsonStorageChanged);
       }
 
@@ -103,7 +105,7 @@
         updateStatus();
         const root = ui.getContentElement();
         const signature = JSON.stringify({
-          alerts, activeCrime, arsonEnabled, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
+          alerts, activeCrime, arsonEnabled, pickpocketEnabled, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
           life:status?.life, configured:status?.configured, lastError:status?.lastError
         });
         if (signature === lastRenderSignature) {
@@ -134,7 +136,7 @@
         }
         root.append(summary);
         if (crimes) {
-          const nav=document.createElement('nav');nav.className='slink-adhd-links';nav.style.cssText='display:grid;grid-template-columns:repeat(3,minmax(0,1fr))';nav.setAttribute('aria-label','Crime tools');
+          const nav=document.createElement('nav');nav.className='slink-adhd-links';nav.style.cssText='display:grid;grid-template-columns:repeat(2,minmax(0,1fr))';nav.setAttribute('aria-label','Crime tools');
           for(const [id,label] of Object.entries(SLINK.core.adhd.CRIME_TABS)){
             const tab=document.createElement('button');tab.type='button';tab.textContent=label;tab.setAttribute('aria-pressed',String(id===activeCrime));
             if(id===activeCrime)tab.style.fontWeight='700';
@@ -146,6 +148,12 @@
             toggle.onchange=async()=>{toggle.disabled=true;try{await SLINK.core.storage.set('crimes.arson.enabled',toggle.checked);applyArson(toggle.checked);}catch(error){toggle.checked=arsonEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
             label.append(toggle,document.createTextNode(' Enable Arson Helper (preview)'));root.append(label);
             const note=document.createElement('p');note.textContent='Hover over the fire icon in Torn. Enabling Arson Help also shares confirmed recipe details with SLINK.';root.append(note);
+          }
+          if(activeCrime==='pickpocket'){
+            const label=document.createElement('label'),toggle=document.createElement('input'),note=document.createElement('p');
+            toggle.type='checkbox';toggle.checked=pickpocketEnabled;
+            toggle.onchange=async()=>{const value=toggle.checked;toggle.disabled=true;try{await SLINK.core.storage.set('crimes.pickpocket.enabled',value);pickpocketEnabled=value;render(current);}catch(error){toggle.checked=pickpocketEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
+            label.append(toggle,document.createTextNode(' Enable Pickpocket Helper'));note.textContent='Shows target ratings and filters on Torn’s Pickpocketing page. No API calls or automatic actions.';root.append(label,note);
           }
           if(activeCrime==='cracking'){const note=document.createElement('p');note.textContent='Cracking helper coming soon.';root.append(note);}
           if(activeCrime==='uniques')for(const definition of SLINK.core.adhd.CRIME_UNIQUE_DEFINITIONS){
@@ -296,7 +304,7 @@
       return {
         stop() {
           stopped = true;
-          if(arson)global.chrome?.storage?.onChanged?.removeListener(arsonStorageChanged);
+          if(crimes)global.chrome?.storage?.onChanged?.removeListener(arsonStorageChanged);
           if (timer) global.clearInterval(timer);
           if (clockTimer) global.clearInterval(clockTimer);
           global.removeEventListener('slink:api-usage', updateApiUsage);

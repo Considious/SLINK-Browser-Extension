@@ -31,7 +31,7 @@
     Object.freeze({ id:'arsonUnique', crimeId:13, label:'Arson daily unique check', mode:'daily' })
   ]);
   const CRIME_ALERT_IDS = new Set(CRIME_UNIQUE_DEFINITIONS.map(row => row.id));
-  const CRIME_TABS=Object.freeze({arson:'Arson',cracking:'Cracking',uniques:'Uniques'});
+  const CRIME_TABS=Object.freeze({arson:'Arson',pickpocket:'Pickpocket',cracking:'Cracking',uniques:'Uniques'});
   const isCrimeAlert = id => CRIME_ALERT_IDS.has(id);
   function alertsForView(alerts, crimes = false) {
     return alerts.flatMap(alert => crimes ? (isCrimeAlert(alert.id) ? [alert] : [])

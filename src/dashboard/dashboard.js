@@ -571,6 +571,7 @@
     for(const tab of crimeNav.children){tab.classList.toggle('active',tab.dataset.crimeTab===activeCrime);tab.setAttribute('aria-pressed',String(tab.dataset.crimeTab===activeCrime));}
     byId('crime-panel-title').textContent=SLINK.core.adhd.CRIME_TABS[activeCrime];
     byId('arson-helper-setting').hidden=activeCrime!=='arson';
+    byId('pickpocket-helper-setting').hidden=activeCrime!=='pickpocket';
     byId('crime-cracking-note').hidden=activeCrime!=='cracking';
     byId('crime-unique-controls').hidden=activeCrime!=='uniques';
     const crimeToggles=byId('crimes-alert-toggles');
@@ -1904,6 +1905,15 @@
   ]) {
     for (const eventName of ['input','change']) byId(id).addEventListener(eventName, () => markAdhdSettingDirty(key));
   }
+  const pickpocketToggle=byId('pickpocket-helper-enabled');
+  pickpocketToggle.disabled=true;
+  SLINK.core.storage.get('crimes.pickpocket.enabled',false).then(value=>{pickpocketToggle.checked=value===true;pickpocketToggle.disabled=false;}).catch(error=>{byId('crimes-message').textContent=errorText(error);});
+  pickpocketToggle.onchange=async()=>{
+    const enabled=pickpocketToggle.checked;pickpocketToggle.disabled=true;
+    try{await SLINK.core.storage.set('crimes.pickpocket.enabled',enabled);}
+    catch(error){pickpocketToggle.checked=!enabled;byId('crimes-message').textContent=errorText(error);}
+    finally{pickpocketToggle.disabled=false;}
+  };
   const arsonToggle=byId('arson-helper-enabled');
   arsonToggle.disabled=true;
   SLINK.core.storage.get('crimes.arson.enabled',false).then(value=>{arsonToggle.checked=value===true;arsonToggle.disabled=false;}).catch(error=>{byId('crimes-message').textContent=errorText(error);});
