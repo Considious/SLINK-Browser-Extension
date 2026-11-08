@@ -47,6 +47,12 @@ const roster='<div class="members-list"><ul class="table-body">'+rows+'</ul></di
    await page.evaluate(html=>document.querySelector('.members-list').outerHTML=html,roster);await visible(1);
    assert.equal(await field.count(),1);
    await page.getByRole('button',{name:'Hide member filter'}).click();await visible(2);
+   await page.locator('.table-body').evaluate(n=>{n.style.minHeight='500px';n.innerHTML=Array.from({length:16},(_,i)=>'<li><a href="/profiles.php?XID='+(i+100)+'">Member '+i+'</a></li>').join('');});
+   await page.getByRole('button',{name:'Filter members',exact:true}).click();
+   await reset.click();
+   const back=page.getByRole('button',{name:'Back to filters'});
+   await back.click();
+   assert.equal(await page.getByRole('button',{name:'Hide member filter'}).evaluate(n=>n===document.activeElement),true);
    await page.unroute('https://www.torn.com/**');
    const personal='<main id="mainContainer"><div class="tableWrapper"><ul><li><a href="/profiles.php?XID=123">Alice</a><span class="level__x">10</span><img class="userOnlineStatusIcon___x" alt="Online"></li><li><a href="/profiles.php?XID=456">Bob</a><span class="level__x">20</span><img class="userOnlineStatusIcon___x" alt="Offline"></li></ul></div></main>';
    await page.route('https://www.torn.com/**',r=>r.fulfill({contentType:'text/html',body:personal}));
@@ -116,6 +122,10 @@ const roster='<div class="members-list"><ul class="table-body">'+rows+'</ul></di
      await page.getByLabel('Max price').fill('50');
      await page.getByText('0 of 2 loaded items',{exact:true}).waitFor();
      await reset.click();await page.getByText('2 of 2 loaded items',{exact:true}).waitFor();
+     await page.getByLabel('Minimum stock').fill('1');await page.getByText('1 of 2 loaded items',{exact:true}).waitFor();
+     await page.getByRole('button',{name:'Save preset'}).click();
+     await page.reload();await install();
+     await page.getByText('1 of 2 loaded items',{exact:true}).waitFor();assert.equal(await page.getByLabel('Minimum stock').inputValue(),'1');
    }
    await page.close();
  }}finally{await browser.close();}

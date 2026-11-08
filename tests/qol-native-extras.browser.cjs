@@ -18,6 +18,10 @@ const fixtures={
    const open=async(url,file='qol-native-extras.js')=>{await page.goto('https://www.torn.com/'+url);if(url.includes('sid=stocks'))await page.addScriptTag({path:path.join(__dirname,'../src/core/stocks-preview.js')});await page.addScriptTag({path:path.join(__dirname,'../src/content/'+file)});};
    await open('amarket.php');await page.getByText('Filter auctions',{exact:true}).click();
    await page.getByLabel('Ranked tier').selectOption('red');await page.getByText('Knife',{exact:true}).waitFor({state:'hidden'});
+   await page.getByRole('button',{name:'Save preset'}).click();
+   await open('amarket.php');await page.getByText('Knife',{exact:true}).waitFor({state:'hidden'});
+   assert.equal(await page.getByLabel('Ranked tier').inputValue(),'red');
+   await page.getByRole('button',{name:'Reset',exact:true}).click();await page.getByText('Knife',{exact:true}).waitFor();
    await open('factions.php?step=your');await page.getByText('Filter ranked war members').click();
    await page.getByLabel('War side').selectOption('enemy');await page.getByText('Alice',{exact:true}).waitFor({state:'hidden'});
    await open('page.php?sid=racing');await page.getByText('Filter custom races').click();
@@ -31,6 +35,10 @@ const fixtures={
    await page.getByText('Beta',{exact:true}).waitFor({state:'hidden'});
    await page.getByLabel('Stock ownership').selectOption('');await page.getByLabel('Stock name or symbol').fill('BBB');
    await page.getByText('Alpha',{exact:true}).waitFor({state:'hidden'});await page.getByText('Beta',{exact:true}).waitFor();
+   await page.getByRole('button',{name:'Save filter preset'}).click();
+   await open('page.php?sid=stocks','stocks-preview.js');
+   await page.getByText('Alpha',{exact:true}).waitFor({state:'hidden'});
+   await page.getByRole('button',{name:'Reset filters'}).click();await page.getByText('Alpha',{exact:true}).waitFor();
    await page.close();
  }}finally{await browser.close();}
  console.log('Auction, war, races, stock filters, friendly-fire advisory, and company stock suggestions passed');
