@@ -573,6 +573,10 @@
     byId('arson-helper-setting').hidden=activeCrime!=='arson';
     byId('pickpocket-helper-setting').hidden=activeCrime!=='pickpocket';
     byId('crime-cracking-note').hidden=activeCrime!=='cracking';
+    byId('disposal-helper-setting').hidden=activeCrime!=='disposal';
+    const guide=SLINK.core.adhd.CRIME_GUIDES[activeCrime],guideHolder=byId('crime-guide-link');
+    guideHolder.hidden=!guide;
+    if(guide&&guideHolder.dataset.guide!==activeCrime){const a=document.createElement('a');a.textContent=guide[0];a.href='https://www.torn.com/forums.php?p=threads&f=61&t='+guide[1];a.target='_blank';a.rel='noopener noreferrer';guideHolder.replaceChildren(a);guideHolder.dataset.guide=activeCrime;}
     byId('crime-unique-controls').hidden=activeCrime!=='uniques';
     const crimeToggles=byId('crimes-alert-toggles');
     renderAdhdToggleRows(crimeToggles, SLINK.core.adhd.CRIME_UNIQUE_DEFINITIONS, settings, 'alert');
@@ -1914,6 +1918,9 @@
     catch(error){pickpocketToggle.checked=!enabled;byId('crimes-message').textContent=errorText(error);}
     finally{pickpocketToggle.disabled=false;}
   };
+  const disposalToggle=byId('disposal-helper-enabled');disposalToggle.disabled=true;
+  SLINK.core.storage.get('crimes.disposal.enabled',false).then(v=>{disposalToggle.checked=v===true;disposalToggle.disabled=false;}).catch(error=>{byId('crimes-message').textContent=errorText(error);});
+  disposalToggle.onchange=async()=>{const enabled=disposalToggle.checked;disposalToggle.disabled=true;try{await SLINK.core.storage.set('crimes.disposal.enabled',enabled);}catch(error){disposalToggle.checked=!enabled;byId('crimes-message').textContent=errorText(error);}finally{disposalToggle.disabled=false;}};
   const crackingToggle=byId('cracking-helper-enabled');
   crackingToggle.disabled=true;
   SLINK.core.storage.get('crimes.cracking.enabled',false).then(value=>{crackingToggle.checked=value===true;crackingToggle.disabled=false;}).catch(error=>{byId('crimes-message').textContent=errorText(error);});
