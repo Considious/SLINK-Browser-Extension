@@ -27,7 +27,7 @@
       let current = null;
       let lastRenderSignature = null;
       let activeCrime='arson';
-      let arsonEnabled=false,pickpocketEnabled=false,crackingEnabled=false,disposalEnabled=false;
+      let arsonEnabled=false,pickpocketEnabled=false,crackingEnabled=false,disposalEnabled=false,forgeryEnabled=false;
       const arsonPage=crimes&&SLINK.core.arsonPage;
       const arson=Boolean(arsonPage);
       function applyArson(value){
@@ -40,12 +40,14 @@
         const pickKey=SLINK.STORAGE_PREFIX+'crimes.pickpocket.enabled';
         if(area==='local'&&Object.hasOwn(changes,pickKey)){pickpocketEnabled=changes[pickKey].newValue===true;if(current&&!stopped)render(current);}
         const disposalKey=SLINK.STORAGE_PREFIX+'crimes.disposal.enabled';
+        const forgeryKey=SLINK.STORAGE_PREFIX+'crimes.forgery.enabled';
         if(area==='local'&&Object.hasOwn(changes,disposalKey)){disposalEnabled=changes[disposalKey].newValue===true;if(current&&!stopped)render(current);}
+        if(area==='local'&&Object.hasOwn(changes,forgeryKey)){forgeryEnabled=changes[forgeryKey].newValue===true;if(current&&!stopped)render(current);}
         const crackKey=SLINK.STORAGE_PREFIX+'crimes.cracking.enabled';
         if(area==='local'&&Object.hasOwn(changes,crackKey)){crackingEnabled=changes[crackKey].newValue===true;if(current&&!stopped)render(current);}
       }
       if(crimes){
-        try{const [a,p,c,d]=await Promise.all(['arson','pickpocket','cracking','disposal'].map(crime=>SLINK.core.storage.get('crimes.'+crime+'.enabled',false)));pickpocketEnabled=p===true;crackingEnabled=c===true;disposalEnabled=d===true;applyArson(a);}catch{}
+        try{const [a,p,c,d,f]=await Promise.all(['arson','pickpocket','cracking','disposal','forgery'].map(crime=>SLINK.core.storage.get('crimes.'+crime+'.enabled',false)));pickpocketEnabled=p===true;crackingEnabled=c===true;disposalEnabled=d===true;forgeryEnabled=f===true;applyArson(a);}catch{}
         global.chrome?.storage?.onChanged?.addListener(arsonStorageChanged);
       }
 
@@ -109,7 +111,7 @@
         updateStatus();
         const root = ui.getContentElement();
         const signature = JSON.stringify({
-          alerts, activeCrime, arsonEnabled, pickpocketEnabled, crackingEnabled, disposalEnabled, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
+          alerts, activeCrime, arsonEnabled, pickpocketEnabled, crackingEnabled, disposalEnabled, forgeryEnabled, city:status?.city, settings:status?.settings, crimeUniques:status?.crimeUniques,
           life:status?.life, configured:status?.configured, lastError:status?.lastError
         });
         if (signature === lastRenderSignature) {
@@ -170,6 +172,12 @@
             toggle.type='checkbox';toggle.checked=disposalEnabled;
             toggle.onchange=async()=>{const value=toggle.checked;toggle.disabled=true;try{await SLINK.core.storage.set('crimes.disposal.enabled',value);disposalEnabled=value;render(current);}catch(error){toggle.checked=disposalEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
             label.append(toggle,document.createTextNode(' Enable Disposal Helper'));note.textContent='Shows the safest documented method for each job. You choose and submit it yourself.';root.append(label,note);
+          }
+          if(activeCrime==='forgery'){
+            const label=document.createElement('label'),toggle=document.createElement('input'),note=document.createElement('p');
+            toggle.type='checkbox';toggle.checked=forgeryEnabled;
+            toggle.onchange=async()=>{const value=toggle.checked;toggle.disabled=true;try{await SLINK.core.storage.set('crimes.forgery.enabled',value);forgeryEnabled=value;render(current);}catch(error){toggle.checked=forgeryEnabled;ui.setStatus(SLINK.core.format.errorMessage(error),'error');}finally{toggle.disabled=false;}};
+            label.append(toggle,document.createTextNode(' Show project difficulty in Torn'));note.textContent=SLINK.core.adhd.FORGERY_TIP;root.append(label,note);
           }
           const guide=SLINK.core.adhd.CRIME_GUIDES[activeCrime];
           if(guide){const p=document.createElement('p'),a=document.createElement('a');a.textContent=guide[0];a.href='https://www.torn.com/forums.php?p=threads&f=61&t='+guide[1];a.target='_blank';a.rel='noopener noreferrer';p.append(a);root.append(p);}
