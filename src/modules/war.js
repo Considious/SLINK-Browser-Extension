@@ -1280,6 +1280,7 @@
         if (fullUi) context.ui.getContentElement()?.closest('.window')?.classList.toggle('slink-war-alerting', active && settings.alertPanelFlash);
         context.ui.setAlertCount('war', retals.length + itemRequests.length, { group:'combat', label:'active War alerts' });
         context.ui.setBubbleAlert(retals.length ? 'retal' : itemRequests.length ? 'armory' : '', retals.length || itemRequests.length, 'war');
+        globalThis.SLINK_COMPANION_ALERTS?.('war',retals.map(row=>({id:row.attackId,category:'retal',important:true,critical:true})));
         setPageAlert(active);
       }
 

@@ -1221,6 +1221,7 @@
         updateStatus();if(!status?.permitted){ui.setAlertCount('market',0,{group:'efficiency',label:'active Market Watch deals'});observer?.disconnect();mounted=false;root.innerHTML='<p class="slink-market-locked">Market Watch permission is required. Saved watches are paused. Use Refresh permissions after access is granted.</p>';ui.setActions(marketActions.filter(action=>action.id==='permissions'));return;}
         ui.setActions(marketActions);if(document.body)observer?.observe(document.body,{childList:true,subtree:true});syncPurchaseCatalog(status);
         const deals = Array.isArray(status?.opportunities) ? status.opportunities : [];
+        globalThis.SLINK_COMPANION_ALERTS?.('market',deals.map(row=>({id:row.watchId||row.itemId,category:'market_alert',important:true})));
         ui.setAlertCount('market', deals.length, {group:'efficiency',label:'active Market Watch deals'});
         if (!mounted) {
           root.innerHTML = '<div class="slink-market-summary"></div><div class="slink-market-actions"><label class="slink-market-sound"><input id="market-deal-sound" type="checkbox" data-market-sound> Play deal sounds</label><button type="button" data-market-copy-all>Copy item list</button><button type="button" data-market-send-all disabled>Send list to Faction</button></div><div role="status"><span data-market-save-state></span> <button type="button" data-market-retry hidden>Retry</button></div><div class="slink-market-list"></div>';

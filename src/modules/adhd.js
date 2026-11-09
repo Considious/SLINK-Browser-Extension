@@ -98,6 +98,7 @@
         current = status;
         ui.setThemeHealth?.(status?.life?.current, status?.life?.maximum);
         const alerts = SLINK.core.adhd.alertsForView(status?.activeAlerts || [], crimes);
+        if(!crimes&&status?.configured&&status?.activeAlerts)globalThis.SLINK_COMPANION_ALERTS?.('efficiency',globalThis.SLINK_COMPANIONS.efficiencyRows(alerts));
         const selectedAlerts=crimes?(activeCrime==='uniques'?alerts:[]):alerts;
         ui.setAlertCount(crimes?'crimes':'adhd', alerts.length, { group:'efficiency', label:'active Efficiency reminders' });
         updateStatus();
