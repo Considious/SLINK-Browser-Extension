@@ -266,11 +266,11 @@
             <div class="mugging-meta">
               <span class="mugging-badge">${escape(statusLabel(target))}</span>
               ${levelBadge(target.level, cache.userLevel)}
-              <span class="mugging-badge">${target.estimateKind==='unchecked'?'FF check pending':`Rough FF ${target.fairFight === null ? '?' : target.fairFight.toFixed(2)}`}</span>
+              <span class="mugging-badge">${!['ffscouter','bss'].includes(target.estimateKind)?'FF check pending':`Estimated FF ${target.fairFight === null ? '?' : target.fairFight.toFixed(2)}`}</span>
               <span class="mugging-badge">Estimated BS ${target.battleStatsEstimate === null ? '?' : escape(SLINK.core.format.shortNumber(target.battleStatsEstimate))}</span>
               ${target.confidence ? `<span class="mugging-badge">${escape(target.confidence)}</span>` : ''}
             </div>
-            <div class="mugging-actions"><a href="${profile}">Profile</a>${target.estimateKind==='unchecked'?'':`<a href="${attack}">Attack</a>`}<button type="button" data-mugging-save="${target.id}">Save Target</button></div>
+            <div class="mugging-actions"><a href="${profile}">Profile</a>${!['ffscouter','bss'].includes(target.estimateKind)?'':`<a href="${attack}">Attack</a>`}<button type="button" data-mugging-save="${target.id}">Save Target</button></div>
           </article>`;
         }).join('');
       }

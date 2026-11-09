@@ -387,15 +387,18 @@
         body:JSON.stringify({
           user_battle_stats:userBattleStats,
           exclude_target_ids:input.excludeTargetIds,
+          verify_fair_fight:true,
           min_fair_fight:Number(settings.minFairFight) || 1,
           max_fair_fight:Number(settings.maxFairFight) || 3,
-          limit:Math.max(1, Math.min(100, Math.trunc(Number(settings.limit) || 50)))
+          limit:100
         })
       });
-      let response=await loadAssignments();
-      const checked=await fairFightChecks.check(response?.targets||[]).catch(()=>({queued:0}));
-      if(checked.queued>0){const synced=await syncPending(true);if(Number(synced.accepted)>0)response=await loadAssignments();}
+      const response=await loadAssignments();
+      const candidates=Array.isArray(response?.targets)?response.targets:[];
+      const checked=await fairFightChecks.check(candidates,true).catch(()=>({queued:0}));
+      if(checked.queued>0)await syncPending(true).catch(()=>null);
       const ownProfile = await storedOwnBattleStats();
+      response.targets=global.SLINK_MUGGING_FF.applyRange(candidates,checked.scores,ownProfile?.score,Number(settings.minFairFight)||1,Number(settings.maxFairFight)||3,Math.max(1,Math.min(100,Math.trunc(Number(settings.limit)||50))));
       const cache = normalizeCache({
         ...response,
         ffCheckNotice:checked.keyMissing?'Save your FFScouter key in API and feature access to check unknown targets.':checked.error||'',
