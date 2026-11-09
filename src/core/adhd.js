@@ -31,8 +31,8 @@
     Object.freeze({ id:'arsonUnique', crimeId:13, label:'Arson daily unique check', mode:'daily' })
   ]);
   const CRIME_ALERT_IDS = new Set(CRIME_UNIQUE_DEFINITIONS.map(row => row.id));
-  const CRIME_GUIDES=Object.freeze({"arson":["Ultimate Arson Guide",16510947],"pickpocket":["Ultimate Pickpocketing Guide",16358739],"cracking":["Ultimate Cracking Guide",16373016],"forgery":["Ultimate Forgery Guide",16388086],"hustling":["Ultimate Hustling Guide",16363421],"disposal":["Ultimate Disposal Guide",16367936]});
-  const CRIME_TABS=Object.freeze({arson:'Arson',pickpocket:'Pickpocket',cracking:'Cracking',disposal:'Disposal',forgery:'Forgery',hustling:'Hustling',uniques:'Uniques'});
+  const CRIME_GUIDES=Object.freeze({"arson":["Ultimate Arson Guide",16510947],"pickpocket":["Ultimate Pickpocketing Guide",16358739],"cracking":["Ultimate Cracking Guide",16373016],"forgery":["Ultimate Forgery Guide",16388086],"hustling":["Ultimate Hustling Guide",16363421],"scamming":["Ultimate Scamming Guide",16418415],"disposal":["Ultimate Disposal Guide",16367936]});
+  const CRIME_TABS=Object.freeze({arson:'Arson',pickpocket:'Pickpocket',cracking:'Cracking',disposal:'Disposal',forgery:'Forgery',hustling:'Hustling',scamming:'Scamming',uniques:'Uniques'});
   const isCrimeAlert = id => CRIME_ALERT_IDS.has(id);
   function alertsForView(alerts, crimes = false) {
     return alerts.flatMap(alert => crimes ? (isCrimeAlert(alert.id) ? [alert] : [])
@@ -710,6 +710,7 @@
     MARKET_TIERS,
     buildAlerts,
     addictionPercentFromBattleStats,
+    SCAMMING_TIP: 'Shows the current tile, Torn’s visible landing range, and whether Capitalize is available. Never sends a reply.',
     HUSTLING_TIP: 'Shows audience attention, suspicion, and game stakes. Never takes actions.',
     FORGERY_TIP: 'For fewer critical failures, stick with driver’s licenses. For faster skill gain, the guide suggests switching to travel visas at Forgery skill 50.', CRIME_TABS, CRIME_GUIDES, isCrimeAlert, alertsForView,
     clusterRingAchieved,
