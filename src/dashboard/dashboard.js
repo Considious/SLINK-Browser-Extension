@@ -1296,6 +1296,7 @@
     });
   }
   async function applySavedTheme() {
+    globalThis.SLINK_THEME_APPEARANCE?.attach(document.documentElement,document)?.bind(byId("theme-higher-contrast"));
     mountTornPageThemeSettings();
     const [preferred, storedOpacity, storedMinimizedMode] = await Promise.all([
       SLINK.core.storage.get(

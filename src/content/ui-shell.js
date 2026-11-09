@@ -149,6 +149,7 @@
     style.textContent = STYLES;
     const themeStyle = document.createElement('style');
     shadow.append(style, themeStyle);
+    global.SLINK_THEME_APPEARANCE?.attach(host,shadow);
     SLINK.core.formState?.protect(shadow);
 
     let chatButton = null;
