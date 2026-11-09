@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK — QoL feature preview",
-  "version": "0.19.106",
+  "version": "0.19.107",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -9,6 +9,7 @@
     "storage"
   ],
   "host_permissions": [
+    "https://slink-ranked-gear-preview.richard-johnson554.workers.dev/*",
     "https://api.giphy.com/*",
     "https://chatsticker.com/*",
     "https://www.torn.com/*",
@@ -152,6 +153,7 @@
         "src/modules/war.js",
         "src/modules/player-stats.js",
         "src/modules/adhd.js",
+        "src/core/ranked-gear-panel.js",
         "src/modules/market.js",
         "src/modules/merits.js",
         "src/modules/dollar-bazaars.js",

@@ -774,6 +774,10 @@
 
   function renderMarket() {
     if (!market) return;
+    const rankedHost=byId('market-status')?.closest('.market-hero');
+    const rankedPanel=rankedHost?.querySelector('[data-slink-ranked-gear]');
+    if(market.permitted)globalThis.SLINK_RANKED_GEAR?.mount(rankedHost);
+    else rankedPanel?.remove();
     for(const control of document.querySelectorAll('[data-market-permission-locked]')){
       control.disabled=false;
       delete control.dataset.marketPermissionLocked;

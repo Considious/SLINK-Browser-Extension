@@ -174,6 +174,8 @@
         style.id = 'tdd-purchase-highlight-styles';
         style.textContent = `
           [data-tdd-bazaar-targeted],
+          [data-slink-ranked-bazaar-match],
+          [data-slink-ranked-market-info],
           [data-tdd-bazaar-one-dollar],
           [data-tdd-item-market-one-dollar],
           [data-tdd-market-dom-test] {
@@ -365,6 +367,10 @@
         ensurePurchaseHighlightStyles();
         requestPurchaseSellPriceCatalog();
         const cards = new Set(bazaarListingCards());
+        globalThis.SLINK_RANKED_GEAR?.highlightBazaar(cards, {
+          itemId: bazaarCardItemId, price: bazaarCardPrice,
+          available: card => !bazaarCardUnavailable(card) && bazaarCardStock(card) > 0,
+        }, location.href);
         marketDomTestTarget('bazaar', cards);
         const target = targetedBazaarListing();
         document.querySelectorAll('[data-tdd-bazaar-targeted]').forEach((card) => {
@@ -507,6 +513,10 @@
 
       function formatItemMarketPurchaseOpportunities() {
         if (!focusedTornPage() || !onItemMarketPage()) return;
+        if (new URL(location.href).searchParams.has('slinkRankedMarket')) {
+          ensurePurchaseHighlightStyles();
+          globalThis.SLINK_RANKED_GEAR?.highlightMarketInfo(document, location.href);
+        }
         const rows = new Set(itemMarketSellerRows());
         marketDomTestTarget('item-market', rows);
         document.querySelectorAll('[data-tdd-item-market-one-dollar], [data-tdd-item-market-shop-profit], [data-tdd-item-market-overseas-profit]').forEach((row) => {
@@ -603,6 +613,7 @@
             price: bazaarCardPrice(element),
             stock: bazaarCardStock(element),
             sellerId: 0,
+            rankedUid: element?.getAttribute('data-slink-ranked-bazaar-match') || '',
           };
         }
         return {
@@ -667,6 +678,7 @@
       function highlightedQuickPurchaseListing(kind, element) {
         if (!purchaseState.settings.highlightedQuickBuyEnabled || !element?.isConnected) return false;
         if (kind === 'bazaar') {
+          if (element.hasAttribute('data-slink-ranked-bazaar-match')) return bazaarCardStock(element) === 1;
           return element.hasAttribute('data-tdd-bazaar-targeted')
             || element.hasAttribute('data-tdd-bazaar-one-dollar')
             || element.hasAttribute('data-tdd-bazaar-shop-profit')
@@ -692,6 +704,7 @@
       }
 
       function quickPurchaseConfirmationMatches(wrapper, flow) {
+        if (flow?.rankedUid) return Boolean(globalThis.SLINK_RANKED_GEAR?.rankedConfirmationMatches(wrapper, flow));
         const text = normalizedPurchaseText(wrapper?.textContent);
         const itemName = normalizedPurchaseText(flow?.itemName);
         if (!text || !itemName || !text.includes(itemName)) return false;
@@ -735,6 +748,7 @@
 
       function resolvedQuickPurchaseListing(flow) {
         if (!flow) return null;
+        if (flow.rankedUid) return flow;
         if (flow.kind === 'bazaar') {
           const cards = [...new Set([
             flow.element?.isConnected ? flow.element : null,
@@ -752,6 +766,7 @@
       }
 
       function quickPurchaseListingControlKey(listing) {
+        if (listing.rankedUid) return `bazaar:ranked:${listing.rankedUid}`;
         if (listing.kind === 'bazaar') {
           const identity = Number(listing.itemId) > 0
             ? `item-${Number(listing.itemId)}`
@@ -790,6 +805,10 @@
       }
 
       function activeBazaarQuickPurchaseControl(flow, selector) {
+        if (flow.rankedUid) {
+          const native = nativeQuickPurchaseControl(flow.element, selector);
+          return {native: measurableQuickPurchaseControl(native) ? native : null, listing: flow};
+        }
         const resolved = resolvedQuickPurchaseListing(flow);
         let native = nativeQuickPurchaseControl(resolved?.element, selector);
         if (native && !measurableQuickPurchaseControl(native)) native = null;
@@ -1066,12 +1085,14 @@
         }
         const continuingFlow = purchaseState.quickPurchaseFlow?.controlKey === spec.controlKey;
         if (!continuingFlow && !highlightedQuickPurchaseListing(listing.kind, listing.element)) return;
+        if (listing.rankedUid && (!listing.element?.contains(spec.native) || (!continuingFlow && listing.element.getAttribute('data-slink-ranked-bazaar-match') !== listing.rankedUid))) return;
         if (spec.stage === 'buy') {
           if (listing.kind === 'bazaar') {
             const currentCard = bazaarListingCards().find((candidate) => candidate.contains(spec.native))
               || spec.native.closest('[data-testid="item"]')
               || listing.element;
             const currentListing = mergedBazaarQuickPurchaseListing(listing, quickPurchaseListing('bazaar', currentCard));
+            if (listing.rankedUid && (currentCard !== listing.element || currentListing.itemId !== listing.itemId || currentListing.price !== listing.price || currentListing.stock !== 1)) return;
             const pending = {
               ...currentListing,
               card: currentCard,
@@ -1079,12 +1100,12 @@
             };
             purchaseState.pendingBazaarPurchase = pending;
             fillBazaarPurchaseMaximum(pending);
-            Object.assign(listing, currentListing);
+            Object.assign(listing, currentListing, {rankedUid: listing.rankedUid});
           } else {
             fillItemMarketPurchaseMaximum(listing.element, listing.price);
           }
           listing.quantity = quickPurchaseQuantity(listing);
-          if (listing.quantity < 1) return;
+          if (listing.quantity < 1 || (listing.rankedUid && listing.quantity !== 1)) return;
         }
         const now = Date.now();
         purchaseState.quickPurchaseFlow = {
@@ -1158,7 +1179,7 @@
         purchaseState.quickPurchaseFlow = null;
         purchaseState.pendingBazaarPurchase = null;
         const attributes = [
-          'data-tdd-bazaar-targeted', 'data-tdd-bazaar-one-dollar', 'data-tdd-bazaar-shop-profit', 'data-tdd-bazaar-overseas-profit', 'data-tdd-item-market-overseas-profit',
+          'data-slink-ranked-market-info', 'data-slink-ranked-bazaar-match', 'data-tdd-bazaar-targeted', 'data-tdd-bazaar-one-dollar', 'data-tdd-bazaar-shop-profit', 'data-tdd-bazaar-overseas-profit', 'data-tdd-item-market-overseas-profit',
           'data-tdd-item-market-one-dollar', 'data-tdd-item-market-shop-profit', 'data-tdd-item-market-max-applied',
           'data-tdd-purchase-reason', 'data-tdd-market-dom-test'
         ];
@@ -1248,6 +1269,7 @@
         if (!deals.length) {
           const empty = document.createElement('div'); empty.className = 'slink-market-empty'; empty.textContent = 'No watched listing is currently at or below its target.'; list.append(empty);
         }
+        global.SLINK_RANKED_GEAR?.mount(root);
         updateShareButtons(root); schedulePurchaseOpportunityFormatting(0);
       }
 
