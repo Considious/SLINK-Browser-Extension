@@ -103,6 +103,13 @@
       context.ui.setTitle('SLINK Bounties');
       context.ui.setModuleStyles(MODULE_STYLES);
       const contentRoot = context.ui.getContentElement();
+      const ffBoard=global.SLINK_FF_BOUNTIES;
+      let bountyTab='torn',ffRoot=null;
+      function selectBountyTab(tab){
+        if(bountyTab===tab)return;
+        bountyTab=tab;ffRoot=null;mountedSettings=null;actionState=null;
+        render();syncActivity();
+      }
       const retainedEditor = editorViews.get(contentRoot);
       if (retainedEditor) settingsOpen = retainedEditor.settingsOpen;
       contentRoot.dataset.uiExplicitCommit = 'true';
@@ -240,6 +247,17 @@
 
       function render() {
         if (stopped || context.signal?.aborted) return;
+        if(bountyTab==='ff'){
+          if(ffRoot?.isConnected)return;
+          context.ui.setSubtitle('FFScouter Bounty Board');
+          context.ui.setStatus('Separate from Torn Bounties.','normal');
+          context.ui.setActions([]);
+          context.ui.setContentHtml('<div data-ff-board></div>');
+          ffRoot=contentRoot.querySelector('[data-ff-board]');
+          ffBoard.tabs(contentRoot,bountyTab,selectBountyTab);
+          ffBoard.mount(ffRoot,action=>SLINK.core.messaging.send('ffBounties.run',{action}));
+          return;
+        }
         editorViews.set(contentRoot, { settingsOpen });
         const runtime = current?.runtime || {};
         context.ui.setSubtitle(current?.settings?.enabled ? 'Live bounty API crawl' : 'Disabled');
@@ -273,6 +291,7 @@
           ${settingsOpen ? settingsHtml() : ''}
           <div id="bounty-results">${results}</div>
         `);
+        ffBoard?.tabs(contentRoot,bountyTab,selectBountyTab);
         bindEvents();
         updateNotes();autosaveState();updateCountdowns();
         if(settingsOpen)autoSave?.mount();
@@ -390,7 +409,7 @@
       function syncActivity() {
         clearInterval(heartbeatTimer);
         heartbeatTimer = null;
-        if (stopped || context.signal?.aborted || !moduleVisible() || !current?.settings?.enabled) return;
+        if (stopped || context.signal?.aborted || bountyTab==='ff' || !moduleVisible() || !current?.settings?.enabled) return;
         void touch();
         heartbeatTimer = setInterval(() => void touch(), ACTIVE_HEARTBEAT_MS);
         void runScan(false);
@@ -402,7 +421,7 @@
       }
 
       async function runScan(force) {
-        if (busy || stopped || context.signal?.aborted || !current?.settings?.enabled) return;
+        if (busy || stopped || context.signal?.aborted || bountyTab==='ff' || !current?.settings?.enabled) return;
         if (savingSettings || autoSave?.busy) {scanDeferred=true;return;}
         if (force && moduleVisible()) await touch();
         if (stopped || context.signal?.aborted) return;
