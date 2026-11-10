@@ -6,7 +6,7 @@
   function timers(snapshot,now){
     const out={}, a=snapshot?.alerts, body=a?.data??a?.body, at=a?.fetchedAt??a?.at;
     if(recent(at,now,15*60000)){
-      for(const key of ['medical','drug','booster']){
+      for(const key of ['medical','booster']){
         const seconds=body?.cooldowns?.[key];
         if(positive(seconds)&&at+seconds*1000>now)out[key]={end:at+seconds*1000,at};
       }
@@ -29,7 +29,7 @@
   if(!g.document)return;
   const ext=g.SLINK_EXTENSION,pda=g.SLINK_PDA_PLUGIN_API;
   if(!ext&&!pda?.inlineStatus)return;
-  const names={medical:'Medical cooldown',drug:'Drug cooldown',booster:'Booster cooldown',education:'Education ends',oc:'Organized crime ready',war:'Ranked war starts',virus:'Virus coding ends'};
+  const names={medical:'Medical cooldown',booster:'Booster cooldown',education:'Education ends',oc:'Organized crime ready',war:'Ranked war starts',virus:'Virus coding ends'};
   const el=(tag,value)=>{const node=document.createElement(tag);if(value!==undefined)node.textContent=value;return node;};
   const fmt=n=>new Date(n).toLocaleString();
   const elapsed=ms=>{const m=Math.max(1,Math.ceil(ms/60000)),d=Math.floor(m/1440),h=Math.floor(m%1440/60);return [d?d+'d':'',h?h+'h':'',m%60?m%60+'m':''].filter(Boolean).join(' ')||'under 1m';};
@@ -69,7 +69,7 @@
     const keys=pageKeys(), content=keys.length?document.querySelector('.content-wrapper[role="main"]'):null;
     const target=content?.getClientRects().length&&content.firstElementChild&&!content.matches('#mainContainer,#mainwrap')&&['block','flow-root'].includes(getComputedStyle(content).display)?content:null;
     const alerts=current?.alerts,checked=alerts?.fetchedAt??alerts?.at,cooldowns=(alerts?.data??alerts?.body)?.cooldowns;
-    const hasCooldown=recent(checked,now,15*60000)&&['medical','drug','booster'].some(key=>positive(cooldowns?.[key])&&checked+cooldowns[key]*1000>now);
+    const hasCooldown=recent(checked,now,15*60000)&&['medical','booster'].some(key=>positive(cooldowns?.[key])&&checked+cooldowns[key]*1000>now);
     sidebar=panel(sidebar,current&&(current.canVirus||hasCooldown)?side:null,'SLINK timers');
     const allowed=keys[0]==='company'?current?.canCompany:current?.canVirus||(keys.includes('war')&&current?.canWar);
     main=panel(main,allowed?target:null,keys[0]==='company'?'SLINK · Your company':'SLINK · Timers');
@@ -106,7 +106,7 @@
         if(feedback){const status=el('p',feedback);status.setAttribute('role','status');box.content.append(status);}
       }
     }
-    update(sidebar,['medical','drug','booster','virus'],true);update(main,keys,false);
+    update(sidebar,['medical','booster','virus'],true);update(main,keys,false);
   }
   async function checkVirus(){
     if(busy||!data?.canVirus||data.expiresAt<=Date.now()||!visible())return;
