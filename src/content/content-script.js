@@ -5,6 +5,7 @@
   Object.defineProperty(global, '__SLINK_EXTENSION_CONTENT_STARTED__', { value:true });
   const SLINK = global.SLINK_EXTENSION;
   const startupKeys = [
+    'slink.companions.v1',
     'ui.pagePanelHidden','ui.main.position','ui.bubble.position','ui.main.size','ui.main.collapsed','ui.main.minimizedMode',
     'ui.main.navigation.v2','ui.main.activeModule','ui.main.activeModulesByGroup',
     'permissions.snapshot','permissions.leveling','permissions.war','permissions.access',
@@ -22,7 +23,9 @@
     const catalog = startupValues[SLINK.core.themes.CATALOG_STORAGE_KEY]?.catalog;
     if (catalog) SLINK.core.themes.installCatalog(catalog);
   } catch (error) { console.debug('[SLINK] Cached theme catalog rejected:', error); }
-  const ui = SLINK.core.uiShell.createShell({ title:'SLINK', subtitle:'Shared Live Intelligence NetworK',
+  let companion;
+  let companionPermissions=startupPermissions;
+  const ui = SLINK.core.uiShell.createShell({ title:'SLINK', subtitle:'Shared Live Intelligence NetworK',onVisibility:()=>companion?.onVisibility(),
     themeId:startupValues[SLINK.core.themes.STORAGE_KEY], permissions:startupPermissions, preferences:startupValues });
   global.SLINK_OPEN_FACTION_ROOMS=()=>ui.openModule('faction-rooms');
   ui.setThemePanelOpacity(startupValues[SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY] ?? SLINK.core.themes.DEFAULT_PANEL_OPACITY);
@@ -42,6 +45,16 @@
   let modulePermissionRevision = 0;
 
   ui.setHidden(Boolean(startupValues['ui.pagePanelHidden']));
+  const companionEngine=global.SLINK_COMPANIONS;
+  if(companionEngine)try{
+    companion=companionEngine.create({
+      allowed:scope=>SLINK.core.permissions.hasScope(companionPermissions,scope)||SLINK.core.permissions.hasScope(companionPermissions,'admin.*'),
+      open:()=>ui.openLauncher(),isObscured:ui.companionObscured,settingsParent:ui.companionSettings,
+      asset:item=>global.SLINK_COMPANION_ART[item.asset],
+      storage:{getItem:key=>startupValues[key],setItem:(key,value)=>SLINK.core.storage.set(key,value)}
+    });
+    global.SLINK_COMPANION_ALERTS=(source,rows)=>companion.observe(source,rows);
+  }catch(error){console.warn('[SLINK] Companion unavailable:',error);}
 
   async function modulePresentation(module) {
     if (module.id !== 'war') {
@@ -200,6 +213,7 @@
       SLINK.core.storage.get(SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY, SLINK.core.themes.DEFAULT_PANEL_OPACITY)
     ]);
     ui.setTheme(preferredTheme, permissions);
+    companionPermissions=permissions;companion?.sync();
     ui.setThemePanelOpacity(panelOpacity);
     return permissions;
   }
@@ -271,6 +285,9 @@
       void updateModuleViews(changedViews).catch(error => console.error('[SLINK] Could not update the affected module view:', error));
     }
     const permissionsKey = SLINK.core.storage.fullKey('permissions.snapshot');
+    if(companion&&['permissions.snapshot','permissions.access','permissions.war','permissions.leveling'].some(key=>changes[SLINK.core.storage.fullKey(key)])){
+      void SLINK.core.messaging.send('permissions.get').then(permissions=>{companionPermissions=permissions;companion.sync();}).catch(()=>{});
+    }
     const themeKey = SLINK.core.storage.fullKey(SLINK.core.themes.STORAGE_KEY);
     const themePanelOpacityKey = SLINK.core.storage.fullKey(SLINK.core.themes.PANEL_OPACITY_STORAGE_KEY);
     const catalogKey = SLINK.core.storage.fullKey(SLINK.core.themes.CATALOG_STORAGE_KEY);

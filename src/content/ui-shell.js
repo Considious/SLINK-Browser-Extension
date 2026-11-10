@@ -653,6 +653,7 @@
       bubble.hidden = hidden || !collapsed || views.size === 0 || minimizedMode === 'chat';
       syncChatButtonVisibility();
       for (const alert of alerts.values()) alert.element.hidden = hidden;
+      options.onVisibility?.();
     }
 
     async function setCollapsed(value, persist = true) {
@@ -883,6 +884,9 @@
     }
     return Object.freeze({
       host,
+      companionSettings:main.element,
+      companionObscured:()=>!main.element.hidden,
+      openLauncher(){hidden=false;void setCollapsed(false);},
       openModule(id) { if(!views.has(id))throw Error('Room management is not ready. Open SLINK and try again.');hidden=false;collapsed=false;setActive(id,true);refreshShell(); },
       ready,
       createModuleView,
