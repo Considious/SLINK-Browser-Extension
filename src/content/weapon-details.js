@@ -25,11 +25,11 @@
   const regularRows='ul.item-list > li,li[data-item],li[data-itemid],[data-testid="item"],li[id]:has(.item-plate)';
   const nativeBonus=':is(.bonuses .bonus,.iconBonuses___sb7SH,[class*="iconBonuses___"],.iconsbonuses) [class*="bonus-attachment-"][title]';
   let mounted,queued=false;
-  function mount(root){
+  function mount(root,anchor){
     const box=make('div'),load=make('button','Show weapon XP'),toggle=make('button','Explain special bonuses'),status=make('span');
     load.type=toggle.type='button';status.setAttribute('role','status');status.style.marginInlineStart='.4em';
     box.style.cssText='display:flex;align-items:center;gap:.35em;flex-wrap:wrap;margin:.35em 0';
-    box.append(load,...(attack?[]:[toggle]),status);root.prepend(box);
+    box.append(load,...(attack?[]:[toggle]),status);if(anchor)anchor.before(box);else root.prepend(box);
     let cache=null,show=false,seq=0,seen=new Map();
     function clear(){for(const n of seen.values())n.remove();seen.clear();}
     function update(){
@@ -79,9 +79,11 @@
   }
   function sync(){
     queued=false;if(document.hidden)return;
-    const root=attack?document.querySelector('#attack-root'):path==='/factions.php'?(location.hash.includes('tab=armoury')?document.querySelector('#faction-armoury'):null):document.querySelector('#mainContainer')||document.querySelector('.content-wrapper[role="main"]');
+    const anchor=attack?null:path==='/factions.php'?(location.hash.includes('tab=armoury')?document.querySelector('#faction-armoury > hr'):null):path==='/item.php'?document.querySelector('.equipped-items-wrap'):null;
+    const candidate=attack?document.querySelector('#attack-root:has('+attackSlot+')'):anchor?.parentElement;
+    const root=candidate?.getClientRects().length&&!candidate.matches('#mainContainer,#mainwrap')&&['block','flow-root'].includes(getComputedStyle(candidate).display)?candidate:null;
     if(root&&mounted?.root===root&&mounted.box.isConnected){mounted.update();return;}
-    mounted?.dispose();mounted=root?mount(root):null;
+    mounted?.dispose();mounted=root?mount(root,anchor):null;
   }
   function schedule(){if(!queued&&!document.hidden){queued=true;requestAnimationFrame(sync);}}
   function start(){

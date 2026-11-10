@@ -66,7 +66,8 @@
     if(!visible())return;
     const now=Date.now(), current=data?.expiresAt>now?data:null;
     const side=document.querySelector('#sidebar');
-    const keys=pageKeys(), target=keys.length?(document.querySelector('#mainContainer')||document.querySelector('.content-wrapper[role="main"]')||document.querySelector('#mainwrap')):null;
+    const keys=pageKeys(), content=keys.length?document.querySelector('.content-wrapper[role="main"]'):null;
+    const target=content?.getClientRects().length&&content.firstElementChild&&!content.matches('#mainContainer,#mainwrap')&&['block','flow-root'].includes(getComputedStyle(content).display)?content:null;
     const alerts=current?.alerts,checked=alerts?.fetchedAt??alerts?.at,cooldowns=(alerts?.data??alerts?.body)?.cooldowns;
     const hasCooldown=recent(checked,now,15*60000)&&['medical','drug','booster'].some(key=>positive(cooldowns?.[key])&&checked+cooldowns[key]*1000>now);
     sidebar=panel(sidebar,current&&(current.canVirus||hasCooldown)?side:null,'SLINK timers');

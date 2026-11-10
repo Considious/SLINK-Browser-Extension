@@ -28,8 +28,10 @@
   function sync(){
     queued=false;
     if(document.visibilityState==='hidden')return;
-    const target=id(), host=document.querySelector('#mainContainer')||document.querySelector('.content-wrapper[role="main"]')||document.querySelector('#mainwrap');
-    if(panel?.target===target&&panel.node.parentNode===host)return;
+    const target=id(), anchor=document.querySelector('.profile-wrapper:has(.profile-information-wrapper .box-value)');
+    const parent=anchor?.parentElement;
+    const host=anchor?.getClientRects().length&&parent&&!parent.matches('#mainContainer,#mainwrap')&&['block','flow-root'].includes(getComputedStyle(parent).display)?parent:null;
+    if(panel?.target===target&&panel.node.previousElementSibling===anchor&&panel.node.parentNode===host)return;
     panel?.node.remove();panel=null;
     const seq=++revision;if(!target||!host)return;
     const node=el('details');node.style.cssText='margin:.5rem 0;padding:.55rem;border:1px solid currentColor;border-radius:.4rem';
@@ -40,7 +42,7 @@
     const button=el('button','Save note');button.type='button';button.disabled=true;
     const status=el('p','Loading…');status.setAttribute('role','status');
     node.append(title,el('p','Only saved on this device. Clear the text and save to remove your note.'),label,button,status);
-    const instance={target,node,account:null};panel=instance;host.prepend(node);
+    const instance={target,node,account:null};panel=instance;anchor.after(node);
     let account=null,saved='';
     const current=()=>seq===revision&&node.isConnected&&id()===target;
     void (async()=>{

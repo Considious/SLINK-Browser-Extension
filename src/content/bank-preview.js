@@ -10,7 +10,7 @@
   const format=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2});
   let panel=null,observer=null;
   function mount(target){
-    if(panel?.parentNode===target)return;
+    if(panel?.previousElementSibling===target)return;
     panel?.remove();
     const section=create('section');panel=section;section.setAttribute('aria-label','SLINK Bank comparison');
     section.style.cssText='margin:.5rem 0;padding:.65rem;border:1px solid currentColor;border-radius:.4rem;line-height:1.5';
@@ -50,12 +50,13 @@
       finally{refresh.disabled=false;}
     });
     section.append(create('strong','SLINK Bank comparison'),create('p','Estimates only. Torn pays interest at maturity. This does not change or submit an investment.'),label,refresh,status,details,results);
-    target.prepend(section);
+    target.after(section);
   }
   function sync(){
     if(!isBank()){observer?.disconnect();observer=null;panel?.remove();panel=null;return;}
-    const target=document.querySelector('#mainContainer,.content-wrapper[role="main"],#mainwrap');
-    if(target)mount(target);
+    const target=document.querySelector('.content-wrapper > .delimiter-999');
+    if(target?.getClientRects().length&&!target.parentElement.matches('#mainContainer,#mainwrap')&&['block','flow-root'].includes(getComputedStyle(target.parentElement).display))mount(target);
+    else{panel?.remove();panel=null;}
     if(!observer&&document.body){observer=new MutationObserver(sync);observer.observe(document.body,{childList:true,subtree:true});}
   }
   g.addEventListener('hashchange',sync);sync();

@@ -8,6 +8,8 @@
     let config=Q.normalize(),loaded=false,allowed=false,stopped=false,observer=null,scope=null,timer=null,busy=false,preparing=false,queue=Promise.resolve(),context=null,seenAt=0;
     let items=new Map(),metadata=new Map(),bonus={},catalogAt=0,profileAt=0,bonusAt=0,status='',tray=null,links=null,manager=null,style=null,lastRoute='',inputPending=false,lastMedical=null;
     const changed=new Set();
+    let managerStatus=null,loadState=['Loading saved state…','normal'],loadRevision=0;
+    function reportLoad(message,tone='normal'){loadState=[message,tone];managerStatus?.(...loadState);}
     const active=()=>!stopped&&allowed&&(!host.allowed||host.allowed())&&doc.visibilityState!=='hidden'&&doc.hasFocus();
     const route=()=>{const u=new URL(global.location.href);return u.pathname==='/item.php'?'inventory':u.pathname==='/factions.php'&&(/armoury|armory/i.test(u.hash)||doc.querySelector('.armoury-tabs,.armoury-points-wrap,#faction-armoury-tabs'))?'armory':null;};
     function node(tag,text,attrs={}){const el=doc.createElement(tag);if(text!==undefined)el.textContent=text;for(const [k,v]of Object.entries(attrs))el.setAttribute(k,String(v));return el;}
@@ -27,6 +29,9 @@
       .slink-qol [role="status"]{display:block;white-space:pre-wrap;margin-top:4px}.slink-qol small{opacity:.82}.slink-qol-add{font-size:11px;padding:2px 4px;cursor:pointer;margin-left:4px}
       .slink-qol-info{display:block;font-size:11px;line-height:1.3;color:var(--slt-text,#ddd);white-space:normal}.slink-qol h3{margin:9px 0 4px}.slink-qol label{display:inline-flex;gap:5px;align-items:center;margin:4px 7px 4px 0}
       .slink-qol [draggable="true"]{touch-action:pan-y}.slink-qol-links a{padding:4px 6px;color:var(--slt-link,#c9a5ff)}
+      .slink-qol .slink-qol-toggles{display:flex;flex-wrap:wrap;gap:3px 12px;margin:4px 0}
+      .slink-qol .slink-qol-toggles label{display:inline-flex;min-width:0;margin:0}
+      .slink-qol .slink-qol-toggles input[type="checkbox"]{min-height:0;margin:0;padding:0}
     `;doc.head.append(style);}
     function moveControl(row,key,kind){
       const list=kind==='favorites'?config.favorites:config.links,keyFn=kind==='favorites'?Q.favoriteKey:x=>x.id,index=list.findIndex(x=>keyFn(x)===key);
@@ -38,8 +43,9 @@
     function drawManager(){
       if(!manager||inputPending)return;manager.replaceChildren();manager.classList.add('slink-qol');const localStyle=node('style');localStyle.textContent=style?.textContent||'';manager.append(localStyle);
       manager.append(node('h3','Page tools'));
+      const toggles=node('div',undefined,{class:'slink-qol-toggles'});manager.append(toggles);
       for(const [key,label]of [['enabled','Enable page tools'],['quickItems','Quick-use favorites'],['customLinks','Custom links'],['effects','Item effects'],['values','Item values']]){
-        const l=node('label'),input=node('input',undefined,{type:'checkbox'});input.checked=config[key];input.addEventListener('change',()=>void mutate(s=>({...s,[key]:input.checked})).catch(e=>notice(e.message)));l.append(input,doc.createTextNode(label));manager.append(l);
+        const l=node('label'),input=node('input',undefined,{type:'checkbox'});input.checked=config[key];input.addEventListener('change',()=>void mutate(s=>({...s,[key]:input.checked})).catch(e=>notice(e.message)));l.append(input,doc.createTextNode(label));toggles.append(l);
       }
       const row=node('div',undefined,{class:'slink-qol-row'}),blood=node('select',undefined,{'aria-label':'Your Torn blood type'});blood.append(node('option','Choose Torn blood type',{value:''}));for(const type of Q.BLOOD)blood.append(node('option',type,{value:type}));blood.value=config.bloodType||'';
       blood.addEventListener('change',()=>void mutate(s=>({...s,bloodType:blood.value})).catch(e=>notice(e.message)));row.append(node('span','Your Torn blood type'),blood);manager.append(row,node('small','Blood shortcuts are disabled until your Torn blood type is known. No action is used to discover it.'));
@@ -103,19 +109,23 @@
       observer ||= new MutationObserver(()=>schedule());observer.observe(scope,{childList:true,subtree:true,characterData:true});
     }
     function scan(){
-      timer=null;observer?.disconnect();if(!active()||!config.enabled||!['quickItems','effects','values','customLinks'].some(k=>config[k])){cleanNative();return;}
+      timer=null;observer?.disconnect();if(stopped||!allowed||host.allowed&&!host.allowed()||!config.enabled||!['quickItems','effects','values','customLinks'].some(k=>config[k])){cleanNative();return;}
+      if(!active())return;
       installStyle();const source=route();if(source!==lastRoute){items.clear();seenAt=0;lastRoute=source;}
-      if(config.customLinks&&config.links.length){const target=doc.querySelector('#sidebar')||doc.querySelector('.content-wrapper[role="main"]');if(target){if(!links||links.parentNode!==target){links?.remove();links=node('nav',undefined,{class:'slink-qol slink-qol-links','aria-label':'SLINK custom links'});target.prepend(links);}const key=JSON.stringify(config.links);if(links.dataset.renderKey!==key){links.dataset.renderKey=key;links.replaceChildren();for(const l of config.links)links.append(node('a',l.name,{href:l.href,...(l.newTab?{target:'_blank',rel:'noopener noreferrer'}:{})}));}}}
+      if(config.customLinks&&config.links.length){const target=doc.querySelector('#sidebar');if(target){if(!links||links.parentNode!==target){links?.remove();links=node('nav',undefined,{class:'slink-qol slink-qol-links','aria-label':'SLINK custom links'});target.prepend(links);}const key=JSON.stringify(config.links);if(links.dataset.renderKey!==key){links.dataset.renderKey=key;links.replaceChildren();for(const l of config.links)links.append(node('a',l.name,{href:l.href,...(l.newTab?{target:'_blank',rel:'noopener noreferrer'}:{})}));}}}
       else{links?.remove();links=null;}
       if(!config.quickItems&&!config.effects&&!config.values){tray?.remove();tray=null;scope?.querySelectorAll('.slink-qol-add,.slink-qol-info').forEach(n=>n.remove());return;}
       if(!source){tray?.remove();tray=null;tradeValues();return;}
       scope=source==='inventory'?doc.querySelector('#mainContainer,.content-wrapper[role="main"],#mainwrap'):doc.querySelector('.content-wrapper[role="main"],#mainContainer,#mainwrap');
-      if(!scope)return;
+      if(!scope){tray?.remove();tray=null;return;}
+      const anchor=source==='inventory'?scope.querySelector('.equipped-items-wrap'):scope.querySelector('#faction-armoury > hr');
+      const parentDisplay=anchor?.parentElement&&global.getComputedStyle(anchor.parentElement).display;
+      const safeAnchor=anchor?.getClientRects().length&&!anchor.parentElement.matches('#mainContainer,#mainwrap')&&['block','flow-root'].includes(parentDisplay)?anchor:null;
       const rows=readRows(source);items=new Map(rows.map(x=>[x.id,x]));seenAt=Date.now();decorate(source,rows);
       // Learn only a displayed own-player blood-type label, never another player's profile.
       if(!config.bloodType){const label=doc.querySelector('#sidebar [title*="Blood type" i],#sidebar [aria-label*="Blood type" i]');const match=(label?.getAttribute('title')||label?.getAttribute('aria-label')||'').match(/blood type\s*:?\s*(AB|A|B|O)\s*([+-])/i);if(match)void mutate(s=>({...s,bloodType:Q.blood(match[1]+match[2])})).catch(e=>notice(e.message));}
-      if(config.quickItems){
-        if(!tray||tray.parentNode!==scope){tray?.remove();tray=node('section',undefined,{class:'slink-qol','aria-label':'SLINK quick use'});scope.prepend(tray);}
+      if(config.quickItems&&safeAnchor){
+        if(!tray||tray.nextElementSibling!==safeAnchor){tray?.remove();tray=node('section',undefined,{class:'slink-qol','aria-label':'SLINK quick use'});safeAnchor.before(tray);}
         const favorites=config.favorites.filter(x=>x.source===source).map(f=>({f,item:items.get(f.id),img:items.get(f.id)?.row.querySelector('img')}));
         const key=JSON.stringify([source,favorites.map(({f,item,img})=>[f.id,f.name,item?.name,item?.quantity,item?.usable,img?.getAttribute('src'),img?.getAttribute('srcset')])]);
         if(tray.dataset.renderKey!==key){
@@ -171,12 +181,15 @@
       finally{global.clearTimeout(timeout);busy=false;schedule();}
     }
     let updateChecked=false;
-    async function sync(){try{const result=await host.load();allowed=result.allowed!==false;config=Q.normalize(result.settings);loaded=true;if(!allowed)cleanNative();else if(host.cached){const c=await host.cached();metadata=new Map(Q.catalog(c.catalog).map(x=>[x.id,x]));bonus=Q.bonuses(c.perks);catalogAt=Number(c.catalogAt)||0;profileAt=Number(c.profileAt)||0;bonusAt=Number(c.perksAt)||0;context=c.context||null;}drawManager();schedule();
+    async function sync(){const revision=++loadRevision;try{const result=await host.load();if(stopped||revision!==loadRevision)return;allowed=result.allowed!==false;config=Q.normalize(result.settings);loaded=true;if(!allowed)cleanNative();drawManager();reportLoad(allowed?'Saved settings loaded':'Page tools are not available for this account.',allowed?'ready':'normal');schedule();
+      if(allowed&&host.cached){try{const c=await host.cached();if(stopped||revision!==loadRevision)return;if(c){metadata=new Map(Q.catalog(c.catalog).map(x=>[x.id,x]));bonus=Q.bonuses(c.perks);catalogAt=Number(c.catalogAt)||0;profileAt=Number(c.profileAt)||0;bonusAt=Number(c.perksAt)||0;context=c.context||null;schedule();}}catch(error){if(!stopped&&revision===loadRevision)notice('Cached item information is unavailable: '+error.message);}}
       if(allowed&&config.enabled&&!updateChecked){updateChecked=true;void host.updates().then(data=>{const release=data?.[host.product];if(Q.versionCompare(release?.version,host.version)>0){notice('SLINK '+release.version+' is available.');const href=Q.safeUrl(release.url);if(href){const update=node('aside',undefined,{class:'slink-qol','aria-label':'SLINK update available'});update.append(node('a','SLINK '+release.version+' available',{href,target:'_blank',rel:'noopener noreferrer'}),button('Dismiss',()=>update.remove()));doc.querySelector('#sidebar')?.prepend(update);}}}).catch(()=>{});}
-    }catch(error){allowed=false;cleanNative();if(manager){manager.replaceChildren(node('p','Page tools could not load. Verify access and reopen this tab.'));manager.append(node('div',undefined,{role:'status'}));}notice('Settings could not be loaded: '+error.message);}}
+    }catch(error){if(stopped||revision!==loadRevision)return;allowed=false;loaded=false;cleanNative();if(manager){manager.replaceChildren(node('p','Page tools could not load. Verify access and reopen this tab.'));manager.append(node('div',undefined,{role:'status'}));}reportLoad('Settings could not be loaded: '+error.message,'error');notice('Settings could not be loaded: '+error.message);}}
     const wake=()=>{if(!active()){observer?.disconnect();return;}schedule();};
-    doc.addEventListener('visibilitychange',wake);global.addEventListener('focus',wake);global.addEventListener('blur',wake);global.addEventListener('hashchange',wake);global.addEventListener('popstate',wake);
-    return Object.freeze({sync,refreshInfo,mutate,subscribe(fn){changed.add(fn);return()=>changed.delete(fn);},mount(root){manager=root;installStyle();if(loaded)drawManager();else void sync();},unmount(){manager=null;inputPending=false;},getSettings:()=>config,stop(){stopped=true;observer?.disconnect();global.clearTimeout(timer);cleanNative();style?.remove();doc.removeEventListener('visibilitychange',wake);for(const [name,fn]of [['focus',wake],['blur',wake],['hashchange',wake],['popstate',wake]])global.removeEventListener(name,fn);}});
+    const readyObserver=doc.body?new MutationObserver(records=>{if(active()&&records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1&&(n.matches?.('.equipped-items-wrap,#faction-armoury,#sidebar')||n.querySelector?.('.equipped-items-wrap,#faction-armoury,#sidebar')))))schedule();}):null;
+    readyObserver?.observe(doc.body,{childList:true,subtree:true});
+    doc.addEventListener('visibilitychange',wake);global.addEventListener('focus',wake);global.addEventListener('hashchange',wake);global.addEventListener('popstate',wake);
+    return Object.freeze({sync,refreshInfo,mutate,subscribe(fn){changed.add(fn);return()=>changed.delete(fn);},mount(root,setStatus){manager=root;managerStatus=setStatus;installStyle();managerStatus?.(...loadState);if(loaded)drawManager();else void sync();},unmount(){manager=null;managerStatus=null;inputPending=false;},getSettings:()=>config,stop(){stopped=true;readyObserver?.disconnect();observer?.disconnect();global.clearTimeout(timer);cleanNative();style?.remove();doc.removeEventListener('visibilitychange',wake);for(const [name,fn]of [['focus',wake],['hashchange',wake],['popstate',wake]])global.removeEventListener(name,fn);}});
   }
   global.SLINK_QOL_UI=Object.freeze({create});
 })(globalThis);
