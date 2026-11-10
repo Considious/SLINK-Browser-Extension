@@ -210,7 +210,7 @@
     speech.addEventListener('pointerenter',()=>global.clearTimeout(speechTimer),{signal});
     speech.addEventListener('pointerleave',()=>resumeSpeech?.(),{signal});
     speech.addEventListener('click',clearSpeech,{signal});
-    global.addEventListener('focus',()=>{focused=true;onVisibility();},{signal});
+    global.addEventListener('focus',()=>{focused=true;if(entry&&art?.naturalWidth&&visible()){paint();idle();}},{signal});
     global.addEventListener('blur',()=>{focused=false;onVisibility();},{signal});
     global.addEventListener('resize',onVisibility,{signal});
     function recheck(){
