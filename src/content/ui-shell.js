@@ -13,6 +13,11 @@
   const MAIN_SIZE_STORAGE_KEY = 'ui.main.size';
   const MAIN_SIZE_MIRROR_KEY = 'slink-extension:ui:main:size:v1';
   const MINIMIZED_MODE_STORAGE_KEY = 'ui.main.minimizedMode';
+  const GROUP_ORDER = ['combat', 'efficiency', 'quality-of-life'];
+  function groupRank(group) {
+    const rank = GROUP_ORDER.indexOf(group);
+    return rank < 0 ? GROUP_ORDER.length : rank;
+  }
   const NAVIGATION_FALLBACK_ORDER = Object.freeze(['leveling','bounties','mugging','target-list','war','player-stats','adhd','market','merits','dollar-bazaars','racing']);
   const STYLES = `
     :host { all: initial; ${SLINK.core.themes.cssVariables('slink-dark')} }
@@ -782,7 +787,8 @@
         groupButton.setAttribute('role', 'tab');
         groupButton.addEventListener('click', () => setActiveGroup(group, true));
         groupButtons.set(group, groupButton);
-        groups.append(groupButton);
+        const next = Array.from(groups.children).find(button => groupRank(button.dataset.slinkGroup) > groupRank(group));
+        groups.insertBefore(groupButton, next || null);
       }
       const view = { id:module.id, title:module.title, group, element, tab, alertBadge:tabAlertBadge };
       views.set(module.id, view);
