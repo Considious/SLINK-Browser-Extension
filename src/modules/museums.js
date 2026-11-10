@@ -49,13 +49,13 @@
       }
 
       ui.setModuleStyles(`
-        .slink-museum{display:grid;gap:9px}.slink-museum-summary,.slink-museum-set{min-width:0;padding:10px;border:1px solid var(--slink-border-soft);border-radius:8px;background:var(--slink-bg-control)}
+        .slink-museum{display:grid;gap:9px;container:museum / inline-size}.slink-museum-summary,.slink-museum-set{min-width:0;padding:10px;border:1px solid var(--slink-border-soft);border-radius:8px;background:var(--slink-bg-control)}
         .slink-museum-head,.slink-museum-actions{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}.slink-museum-head>div{min-width:0;flex:1}.slink-museum-head strong,.slink-museum-head small{display:block}.slink-museum-head small{margin-top:3px;color:var(--slink-muted);line-height:1.35}
         .slink-museum-items{display:grid;gap:7px;margin-top:9px}.slink-museum-item{display:grid;grid-template-columns:minmax(0,1fr) minmax(135px,auto);gap:9px;align-items:center;padding:8px;border:1px solid var(--slink-border-soft);border-radius:7px}.slink-museum-item>div:first-child{min-width:0}
         .slink-museum-item strong,.slink-museum-item small{display:block}.slink-museum-item small{margin-top:3px;color:var(--slink-muted);line-height:1.35}.slink-museum-item.complete{opacity:.68}.slink-museum-market{display:grid;grid-template-columns:minmax(105px,1fr) minmax(120px,auto);gap:6px;align-items:end}.slink-museum-market input{box-sizing:border-box;width:100%;min-height:40px}.slink-museum-market button{min-height:40px}
         .slink-museum-set summary{cursor:pointer;font-weight:700;line-height:1.4}.slink-museum-good{color:var(--slink-ready)}.slink-museum-missing{color:var(--slink-warning)}
         .slink-museum-market input[aria-invalid="true"]{border-color:var(--slink-error)}
-        @media(max-width:620px){.slink-museum-item,.slink-museum-market{grid-template-columns:1fr}}
+        @container museum (max-width:430px){.slink-museum-item{grid-template-columns:minmax(0,1fr)}.slink-museum-market{grid-template-columns:minmax(0,1fr) minmax(0,auto)}} @container museum (max-width:285px){.slink-museum-market{grid-template-columns:minmax(0,1fr)}}
       `);
 
       function render() {
