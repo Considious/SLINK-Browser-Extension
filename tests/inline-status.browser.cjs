@@ -5,14 +5,14 @@ const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE||'playwright');
  const browser=await chromium.launch(process.env.SLINK_BROWSER_EXECUTABLE?{executablePath:process.env.SLINK_BROWSER_EXECUTABLE}:{channel:'msedge'});
  try{for(const pda of [false,true]){
   const page=await browser.newPage({viewport:{width:pda?390:1100,height:800}});
-  await page.route('https://www.torn.com/**',r=>r.fulfill({contentType:'text/html',body:'<aside id="sidebar"></aside><main id="mainContainer"></main>'}));
+  await page.route('https://www.torn.com/**',r=>r.fulfill({contentType:'text/html',body:'<aside id="sidebar"></aside><main id="mainContainer"><section class="content-wrapper" role="main"><h2>Company</h2></section></main>'}));
   await page.goto('https://www.torn.com/joblist.php');
   await page.evaluate(pda=>{
    const now=Date.now(), session={token:'fixture',userId:1,expiresAt:now+600000,scopes:['slink.adhd.alerts','slink.qol.company']};
    const company={userId:1,fetchedAt:now,company:{id:3,name:'Company One'},self:{id:1,name:'Me',addictionPenalty:0,totalEffectiveness:110},employees:[{id:2,name:'Employee Two'}],director:false};
    const alerts={fetchedAt:now,data:{profile:{id:1},cooldowns:{medical:150}}};
    window.virusRequests=0;
-   const virus=async()=>{window.virusRequests++;return {virus:{time_left:180}};};
+   const virus=async()=>{window.virusRequests++;return {virus:{until:Math.floor(Date.now()/1000)+180}};};
    if(pda)window.SLINK_PDA_PLUGIN_API={inlineStatus:()=>({owner:1,expiresAt:session.expiresAt,canVirus:true,canCompany:true,company,alerts}),tornJson:virus};
    else{
     const cache={'access.session.v1':session,'company.runtime.v1':{snapshot:company},'adhd.runtime.v1':{snapshot:alerts}};

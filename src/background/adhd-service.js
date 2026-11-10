@@ -684,7 +684,7 @@
       const key=await accessKey();
       if(!key)throw Error('Enable Efficiency and save your Torn API key first.');
       const result=await tornJson('https://api.torn.com/v2/user/virus?comment=SLINK%20virus%20timer',key);
-      return {virus:result?.virus===null?null:{time_left:result?.virus?.time_left}};
+      return {virus:result?.virus===null?null:{until:result?.virus?.until}};
     },
     async 'crimes.recipes.candidates'(input){if(!await recipeSession()||typeof input?.key!=='string')return [];return recipes.candidates('arson',input.key);},
     async 'crimes.recipes.record'(input,sender){

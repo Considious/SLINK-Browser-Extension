@@ -22,10 +22,16 @@
     const start=epoch(war?.startedAt??war?.start);
     if(start>now&&recent(war?.detectedAt,now,60*60000))out.war={end:start,at:war.detectedAt};
     const v=snapshot?.virus;
-    if(recent(v?.at,now,60*60000)&&positive(v?.seconds)&&v.at+v.seconds*1000>now)out.virus={end:v.at+v.seconds*1000,at:v.at};
+    if(recent(v?.at,now,60*60000)&&v.end>now)out.virus={end:v.end,at:v.at};
     return out;
   }
-  g.SLINK_INLINE_STATUS=Object.freeze({timers});
+  function readVirusEnd(reply){
+    if(reply?.virus===null)return 0;
+    const until=reply?.virus?.until;
+    if(!Number.isSafeInteger(until)||until<=0)throw Error('Torn did not return a usable virus timer.');
+    return until*1000;
+  }
+  g.SLINK_INLINE_STATUS=Object.freeze({timers,readVirusEnd});
   if(!g.document)return;
   const ext=g.SLINK_EXTENSION,pda=g.SLINK_PDA_PLUGIN_API;
   if(!ext&&!pda?.inlineStatus)return;
@@ -114,10 +120,9 @@
     try{
       const reply=ext?await ext.core.messaging.send('inline-status.virus'):await pda.tornJson('/v2/user/virus','SLINK virus timer');
       if(data?.owner!==owner)return;
-      const value=reply?.virus;
-      if(value!==null&&!Number.isFinite(value?.time_left))throw Error('Torn did not return a usable virus timer.');
-      virus={owner,at:Date.now(),seconds:value?.time_left};
-      if(!positive(virus.seconds))feedback='Torn reports no active virus timer.';
+      const end=readVirusEnd(reply),at=Date.now();
+      virus={owner,at,end};
+      if(end<=at)feedback='Torn reports no active virus timer.';
     }catch(e){feedback=e.message||'Could not check the virus timer.';}
     finally{busy=false;paint();}
   }
