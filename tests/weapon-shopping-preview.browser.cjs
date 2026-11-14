@@ -15,13 +15,19 @@ const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE||'playwright');
   await page.route('https://www.torn.com/**',r=>{
    const url=r.request().url();
    const body=url.includes('sid=attack')?'<section id="attack-root"><div id="weapon_main" aria-describedby="attacker_primary">'+image(484)+legacy+'<button>Reload</button></div></section>':url.includes('ItemMarket')?market:url.includes('bazaar.php')?bazaar:url.includes('factions.php')?'<section id="faction-armoury"><hr>'+legacy+'</section>':'<section><div class="equipped-items-wrap"></div>'+legacy+'</section>';
-   return r.fulfill({contentType:'text/html',body:'<!doctype html><style>body{font:12px Arial}.native-cell{display:inline-block;width:42px;height:32px;white-space:nowrap;line-height:32px}.native-cell i{display:inline-block;width:12px;height:10px}.native-cell > span,.properties___PToF_ span,.infoBonuses___SQF19 span{line-height:32px}.infoBonuses___SQF19,.properties___PToF_{display:flex;width:100px}.infoBonuses___SQF19 > div,.properties___PToF_ > div{flex:1 1 50%;height:24px}.infoBonuses___SQF19 i,.icon___grIJv{width:9px}img{width:16px}</style><main id="mainContainer">'+body+'</main>'});
+   return r.fulfill({contentType:'text/html',body:'<!doctype html><style>body{font:12px Arial}.native-cell{display:inline-block;width:42px;height:32px;white-space:nowrap;line-height:32px}.native-cell i{display:inline-block;width:12px;height:10px}.native-cell > span,.infoBonuses___SQF19 span{line-height:32px}.infoBonuses___SQF19,.properties___PToF_{display:flex;width:100px}.infoBonuses___SQF19 > div{flex:1 1 50%;height:24px}.properties___PToF_{background:#ff0}.properties___PToF_ > div{flex:1 1 50%;display:flex;align-items:center;gap:2px;background:#353535;border-radius:3px}.properties___PToF_ svg{display:block;fill:#ddd}.properties___PToF_ > div > .icon___grIJv{margin:0}.infoBonuses___SQF19 i,.icon___grIJv{width:9px}img{width:16px}</style><main id="mainContainer">'+body+'</main>'});
   });
   await page.addInitScript(()=>{
    window.SLINK_EXTENSION={core:{storage:{get:async()=>({token:'x',userId:1,expiresAt:Date.now()+60000}),fullKey:k=>k},messaging:{send:async(action)=>action==='qol.weaponExperience'?{484:70,487:70,244:50}:{levels:{smg:4,piercing:2},classes:{484:'smg',487:'smg',244:'piercing'}}}}};
   });
   for(const end of ['item.php','factions.php#/tab=armoury','page.php?sid=ItemMarket','bazaar.php?userId=10']){
    await page.goto('https://www.torn.com/'+end);
+   const nativeMarket=page.locator('[class*="property___"]');
+   const snapshot=()=>nativeMarket.evaluateAll(nodes=>nodes.map(n=>{
+    const s=getComputedStyle(n),icon=n.querySelector('svg').getBoundingClientRect(),pill=n.getBoundingClientRect();
+    return {width:pill.width,height:pill.height,background:s.backgroundColor,display:s.display,iconWidth:icon.width,iconX:icon.x-pill.x};
+   }));
+   const original=await snapshot();
    for(const n of ['stack-components','weapon-merits','stack-details','shop-mastery'])await page.addScriptTag({path:path.join(__dirname,'../src',({'stack-components':'core/torn-components','weapon-merits':'core/weapon-merits','stack-details':'content/weapon-details','shop-mastery':'content/weapon-merits'})[n]+'.js')});
    await page.locator('[data-slink-weapon-merit]').last().waitFor();
    await page.locator('[data-slink-weapon-xp]').last().waitFor();
@@ -34,7 +40,16 @@ const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE||'playwright');
     await page.getByText(isBaz?'$8,520':'$970',{exact:true}).waitFor();
     if(isBaz)await page.getByText('Poison 87%',{exact:true}).waitFor();
    }
-   const cells=await page.locator('.slink-weapon-stat-cell').all();
+   if(isMarket){
+    const actual=await snapshot();
+    assert.equal(actual.length,2);
+    for(const [i,value] of actual.entries()){
+      const before=original[i];
+      assert.ok(value.height>before.height&&value.height<=before.height+14);
+      assert.deepEqual({...value,height:before.height},before);
+    }
+   }
+   const cells=await page.locator(isMarket?'[class*="property___"]':'.slink-weapon-stat-cell').all();
    assert.equal(cells.length,2);
    for(const cell of cells){
     const bounds=await cell.evaluate(el=>{
@@ -57,6 +72,8 @@ const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE||'playwright');
   console.log('Passed: tight centered stat stacks on all four views and unchanged native Attack controls.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
+
 
 
 
