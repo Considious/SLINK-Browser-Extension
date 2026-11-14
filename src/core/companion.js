@@ -5,7 +5,7 @@
   const smooth = v => { v=clamp(v,0,1); return v*v*(3-2*v); };
   const critical = 'a,button,input,textarea,select,label,summary,[contenteditable],[tabindex]:not([tabindex="-1"]),[role="button"],[role="link"],[role="dialog"],[aria-modal="true"],header,nav,#chatRoot,#sidebar';
   function register(entry) { catalogue.set(entry.id,Object.freeze(entry)); }
-  function create({allowed,open,asset,settingsParent,isObscured=()=>false,storage}) {
+  function create({allowed,open,asset,settingsParent,setSettingsAvailable,isObscured=()=>false,storage}) {
     const doc=global.document, motion=global.matchMedia('(prefers-reduced-motion: reduce)'), key='slink.companions.v1';
     let settings={};
     try { storage??=global.localStorage;settings=JSON.parse(storage.getItem(key))||{}; } catch {}
@@ -22,6 +22,7 @@
     const panel=doc.createElement('details');
     panel.style.cssText='padding:5px 9px;color:inherit;font:13px/1.5 system-ui;max-width:100%';
     panel.innerHTML='<summary>Companion settings</summary><div style="display:grid;gap:5px;padding:5px 0"><label>Companion <select data-pref="id"></select></label><label>Movement <select data-pref="movement"><option value="wander">Wander</option><option value="stay">Stay where I put him</option></select></label><label>Companion alerts <select data-pref="alerts"><option value="all">All</option><option value="important">Important only</option><option value="minimal">Minimal</option><option value="silent">Silent</option></select></label><label><input type="checkbox" data-pref="chatter"> Idle chatter</label><label><input type="checkbox" data-pref="reduced"> Reduced motion</label></div>';
+    if(setSettingsAvailable)panel.open=true;
     settingsParent.append(panel);
     const field=name=>panel.querySelector('[data-pref="'+name+'"]');
     const reduced=()=>Boolean(settings.reduced)||motion.matches;
@@ -131,6 +132,7 @@
       const requested=settings.id??eligible.find(item=>item.defaultEnabled)?.id;
       const next=eligible.find(item=>item.id===requested)||null;
       panel.hidden=!eligible.length;
+      setSettingsAvailable?.(eligible.length>0);
       const signature=eligible.map(item=>item.id).join(',');
       if(field('id').dataset.items!==signature){
         field('id').dataset.items=signature;

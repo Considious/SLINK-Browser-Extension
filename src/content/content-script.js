@@ -49,7 +49,7 @@
   if(companionEngine)try{
     companion=companionEngine.create({
       allowed:scope=>SLINK.core.permissions.hasScope(companionPermissions,scope)||SLINK.core.permissions.hasScope(companionPermissions,'admin.*'),
-      open:()=>ui.openLauncher(),isObscured:ui.companionObscured,settingsParent:ui.companionSettings,
+      open:()=>ui.openLauncher(),isObscured:ui.companionObscured,settingsParent:ui.companionSettings,setSettingsAvailable:ui.setCompanionAvailable,
       asset:item=>global.SLINK_COMPANION_ART[item.asset],
       storage:{getItem:key=>startupValues[key],setItem:(key,value)=>SLINK.core.storage.set(key,value)}
     });

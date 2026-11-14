@@ -29,7 +29,7 @@
       .slink-qol [role="status"]{display:block;white-space:pre-wrap;margin-top:4px}.slink-qol small{opacity:.82}.slink-qol-add{font-size:11px;padding:2px 4px;cursor:pointer;margin-left:4px}
       .slink-qol-info{display:block;font-size:11px;line-height:1.3;color:var(--slt-text,#ddd);white-space:normal}.slink-qol h3{margin:9px 0 4px}.slink-qol label{display:inline-flex;gap:5px;align-items:center;margin:4px 7px 4px 0}
       .slink-qol [draggable="true"]{touch-action:pan-y}.slink-qol-links a{padding:4px 6px;color:var(--slt-link,#c9a5ff)}
-      .slink-qol .slink-qol-toggles{display:flex;flex-wrap:wrap;gap:3px 12px;margin:4px 0}
+      .slink-qol .slink-qol-toggles{display:grid;gap:3px;margin:4px 0}
       .slink-qol .slink-qol-toggles label{display:inline-flex;min-width:0;margin:0}
       .slink-qol .slink-qol-toggles input[type="checkbox"]{min-height:0;margin:0;padding:0}
     `;doc.head.append(style);}

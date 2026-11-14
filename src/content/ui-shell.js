@@ -78,6 +78,11 @@
     .content > * { min-width:0; max-width:100%; }
     .window.main > .theme-content-shell > .module-view > .module-head, .window.main > .theme-content-shell > .module-view > .status, .window.main > .theme-content-shell > .module-view > .actions { flex:0 0 auto; }
     .window.main > .theme-content-shell > .module-view > .content { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
+    .companion-settings-button { flex:0 0 auto; padding:0 6px; }
+    .companion-settings-back { align-self:start; margin:8px 10px 0; }
+    .companion-settings-view label { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; }
+    .companion-settings-view select { min-width:0; max-width:100%; background:var(--slink-bg-control); color:var(--slink-text); }
+    .companion-settings-view summary { display:none; }
     .row { display:grid; grid-template-columns:105px minmax(0,1fr); gap:8px; }
     .label { color:var(--slink-muted); }
     .value { overflow-wrap:anywhere; color:var(--slink-text); }
@@ -210,7 +215,36 @@
     tabs.setAttribute('aria-label', 'SLINK tools');
     const themeContentShell = document.createElement('div');
     themeContentShell.className = 'theme-content-shell';
-    themeContentShell.append(main.head, groups, tabs);
+    const companionButton = document.createElement('button');
+    companionButton.type = 'button';
+    companionButton.className = 'companion-settings-button';
+    companionButton.textContent = 'Companion';
+    companionButton.setAttribute('aria-label', 'Companion settings');
+    companionButton.setAttribute('aria-controls', 'slink-companion-settings-view');
+    companionButton.setAttribute('aria-expanded', 'false');
+    companionButton.hidden = true;
+    main.head.insertBefore(companionButton, main.head.querySelector('.hide'));
+    const companionView = document.createElement('section');
+    companionView.id = 'slink-companion-settings-view';
+    companionView.className = 'module-view companion-settings-view';
+    companionView.setAttribute('aria-label', 'Companion settings');
+    companionView.hidden = true;
+    const companionBack = document.createElement('button');
+    companionBack.type = 'button';
+    companionBack.className = 'companion-settings-back';
+    companionBack.textContent = 'Back to dashboard';
+    const companionContent = document.createElement('div');
+    companionContent.className = 'content';
+    companionView.append(companionBack, companionContent);
+    let companionOpen = false;
+    function toggleCompanion(open, focus = false) {
+      companionOpen = open && !companionButton.hidden;
+      refreshShell();
+      if (focus) (companionOpen ? companionBack : companionButton).focus();
+    }
+    companionButton.addEventListener('click', () => toggleCompanion(!companionOpen, true));
+    companionBack.addEventListener('click', () => toggleCompanion(false, true));
+    themeContentShell.append(main.head, groups, tabs, companionView);
     main.element.append(themeContentShell);
     const bubble = document.createElement('button');
     bubble.type = 'button';
@@ -621,7 +655,7 @@
         persistNavigationState();
       }
       for (const [moduleId, view] of views) {
-        view.element.hidden = moduleId !== id;
+        view.element.hidden = companionOpen || moduleId !== id;
         view.tab.hidden = view.group !== activeGroup;
         view.tab?.setAttribute('aria-selected', String(moduleId === id));
       }
@@ -652,9 +686,11 @@
       }
       if (activeId) setActive(activeId, false);
       const activeViews = docked.filter(view => view.group === activeGroup);
-      groups.hidden = groupButtons.size < 2;
-      tabs.hidden = activeViews.length === 0;
-      main.element.hidden = hidden || collapsed || docked.length === 0;
+      groups.hidden = companionOpen || groupButtons.size < 2;
+      tabs.hidden = companionOpen || activeViews.length === 0;
+      companionView.hidden = !companionOpen;
+      companionButton.setAttribute('aria-expanded', String(companionOpen));
+      main.element.hidden = hidden || collapsed || (!companionOpen && docked.length === 0);
       bubble.hidden = hidden || !collapsed || views.size === 0 || minimizedMode === 'chat';
       syncChatButtonVisibility();
       for (const alert of alerts.values()) alert.element.hidden = hidden;
@@ -890,10 +926,14 @@
     }
     return Object.freeze({
       host,
-      companionSettings:main.element,
+      companionSettings:companionContent,
+      setCompanionAvailable(value) {
+        companionButton.hidden = !value;
+        if (!value && companionOpen) toggleCompanion(false);
+      },
       companionObscured:()=>!main.element.hidden,
       openLauncher(){hidden=false;void setCollapsed(false);},
-      openModule(id) { if(!views.has(id))throw Error('Room management is not ready. Open SLINK and try again.');hidden=false;collapsed=false;setActive(id,true);refreshShell(); },
+      openModule(id) { if(!views.has(id))throw Error('Room management is not ready. Open SLINK and try again.');hidden=false;collapsed=false;companionOpen=false;setActive(id,true);refreshShell(); },
       ready,
       createModuleView,
       dismissAlert,
@@ -917,5 +957,3 @@
 
   SLINK.define('core', 'uiShell', Object.freeze({ createShell }));
 })(globalThis);
-
-
