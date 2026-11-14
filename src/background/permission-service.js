@@ -209,7 +209,7 @@
     try {
       const currentSettings = await settings();
       await SLINK.core.tornApiLimiter.reserve({ wait:true });
-      const data = await SLINK.core.http.requestJson('tornApi', `https://api.torn.com/v2/user/${encodeURIComponent(userId)}/basic`, {
+      const data = await SLINK.core.http.requestJson('tornApi', `https://api.torn.com/v2/user/${encodeURIComponent(userId)}/basic?comment=SLINK%20Perms`, {
         headers:{ Authorization:`ApiKey ${currentSettings.tornKey}` },
         cache:'no-store'
       });

@@ -385,6 +385,13 @@
     });
   }
 
+  async function shareRosterIntel(rows,observedAt,source='bulk:faction-members') {
+    if (!SLINK.services.playerIntelligence) return;
+    await SLINK.services.playerIntelligence.observeMany(rows.flatMap(row=>row?.status?.state ? [{
+      playerId:row.id ?? row.user_id, name:row.name, level:row.level, status:row.status, source, observedAt
+    }] : [])).catch(()=>{});
+  }
+
   async function scheduledRoster(activeWar, currentSettings) {
     const cached = await SLINK.core.storage.get(KEYS.scheduledRoster, null);
     if (
@@ -394,6 +401,7 @@
     ) return cached.members;
     const response = await tornRequest(`/v2/faction/${encodeURIComponent(activeWar.opponentFactionId)}/members`, currentSettings.tornKey);
     const rows = response?.members ?? response?.faction?.members ?? [];
+    await shareRosterIntel(Array.isArray(rows)?rows:[],Date.now());
     const members = (Array.isArray(rows) ? rows : []).map(normalizeTornFactionMember).filter(Boolean);
     if (!members.length) throw new Error('Torn returned no opposing faction members for the assigned war.');
     await SLINK.core.storage.set(KEYS.scheduledRoster, { warId:activeWar.warId, fetchedAt:Date.now(), members });
@@ -404,6 +412,7 @@
     const response = await tornRequest(`/v2/faction/${encodeURIComponent(activeWar.opponentFactionId)}/members`, currentSettings.tornKey);
     const members = response?.members ?? response?.faction?.members ?? [];
     if (!Array.isArray(members) || !members.length) throw new Error('Torn returned no opposing faction members.');
+    await shareRosterIntel(members,Date.now());
     await workerRequest(`/api/wars/${encodeURIComponent(activeWar.warId)}/status`, {
       method:'POST',
       body:{ opponent_faction_id:activeWar.opponentFactionId, observedAt:Date.now(), members }
@@ -775,10 +784,13 @@
       .slice(0, 10);
     for (const id of missing) {
       try {
-        const response = await tornRequest(`/v2/user/${encodeURIComponent(id)}/profile`, currentSettings.tornKey);
+        const response = await tornRequest(`/v2/user/${encodeURIComponent(id)}/profile?comment=SLINK%20War%20Retal`, currentSettings.tornKey);
         const source = response?.profile ?? response?.basic ?? response?.user ?? response;
         const member = normalizeTornFactionMember({ id, ...source });
-        if (member) cached[id] = { member, checkedAt:Date.now() };
+        if (member) {
+          cached[id] = { member, checkedAt:Date.now() };
+          if (source?.status?.state) await shareRosterIntel([{...source,id}],Date.now(),'profile:war-retal');
+        }
       } catch {
         cached[id] = { member:null, checkedAt:Date.now() };
       }

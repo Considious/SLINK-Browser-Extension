@@ -449,6 +449,11 @@ const routes = {
   ...SLINK.services.moneyProperty.routes,
   ...SLINK.services.events.routes,
   ...SLINK.services.mugging.routes,
+  'playerBasic.activity':(_input,sender)=>recordBasicActivity(sender),
+  'mugging.contribution.run':(input,sender)=>SLINK.services.mugging.runContribution(input,sender,()=>canRunPlayerBasic(sender)),
+  'leveling.check':(input,sender)=>SLINK.services.leveling.routes['leveling.check'](input,sender,()=>canRunPlayerBasic(sender)),
+  'targetList.polling.run':(input,sender)=>SLINK.services.targetList.runPolling(input,sender,()=>canRunPlayerBasic(sender)),
+  'targetList.stakeout.run':(input,sender)=>SLINK.services.targetList.runStakeouts(input,sender,()=>canRunPlayerBasic(sender)),
   ...SLINK.services.adhd.routes,
   ...SLINK.services.market.routes,
   ...SLINK.services.merits.routes,
@@ -461,6 +466,18 @@ const routes = {
 
 let activeTornPageTabId = null;
 let activityRevision = 0;
+const basicActivityKey='slink.playerBasic.activity';
+async function recordBasicActivity(sender) {
+  const id=sender?.tab?.id;
+  if (!Number.isInteger(id) || id!==await eligibleTornPageTab()) return {active:false};
+  await chrome.storage.session.set({[basicActivityKey]:{id,at:Date.now()}});
+  return {active:true};
+}
+async function canRunPlayerBasic(sender) {
+  const entry=(await chrome.storage.session.get(basicActivityKey))[basicActivityKey];
+  if (!entry || Date.now()-entry.at>120_000 || (sender && entry.id!==sender.tab?.id)) return false;
+  return entry.id===await eligibleTornPageTab();
+}
 let activityQueue = Promise.resolve();
 
 async function notifyTornPageActivity(tabId, active) {
@@ -587,7 +604,7 @@ chrome.alarms.onAlarm.addListener(alarm => {
     }).catch(error => console.error('[SLINK] Daily player stats:', error));
   }
   if (alarm.name === SLINK.services.mugging.ALARM) {
-    void SLINK.services.mugging.runContribution().catch(error => console.error('[SLINK] Mugging contribution:', error));
+    void SLINK.services.mugging.runContribution(undefined,undefined,()=>canRunPlayerBasic()).catch(error => console.error('[SLINK] Mugging contribution:', error));
   }
   if (alarm.name === SLINK.services.abroadStocks.ALARM) {
     void SLINK.services.abroadStocks.refresh(false)
@@ -596,8 +613,8 @@ chrome.alarms.onAlarm.addListener(alarm => {
   }
   if (alarm.name === SLINK.services.targetList.POLL_ALARM) {
     void Promise.allSettled([
-      SLINK.services.targetList.runPolling(),
-      SLINK.services.targetList.runStakeouts()
+      SLINK.services.targetList.runPolling(undefined,undefined,()=>canRunPlayerBasic()),
+      SLINK.services.targetList.runStakeouts(undefined,undefined,()=>canRunPlayerBasic())
     ]).then(results => {
       const rejected = results.find(result => result.status === 'rejected');
       if (rejected) console.error('[SLINK] Target List scheduling:', rejected.reason);

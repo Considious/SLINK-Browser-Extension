@@ -206,7 +206,7 @@
       }
 
       function moduleVisible() {
-        return Boolean(!stopped && !context.signal?.aborted && moduleView && !moduleView.hidden);
+        return Boolean(!stopped && !context.signal?.aborted && moduleView && !moduleView.hidden && moduleView.getClientRects().length && !document.hidden && document.hasFocus());
       }
 
       async function touchMuggingUi(force = false) {
@@ -218,13 +218,12 @@
         return true;
       }
 
-      function noteMuggingInteraction() {
-        if (moduleVisible()) void touchMuggingUi(false);
+      function noteMuggingInteraction(event) {
+        if (event.isTrusted && moduleVisible()) void touchMuggingUi(false);
       }
 
       function syncMuggingVisibility() {
         if (!moduleVisible()) return;
-        void touchMuggingUi(true);
         const revision = cacheRevision;
         void SLINK.core.messaging.send('mugging.status').then(value => {
           if (stopped || context.signal?.aborted || revision !== cacheRevision) return;

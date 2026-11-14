@@ -252,7 +252,7 @@
     return true;
   }
 
-  async function runContribution() {
+  async function runContribution(_input, sender, active = () => false) {
     if (contributing) return contributing;
     contributing = (async () => {
       const now = Date.now();
@@ -262,10 +262,17 @@
         await SLINK.core.storage.set(CONTRIBUTION_KEY, disabled);
         return disabled;
       }
-      const session = await SLINK.services.permissionAccess.ensureSession(false, REQUIRED_SCOPE);
-      if (!SLINK.core.permissions.hasScope(session, REQUIRED_SCOPE)) throw new Error('Your SLINK account does not have slink.mugging permission.');
       const activity = await SLINK.core.storage.get(ACTIVITY_KEY, {});
       const mode = contributionMode(activity?.lastActiveAt, now);
+      if (mode !== 'active' || !await active()) {
+        await syncPending(false).catch(()=>null);
+        const previous=await SLINK.core.storage.get(CONTRIBUTION_KEY,{});
+        const paused = {...previous,at:now,enabled:true,mode:'inactive',fetched:0,skipped:0,errors:0};
+        if(previous.mode!=='inactive')await SLINK.core.storage.set(CONTRIBUTION_KEY,paused);
+        return paused;
+      }
+      const session = await SLINK.services.permissionAccess.ensureSession(false, REQUIRED_SCOPE);
+      if (!SLINK.core.permissions.hasScope(session, REQUIRED_SCOPE)) throw new Error('Your SLINK account does not have slink.mugging permission.');
       const capacity = await SLINK.core.tornApiLimiter.getContributionCapacity({
         ceiling:CONTRIBUTION_CEILING,
         interactiveReserve:INTERACTIVE_RESERVE
@@ -275,12 +282,18 @@
         : { tasks:[] };
       let fetched = 0, skipped = 0, errors = 0;
       const observations = [];
+      if (!await active()) return {mode:'inactive',fetched:0};
       await fairFightChecks.check(Array.isArray(response?.tasks)?response.tasks:[]).catch(()=>null);
+      const budget = Math.min(capacity.available, Math.max(0, Number(response?.api_budget_per_minute) || 0));
+      const seen=new Set();
       for (const task of (Array.isArray(response?.tasks) ? response.tasks : [])) {
-        if (fetched >= capacity.available) break;
+        if (fetched >= budget || !await active()) break;
+        const id=Number(task.player_id);
+        if (!Number.isSafeInteger(id) || id<=0 || seen.has(id)) continue;
+        seen.add(id);
         try {
           const result = await SLINK.services.playerIntelligence.refresh({
-            playerId:task.player_id,
+            playerId:id, owner:'mugging', adaptive:true, active,
             maxAgeMs:15 * 60_000,
             priority:'contribution',
             contribution:true,
@@ -302,7 +315,7 @@
       const sync = await syncPending(false);
       const pending = await SLINK.core.storage.get(PENDING_KEY, []);
       const status = {
-        at:Date.now(), enabled:true, mode, apiBudgetPerMinute:capacity.available,
+        at:Date.now(), enabled:true, mode, apiBudgetPerMinute:budget,
         contributionCeiling:CONTRIBUTION_CEILING,
         interactiveReserve:INTERACTIVE_RESERVE,
         sharedUsageAtStart:capacity.count,

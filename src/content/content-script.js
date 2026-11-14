@@ -122,8 +122,19 @@
     stakeoutTimer = null;
   }
 
+  let lastPlayerInput=0;
+  let lastPlayerSignal=0;
+  for (const event of ['pointerdown','keydown','wheel','touchstart']) document.addEventListener(event, e=>{
+    if (!e.isTrusted || !runtimeActive || document.hidden || !document.hasFocus()) return;
+    lastPlayerInput=Date.now();
+    if (lastPlayerInput-lastPlayerSignal>=10_000) {
+      lastPlayerSignal=lastPlayerInput;
+      void SLINK.core.messaging.send('playerBasic.activity').catch(()=>{});
+    }
+  }, {capture:true,passive:true});
+
   async function runStakeoutTick() {
-    if (!runtimeActive || stakeoutTicking || !global.chrome?.runtime?.id) return;
+    if (!runtimeActive || !lastPlayerInput || Date.now()-lastPlayerInput>120_000 || stakeoutTicking || !global.chrome?.runtime?.id) return;
     stakeoutTicking = true;
     try { await SLINK.core.messaging.send('targetList.stakeout.run'); }
     catch (error) { if (global.chrome?.runtime?.id) console.debug('[SLINK] Stakeout heartbeat paused:', error); }

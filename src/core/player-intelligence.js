@@ -198,6 +198,7 @@
       now = Date.now(),
       maxAgeMs = DEFAULT_FRESH_MS,
       timerBufferMs = TIMER_BUFFER_MS,
+      adaptive = false,
       forceApi = false
     } = {}
   ) {
@@ -216,7 +217,12 @@
       };
     }
     const observedAt = Math.max(0, Number(normalized.observedAt) || 0);
-    const freshness = Math.max(0, Number(maxAgeMs) || 0);
+    const state=normalized.state;
+    const floor = ['Federal','Fallen'].includes(state) ? 24*60*60_000 : state==='Okay' ? 5*60_000 : ['Abroad','Hiding Out'].includes(state) ? 3*60_000 : state==='Unknown' ? 60_000 : 0;
+    const freshness = Math.max(adaptive ? floor : 0, Number(maxAgeMs) || 0);
+    if (TIMED_STATES.has(state) && untilMs && untilMs <= now && observedAt < untilMs) {
+      return { required:true, reason:'timer-ended', nextCheckAt:now };
+    }
     if (observedAt > 0 && now - observedAt < freshness) {
       return {
         required:false,

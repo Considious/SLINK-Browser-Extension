@@ -368,7 +368,8 @@
       }
 
       async function markActivity() {
-        if (!current?.configured || current?.settings?.contributorOnly) return;
+        if (!moduleVisible() || !current?.configured) return;
+        if (current.settings?.contributorOnly) { lastActivityTouchAt=Date.now(); return; }
         if (Date.now() - lastActivityTouchAt < 60_000) return;
         lastActivityTouchAt = Date.now();
         try {
@@ -378,20 +379,22 @@
 
       function moduleVisible() {
         const view = context.ui.getContentElement()?.closest('.module-view');
-        return Boolean(view && !view.hidden);
+        return Boolean(view && !view.hidden && view.getClientRects().length && !document.hidden && document.hasFocus());
       }
 
       function cycleActive() {
-        return moduleVisible() || (lastActivityTouchAt > 0 && Date.now() - lastActivityTouchAt <= INACTIVE_AFTER_MS);
+        return moduleVisible() && lastActivityTouchAt > 0 && Date.now() - lastActivityTouchAt <= INACTIVE_AFTER_MS;
       }
 
       function syncActivityHeartbeat() {
         clearInterval(activityTimer);
         activityTimer = null;
-        if (!moduleVisible()) return;
-        void markActivity();
-        activityTimer = setInterval(() => void markActivity(), 60_000);
-        if (current?.configured && !busy) void runCycle(false);
+        if (!moduleVisible()) {
+          clearTimeout(cycleTimer);cycleTimer=null;
+          void SLINK.core.messaging.send('leveling.leader.release').catch(()=>{});
+          return;
+        }
+        if (current?.configured && !busy && cycleActive()) void runCycle(false);
       }
 
       async function refreshStatus() {
@@ -419,10 +422,10 @@
             : startedAt + Math.floor(index * spacing);
           const delay = Math.max(0, targetAt - Date.now());
           if (delay) await new Promise(resolve => setTimeout(resolve, delay));
-          if (stopped) return;
+          if (stopped || !cycleActive() || !await isLeader()) return;
           try {
             const observation = await SLINK.core.messaging.send('leveling.check', check);
-            if (observation?.completed_locally !== true) observations.push(observation);
+            if (observation?.completed_locally !== true && !observation?.skipped) observations.push(observation);
           } catch (error) {
             failures.push(error);
           }
@@ -474,8 +477,14 @@
         cycleTimer = setTimeout(() => void runCycle(false), delay);
       }
 
-      context.listen(root,'pointerdown',()=>void markActivity(),{once:true});
-      leaderTimer = setInterval(() => void isLeader(), 5_000);
+      const userActivity=async event=>{
+        if (!event.isTrusted || !moduleVisible()) return;
+        const wasActive=cycleActive();
+        await markActivity();
+        if (!wasActive && cycleActive()) void runCycle(false);
+      };
+      context.listen(root,'pointerdown',userActivity);
+      context.listen(root,'keydown',userActivity);
       await refreshStatus();
       const moduleView = context.ui.getContentElement()?.closest('.module-view');
       if (moduleView) {

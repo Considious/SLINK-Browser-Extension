@@ -294,7 +294,8 @@
     };
   }
 
-  async function runStakeouts(input = {}) {
+  async function runStakeouts(input = {}, _sender, active = () => false) {
+    if (!await active()) return {paused:true};
     if (stakeoutInFlight) return stakeoutInFlight;
     stakeoutInFlight = (async () => {
       const now = Math.max(0, Number(input.now) || Date.now());
@@ -323,21 +324,23 @@
       const generated = [];
 
       for (const target of due) {
+        if (!await active()) break;
         const id = String(target.playerId);
         const intervalMs = target.stakeoutIntervalSeconds * 1_000;
         generated.push(...collectStakeoutChanges(target, runtime, intelligence[id] || null, now));
         try {
           const result = await SLINK.services.playerIntelligence.refresh({
-            playerId:target.playerId,
+            playerId:target.playerId, owner:'stakeout', adaptive:false, active,
             priority:'high',
             maxAgeMs:intervalMs,
             timerBufferMs:1_000
           });
+          if (result.reason === 'inactive') break;
           processed += 1;
           if (result.fetched) apiFetched += 1;
           else skipped += 1;
           generated.push(...collectStakeoutChanges(target, runtime, result.record, now));
-          runtime.schedule[id] = result.reason === 'known-timer' || result.reason === 'fresh-cache'
+          runtime.schedule[id] = result.reason === 'known-timer' || ['fresh-cache','in-flight-cache'].includes(result.reason)
             ? Math.max(now + 1_000, Number(result.nextCheckAt) || now + intervalMs)
             : now + intervalMs;
         } catch (error) {
@@ -451,7 +454,7 @@
     const refreshResult = await SLINK.services.playerIntelligence.refresh({
       playerId,
       priority:'high',
-      forceApi:input.forceApi === true
+      owner:'target', forceApi:input.forceApi === true
     });
     const current = await status();
     return { ...current, refresh:refreshResult };
@@ -486,7 +489,8 @@
     return status();
   }
 
-  async function runPolling(input = {}) {
+  async function runPolling(input = {}, _sender, active = () => false) {
+    if (!await active()) return {paused:true};
     if (pollInFlight) return pollInFlight;
     pollInFlight = (async () => {
       const now = Math.max(0, Number(input.now) || Date.now());
@@ -523,19 +527,21 @@
       let lastError = '';
 
       for (const target of due) {
+        if (!await active()) break;
         const id = String(target.playerId);
         try {
           const result = await SLINK.services.playerIntelligence.refresh({
-            playerId:target.playerId,
+            playerId:target.playerId, owner:'polling', adaptive:true, active,
             priority:'low',
             maxAgeMs:intervalMs
           });
+          if (result.reason === 'inactive') break;
           processed += 1;
           if (result.fetched) apiFetched += 1;
           else skipped += 1;
           runtime.schedule[id] = result.reason === 'known-timer'
             ? Math.max(now + 30_000, Number(result.nextCheckAt) || now + intervalMs)
-            : result.reason === 'fresh-cache'
+            : ['fresh-cache','in-flight-cache'].includes(result.reason)
               ? Math.max(now + 30_000, Number(result.nextCheckAt) || now + intervalMs)
               : now + intervalMs;
         } catch (error) {

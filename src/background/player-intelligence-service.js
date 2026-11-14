@@ -121,6 +121,8 @@
     if (!playerId) throw new Error('A valid Torn player ID is required.');
     const current = databaseStore() ? await databaseStore().get(playerId) : (await cacheMap())[String(playerId)] || null;
     const decision = CORE.requestDecision(current, input);
+    const comments = { mugging:'SLINK Mug Ext', leveling:'SLINK Lvl Ext', contributor:'SLINK Lvl Donor', polling:'SLINK Poll Ext', stakeout:'SLINK Stake Ext', target:'SLINK Tgt Ext' };
+    const comment = Object.hasOwn(comments,input.owner) ? comments[input.owner] : 'SLINK Intel Ext';
     if (!decision.required) {
       return {
         record:current
@@ -131,9 +133,12 @@
         nextCheckAt:decision.nextCheckAt
       };
     }
-    if (inFlight.has(playerId)) return inFlight.get(playerId);
+    if (inFlight.has(playerId)) {
+      const result=await inFlight.get(playerId);
+      return result.reason==='inactive' ? result : {...result,fetched:false,reason:'in-flight-cache'};
+    }
     const pending = (async () => {
-      const key = await tornKey();
+      const key = input.apiKey || await tornKey();
       if (!key) throw new Error('Save a Torn API key before refreshing player intelligence.');
       const endpoint = `/v2/user/${playerId}/basic`;
       const reservation = input.contribution === true
@@ -141,13 +146,14 @@
         : SLINK.core.tornApiLimiter.reserve;
       await reservation({
         wait:input.contribution === true ? input.wait === true : input.wait !== false,
-        script:'SLINK Player Intelligence',
+        script:comment,
         priority:input.contribution === true ? 'contribution' : String(input.priority || 'normal'),
         endpoint
       });
+      if (input.active && !await input.active()) return {record:current,fetched:false,reason:'inactive'};
       const response = await SLINK.core.http.requestJson(
         'tornApi',
-        `https://api.torn.com${endpoint}`,
+        `https://api.torn.com${endpoint}?comment=${encodeURIComponent(comment)}`,
         {
           headers:{ Authorization:`ApiKey ${key}` },
           cache:'no-store'
@@ -159,9 +165,9 @@
           'Torn player lookup failed.'
         );
       }
-      const record = await observe(
-        CORE.fromTornResponse(playerId, response, Date.now())
-      );
+      const observation=CORE.fromTornResponse(playerId,response,Date.now());
+      if (observation.state==='Unknown') return {record:current,fetched:true,reason:'no-status'};
+      const record = await observe(observation);
       return {
         record:{ ...record, status:CORE.effectiveStatus(record) },
         fetched:true,
@@ -184,7 +190,7 @@
       'factionMembers.cachedIntel':factionMemberIntel,
       'playerIntelligence.get':get,
       'playerIntelligence.observe':observe,
-      'playerIntelligence.refresh':refresh,
+      'playerIntelligence.refresh':input=>refresh({playerId:input?.playerId ?? input?.player_id ?? input?.targetId ?? input?.id, forceApi:input?.forceApi===true}),
       'playerIntelligence.list':async () => ({ players:await cacheMap() })
     })
   }));

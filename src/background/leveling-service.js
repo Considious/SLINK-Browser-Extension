@@ -321,18 +321,6 @@
     return publicStatus();
   }
 
-  async function tornJson(url) {
-    const currentSettings = await settings();
-    if (!currentSettings.tornKey) throw new Error('Torn API key is not configured.');
-    await SLINK.core.tornApiLimiter.reserve({ wait: true });
-    const data = await SLINK.core.http.requestJson('tornApi', url, {
-      headers: { Authorization: `ApiKey ${currentSettings.tornKey}` },
-      cache: 'no-store'
-    });
-    if (data?.error) throw new Error(data.error.message || data.error.error || 'Torn API request failed.');
-    return data;
-  }
-
   async function tornText(url) {
     const currentSettings = await settings();
     if (!currentSettings.tornKey) throw new Error('Torn API key is not configured.');
@@ -1033,30 +1021,36 @@
     };
   }
 
-  async function checkTarget(input) {
+  async function checkTarget(input, sender, active = () => false) {
+    if (!await active() || localLeader.tabId!==sender?.tab?.id) return {skipped:true};
+    const currentSettings=await settings();
+    if (!currentSettings.tornKey || !await acceptedCurrentTerms()) return {skipped:true};
     const targetId = Number(input?.id);
     const batchId = String(input?.check_batch_id || '');
     const pending = await pendingChecks();
     const target = pending.find(check => Number(check.id) === targetId && String(check.check_batch_id || '') === batchId);
     if (!target) throw new Error('This Torn check is not assigned to the extension.');
-    const data = await tornJson(`https://api.torn.com/v2/user/${encodeURIComponent(targetId)}/basic`);
-    const source = data?.profile ?? data?.basic ?? data?.user ?? data;
-    const status = source?.status ?? data?.status ?? {};
-    const state = status?.state ?? status?.description ?? status?.details ?? source?.state ?? 'Unknown';
+    const result=await SLINK.services.playerIntelligence.refresh({
+      playerId:targetId, owner:currentSettings.contributorOnly?'contributor':'leveling',
+      adaptive:true, apiKey:currentSettings.tornKey, active:async()=>localLeader.tabId===sender?.tab?.id && await active()
+    });
+    if (result.reason==='inactive' || !result.record?.observedAt || !result.record?.state || result.record.state==='Unknown') return {skipped:true};
+    const {state,description,until}=result.record;
     const observation = {
       target_id: targetId,
       state: String(state || 'Unknown'),
-      description: String(status?.description ?? status?.details ?? state ?? 'Unknown'),
-      until: Number(status?.until) || 0,
+      description: String(description || state),
+      until: Number(until) || 0,
       check_batch_id: batchId || undefined,
       source: 'torn_api',
+      observed_at:result.record.observedAt,
       contributor_auth: input?.contributor_auth === true || target.contributor_auth === true
     };
     if (canCompleteOkayLocally(target, observation)) {
       await completePendingLocally(target, observation);
       return { ...observation, completed_locally: true };
     }
-    return observation;
+    return result.fetched ? observation : {skipped:true};
   }
 
   async function submitObservations(input) {
