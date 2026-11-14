@@ -13,7 +13,8 @@ const source = f => path.join(__dirname,'../src',files[f]+'.js');
   await page.route('https://www.torn.com/**',route=>{
    const {pathname,search}=new URL(route.request().url());
    const body=search.includes('sid=list')?filters:pathname==='/factions.php'?'<section id="faction-armoury"><hr><ul class="item-list"><li data-itemid="16">'+item+'</li></ul></section>':pathname==='/item.php'?'<section><div class="equipped-items-wrap"></div><ul class="item-list"><li data-itemid="16">'+item+'</li></ul></section>':search.includes('ItemMarket')?'<li><div class="itemTile___gJeSo">'+item+'</div></li>':'<div data-testid="item">'+item+'<div data-testid="description"></div></div>';
-   return route.fulfill({contentType:'text/html',body:'<!doctype html><style>.stats{display:flex}.stat{width:40px;text-align:center}.stat i{display:block}li{list-style:none}img{width:12px}</style><main id="mainContainer">'+body+'</main>'});
+   const markup=pathname==='/bazaar.php'||search.includes('ItemMarket')?body.replaceAll('bonus-attachment-item-','unavailable-item-'):body;
+   return route.fulfill({contentType:'text/html',body:'<!doctype html><style>.stats{display:flex}.stat{width:40px;text-align:center}.stat i{display:block}li{list-style:none}img{width:12px}</style><main id="mainContainer">'+markup+'</main>'});
   });
   await page.addInitScript(()=>{
    window.calls=[];
