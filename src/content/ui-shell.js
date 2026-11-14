@@ -79,6 +79,7 @@
     .window.main > .theme-content-shell > .module-view > .module-head, .window.main > .theme-content-shell > .module-view > .status, .window.main > .theme-content-shell > .module-view > .actions { flex:0 0 auto; }
     .window.main > .theme-content-shell > .module-view > .content { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
     .companion-settings-button { flex:0 0 auto; padding:0 6px; }
+    .companion-perch { flex:0 0 49px; width:49px; height:45px; pointer-events:none; }
     .companion-settings-back { align-self:start; margin:8px 10px 0; }
     .companion-settings-view label { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; }
     .companion-settings-view select { min-width:0; max-width:100%; background:var(--slink-bg-control); color:var(--slink-text); }
@@ -224,6 +225,11 @@
     companionButton.setAttribute('aria-expanded', 'false');
     companionButton.hidden = true;
     main.head.insertBefore(companionButton, main.head.querySelector('.hide'));
+    const companionPerch = document.createElement('span');
+    companionPerch.className = 'companion-perch';
+    companionPerch.hidden = true;
+    companionPerch.setAttribute('aria-hidden', 'true');
+    main.head.insertBefore(companionPerch, companionButton);
     const companionView = document.createElement('section');
     companionView.id = 'slink-companion-settings-view';
     companionView.className = 'module-view companion-settings-view';
@@ -535,6 +541,7 @@
         if (!drag || event.pointerId !== drag.id) return;
         const box = element.getBoundingClientRect(); drag = null; delete head.dataset.dragging;
         setPosition({ left:box.left, top:box.top }, true);
+        options.onVisibility?.();
       };
       head.addEventListener('pointerup', finish); head.addEventListener('pointercancel', finish);
       const ready = readPreference(storageKey, null).then(position => { if (position) setPosition(position); });
@@ -755,6 +762,7 @@
       if (!alert) return;
       alert.element.remove();
       alerts.delete(key);
+      options.onVisibility?.();
     }
 
     function showAlert(definition = {}) {
@@ -931,7 +939,12 @@
         companionButton.hidden = !value;
         if (!value && companionOpen) toggleCompanion(false);
       },
-      companionObscured:()=>!main.element.hidden,
+      companionAvoidElements:()=>[main.element,bubble,...Array.from(alerts.values(),alert=>alert.element)],
+      companionDock:()=>{
+        if(main.element.hidden)return null;
+        const {left,right}=main.element.getBoundingClientRect();
+        return Math.max(left,global.innerWidth-right)<115?companionPerch:null;
+      },
       openLauncher(){hidden=false;void setCollapsed(false);},
       openModule(id) { if(!views.has(id))throw Error('Room management is not ready. Open SLINK and try again.');hidden=false;collapsed=false;companionOpen=false;setActive(id,true);refreshShell(); },
       ready,
