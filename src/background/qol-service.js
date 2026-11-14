@@ -25,6 +25,16 @@
     if(releaseTask)return releaseTask;
     releaseTask=(async()=>{let data;try{data=await S.core.http.requestJson('contributionWorker','https://slinkcontributionworker.richard-johnson554.workers.dev/api/releases',{cache:'no-store'});if(data?.schema!==1)throw Error('Update service unavailable.');}catch{data={schema:1,error:'Update information is temporarily unavailable.'};}await S.core.storage.set(UPDATES,{at:Date.now(),data});return data;})().finally(()=>releaseTask=null);return releaseTask;
   }
+  const weaponFreshMs=6*60*60_000, weaponInFlight=new Map();
+  async function weaponSnapshot(kind,read){
+    const id=await owner(), key='qol.weapon-'+kind+'.v1:'+id;
+    const cached=await S.core.storage.get(key,{});
+    if(cached.data&&Date.now()-cached.at<weaponFreshMs)return cached.data;
+    if(weaponInFlight.has(key))return weaponInFlight.get(key);
+    const pending=(async()=>{const data=await read();if(await owner()!==id)throw Error('The signed-in account changed.');
+      await S.core.storage.set(key,{data,at:Date.now()});return data;
+    })().finally(()=>weaponInFlight.delete(key));weaponInFlight.set(key,pending);return pending;
+  }
   S.define('services','pageTools',{routes:{
     'qol.leaseCompare':(input,sender)=>{
       const page=new URL(sender?.tab?.url||'https://invalid.invalid');
@@ -33,14 +43,13 @@
       if(!Number.isSafeInteger(type)||type<0)throw Error('Choose a property type.');
       return api(type?'/v2/market/'+type+'/rentals?limit=50':'/v2/torn/properties','slink.qol.money-property');
     },
-    'qol.weaponExperience':async()=>{
-      const id=await owner(),body=await api('/v2/user/weaponexp');
-      if(await owner()!==id)throw Error('The signed-in account changed.');
+    'qol.weaponExperience':()=>weaponSnapshot('xp',async()=>{
+      const body=await api('/v2/user/weaponexp');
       if(!Array.isArray(body?.weaponexp))throw Error('Torn did not return weapon experience.');
       return Object.fromEntries(body.weaponexp.filter(r=>Number.isSafeInteger(r?.id)&&r.id>0&&Number.isInteger(r.exp)&&r.exp>=0&&r.exp<=100).map(r=>[r.id,r.exp]));
-    },
-    'qol.weaponMerits':async()=>{
-      const id=await owner(),model=global.SLINK_WEAPON_MERITS;
+    }),
+    'qol.weaponMerits':()=>weaponSnapshot('mastery',async()=>{
+      const model=global.SLINK_WEAPON_MERITS;
       const cached=await S.core.storage.get('qol.weapon-classes.v1',{});
       const classes=cached.at>Date.now()-86400000&&cached.classes?Promise.resolve(cached.classes):(weaponCatalogue??=(async()=>{
         const data=model.catalogue(await api('/v2/torn/items?cat=Weapon'));
@@ -48,9 +57,8 @@
         await S.core.storage.set('qol.weapon-classes.v1',{classes:data,at:Date.now()});return data;
       })().finally(()=>{weaponCatalogue=null;}));
       const [levels,catalogue]=await Promise.all([api('/v2/user/perks').then(model.perks),classes]);
-      if(await owner()!==id)throw Error('The signed-in account changed.');
       return {levels,classes:catalogue};
-    },
+    }),
     'qol.get':async()=>({allowed:true,settings:Q.normalize(await S.core.storage.get(KEY+':'+await owner(),{}))}),
     'qol.save':input=>{const task=queue.then(async()=>{const key=KEY+':'+await owner(),value=Q.normalize(input);await S.core.storage.set(key,value);return value;});queue=task.catch(()=>{});return task;},
     'qol.cached':async()=>S.core.storage.get(await cacheKey(),{}),'qol.info':input=>info(input?.force===true),'qol.profile':input=>profile(input?.force===true),'qol.updates':updates

@@ -69,7 +69,7 @@
   const PAGE_STYLES = `
     a.slink-profile-inside-gate { position:relative; border-radius:8px; outline:4px solid #ff3434 !important; background:#5d1010 !important; box-shadow:0 0 18px rgba(255,0,0,.85) !important; }
     a.slink-profile-inside-gate[data-slink-inside-mode="warn"] { outline-color:#ff9f1c !important; box-shadow:0 0 18px rgba(255,159,28,.8) !important; }
-    .slink-profile-inside-message { display:inline-flex; align-items:center; margin:4px 0 4px 8px; padding:4px 7px; border:2px solid #ff3434; border-radius:5px; background:#4c0d0d; color:#fff; font:800 11px Arial,sans-serif; }
+    .slink-profile-inside-message { display:inline-flex; align-items:center; margin:4px 0 4px 8px; padding:4px 7px; border:1px solid var(--sp-danger); border-radius:5px; background:var(--sp-bg); color:var(--sp-text); font:800 11px Arial,sans-serif; }
   `;
   function escape(value) {
     return SLINK.core.format.escapeHtml(value);
@@ -411,7 +411,7 @@
           ? insideGateMessage(gate)
           : `${insideGateMessage(gate)} Click for an explicit override warning.`;
         const warning = document.createElement('span');
-        warning.className = 'slink-profile-inside-message';
+        warning.className = 'slink-profile-inside-message slink-page-note';
         warning.textContent = gate.mode === 'block' ? 'INSIDES DISABLED' : 'INSIDE HIT — WARNING REQUIRED';
         button.insertAdjacentElement('afterend', warning);
       }

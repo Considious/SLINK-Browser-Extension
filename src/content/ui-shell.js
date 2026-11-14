@@ -81,8 +81,6 @@
     .companion-settings-button { flex:0 0 auto; padding:0 6px; }
     .companion-perch { flex:0 0 49px; width:49px; height:45px; pointer-events:none; }
     .companion-settings-back { align-self:start; margin:8px 10px 0; }
-    .companion-settings-view label { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; }
-    .companion-settings-view select { min-width:0; max-width:100%; background:var(--slink-bg-control); color:var(--slink-text); }
     .companion-settings-view summary { display:none; }
     .row { display:grid; grid-template-columns:105px minmax(0,1fr); gap:8px; }
     .label { color:var(--slink-muted); }
@@ -155,6 +153,7 @@
     const previousVisibility = host.style.visibility;
     host.style.visibility = 'hidden';
     const shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
+    globalThis.SLINK_TORN_COMPONENTS?.install(shadow);
     shadow.replaceChildren();
     const style = document.createElement('style');
     style.textContent = STYLES;

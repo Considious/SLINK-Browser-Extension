@@ -197,7 +197,7 @@
             label.append(toggle,document.createTextNode(' Show Scamming guidance in Torn'));note.textContent=SLINK.core.adhd.SCAMMING_TIP;root.append(label,note);
           }
           const guide=SLINK.core.adhd.CRIME_GUIDES[activeCrime];
-          if(guide){const p=document.createElement('p'),a=document.createElement('a');a.textContent=guide[0];a.href='https://www.torn.com/forums.php?p=threads&f=61&t='+guide[1];a.target='_blank';a.rel='noopener noreferrer';p.append(a);root.append(p);}
+          if(guide){const p=document.createElement('p'),a=document.createElement('a');a.className='slink-page-action';globalThis.SLINK_TORN_COMPONENTS?.install(root.getRootNode());a.textContent=guide[0];a.href='https://www.torn.com/forums.php?p=threads&f=61&t='+guide[1];a.target='_blank';a.rel='noopener noreferrer';p.append(a);root.append(p);}
           if(activeCrime==='uniques')for(const definition of SLINK.core.adhd.CRIME_UNIQUE_DEFINITIONS){
             const row=(status?.crimeUniques||[]).find(entry=>entry.id===definition.id);
             const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=status?.settings?.enabled?.[definition.id]!==false;
