@@ -53,7 +53,7 @@ const {chromium}=require(process.env.SLINK_PLAYWRIGHT_MODULE||'playwright');
    assert.deepEqual(await page.locator('[data-slink-weapon-xp]').allTextContents(),['+7%','+1.4']);
    assert.deepEqual(await page.locator('[data-slink-weapon-merit]').allTextContents(),['+4%','+0.8']);
    if(end.includes('bazaar.php')||end.includes('ItemMarket')){
-    assert.equal(await page.locator('[data-slink-market-weapon-preview]').count(),1);continue;
+    assert.equal(await page.locator('.slink-weapon-shop-stat').count(),2);
    }
    const outside=await page.locator('.damage').evaluate(el=>{
     const cell=el.getBoundingClientRect();
