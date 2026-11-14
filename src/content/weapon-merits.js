@@ -64,7 +64,7 @@
       }else value=await ext.core.messaging.send('qol.weaponMerits');
       if(revision!==generation||owner!==await own()||revision!==generation||!allowed())return;
       snapshot={...value,owner,at:Date.now()};button.textContent='Retry weapon mastery';
-      notice.textContent=Object.keys(value.levels).length?'Bonuses shown beside the base stats.':'No weapon mastery bonuses found.';schedule();
+      notice.textContent=Object.keys(value.levels).length?Object.keys(value.levels).map(kind=>kind==='smg'?'SMG':kind[0].toUpperCase()+kind.slice(1)).join(', ')+' mastery detected.':'No weapon mastery bonuses found.';schedule();
     }catch(e){if(revision===generation){snapshot=null;clear();button.hidden=false;button.textContent='Retry weapon mastery';notice.textContent=e.message||'Could not load weapon merits.';}}
     finally{if(revision===generation&&button)button.disabled=false;}
   }

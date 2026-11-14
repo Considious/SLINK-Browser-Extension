@@ -48,7 +48,7 @@
       if(!Array.isArray(body?.weaponexp))throw Error('Torn did not return weapon experience.');
       return Object.fromEntries(body.weaponexp.filter(r=>Number.isSafeInteger(r?.id)&&r.id>0&&Number.isInteger(r.exp)&&r.exp>=0&&r.exp<=100).map(r=>[r.id,r.exp]));
     }),
-    'qol.weaponMerits':()=>weaponSnapshot('mastery',async()=>{
+    'qol.weaponMerits':()=>weaponSnapshot('mastery-v2',async()=>{
       const model=global.SLINK_WEAPON_MERITS;
       const cached=await S.core.storage.get('qol.weapon-classes.v1',{});
       const classes=cached.at>Date.now()-86400000&&cached.classes?Promise.resolve(cached.classes):(weaponCatalogue??=(async()=>{
@@ -56,7 +56,10 @@
         if(!Object.keys(data).length)throw Error('Torn did not return weapon classes.');
         await S.core.storage.set('qol.weapon-classes.v1',{classes:data,at:Date.now()});return data;
       })().finally(()=>{weaponCatalogue=null;}));
-      const [levels,catalogue]=await Promise.all([api('/v2/user/perks').then(model.perks),classes]);
+      const meritKey='qol.merit-catalogue.v1', storedMerits=await S.core.storage.get(meritKey,{});
+      const definitions=storedMerits.data&&Date.now()-storedMerits.at<86400000 ? Promise.resolve(storedMerits.data) : api('/v2/torn/merits?comment=SLINK%20Merits').then(async data=>{await S.core.storage.set(meritKey,{at:Date.now(),data});return data;});
+      const [user,defs,catalogue]=await Promise.all([api('/v2/user/merits?comment=SLINK%20Mastery'),definitions,classes]);
+      const levels=model.upgrades(user,defs);
       return {levels,classes:catalogue};
     }),
     'qol.get':async()=>({allowed:true,settings:Q.normalize(await S.core.storage.get(KEY+':'+await owner(),{}))}),
