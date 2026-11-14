@@ -6,7 +6,8 @@
   if(!model||!ext&&!pda)return;
   const selectors={damage:'.bonus-attachment-item-damage-bonus',accuracy:'.bonus-attachment-item-accuracy-bonus'};
   const both=Object.values(selectors).join(',');
-  const mark='data-slink-weapon-merit';
+  const ui=g.SLINK_TORN_COMPONENTS;
+  if(!ui?.weaponStat)return;
   let root,button,notice,observer,snapshot,queued=false,generation=0;
   const added=new Set();
   const storageKey='access.session.v1';
@@ -27,23 +28,18 @@
     }
     return '';
   }
-  function clear(){for(const n of added)n.remove();added.clear();}
+  function clear(){for(const n of added)ui.clearWeaponStat(n);added.clear();}
   function draw(){
     queued=false;if(!root?.isConnected||!allowed()||document.hidden||!snapshot)return;
     const next=new Set();
-    for(const icon of root.querySelectorAll(both)){
-      const base=icon.nextElementSibling;
-      if(!base?.matches('span')||Array.from(base.children).some(n=>!n.hasAttribute(mark))||!/^\d+(?:\.\d+)?$/.test(Array.from(base.childNodes).filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim()))continue;
+    const itemsRoot=location.pathname==='/item.php'?(root.closest('#mainContainer,.content-wrapper[role="main"],#mainwrap')||root):root;
+    for(const icon of itemsRoot.querySelectorAll(both)){
       const id=itemId(icon),stat=icon.matches(selectors.damage)?'damage':'accuracy';
       const value=model.suffix(snapshot.levels[snapshot.classes[id]],stat);
-      if(!value)continue;
-      let label=base.querySelector('['+mark+']');
-      if(!label){label=document.createElement('span');label.setAttribute(mark,'');label.classList.add('slink-page-positive');label.style.whiteSpace='nowrap';base.append(label);}
-      if(label.textContent!==' '+value)label.textContent=' '+value;
-      label.title=stat==='damage'?'Weapon mastery merit damage modifier':'Weapon mastery merit accuracy bonus';
-      next.add(label);
+      const label=ui.weaponStat(icon,'merit',value.replace(/[()]/g,''),'Weapon mastery: '+value.replace(/[()]/g,'')+' '+stat);
+      if(label)next.add(label);
     }
-    for(const n of added)if(!next.has(n))n.remove();
+    for(const n of added)if(!next.has(n))ui.clearWeaponStat(n);
     added.clear();for(const n of next)added.add(n);
   }
   function schedule(){if(!queued&&!document.hidden){queued=true;requestAnimationFrame(draw);}}
@@ -55,11 +51,13 @@
       let value;
       if(pda){
         const cache=pda.cache('weaponMeritCatalogue',{}),fresh=cache.at>Date.now()-86400000&&cache.classes;
-        if(fresh&&cache.merits?.owner===owner&&cache.merits.at>Date.now()-21600000)value={levels:cache.merits.levels,classes:fresh};
+        if(fresh&&cache.merits?.schema===2&&cache.merits.owner===owner&&cache.merits.at>Date.now()-21600000)value={levels:cache.merits.levels,classes:fresh};
         else {
-        const [perks,catalogue]=await Promise.all([pda.tornJson('/v2/user/perks','SLINK weapon merits'),fresh?null:pda.tornJson('/v2/torn/items?cat=Weapon','SLINK weapon catalogue')]);
+        const meritDefs=cache.definitionsAt>Date.now()-86400000&&cache.definitions;
+        const [user,defs,catalogue]=await Promise.all([pda.tornJson('/v2/user/merits','SLINK Mastery'),meritDefs||pda.tornJson('/v2/torn/merits','SLINK Merits'),fresh?null:pda.tornJson('/v2/torn/items?cat=Weapon','SLINK weapon catalogue')]);
+        if(!meritDefs){cache.definitions=defs;cache.definitionsAt=Date.now();}
         const classes=fresh||model.catalogue(catalogue);if(!Object.keys(classes).length)throw Error('Torn did not return weapon classes.');if(!fresh){cache.classes=classes;cache.at=Date.now();}
-        value={levels:model.perks(perks),classes};cache.merits={owner,at:Date.now(),levels:value.levels};
+        value={levels:model.upgrades(user,defs),classes};cache.merits={schema:2,owner,at:Date.now(),levels:value.levels};pda.persist?.();
         }
       }else value=await ext.core.messaging.send('qol.weaponMerits');
       if(revision!==generation||owner!==await own()||revision!==generation||!allowed())return;
@@ -81,7 +79,8 @@
     button=document.createElement('button');button.type='button';button.hidden=true;button.textContent='Retry weapon mastery';button.onclick=e=>{if(e.isTrusted)void load();};
     notice=document.createElement('span');notice.setAttribute('role','status');notice.style.marginInlineStart='.5em';
     const title=document.createElement('strong');title.textContent='Weapon mastery';bar.append(title,notice,button);anchor.before(bar);
-    observer=new MutationObserver(schedule);observer.observe(root,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['src','data-item','data-itemid']});
+    const itemsRoot=location.pathname==='/item.php'?(root.closest('#mainContainer,.content-wrapper[role="main"],#mainwrap')||root):root;
+    observer=new MutationObserver(schedule);observer.observe(itemsRoot,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['src','data-item','data-itemid']});
     void load();
   }
   function start(){
