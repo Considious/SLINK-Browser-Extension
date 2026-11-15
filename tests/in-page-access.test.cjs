@@ -46,6 +46,21 @@ const exercise=async (source,check)=>{
   const merits=await runtime.services.merits.routes['merits.refresh']();
   check(merits.configured===true&&!merits.lastError&&!merits.fetchedAt,'Paused Merits skips authentication and Torn requests');
 
+  runtime.core.adhd={marketWatchLimit:permission=>permission?.limit||0};
+  const lockedEditor=await market.routes['market.watch.editor']({loadCatalog:true,includeCatalog:true});
+  check(!lockedEditor.permitted&&lockedEditor.items===null,'Locked editor does not retrieve a catalogue or require auth');
+  data.set('access.session.v1',{token:'test',limit:5,expiresAt:Date.now()+100000});
+  data.set('market.runtime.v1',{catalog:{items:[{id:42,name:'Test item',unneeded:'private'}]}});
+  const editor=await market.routes['market.watch.editor']({includeCatalog:true});
+  check(editor.permitted&&editor.limit===5&&editor.items[0].name==='Test item'&&!editor.items[0].unneeded,'Active editor uses the cached minimal catalogue');
+  new Function('globalThis',source('src/core/market-watch-editor.js'))(global);
+  const fields={type:{value:'item'},itemId:{value:'42'},price:{value:'173'},priority:{value:'high'},market:{checked:true},bazaar:{checked:false},enabled:{checked:true}};
+  const item=global.SLINK_MARKET_WATCH_EDITOR.watchInput(fields,'old-uid',()=>{throw Error('An edit must not generate another UID');});
+  check(item.requireExisting&&item.uid==='old-uid'&&item.itemId===42&&item.maxPrice===173&&item.marketEnabled&&!item.bazaarEnabled,'Item edits preserve UID and chosen sources');
+  fields.type.value='points';
+  const points=global.SLINK_MARKET_WATCH_EDITOR.watchInput(fields,'',()=>'new-uid');
+  check(!points.requireExisting&&points.uid==='new-uid'&&points.itemId===0&&points.marketEnabled&&!points.bazaarEnabled,'Points ignore item-only settings');
+
   const worker=source('src/background/service-worker.js');
   const accessRoutes=worker.slice(worker.indexOf("  async 'access.inPage.status'()"),worker.indexOf("  async 'tornApi.accessUsage'()"));
   const mock={core:{storage,permissions:{hasScope:()=>false}},services:{permissionAccess:{settings:async()=>({tornKey:'fixture-secret',ffKey:'fixture-ff'}),ensureSession:async()=>({token:'fixture-token'})}}};

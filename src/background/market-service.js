@@ -489,6 +489,17 @@
     return savedListOnly ? listSavedWatches() : publicStatus(false);
   }
 
+  async function watchEditorStatus(input={}){
+    const [current,access,cached]=await Promise.all([settings(),accessState(),runtime()]);
+    const catalog=access.permitted&&input.loadCatalog===true?await ensureCatalog({current:cached}):cached.catalog;
+    return {
+      watches:current.watches, permitted:access.permitted, limit:access.limit,
+      activeCount:MARKET.activeSlotCount(current), lastPriority:current.lastPriority,
+      items:access.permitted&&input.includeCatalog===true
+        ? (catalog?.items||[]).map(({id,name})=>({id,name})) : null
+    };
+  }
+
   async function listSavedWatches(){
     return (await settings()).watches.map(({uid,label,maxPrice,enabled})=>({uid,label,maxPrice,enabled}));
   }
@@ -670,6 +681,7 @@
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },
     'market.watch.save':payload => withActivity(upsertWatch, payload),
     'market.watch.toggle':payload => withActivity(toggleWatch, payload),
+    'market.watch.editor':watchEditorStatus,
     'market.watch.listSaved':listSavedWatches,
     'market.watch.removeSaved':input=>removeWatch(input,true),
     'market.watch.remove':payload => withActivity(removeWatch, payload),
