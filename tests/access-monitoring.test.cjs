@@ -65,3 +65,31 @@ test('Paused Bounties, Company, Museums, Events and Money keep cached state with
   new Function('globalThis',ff)({SLINK_EXTENSION:{define:(_,__,value)=>{service=value;},core:{storage:{get:async()=>false}}},SLINK_FF_BOUNTIES:{service:()=>()=>{throw Error('FF provider contacted while paused');}}});
   await assert.rejects(service.routes['ffBounties.run']({action:'list'}),/paused/i);
 });
+
+test('Officers pause returns cached status and disables the alert collector',async()=>{
+  const source=read('src/background/faction-officer-service.js');
+  const monitoringEnabled=async()=>false;
+  const result={retained:true};
+  const local=async request=>{assert.equal(request,false);return result;};
+  assert.equal(await bind(source,'refresh',{monitoringEnabled,status:local})(true),result);
+  assert.equal(await bind(source,'refreshStock',{monitoringEnabled,stockStatus:local})('all',true),result);
+  assert.deepEqual(await bind(source,'activeAlerts',{monitoringEnabled})(true),[]);
+});
+test('Travel pause detaches its observer and resumes without deleting trip progress',()=>{
+  const source=read('src/modules/travel-run.js');
+  const events=new Map(),writes=[];let observed=0,disconnected=0,enabled=false;
+  const listener=(name,fn)=>events.set(name,fn);
+  const world={document:{visibilityState:'hidden',documentElement:{},hasFocus:()=>false,addEventListener(){}},
+    location:{pathname:'/travelagency.php'},addEventListener:listener,
+    localStorage:{getItem:()=>null,setItem:(...args)=>writes.push(args)},sessionStorage:{getItem:()=>null,setItem:(...args)=>writes.push(args)},
+    SLINK_PDA_PLUGIN_API:{moduleMonitoringEnabled:()=>enabled}};
+  world.top=world.self=world;
+  class Observer{observe(){observed++}disconnect(){disconnected++}}
+  new Function('globalThis','MutationObserver','AbortController',source)(world,Observer,AbortController);
+  assert.equal(observed,0);
+  const change=events.get('slink:travel-run-monitoring');
+  enabled=true;change();change();assert.equal(observed,1);
+  enabled=false;change();assert.equal(disconnected,1);
+  enabled=true;change();assert.equal(observed,2);
+  assert.deepEqual(writes,[]);
+});

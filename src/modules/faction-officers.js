@@ -8,7 +8,12 @@
     id:'faction-officers',title:'Faction Officers',shortTitle:'Officers',group:'quality-of-life',groupTitle:'Quality of Life',requiredScopes:[],
     permissionTest:permissions=>[CORE.ADMIN_SCOPE,...SCOPES].some(scope=>SLINK.core.permissions.hasScope(permissions,scope)),
     defaultShowInTorn:true,matches:url=>url.hostname==='www.torn.com',
-    async start(context){
+    async start(context) {
+      if(await SLINK.core.storage.get('ui.monitoring.faction-officers.enabled',true)===false){
+        context.ui.setStatus('Faction Officers is paused. Resume in Torn → SLINK → Access.');
+        context.ui.setActions([{id:'access',label:'Open Access',onClick:()=>context.ui.navigateTo?.('access')}]);
+        return {};
+      }
       const ui=context.ui,root=ui.getContentElement();
       let current=null,access=null,busy=false,stopped=false,accessSaving=false,settingsRevision=0,accessFaction=null,notice='',previewTimer=null;
       const controllers=new Map();

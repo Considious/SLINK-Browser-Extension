@@ -59,20 +59,32 @@
     }
     container.dataset.slinkChatHighlighted='true';
   }
-  function observeHighlights(){observer?.disconnect();chatRoot=document.getElementById('chatRoot');if(observer&&chatRoot&&SLINK.core.pageActivity?.eligible())observer.observe(chatRoot,{childList:true,subtree:true});}
+  let monitoringPaused=false;
+  function observeHighlights(){observer?.disconnect();chatRoot=document.getElementById('chatRoot');if(!monitoringPaused&&observer&&chatRoot&&SLINK.core.pageActivity?.eligible())observer.observe(chatRoot,{childList:true,subtree:true});}
   function scanHighlights() {
-    if(!SLINK.core.pageActivity?.eligible())return;
+    if(monitoringPaused||!SLINK.core.pageActivity?.eligible())return;
     const scopes=highlightScopes.size?[...highlightScopes]:[document.getElementById('chatRoot')];highlightScopes.clear();observer?.disconnect();
     try{for(const scope of scopes)if(scope?.isConnected){if(scope.matches?.(MESSAGE_SELECTOR))highlightNode(scope);scope.querySelectorAll(MESSAGE_SELECTOR).forEach(highlightNode);}}
     finally{observeHighlights();}
   }
-  function scheduleScan() { if (!SLINK.core.pageActivity?.eligible()||scanTimer!==null) return; scanTimer=setTimeout(()=>{scanTimer=null;scanHighlights();},80); }
+  function scheduleScan() { if (monitoringPaused||!SLINK.core.pageActivity?.eligible()||scanTimer!==null) return; scanTimer=setTimeout(()=>{scanTimer=null;scanHighlights();},80); }
 
+  chrome.storage.onChanged.addListener((changes,area)=>{
+    const change=changes[SLINK.core.storage.fullKey('ui.monitoring.chat.enabled')];
+    if(area!=='local'||!change)return;
+    monitoringPaused=change.newValue===false;
+    if(monitoringPaused){observer?.disconnect();clearTimeout(scanTimer);scanTimer=null;clearHighlights();}
+  });
   SLINK.modules.register({
     id:'chat', title:'Chat', shortTitle:'Chat', group:'quality-of-life', groupTitle:'Quality of Life',
     requiredScopes:[], permissionTest:permissions=>['slink.qol.chat','admin.*'].some(scope=>SLINK.core.permissions.hasScope(permissions,scope)),
     defaultShowInTorn:true, matches:url=>url.hostname==='www.torn.com',
     async start(context) {
+      if(await SLINK.core.storage.get('ui.monitoring.chat.enabled',true)===false){
+        context.ui.setStatus('Chat enhancements are paused. Resume in Torn → SLINK → Access.');
+        context.ui.setActions([{id:'access',label:'Open Access',onClick:()=>context.ui.navigateTo?.('access')}]);
+        return {};
+      }
       const ui=context.ui,root=ui.getContentElement(),dashboard=context.presentation==='dashboard';
       let stopped=false,macroSaving=false,macroStructure=0,adding=false;
       let macroRecord=dashboard?await SLINK.core.messaging.send('chat.macros.get'):null;

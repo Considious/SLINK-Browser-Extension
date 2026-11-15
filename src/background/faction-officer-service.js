@@ -52,8 +52,12 @@
       body:options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body
     });
   }
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.faction-officers.enabled',true)!==false;
+  const assertMonitoring=async()=>{if(!await monitoringEnabled())throw Error('Faction Officers is paused in Access.');};
   async function tornJson(path,key) {
+    await assertMonitoring();
     await SLINK.core.tornApiLimiter.reserve({wait:true});
+    await assertMonitoring();
     const response = await SLINK.core.http.requestJson('tornApi',`https://api.torn.com${path}`,{
       headers:{Authorization:`ApiKey ${key}`},cache:'no-store'
     });
@@ -132,6 +136,7 @@
     return {crimes};
   }
   async function refreshStock(kind='all',force=false){
+    if(!await monitoringEnabled())return stockStatus(false);
     if(stockRefreshing)return stockRefreshing;
     stockRefreshing=(async()=>{
       const [config,current,armoryAllowed,ocAllowed]=await Promise.all([stockSettings(),stockRuntime(),has(CORE.ARMORY_SCOPE),has(CORE.OC_SCOPE)]);
@@ -189,7 +194,7 @@
   }
   async function stockStatus(refreshIfDue=true){
     const [config,current,armoryAllowed,ocAllowed,adminAllowed]=await Promise.all([stockSettings(),stockRuntime(),has(CORE.ARMORY_SCOPE),has(CORE.OC_SCOPE),has(CORE.ADMIN_SCOPE)]);
-    if(refreshIfDue&&((armoryAllowed&&due(current.lastArmoryCheckAt,config.armory.checksPerDay))||(ocAllowed&&due(current.lastOcCheckAt,config.oc.checksPerDay)))){
+    if(refreshIfDue&&await monitoringEnabled()&&((armoryAllowed&&due(current.lastArmoryCheckAt,config.armory.checksPerDay))||(ocAllowed&&due(current.lastOcCheckAt,config.oc.checksPerDay)))){
       try{return await refreshStock('all',false);}catch{}
     }
     if(current.lastArmoryCheckAt)current.armoryShortages=CORE.shortages(CORE.ARMORY_ITEMS,config.armory.thresholds,current.inventory,current.points);
@@ -201,6 +206,7 @@
     return {settings:config,runtime:current,access:{armory:armoryAllowed,oc:ocAllowed,admin:adminAllowed}};
   }
   async function refresh(force=false){
+    if(!await monitoringEnabled())return status(false);
     if(refreshing)return refreshing;
     refreshing=(async()=>{
       const previous=await runtime();
@@ -221,6 +227,7 @@
   async function dismissed(){const value=await SLINK.core.storage.get(KEYS.dismissed,{});return value&&typeof value==='object'?value:{};}
   function alertId(row){return `factionOnboarding:${Number(row.user_id)}:${Number(row.joined_at)||0}`;}
   async function activeAlerts(refreshIfDue=true){
+    if(!await monitoringEnabled())return [];
     const [allowed,adminAllowed,current,hidden,adhdSettings,stock]=await Promise.all([
       has(CORE.OFFICER_SCOPE),has(CORE.ADMIN_SCOPE),status(refreshIfDue),dismissed(),
       SLINK.core.storage.get('adhd.settings.v1',{}),stockStatus(refreshIfDue)

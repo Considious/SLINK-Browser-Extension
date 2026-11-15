@@ -1,9 +1,9 @@
 (function connectChatFairFight(global){
  'use strict';const S=global.SLINK_EXTENSION;let permitted=false,enabled=false,mentions=false,generation=0;
  const bubbles=global.SLINK_CHAT_FF.mount({activity:S.core.pageActivity,enabled:()=>permitted&&enabled,mentions:()=>permitted&&mentions,lookup:ids=>S.core.messaging.send('chat.ff.lookup',{ids})});
- async function refresh(){const token=++generation;try{const config=await S.core.messaging.send('chat.ff.get');if(token!==generation)return;enabled=config.enabled===true;mentions=config.mentions===true;permitted=enabled||mentions;}catch{if(token!==generation)return;/* A transient settings-read failure must not erase an acknowledged preference. */}bubbles.sync();}
+ async function refresh(){const token=++generation;try{if(await S.core.storage.get('ui.monitoring.chat.enabled',true)===false){if(token===generation){permitted=false;bubbles.sync();}return;}const config=await S.core.messaging.send('chat.ff.get');if(token!==generation)return;enabled=config.enabled===true;mentions=config.mentions===true;permitted=enabled||mentions;}catch{if(token!==generation)return;/* A transient settings-read failure must not erase an acknowledged preference. */}bubbles.sync();}
  global.addEventListener('slink-chat-enable',()=>{permitted=true;void refresh();});
- global.addEventListener('slink-chat-disable',()=>{permitted=false;generation++;bubbles.sync();});
- chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&Object.keys(changes).some(key=>key.includes('qol.chat.ff.v1')||key.includes('access.session.v1')))void refresh();});
+ global.addEventListener('slink-chat-disable',()=>{permitted=false;enabled=false;mentions=false;generation++;bubbles.sync();});
+ chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local'&&Object.keys(changes).some(key=>key==='slink.ui.monitoring.chat.enabled'||key.includes('qol.chat.ff.v1')||key.includes('access.session.v1')))void refresh();});
  void refresh();
 })(globalThis);

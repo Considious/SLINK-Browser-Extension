@@ -49,6 +49,8 @@
   let observedChat = null;
   let inlineMedia = null;
   let enabled = false;
+  const pauseKey='slink.ui.monitoring.chat.enabled';
+  let monitoringReady=false,masterPaused=false;
   const activity = globalThis.SLINK_EXTENSION.core.pageActivity;
   function syncActivity() {
     inlineMedia?.sync();
@@ -64,9 +66,9 @@
     scheduleScan();
   }
   activity.subscribe(syncActivity);
-  window.addEventListener('slink-chat-disable', () => { enabled = false; syncActivity(); });
+  window.addEventListener('slink-chat-disable', () => { enabled = false; syncActivity(); document.querySelectorAll('[data-ccb-trigger],[data-ccb-newsletter-trigger],[data-ccb-media-trigger]').forEach(node=>node.remove()); });
   function enable() {
-    if (enabled) return;
+    if (!monitoringReady||masterPaused||enabled) return;
     enabled = true;
     if(!inlineMedia&&globalThis.SLINK_CHAT_MEDIA)inlineMedia=globalThis.SLINK_CHAT_MEDIA.mount({activity,enabled:()=>enabled,settings:()=>globalThis.SLINK_GIPHY.client().get()});
     void inlineMedia?.refresh();
@@ -84,14 +86,13 @@
     });
     syncActivity();
   }
-  window.addEventListener('slink-chat-enable', enable);
+  window.addEventListener('slink-chat-enable',()=>{if(monitoringReady&&!masterPaused)enable();else void bootstrapAccess();});
   let accessGeneration=0;
-  window.addEventListener('slink-chat-enable',()=>{accessGeneration++;});
   window.addEventListener('slink-chat-disable',()=>{accessGeneration++;});
-  async function bootstrapAccess(){const ticket=++accessGeneration;try{const permissions=await globalThis.SLINK_EXTENSION.core.messaging.send('permissions.get');if(ticket!==accessGeneration)return;if(globalThis.SLINK_EXTENSION.core.permissions.hasScope(permissions,'slink.qol.chat'))enable();else{enabled=false;syncActivity();}}catch{}}
+  async function bootstrapAccess(){const ticket=++accessGeneration;try{const permissions=await globalThis.SLINK_EXTENSION.core.messaging.send('permissions.get');const paused=await globalThis.SLINK_EXTENSION.core.storage.get('ui.monitoring.chat.enabled',true)===false;if(ticket!==accessGeneration)return;monitoringReady=true;masterPaused=paused;if(paused){window.dispatchEvent(new CustomEvent('slink-chat-disable'));return;}if(globalThis.SLINK_EXTENSION.core.permissions.hasScope(permissions,'slink.qol.chat'))enable();else{enabled=false;syncActivity();}}catch{}}
   void bootstrapAccess();
-  globalThis.chrome?.storage?.onChanged?.addListener((changes,area)=>{if(area!=='local')return;const keys=Object.keys(changes);if(keys.some(key=>/permissions|access.session/.test(key)))void bootstrapAccess();if(keys.some(key=>key.includes('qol.chat.giphy.v1')))void inlineMedia?.refresh();});
-  window.addEventListener('slink-chat-media-settings',()=>{void inlineMedia?.refresh();});
+  globalThis.chrome?.storage?.onChanged?.addListener((changes,area)=>{if(area!=='local')return;const keys=Object.keys(changes);if(changes[pauseKey]?.newValue===false){masterPaused=true;window.dispatchEvent(new CustomEvent('slink-chat-disable'));}else if(changes[pauseKey]||keys.some(key=>/permissions|access.session/.test(key)))void bootstrapAccess();if(keys.some(key=>key.includes('qol.chat.giphy.v1')))void inlineMedia?.refresh();});
+  window.addEventListener('slink-chat-media-settings',()=>{if(enabled)void inlineMedia?.refresh();});
   window.addEventListener('hashchange', scheduleScan);
 
   window.addEventListener('resize', () => {
