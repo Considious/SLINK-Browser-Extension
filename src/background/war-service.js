@@ -169,6 +169,8 @@
   }
 
   async function workerRequest(path, options = {}, retried = false) {
+    const monitoringPath=/^\/api\/wars\/[^/]+\/(?:status|attacks|heartbeat|snapshot)(?:\?|$)/.test(path);
+    if(monitoringPath&&!await monitoringEnabled())throw pausedError();
     const headers = { Accept:'application/json', ...(options.headers || {}) };
     if (options.auth !== false) {
       const session = await ensureSession(false);
@@ -180,6 +182,7 @@
       requestOptions.body = JSON.stringify(options.body);
     }
     try {
+      if(monitoringPath&&!await monitoringEnabled())throw pausedError();
       return await SLINK.core.http.requestJson('warWorker', `${WAR.WORKER_BASE}${path}`, requestOptions);
     } catch (error) {
       if (error.status === 401 && options.auth !== false && !retried) {
@@ -264,8 +267,12 @@
     }
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.war.enabled',true)!==false;
+  const pausedError=()=>Object.assign(Error('War is paused in SLINK Access.'),{code:'SLINK_WAR_PAUSED'});
   async function tornRequest(path, apiKey) {
+    if(path!=='/v2/faction/members'&&!await monitoringEnabled())throw pausedError();
     await SLINK.core.tornApiLimiter.reserve({ wait:true });
+    if(path!=='/v2/faction/members'&&!await monitoringEnabled())throw pausedError();
     return SLINK.core.http.requestJson('tornApi', `https://api.torn.com${path}`, {
       headers:{ Authorization:`ApiKey ${apiKey}` },
       cache:'no-store'
@@ -933,6 +940,7 @@
   }
 
   async function prepareAlerts() {
+    if(!await monitoringEnabled())return publicStatus();
     if (alertCycling) return alertCycling;
     const now = Date.now();
     if (now - lastAlertCycleStartedAt < STATUS_INTERVAL_MS - 1_000) return publicStatus();
@@ -978,6 +986,7 @@
   }
 
   async function prepareCycle(payload = {}) {
+    if(!await monitoringEnabled())return publicStatus();
     if (cycling) return cycling;
     const now = Date.now();
     if (payload.manual !== true && now - lastCycleStartedAt < STATUS_INTERVAL_MS - 1_000) return publicStatus();
@@ -1079,7 +1088,8 @@
     }
   }
 
-  function claimLeader(input = {}) {
+  async function claimLeader(input = {}) {
+    if(!await monitoringEnabled())return {leader:false,expiresAt:0};
     const clientId = String(input.clientId || '').trim().slice(0, 160);
     if (!clientId) throw new Error('A War polling client ID is required.');
     const now = Date.now();
@@ -1202,9 +1212,11 @@
   }
 
   async function publicStatus() {
+    const monitoringPaused=!await monitoringEnabled();
+    const cachedTerms=monitoringPaused?await SLINK.core.storage.get(KEYS.terms,{version:WAR.TERMS_VERSION,sha256:WAR.TERMS_SHA256,documentUrl:'',summary:''}):null;
     const [currentSettings, currentRuntime, terms, accepted, session, activeWar, permissions, armoryRoster] = await Promise.all([
-      settings(), runtime(), fetchTerms().catch(() => ({ version:WAR.TERMS_VERSION, sha256:WAR.TERMS_SHA256, documentUrl:'', summary:'' })),
-      acceptedCurrentTerms().catch(() => false),
+      settings(), runtime(), cachedTerms||fetchTerms().catch(() => ({ version:WAR.TERMS_VERSION, sha256:WAR.TERMS_SHA256, documentUrl:'', summary:'' })),
+      acceptedCurrentTerms(cachedTerms).catch(() => false),
       SLINK.core.storage.get(KEYS.session, null),
       SLINK.core.storage.get(KEYS.activeWar, null),
       SLINK.core.storage.get(KEYS.permissions, null),
@@ -1220,6 +1232,7 @@
     });
     const publicRuntime = { ...(currentRuntime || {}), snapshot:{ ...(currentRuntime?.snapshot || {}), itemRequests } };
     return {
+      monitoringPaused,
       configured:Boolean(currentSettings.tornKey && accepted),
       settings:{
         hasTornKey:Boolean(currentSettings.tornKey),
@@ -1266,7 +1279,7 @@
       'war.terms': () => fetchTerms(true),
       'war.settings.save': saveSettings,
       'war.session.clear': async () => { await clearSession(); return publicStatus(); },
-      'war.active.detect': async payload => { lastCycleStartedAt = 0; const activeWar = await registerActiveWar(payload); return { activeWar, status:await publicStatus() }; },
+      'war.active.detect': async payload => { if(!await monitoringEnabled())return {activeWar:null, status:await publicStatus()}; lastCycleStartedAt = 0; const activeWar = await registerActiveWar(payload); return { activeWar, status:await publicStatus() }; },
       'war.activity.touch': touchActivity,
       'war.activity.status': activityStatus,
       'war.alerts.prepare': prepareAlerts,
@@ -1277,7 +1290,7 @@
       'war.claims.update': updateClaim,
       'war.chain.report': chainReport,
       'war.mug.report': recordMugResult,
-      'war.outside.refresh': discoverOutsideTargets,
+      'war.outside.refresh': async payload=>{if(!await monitoringEnabled())throw pausedError();return discoverOutsideTargets(payload);},
       'war.armory.members': payload => armoryMembers(payload?.force === true),
       'war.armory.request': updateArmoryRequest,
       'war.logs': async () => {

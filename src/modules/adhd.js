@@ -20,6 +20,7 @@
     defaultShowInTorn:true,
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {
+      const monitoringPaused=await SLINK.core.storage.get('ui.monitoring.alerts.enabled',true)===false;
       const ui = context.ui;
       let stopped = false;
       let timer = null;
@@ -89,6 +90,7 @@
       function updateStatus() {
         if (!current) return;
         SLINK.core.adhd.updateReminderClock(ui.getContentElement(), current.settings);
+        if(monitoringPaused){ui.setStatus('Efficiency API alerts are paused. Other modules can still show alerts.');return;}
         ui.setStatus(current?.lastError || (current?.configured ? `API timers updated ${relativeTime(current.fetchedAt)}` : 'Enable Efficiency from the extension dashboard.'), current?.lastError ? 'error' : current?.configured ? 'ready' : 'normal');
       }
 
@@ -341,8 +343,8 @@
       ]);
       await load(false);
       global.addEventListener('slink:api-usage', updateApiUsage);
-      timer = global.setInterval(() => { if (!stopped) void load(!crimes); }, 15_000);
-      clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
+      timer = global.setInterval(() => { if (!stopped) void load(!crimes&&!monitoringPaused); }, 15_000);
+      if(!monitoringPaused)clockTimer = global.setInterval(() => { if (!stopped) updateStatus(); }, 1_000);
       return {
         stop() {
           stopped = true;

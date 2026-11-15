@@ -26,6 +26,9 @@
               <button type="button" data-verify>Refresh permissions</button><button type="button" data-dashboard>Open standalone dashboard</button></div>
             <div data-credentials></div><p data-notice role="status"></p></section>
           <section><h2>Modules</h2><p>Pausing a module keeps its tab and saved settings.</p>
+            <label>War <input type="checkbox" role="switch" data-module="war" disabled></label>
+            <label>Leveling <input type="checkbox" role="switch" data-module="leveling" disabled></label>
+            <label>Efficiency alerts <input type="checkbox" role="switch" data-module="alerts" disabled></label>
             <label>Market Watch checks <input type="checkbox" role="switch" data-module="market" disabled></label>
             <label>Mugging checks <input type="checkbox" role="switch" data-module="mugging" disabled></label>
             <label>Merit checks <input type="checkbox" role="switch" data-module="merits" disabled></label>
@@ -147,7 +150,7 @@
       const observer=new MutationObserver(sync);
       for(const element of [view,shell])if(element)observer.observe(element,{attributes:true,attributeFilter:['hidden']});
       context.listen(document,'visibilitychange',sync);
-      const refreshKeys=['permissions.snapshot','access.settings.v1','access.session.v1','market.settings.v1','mugging.settings.v1','ui.monitoring.merits.enabled','ui.monitoring.dollarBazaars.enabled',themes.STORAGE_KEY,themes.PANEL_OPACITY_STORAGE_KEY,launcherKey];
+      const refreshKeys=['permissions.snapshot','access.settings.v1','access.session.v1','market.settings.v1','mugging.settings.v1','ui.monitoring.war.enabled','ui.monitoring.leveling.enabled','ui.monitoring.alerts.enabled','ui.monitoring.merits.enabled','ui.monitoring.dollarBazaars.enabled',themes.STORAGE_KEY,themes.PANEL_OPACITY_STORAGE_KEY,launcherKey];
       const storageListener=(changes,area)=>{
         if(area==='local'&&active()&&!writing&&refreshKeys.some(key=>Object.hasOwn(changes,storage.fullKey(key))))void hydrate();
       };

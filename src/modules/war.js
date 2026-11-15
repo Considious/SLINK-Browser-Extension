@@ -87,6 +87,14 @@
     matches:url => url.hostname === 'www.torn.com',
 
     async start(context) {
+      if(await SLINK.core.storage.get('ui.monitoring.war.enabled',true)===false){
+        if(context.presentation==='full'){
+          context.ui.setStatus('War is paused. Saved settings and cached data are kept.');
+          context.ui.setActions([{id:'access',label:'Open Access',onClick:()=>context.ui.navigateTo('access')}]);
+          context.ui.setAlertCount('war',0);
+        }
+        return {};
+      }
       let current = null;
       let activeTab = 'targets';
       let stopped = false;

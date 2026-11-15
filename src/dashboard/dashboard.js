@@ -535,7 +535,7 @@
     const alerts = SLINK.core.adhd.alertsForView(allAlerts);
     updateNavigationAlertCounts();
     const badge = byId('adhd-permission-state');
-    badge.textContent = permitted ? 'Efficiency access active' : `Requires ${adhd?.requiredScope || SLINK.core.adhd.ALERT_SCOPE}`;
+    badge.textContent = adhd?.monitoringPaused ? 'Efficiency API alerts paused' : permitted ? 'Efficiency access active' : `Requires ${adhd?.requiredScope || SLINK.core.adhd.ALERT_SCOPE}`;
     badge.className = permitted ? 'badge ready' : 'badge error';
     byId('adhd-active-count').textContent = alerts.length;
     byId('adhd-city-count').textContent = adhd?.city?.bought ?? '—';
@@ -992,7 +992,7 @@
     byId('reported-count').textContent = runtime.lastCycleReported || 0;
     renderSharedApiUsage(system?.tornApiUsage || leveling?.tornApiUsage);
     byId('leveling-role').textContent = runtime.contributorOnly || runtime.idle ? 'API contributor' : runtime.collector ? 'API collector' : leveling?.configured ? 'Standby device' : 'Setup required';
-    byId('leveling-status').textContent = runtime.cycleStatus || 'Ready';
+    byId('leveling-status').textContent = leveling?.monitoringPaused ? 'Paused in SLINK Access' : runtime.cycleStatus || 'Ready';
     const settings = leveling?.settings || {};
     editorGuard.hydrate(byId('poll-seconds'),settings.pollSeconds || 300);
     editorGuard.hydrate(byId('min-ff'),settings.minFF || 1);
@@ -1140,7 +1140,7 @@
     const sharedConfig = war?.sharedConfig || {};
     const snapshot = war?.runtime?.snapshot || {};
     const stats = war?.runtime?.panelStats || {};
-    byId('war-role').textContent = war?.session?.authenticated ? (war.session.officer ? 'War officer' : war.session.factionCapable ? 'Faction API' : 'Public API') : 'Setup required';
+    byId('war-role').textContent = war?.monitoringPaused ? 'Paused in SLINK Access' : war?.session?.authenticated ? (war.session.officer ? 'War officer' : war.session.factionCapable ? 'Faction API' : 'Public API') : 'Setup required';
     const phase = war?.activeWar?.phase;
     byId('copy-chain-report').disabled = phase !== 'active';
     const startsAt = Number(war?.activeWar?.startedAt) || 0;
@@ -1523,7 +1523,7 @@
   }
 
   async function claimWarLeader() {
-    if (visiblePage()!=='workspace'||combatActive!=='overview') {
+    if (visiblePage()!=='workspace'||combatActive!=='overview'||await SLINK.core.storage.get('ui.monitoring.war.enabled',true)===false) {
       if (warLeader) void SLINK.core.messaging.send('war.leader.release', { clientId:warLeaderClientId }).catch(() => {});
       warLeader = false;
       return false;
@@ -2093,6 +2093,16 @@
     byId('adhd-error').textContent = errorText(error);
     byId('adhd-error').hidden = false;
   }
+  chrome.storage.onChanged.addListener((changes,area)=>{
+    if(area!=='local')return;
+    for(const [id,route,apply] of [
+      ['war','war.status',status=>{war=status;renderWar();renderTargets();}],
+      ['leveling','leveling.status',status=>{leveling=status;renderLeveling();renderTargets();}],
+      ['alerts','adhd.status',status=>{adhd=status;renderAdhd();}]
+    ])if(Object.hasOwn(changes,SLINK.core.storage.fullKey('ui.monitoring.'+id+'.enabled'))){
+      void SLINK.core.messaging.send(route,{refreshIfDue:false}).then(apply).catch(()=>{});
+    }
+  });
   await claimWarLeader();
   setInterval(() => void claimWarLeader(), 5_000);
   addEventListener('visibilitychange', () => void claimWarLeader());
@@ -2104,7 +2114,7 @@
     } catch {}
   }, 2_000);
   setInterval(async () => {
-    if (!war?.configured||visiblePage()!=='workspace'||combatActive!=='overview') return;
+    if (!war?.configured||visiblePage()!=='workspace'||combatActive!=='overview'||await SLINK.core.storage.get('ui.monitoring.war.enabled',true)===false) return;
     try {
       war = warLeader
         ? await SLINK.core.messaging.send('war.cycle.prepare')
@@ -2114,7 +2124,7 @@
     } catch (error) { showError('war-error', error); }
   }, 10_000);
   setInterval(async () => {
-    if (!adhd?.configured||visiblePage()!=='alerts'||!['alerts','crimes'].includes(efficiencyActive)) return;
+    if (!adhd?.configured||visiblePage()!=='alerts'||!['alerts','crimes'].includes(efficiencyActive)||await SLINK.core.storage.get('ui.monitoring.alerts.enabled',true)===false) return;
     try { adhd = await SLINK.core.messaging.send('adhd.status', { refreshIfDue:true }); renderAdhd(); }
     catch (error) { byId('adhd-error').textContent = errorText(error); byId('adhd-error').hidden = false; }
   }, 30_000);

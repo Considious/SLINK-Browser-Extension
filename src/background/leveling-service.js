@@ -187,6 +187,8 @@
   }
 
   async function workerRequest(path, options = {}, retried = false) {
+    const monitoringPath=options.auth!==false;
+    if(monitoringPath&&!await monitoringEnabled())throw Object.assign(Error('Leveling is paused in SLINK Access.'),{code:'SLINK_LEVELING_PAUSED'});
     const headers = { Accept: 'application/json', ...(options.headers || {}) };
     const contributor = options.sessionKind === 'contributor';
     if (options.auth !== false) {
@@ -199,6 +201,7 @@
       requestOptions.body = JSON.stringify(options.body);
     }
     try {
+      if(monitoringPath&&!await monitoringEnabled())throw Object.assign(Error('Leveling is paused in SLINK Access.'),{code:'SLINK_LEVELING_PAUSED'});
       return await SLINK.core.http.requestJson('slinkWorker', `${WORKER_BASE}${path}`, requestOptions);
     } catch (error) {
       if (error.status === 401 && options.auth !== false && !retried) {
@@ -730,14 +733,17 @@
   }
 
   async function publicStatus() {
+    const monitoringPaused=!await monitoringEnabled();
+    const cachedTerms=monitoringPaused?await SLINK.core.storage.get(KEYS.terms,{}):null;
     const [currentSettings, currentRuntime, terms, accepted, productSession, contributorSession, usage, pending, permissions] = await Promise.all([
-      settings(), runtime(), fetchTerms(), acceptedCurrentTerms(),
+      settings(), runtime(), cachedTerms||fetchTerms(), cachedTerms&&!cachedTerms.version?false:acceptedCurrentTerms(cachedTerms),
       SLINK.core.storage.get(KEYS.session, null), SLINK.core.storage.get(KEYS.contributorSession, null),
       SLINK.core.tornApiLimiter.getUsage(), pendingChecks(),
       SLINK.core.storage.get('permissions.snapshot', null)
     ]);
     const session = currentSettings.contributorOnly ? contributorSession : productSession;
     return {
+      monitoringPaused,
       configured: Boolean(currentSettings.tornKey && accepted),
       settings: {
         hasTornKey: Boolean(currentSettings.tornKey),
@@ -841,7 +847,9 @@
     return publicStatus();
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.leveling.enabled',true)!==false;
   async function prepareCycle(options = {}) {
+    if(!await monitoringEnabled())return {status:await publicStatus(),checks:[]};
     if (cyclePromise) return cyclePromise;
     cyclePromise = (async () => {
       const currentSettings = await settings();
@@ -1022,6 +1030,8 @@
   }
 
   async function checkTarget(input, sender, active = () => false) {
+    const pageActive=active;
+    active=async()=>await monitoringEnabled()&&await pageActive();
     if (!await active() || localLeader.tabId!==sender?.tab?.id) return {skipped:true};
     const currentSettings=await settings();
     if (!currentSettings.tornKey || !await acceptedCurrentTerms()) return {skipped:true};
@@ -1077,6 +1087,7 @@
   }
 
   async function submitAttackObservation(input) {
+    if(!await monitoringEnabled())return {skipped:true};
     const targetId = Number(input?.targetId);
     if (!Number.isInteger(targetId) || targetId <= 0) throw new Error('Invalid attack target.');
     await workerRequest('/api/observations', {
@@ -1092,7 +1103,8 @@
     return { ok: true };
   }
 
-  function claimLeader(_payload, sender) {
+  async function claimLeader(_payload, sender) {
+    if(!await monitoringEnabled())return {leader:false,expiresAt:0};
     const tabId = Number(sender?.tab?.id);
     if (!Number.isInteger(tabId)) return { leader: false, expiresAt: 0 };
     const now = Date.now();

@@ -291,9 +291,9 @@
       const change=changes[SLINK.core.storage.fullKey(id+'.settings.v1')];
       if(change&&isEnabled(change.oldValue)!==isEnabled(change.newValue))changedViews.push(id);
     }
-    for(const id of ['merits','dollarBazaars']){
-      const change=changes[SLINK.core.storage.fullKey('ui.monitoring.'+id+'.enabled')];
-      if(change&&(change.oldValue!==false)!==(change.newValue!==false))changedViews.push(id);
+    for(const [setting,ids] of [['merits',['merits']],['dollarBazaars',['dollarBazaars']],['war',['war']],['leveling',['leveling']],['alerts',['adhd','crimes']]]){
+      const change=changes[SLINK.core.storage.fullKey('ui.monitoring.'+setting+'.enabled')];
+      if(change&&(change.oldValue!==false)!==(change.newValue!==false))changedViews.push(...ids);
     }
     const warSettingsKey = SLINK.core.storage.fullKey('war.settings.v1');
     // Ordinary War preferences are handled by War itself. Rebuilding every

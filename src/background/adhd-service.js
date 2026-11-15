@@ -66,8 +66,12 @@
     return current.enabled ? String(current.tornKey || '').trim() : '';
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.alerts.enabled',true)!==false;
+  const pausedError=()=>Object.assign(Error('Efficiency API alerts are paused in SLINK Access.'),{code:'SLINK_ALERTS_PAUSED'});
   async function tornJson(url, key) {
+    if(!await monitoringEnabled())throw pausedError();
     await SLINK.core.tornApiLimiter.reserve({ wait:true, priority:'alerts', script:'SLINK General Alerts' });
+    if(!await monitoringEnabled())throw pausedError();
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },
       cache:'no-store'
@@ -198,6 +202,7 @@
   }
 
   async function refresh(force = false) {
+    if(!await monitoringEnabled())return publicStatus(false);
     if (refreshing) return refreshing;
     refreshing = (async () => {
       const currentRuntime = await runtime();
@@ -311,6 +316,7 @@
   }
 
   async function refreshMobility(force = false) {
+    if(!await monitoringEnabled())return publicStatus(false);
     if (refreshing) return refreshing;
     if (mobilityRefreshing) return mobilityRefreshing;
     mobilityRefreshing = (async () => {
@@ -352,6 +358,7 @@
   }
 
   async function refreshCrimeWindows(force = false) {
+    if(!await monitoringEnabled())return publicStatus(false);
     if (refreshing) return refreshing;
     if (crimeRefreshing) return crimeRefreshing;
     crimeRefreshing = (async () => {
@@ -528,9 +535,9 @@
       settings(), runtime(), SLINK.core.storage.get(KEYS.soundState, { activeIds:[], pendingIds:[] })
     ]);
     const snapshot = usableSnapshot(currentRuntime);
-    const efficiencyAlerts = ADHD.buildAlerts(snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
+    const efficiencyAlerts = await monitoringEnabled() ? ADHD.buildAlerts(snapshot || {}, currentSettings, Date.now(), { includeHidden:true })
       .filter(alert => (snapshot || alert.id === 'timer24') && currentSettings.soundEnabled[alert.id] === true)
-      .map(alert => alert.soundId ? { ...alert, id:alert.soundId, sourceId:alert.id } : alert);
+      .map(alert => alert.soundId ? { ...alert, id:alert.soundId, sourceId:alert.id } : alert) : [];
     const [stakeoutAlerts, abroadAlerts, companyAlerts, moneyAlerts, onboardingAlerts, abroadSettings, moneyStatus] = await Promise.all([
       SLINK.services.targetList.activeAlerts(),
       SLINK.services.abroadStocks.activeAlerts(),
@@ -577,10 +584,12 @@
   }
 
   async function publicStatus(refreshIfDue = true) {
+    const monitoringPaused=!await monitoringEnabled();
+    if(monitoringPaused)refreshIfDue=false;
     const [currentSettings, initialRuntime, access, permissions, usage] = await Promise.all([
       settings(),
       runtime(),
-      SLINK.services.permissionAccess.status().catch(error => ({ configured:false, error:SLINK.core.format.errorMessage(error) })),
+      (monitoringPaused?SLINK.services.permissionAccess.settings().then(s=>({configured:Boolean(s.enabled&&s.tornKey)})):SLINK.services.permissionAccess.status()).catch(error => ({ configured:false, error:SLINK.core.format.errorMessage(error) })),
       SLINK.core.storage.get('permissions.snapshot', null),
       SLINK.core.tornApiLimiter.getUsage()
     ]);
@@ -614,9 +623,10 @@
       configured:Boolean(access.configured),
       permitted,
       requiredScope:ADHD.ALERT_SCOPE,
+      monitoringPaused,
       settings:currentSettings,
       activeAlerts:[
-        ...ADHD.buildAlerts(snapshot || {}, currentSettings).filter(alert => snapshot || alert.id === 'timer24'),
+        ...(monitoringPaused?[]:ADHD.buildAlerts(snapshot || {}, currentSettings).filter(alert => snapshot || alert.id === 'timer24')),
         ...stakeoutAlerts,
         ...abroadAlerts,
         ...companyAlerts,
