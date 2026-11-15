@@ -32,6 +32,12 @@
             <label>Target List <input type="checkbox" role="switch" data-module="target-list" disabled></label>
             <label>Player Stats <input type="checkbox" role="switch" data-module="player-stats" disabled></label>
             <label>Abroad Stocks <input type="checkbox" role="switch" data-module="abroad-stocks" disabled></label>
+            <label>Bounties <input type="checkbox" role="switch" data-module="bounties" disabled></label>
+            <label>Racing <input type="checkbox" role="switch" data-module="racing" disabled></label>
+            <label>Company <input type="checkbox" role="switch" data-module="company" disabled></label>
+            <label>Museums <input type="checkbox" role="switch" data-module="museums" disabled></label>
+            <label>Money &amp; Property <input type="checkbox" role="switch" data-module="money-property" disabled></label>
+            <label>Events <input type="checkbox" role="switch" data-module="events" disabled></label>
             <label>Market Watch checks <input type="checkbox" role="switch" data-module="market" disabled></label>
             <label>Mugging checks <input type="checkbox" role="switch" data-module="mugging" disabled></label>
             <label>Merit checks <input type="checkbox" role="switch" data-module="merits" disabled></label>
@@ -153,7 +159,7 @@
       const observer=new MutationObserver(sync);
       for(const element of [view,shell])if(element)observer.observe(element,{attributes:true,attributeFilter:['hidden']});
       context.listen(document,'visibilitychange',sync);
-      const refreshKeys=['permissions.snapshot','access.settings.v1','access.session.v1','market.settings.v1','mugging.settings.v1','ui.monitoring.war.enabled','ui.monitoring.leveling.enabled','ui.monitoring.alerts.enabled','ui.monitoring.target-list.enabled','ui.monitoring.player-stats.enabled','ui.monitoring.abroad-stocks.enabled','ui.monitoring.merits.enabled','ui.monitoring.dollarBazaars.enabled',themes.STORAGE_KEY,themes.PANEL_OPACITY_STORAGE_KEY,launcherKey];
+      const refreshKeys=['permissions.snapshot','access.settings.v1','access.session.v1','market.settings.v1','mugging.settings.v1','ui.monitoring.war.enabled','ui.monitoring.leveling.enabled','ui.monitoring.alerts.enabled','ui.monitoring.target-list.enabled','ui.monitoring.player-stats.enabled','ui.monitoring.abroad-stocks.enabled','ui.monitoring.bounties.enabled','ui.monitoring.racing.enabled','ui.monitoring.company.enabled','ui.monitoring.museums.enabled','ui.monitoring.money-property.enabled','ui.monitoring.events.enabled','ui.monitoring.merits.enabled','ui.monitoring.dollarBazaars.enabled',themes.STORAGE_KEY,themes.PANEL_OPACITY_STORAGE_KEY,launcherKey];
       const storageListener=(changes,area)=>{
         if(area==='local'&&active()&&!writing&&refreshKeys.some(key=>Object.hasOwn(changes,storage.fullKey(key))))void hydrate();
       };

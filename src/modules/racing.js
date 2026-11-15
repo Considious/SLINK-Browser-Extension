@@ -20,6 +20,11 @@
     defaultShowInTorn:true,
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {
+      if(await SLINK.core.storage.get('ui.monitoring.racing.enabled',true)===false){
+        context.ui.setStatus('Racing is paused. Resume it in Torn → SLINK → Access.');
+        context.ui.setActions([{id:'access',label:'Open Access',onClick:()=>context.ui.navigateTo?.('access')}]);
+        return {};
+      }
       const ui = context.ui;
       let stopped = false;
       let observer = null;

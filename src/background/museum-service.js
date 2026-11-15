@@ -19,8 +19,11 @@
     return String(access?.tornKey || leveling?.tornKey || war?.tornKey || '').trim();
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.museums.enabled',true)!==false;
   async function tornJson(url, key) {
+    if(!await monitoringEnabled())throw Error('This module is paused in Access.');
     await SLINK.core.tornApiLimiter.reserve({ wait:true });
+    if(!await monitoringEnabled())throw Error('This module is paused in Access.');
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },
       cache:'no-store'
@@ -53,6 +56,7 @@
   }
 
   async function refresh(force = false) {
+    if(!await monitoringEnabled())return publicStatus(false);
     if (refreshing) return refreshing;
     refreshing = (async () => {
       await SLINK.services.permissionAccess.ensureSession(false, MUSEUM.SCOPE);
@@ -80,7 +84,7 @@
       SLINK.core.storage.get('permissions.snapshot', null)
     ]);
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, MUSEUM.SCOPE);
-    if (refreshIfDue && permitted && (!current.inventory || Date.now() - Number(current.fetchedAt || 0) >= MUSEUM.CACHE_MS)) {
+    if (refreshIfDue && await monitoringEnabled() && permitted && (!current.inventory || Date.now() - Number(current.fetchedAt || 0) >= MUSEUM.CACHE_MS)) {
       try { return await refresh(false); } catch {}
     }
     const progress = current.inventory ? MUSEUM.buildStatus(current.inventory, current.catalog?.items || []) : { sets:[], summary:{ completed:0, total:MUSEUM.SETS.length, redeemablePoints:0 } };

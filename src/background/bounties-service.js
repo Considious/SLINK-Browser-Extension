@@ -68,6 +68,7 @@
   }
 
   async function touchActivity() {
+    if(!await monitoringEnabled())return publicStatus();
     await SLINK.core.storage.set(KEYS.activity, Date.now());
     return publicStatus();
   }
@@ -108,7 +109,9 @@
     });
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.bounties.enabled',true)!==false;
   async function tornRequest(url, key, currentSettings, endpoint) {
+    if(!await monitoringEnabled())throw Error('Bounties is paused in Access.');
     await reserveBudget('torn', currentSettings.tornCallsPerMinute);
     await SLINK.core.tornApiLimiter.reserve({
       wait:true,
@@ -116,6 +119,7 @@
       priority:'normal',
       endpoint
     });
+    if(!await monitoringEnabled())throw Error('Bounties is paused in Access.');
     const data = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },
       cache:'no-store'
@@ -135,6 +139,7 @@
   }
 
   async function enrichFairFight(targets, key, currentSettings) {
+    if(!await monitoringEnabled())throw Error('Bounties is paused in Access.');
     if (!key || !targets.length) return;
     const cache = await SLINK.core.storage.get(KEYS.fairFight, {});
     const now = Date.now();
@@ -150,6 +155,7 @@
       const url = 'https://ffscouter.com/api/v1/get-stats' +
         `?key=${encodeURIComponent(key)}` +
         `&targets=${encodeURIComponent(chunk.join(','))}`;
+      if(!await monitoringEnabled())throw Error('Bounties is paused in Access.');
       const response = await SLINK.core.http.requestJson('ffscouter', url, { cache:'no-store' });
       if (response?.error) throw new Error('FFScouter unavailable.');
       const returned = new Set();
@@ -184,6 +190,7 @@
   }
 
   async function scanBatch(input = {}) {
+    if(!await monitoringEnabled())return publicStatus();
     if (scanPromise) return scanPromise;
     scanPromise = (async () => {
       const currentSettings = await settings();

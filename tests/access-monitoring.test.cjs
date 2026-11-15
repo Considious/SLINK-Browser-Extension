@@ -47,3 +47,21 @@ test('Paused Target List, Player Stats and Abroad Stocks stop their schedulers',
     assert.deepEqual(cleared,[id]);
   }
 });
+
+test('Paused Bounties, Company, Museums, Events and Money keep cached state without requesting fresh data',async()=>{
+  const monitoringEnabled=async()=>false;
+  const publicStatus=async flag=>({cached:true,flag});
+  for(const [id,name] of [['bounties','scanBatch'],['company','refresh'],['museum','refresh'],['events','refresh'],['money-property','refresh']]){
+    const s=read('src/background/'+id+'-service.js');
+    const paused=bind(s,name,{monitoringEnabled,publicStatus});
+    assert.deepEqual(await paused(true),{cached:true,flag:id==='bounties'?undefined:false});
+  }
+  for(const id of ['company','money-property']){
+    const s=read('src/background/'+id+'-service.js');
+    assert.deepEqual(await bind(s,'activeAlerts',{monitoringEnabled})(),[]);
+  }
+  const ff=read('src/background/ff-bounties-service.js');
+  let service;
+  new Function('globalThis',ff)({SLINK_EXTENSION:{define:(_,__,value)=>{service=value;},core:{storage:{get:async()=>false}}},SLINK_FF_BOUNTIES:{service:()=>()=>{throw Error('FF provider contacted while paused');}}});
+  await assert.rejects(service.routes['ffBounties.run']({action:'list'}),/paused/i);
+});

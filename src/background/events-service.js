@@ -28,8 +28,11 @@
     return String(access?.tornKey || leveling?.tornKey || war?.tornKey || '').trim();
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.events.enabled',true)!==false;
   async function tornJson(url, key) {
+    if(!await monitoringEnabled())throw Error('This module is paused in Access.');
     await SLINK.core.tornApiLimiter.reserve({ wait:true });
+    if(!await monitoringEnabled())throw Error('This module is paused in Access.');
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },
       cache:'no-store'
@@ -39,6 +42,7 @@
   }
 
   async function refresh(force = false) {
+    if(!await monitoringEnabled())return publicStatus(false);
     if (refreshing) return refreshing;
     refreshing = (async () => {
       await SLINK.services.permissionAccess.ensureSession(false, CORE.SCOPE);
@@ -75,7 +79,7 @@
       SLINK.core.storage.get('permissions.snapshot', null)
     ]);
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, CORE.SCOPE);
-    if (refreshIfDue && permitted && (current.calendar?.schemaVersion!==2 || Date.now() - Number(current.fetchedAt || 0) >= CORE.CACHE_MS)) {
+    if (refreshIfDue && await monitoringEnabled() && permitted && (current.calendar?.schemaVersion!==2 || Date.now() - Number(current.fetchedAt || 0) >= CORE.CACHE_MS)) {
       try { return await refresh(false); } catch {}
     }
     const selected = CORE.selectEvent(current.calendar || {}, currentSettings.selectedId);

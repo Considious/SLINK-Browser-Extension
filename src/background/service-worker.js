@@ -391,7 +391,7 @@ const routes = {
   },
 
   async 'access.inPage.status'() {
-    const [access, war, leveling, market, mugging, session, permissions, meritsEnabled, dollarEnabled, warEnabled, levelingEnabled, alertsEnabled, targetListEnabled, playerStatsEnabled, abroadStocksEnabled] = await Promise.all([
+    const [access, war, leveling, market, mugging, session, permissions, meritsEnabled, dollarEnabled, warEnabled, levelingEnabled, alertsEnabled, targetListEnabled, playerStatsEnabled, abroadStocksEnabled, ...otherModules] = await Promise.all([
       SLINK.services.permissionAccess.settings(),
       SLINK.core.storage.get('war.settings.v1',{}),
       SLINK.core.storage.get('leveling.settings.v1',{}),
@@ -406,14 +406,15 @@ const routes = {
       SLINK.core.storage.get('ui.monitoring.alerts.enabled',true),
       SLINK.core.storage.get('ui.monitoring.target-list.enabled',true),
       SLINK.core.storage.get('ui.monitoring.player-stats.enabled',true),
-      SLINK.core.storage.get('ui.monitoring.abroad-stocks.enabled',true)
+      SLINK.core.storage.get('ui.monitoring.abroad-stocks.enabled',true),
+      ...['bounties','racing','company','museums','money-property','events'].map(id=>SLINK.core.storage.get('ui.monitoring.'+id+'.enabled',true))
     ]);
     return {
       hasTornKey:Boolean(access.tornKey||war.tornKey||leveling.tornKey),
       hasFfKey:Boolean(access.ffKey||war.ffKey||leveling.ffKey),
       authenticated:Boolean(session?.token&&Number(session.expiresAt)>Date.now()),
       efficiency:access.enabled===true,war:Boolean(war.tornKey),leveling:Boolean(leveling.tornKey),
-      permissions,modules:{market:market.enabled!==false,mugging:mugging.enabled===true,merits:meritsEnabled!==false,dollarBazaars:dollarEnabled!==false,war:warEnabled!==false,leveling:levelingEnabled!==false,alerts:alertsEnabled!==false,'target-list':targetListEnabled!==false,'player-stats':playerStatsEnabled!==false,'abroad-stocks':abroadStocksEnabled!==false}
+      permissions,modules:{market:market.enabled!==false,mugging:mugging.enabled===true,merits:meritsEnabled!==false,dollarBazaars:dollarEnabled!==false,war:warEnabled!==false,leveling:levelingEnabled!==false,alerts:alertsEnabled!==false,'target-list':targetListEnabled!==false,'player-stats':playerStatsEnabled!==false,'abroad-stocks':abroadStocksEnabled!==false,...Object.fromEntries(['bounties','racing','company','museums','money-property','events'].map((id,index)=>[id,otherModules[index]!==false]))}
     };
   },
   async 'access.inPage.verify'() {
@@ -427,7 +428,7 @@ const routes = {
       await SLINK.services.mugging.routes['mugging.settings.save']({enabled:payload.enabled});
     }else if(payload.module==='market'){
       await SLINK.services.market.routes['market.monitor.setEnabled']({enabled:payload.enabled});
-    }else if(['merits','dollarBazaars','war','leveling','alerts','target-list','player-stats','abroad-stocks'].includes(payload.module)){
+    }else if(['merits','dollarBazaars','war','leveling','alerts','target-list','player-stats','abroad-stocks','bounties','racing','company','museums','money-property','events'].includes(payload.module)){
       await SLINK.core.storage.set('ui.monitoring.'+payload.module+'.enabled',payload.enabled);
       if(payload.module==='dollarBazaars')await SLINK.services.market.ensureDollarAlarm();
       const owner={'target-list':'targetList','player-stats':'playerStats','abroad-stocks':'abroadStocks'}[payload.module];
@@ -671,7 +672,7 @@ chrome.alarms.onAlarm.addListener(alarm => {
     if(activeTornPageTabId!=null)void SLINK.services.adhd.syncRecipes?.().catch(()=>{});
     void Promise.all([
       SLINK.core.storage.get('ui.monitoring.alerts.enabled',true).then(enabled=>enabled!==false?SLINK.services.adhd.publicStatus(true):null),
-      SLINK.services.moneyProperty.publicStatus(true)
+      SLINK.core.storage.get('ui.monitoring.money-property.enabled',true).then(enabled=>enabled!==false?SLINK.services.moneyProperty.publicStatus(true):null)
     ])
       .then(() => SLINK.services.audio.flush())
       .catch(error => console.error('[SLINK] Efficiency alerts:', error));

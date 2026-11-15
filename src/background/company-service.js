@@ -43,8 +43,11 @@
     return String(access?.tornKey || leveling?.tornKey || war?.tornKey || '').trim();
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.company.enabled',true)!==false;
   async function tornJson(url, key) {
+    if(!await monitoringEnabled())throw Error('This module is paused in Access.');
     await SLINK.core.tornApiLimiter.reserve({ wait:true });
+    if(!await monitoringEnabled())throw Error('This module is paused in Access.');
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },
       cache:'no-store'
@@ -58,6 +61,7 @@
   }
 
   async function refresh(force = false) {
+    if(!await monitoringEnabled())return publicStatus(false);
     if (refreshing) return refreshing;
     refreshing = (async () => {
       const permissionSession = await SLINK.services.permissionAccess.ensureSession(false, COMPANY.SCOPE);
@@ -99,7 +103,7 @@
     ]);
     const permitted = SLINK.core.permissions.hasScope(permissions || {}, COMPANY.SCOPE);
     const ttl = Math.max(5, Number(currentSettings.refreshMinutes) || 15) * 60_000;
-    if (refreshIfDue && permitted && (!currentRuntime.snapshot || Date.now() - Number(currentRuntime.fetchedAt || 0) >= ttl)) {
+    if (refreshIfDue && await monitoringEnabled() && permitted && (!currentRuntime.snapshot || Date.now() - Number(currentRuntime.fetchedAt || 0) >= ttl)) {
       try { return await refresh(false); } catch {}
     }
     return {
@@ -109,11 +113,12 @@
       snapshot:currentRuntime.snapshot,
       fetchedAt:Number(currentRuntime.fetchedAt) || 0,
       lastError:String(currentRuntime.lastError || ''),
-      activeAlerts:permitted ? COMPANY.buildAlerts(currentRuntime.snapshot, currentSettings) : []
+      activeAlerts:permitted && await monitoringEnabled() ? COMPANY.buildAlerts(currentRuntime.snapshot, currentSettings) : []
     };
   }
 
   async function activeAlerts() {
+    if(!await monitoringEnabled())return [];
     try {
       const result = await publicStatus(true);
       return result.activeAlerts || [];

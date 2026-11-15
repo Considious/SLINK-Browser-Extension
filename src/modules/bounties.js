@@ -81,6 +81,11 @@
     matches:url => url.hostname === 'www.torn.com',
 
     async start(context) {
+      if(await SLINK.core.storage.get('ui.monitoring.bounties.enabled',true)===false){
+        context.ui.setStatus('Bounties is paused. Resume it in Torn → SLINK → Access.');
+        context.ui.setActions([{id:'access',label:'Open Access',onClick:()=>context.ui.navigateTo?.('access')}]);
+        return {};
+      }
       let current = null;
       let busy = false;
       let settingsOpen = false;

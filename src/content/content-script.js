@@ -76,7 +76,7 @@
       permissions,
       ui,
       modulePresentation,
-      modulePaused:module=>['target-list','player-stats','abroad-stocks'].includes(module.id)?SLINK.core.storage.get('ui.monitoring.'+module.id+'.enabled',true).then(value=>value===false):false,
+      modulePaused:module=>['target-list','player-stats','abroad-stocks','bounties','racing','company','museums','money-property','events'].includes(module.id)?SLINK.core.storage.get('ui.monitoring.'+module.id+'.enabled',true).then(value=>value===false):false,
       moduleVisible: module => SLINK.core.storage.get(`ui.modules.${module.id}.showInTorn`, module.defaultShowInTorn),
       isActive: () => runtimeActive && SLINK.core.pageActivity.eligible()
     };
@@ -300,7 +300,7 @@
       const change=changes[SLINK.core.storage.fullKey('ui.monitoring.'+setting+'.enabled')];
       if(change&&(change.oldValue!==false)!==(change.newValue!==false))changedViews.push(...ids);
     }
-    for(const id of ['target-list','player-stats','abroad-stocks']){
+    for(const id of ['target-list','player-stats','abroad-stocks','bounties','racing','company','museums','money-property','events']){
       const change=changes[SLINK.core.storage.fullKey('ui.monitoring.'+id+'.enabled')];
       if(!change||(change.oldValue!==false)===(change.newValue!==false))continue;
       changedViews.push(id);
