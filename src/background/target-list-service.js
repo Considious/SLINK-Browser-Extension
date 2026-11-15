@@ -187,7 +187,9 @@
     return alerts.length;
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.target-list.enabled',true)!==false;
   async function activeAlerts(now = Date.now()) {
+    if(!await monitoringEnabled())return [];
     const state = await alertState();
     let changed = false;
     const alerts = [];
@@ -295,6 +297,8 @@
   }
 
   async function runStakeouts(input = {}, _sender, active = () => false) {
+    const pageActive=active;
+    active=async()=>await monitoringEnabled()&&await pageActive();
     if (!await active()) return {paused:true};
     if (stakeoutInFlight) return stakeoutInFlight;
     stakeoutInFlight = (async () => {
@@ -445,6 +449,7 @@
   }
 
   async function refresh(input = {}) {
+    if(!await monitoringEnabled())return status();
     const playerId = CORE.validPlayerId(
       input.playerId ?? input.player_id ?? input.targetId ?? input.id
     );
@@ -454,7 +459,7 @@
     const refreshResult = await SLINK.services.playerIntelligence.refresh({
       playerId,
       priority:'high',
-      owner:'target', forceApi:input.forceApi === true
+      owner:'target', active:monitoringEnabled, forceApi:input.forceApi === true
     });
     const current = await status();
     return { ...current, refresh:refreshResult };
@@ -462,6 +467,7 @@
 
   async function ensureAlarm() {
     if (!global.chrome?.alarms) return false;
+    if(!await monitoringEnabled()){await chrome.alarms.clear(POLL_ALARM);return false;}
     if (!await chrome.alarms.get(POLL_ALARM)) {
       await chrome.alarms.create(POLL_ALARM, {
         delayInMinutes:POLL_ALARM_MINUTES,
@@ -490,6 +496,8 @@
   }
 
   async function runPolling(input = {}, _sender, active = () => false) {
+    const pageActive=active;
+    active=async()=>await monitoringEnabled()&&await pageActive();
     if (!await active()) return {paused:true};
     if (pollInFlight) return pollInFlight;
     pollInFlight = (async () => {

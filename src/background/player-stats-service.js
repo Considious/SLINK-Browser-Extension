@@ -54,8 +54,11 @@
     return String(leveling?.tornKey || war?.tornKey || '').trim();
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.player-stats.enabled',true)!==false;
   async function tornJson(url, key) {
+    if(!await monitoringEnabled())throw Error('Player Stats is paused in Access.');
     await SLINK.core.tornApiLimiter.reserve({ wait:true });
+    if(!await monitoringEnabled())throw Error('Player Stats is paused in Access.');
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },
       cache:'no-store'
@@ -128,6 +131,7 @@
   }
 
   async function refresh(force = false) {
+    if(!await monitoringEnabled())return (await SLINK.core.storage.get(CACHE_KEY,null))?.data||null;
     if (refreshPromise) return refreshPromise;
     refreshPromise = (async () => {
       const key = await tornKey();
@@ -179,6 +183,7 @@
   }
 
   async function ensureAlarm() {
+    if(!await monitoringEnabled()){await chrome.alarms.clear(DAILY_ALARM);return null;}
     const existing = await chrome.alarms.get(DAILY_ALARM);
     const next = nextDailyRefresh();
     if (!existing || Math.abs(Number(existing.scheduledTime) - next) > 60_000) {

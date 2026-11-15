@@ -72,6 +72,7 @@
   }
 
   async function detectTravelDefault(currentRuntime, currentSettings) {
+    if(!await monitoringEnabled())return currentSettings;
     if (currentSettings.travelMethodExplicit) return currentSettings;
     const checkedAt = Number(currentRuntime.travelDefaultCheckedAt) || 0;
     if (checkedAt && Date.now() - checkedAt < 24 * 60 * 60_000) return currentSettings;
@@ -99,6 +100,7 @@
   }
 
   async function requestProvider(providerId, currentSettings) {
+    if(!await monitoringEnabled())throw Error('Abroad Stocks is paused in Access.');
     const definition = ABROAD.PROVIDERS[providerId];
     const capability = {
       yata:'yataTravel',
@@ -164,6 +166,7 @@
   }
 
   async function currentTravelContext(now = Date.now()) {
+    if(!await monitoringEnabled())return null;
     const adhdRuntime = await SLINK.core.storage.get('adhd.runtime.v1', {});
     return travelContext(adhdRuntime, now);
   }
@@ -233,7 +236,9 @@
     return candidates[0] || null;
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.abroad-stocks.enabled',true)!==false;
   async function refresh(force = false) {
+    if(!await monitoringEnabled())return publicStatus(false);
     if (refreshing) return refreshing;
     refreshing = (async () => {
       const now = Date.now();
@@ -246,8 +251,10 @@
       if (!force && !landingDue && Number(currentRuntime.activeUntil) <= now && !currentWatches.length) return publicStatus(false);
 
       const currentSettings = await detectTravelDefault(currentRuntime, storedSettings);
+      if(!await monitoringEnabled())return publicStatus(false);
       const providerIds = ['yata','prometheus','tornIntel', ...(currentSettings.useDroqs ? ['droqs'] : [])];
       const settled = await Promise.allSettled(providerIds.map(providerId => requestProvider(providerId, currentSettings)));
+      if(!await monitoringEnabled())return publicStatus(false);
       const snapshots = { ...(currentRuntime.snapshots || {}) };
       const providers = { ...(currentRuntime.providers || {}) };
       settled.forEach((result,index) => {
@@ -301,6 +308,7 @@
   }
 
   async function touchActivity() {
+    if(!await monitoringEnabled())return publicStatus(false);
     const current = await runtime();
     await SLINK.core.storage.set(KEYS.runtime, { ...current, activeUntil:Date.now() + ACTIVITY_MS });
     return publicStatus(true);
@@ -378,6 +386,7 @@
   }
 
   async function activeAlerts(now = Date.now()) {
+    if(!await monitoringEnabled())return [];
     const [currentRuntime, currentSettings, currentWatches, snoozes] = await Promise.all([
       runtime(), settings(), watches(), SLINK.core.storage.get(KEYS.snoozes, {})
     ]);
@@ -426,7 +435,7 @@
 
   async function publicStatus(refreshIfDue = true) {
     const [currentRuntime, currentSettings, currentWatches] = await Promise.all([runtime(), settings(), watches()]);
-    if (refreshIfDue && Number(currentRuntime.fetchedAt) + CACHE_MS <= Date.now()) {
+    if (refreshIfDue && await monitoringEnabled() && Number(currentRuntime.fetchedAt) + CACHE_MS <= Date.now()) {
       try { return await refresh(false); } catch {}
     }
     const watched = new Set(currentWatches.map(entry => entry.key));
@@ -444,6 +453,7 @@
   }
 
   async function ensureAlarm() {
+    if(!await monitoringEnabled()){await chrome.alarms.clear(ALARM);return null;}
     if (!await chrome.alarms.get(ALARM)) await chrome.alarms.create(ALARM, { delayInMinutes:1, periodInMinutes:1 });
     return chrome.alarms.get(ALARM);
   }

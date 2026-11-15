@@ -73,6 +73,11 @@
     matches:url => url.hostname === 'www.torn.com',
 
     async start(context) {
+      if(await SLINK.core.storage.get('ui.monitoring.target-list.enabled',true)===false){
+        context.ui.setStatus('Target List is paused. Resume it in Torn → SLINK → Access.');
+        context.ui.setActions([{id:'access',label:'Open Access',onClick:()=>context.ui.navigateTo?.('access')}]);
+        return {};
+      }
       let current = { targets:[], availableTags:['Level', 'Mug', 'War', 'Target'] };
       let editingId = null;
       let formOpen = false;

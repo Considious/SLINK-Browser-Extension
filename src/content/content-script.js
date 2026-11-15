@@ -76,6 +76,7 @@
       permissions,
       ui,
       modulePresentation,
+      modulePaused:module=>['target-list','player-stats','abroad-stocks'].includes(module.id)?SLINK.core.storage.get('ui.monitoring.'+module.id+'.enabled',true).then(value=>value===false):false,
       moduleVisible: module => SLINK.core.storage.get(`ui.modules.${module.id}.showInTorn`, module.defaultShowInTorn),
       isActive: () => runtimeActive && SLINK.core.pageActivity.eligible()
     };
@@ -134,7 +135,9 @@
     }
   }, {capture:true,passive:true});
 
+  let targetListPaused=false;
   async function runStakeoutTick() {
+    if(targetListPaused)return;
     if (!runtimeActive || !lastPlayerInput || Date.now()-lastPlayerInput>120_000 || stakeoutTicking || !global.chrome?.runtime?.id) return;
     stakeoutTicking = true;
     try { await SLINK.core.messaging.send('targetList.stakeout.run'); }
@@ -147,8 +150,10 @@
     await syncSharedApiLedger();
     if (!runtimeActive) return;
     apiLedgerTimer = global.setInterval(() => void syncSharedApiLedger(), 10_000);
+    targetListPaused=await SLINK.core.storage.get('ui.monitoring.target-list.enabled',true)===false;
+    if(targetListPaused)return;
     await runStakeoutTick();
-    if (runtimeActive) stakeoutTimer = global.setInterval(() => void runStakeoutTick(), 5_000);
+    if (runtimeActive&&!targetListPaused) stakeoutTimer = global.setInterval(() => void runStakeoutTick(), 5_000);
   }
 
   async function applyRuntimeActivity(active) {
@@ -294,6 +299,16 @@
     for(const [setting,ids] of [['merits',['merits']],['dollarBazaars',['dollarBazaars']],['war',['war']],['leveling',['leveling']],['alerts',['adhd','crimes']]]){
       const change=changes[SLINK.core.storage.fullKey('ui.monitoring.'+setting+'.enabled')];
       if(change&&(change.oldValue!==false)!==(change.newValue!==false))changedViews.push(...ids);
+    }
+    for(const id of ['target-list','player-stats','abroad-stocks']){
+      const change=changes[SLINK.core.storage.fullKey('ui.monitoring.'+id+'.enabled')];
+      if(!change||(change.oldValue!==false)===(change.newValue!==false))continue;
+      changedViews.push(id);
+      if(id==='target-list'){
+        targetListPaused=change.newValue===false;
+        if(stakeoutTimer){global.clearInterval(stakeoutTimer);stakeoutTimer=null;}
+        if(runtimeActive&&!targetListPaused)stakeoutTimer=global.setInterval(()=>void runStakeoutTick(),5_000);
+      }
     }
     const warSettingsKey = SLINK.core.storage.fullKey('war.settings.v1');
     // Ordinary War preferences are handled by War itself. Rebuilding every

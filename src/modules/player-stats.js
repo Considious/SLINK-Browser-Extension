@@ -45,6 +45,11 @@
     requiredScopes:['slink.combat.player-stats'],
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {
+      if(await SLINK.core.storage.get('ui.monitoring.player-stats.enabled',true)===false){
+        context.ui.setStatus('Player Stats is paused. Resume it in Torn → SLINK → Access.');
+        context.ui.setActions([{id:'access',label:'Open Access',onClick:()=>context.ui.navigateTo?.('access')}]);
+        return {};
+      }
       const ui = context.ui;
       let stopped = false;
       let timer = null;

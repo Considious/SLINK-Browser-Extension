@@ -180,7 +180,13 @@
       const entry = { module, instance:null, moduleUi, lifecycle:scope };
       running.set(module.id, entry);
       try {
-        const instance = await module.start(scope.context);
+        const disabled=await context.modulePaused?.(module)===true;
+        if(!current()||scope.context.signal.aborted){scope.dispose();if(running.get(module.id)===entry)running.delete(module.id);return;}
+        if(disabled&&presentation==='full'){
+          scope.context.ui?.setStatus?.(module.title+' is paused. Saved settings and cached data are kept.');
+          scope.context.ui?.setActions?.([{id:'access',label:'Open Access to resume',onClick:()=>scope.context.ui.navigateTo('access')}]);
+        }
+        const instance = disabled ? {} : await module.start(scope.context);
         entry.instance = instance;
         if (!current() || scope.context.signal.aborted) {
           scope.dispose();

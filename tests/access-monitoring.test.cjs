@@ -30,3 +30,20 @@ test('Paused Efficiency skips API refresh, including crime and mobility, without
   const fn=bind(alerts,'tornJson',{monitoringEnabled:async()=>false,pausedError:()=>Error('paused')});
   await assert.rejects(fn('https://api.torn.com/v2/user','mock'),/paused/);
 });
+
+test('Paused Target List, Player Stats and Abroad Stocks stop their schedulers',async()=>{
+  const target=read('src/background/target-list-service.js'),stats=read('src/background/player-stats-service.js'),abroad=read('src/background/abroad-stocks-service.js');
+  const monitoringEnabled=async()=>false, never=()=>{throw Error('Paused module contacted its scheduler or network');};
+  for(const name of ['runPolling','runStakeouts'])assert.deepEqual(await bind(target,name,{monitoringEnabled})({},null,never),{paused:true});
+  assert.deepEqual(await bind(target,'activeAlerts',{monitoringEnabled})(),[]);
+  assert.deepEqual(await bind(abroad,'activeAlerts',{monitoringEnabled})(),[]);
+  const local={cached:true};
+  assert.equal(await bind(stats,'refresh',{monitoringEnabled,CACHE_KEY:'fixture',SLINK:{core:{storage:{get:async()=>({data:local})}}}})(true),local);
+  assert.deepEqual(await bind(abroad,'refresh',{monitoringEnabled,publicStatus:async refresh=>({refresh})})(true),{refresh:false});
+  for(const [source,constant,id] of [[target,'POLL_ALARM','target-list'],[stats,'DAILY_ALARM','player-stats'],[abroad,'ALARM','abroad-stocks']]){
+    const cleared=[];
+    const chrome={alarms:{clear:async key=>cleared.push(key),get:never,create:never}};
+    await bind(source,'ensureAlarm',{monitoringEnabled,chrome,global:{chrome},[constant]:id})();
+    assert.deepEqual(cleared,[id]);
+  }
+});
