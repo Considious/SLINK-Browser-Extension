@@ -390,6 +390,78 @@ const routes = {
     return SLINK.core.tornApiLimiter.syncShared(payload);
   },
 
+  async 'access.inPage.status'() {
+    const [access, war, leveling, market, mugging, session, permissions] = await Promise.all([
+      SLINK.services.permissionAccess.settings(),
+      SLINK.core.storage.get('war.settings.v1',{}),
+      SLINK.core.storage.get('leveling.settings.v1',{}),
+      SLINK.core.storage.get('market.settings.v1',{}),
+      SLINK.core.storage.get('mugging.settings.v1',{}),
+      SLINK.core.storage.get('access.session.v1',null),
+      getPermissionSnapshot()
+    ]);
+    return {
+      hasTornKey:Boolean(access.tornKey||war.tornKey||leveling.tornKey),
+      hasFfKey:Boolean(access.ffKey||war.ffKey||leveling.ffKey),
+      authenticated:Boolean(session?.token&&Number(session.expiresAt)>Date.now()),
+      efficiency:access.enabled===true,war:Boolean(war.tornKey),leveling:Boolean(leveling.tornKey),
+      permissions,modules:{market:market.enabled!==false,mugging:mugging.enabled===true}
+    };
+  },
+  async 'access.inPage.verify'() {
+    await SLINK.services.permissionAccess.ensureSession(true,null);
+    return {verified:true};
+  },
+  async 'access.inPage.module'(payload = {}) {
+    if(typeof payload.enabled!=='boolean')throw Error('Select an enabled or paused state.');
+    if(payload.module==='mugging'){
+      if(payload.enabled&&!SLINK.core.permissions.hasScope(await getPermissionSnapshot(),'slink.mugging'))throw Error('Mugging permission is required.');
+      await SLINK.services.mugging.routes['mugging.settings.save']({enabled:payload.enabled});
+    }else if(payload.module==='market'){
+      await SLINK.services.market.routes['market.monitor.setEnabled']({enabled:payload.enabled});
+    }else throw Error('Unknown module.');
+    return {enabled:payload.enabled};
+  },
+  async 'access.inPage.credentials'(payload = {}, sender) {
+    // The cross-origin extension document is the only in-page credential editor.
+    if(sender?.url!==chrome.runtime.getURL('src/access/credentials.html'))throw Error('Open the private SLINK key editor.');
+    const tornKey=String(payload.tornKey||'').trim(),ffKey=String(payload.ffKey||'').trim();
+    const save=(service,input)=>SLINK.services[service].routes[(service==='permissionAccess'?'access':service)+'.settings.save'](input);
+    if(payload.clear===true){
+      await Promise.all([
+        save('permissionAccess',{clearTornKey:true,clearFfKey:true,enabled:false,skipVerification:true}),
+        save('war',{clearTornKey:true,clearFfKey:true}),
+        save('leveling',{clearTornKey:true,clearFfKey:true}),
+        SLINK.services.mugging.routes['mugging.settings.save']({enabled:false})
+      ]);
+      await Promise.all([
+        SLINK.services.permissionAccess.clearSession(),
+        SLINK.services.war.routes['war.session.clear'](),
+        SLINK.services.leveling.routes['leveling.session.clear']()
+      ]);
+      return {saved:true};
+    }
+    if(tornKey.length>128||ffKey.length>128)throw Error('An API key is too long.');
+    if(!tornKey&&!(await routes['access.inPage.status']()).hasTornKey)throw Error('Enter a Torn API key before verifying.');
+    await save('permissionAccess',{tornKey,ffKey,enabled:payload.efficiency===true,acceptTerms:payload.acceptTerms===true,verifyPermissions:true});
+    // Propagate an explicit replacement to already configured consumers without
+    // enabling unrelated modules. First-time setup follows the user's switches.
+    for(const module of ['war','leveling']){
+      const existing=await SLINK.core.storage.get(module+'.settings.v1',{});
+      const requested=payload[module]===true;
+      if(requested){
+        const primary=await SLINK.services.permissionAccess.settings();
+        if(!existing.tornKey||tornKey||ffKey||payload.acceptTerms===true){
+          await save(module,{tornKey:primary.tornKey,ffKey,acceptTerms:payload.acceptTerms===true});
+        }
+      }else if(existing.tornKey){
+        await save(module,{clearTornKey:true});
+        await SLINK.services[module].routes[module+'.session.clear']();
+      }
+    }
+    return {saved:true};
+  },
+
   async 'tornApi.accessUsage'(){ return SLINK.core.tornApiLimiter.getAccessUsage(); },
 
   async 'tornApi.usage'() {

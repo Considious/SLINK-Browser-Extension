@@ -13,7 +13,7 @@
   const MAIN_SIZE_STORAGE_KEY = 'ui.main.size';
   const MAIN_SIZE_MIRROR_KEY = 'slink-extension:ui:main:size:v1';
   const MINIMIZED_MODE_STORAGE_KEY = 'ui.main.minimizedMode';
-  const GROUP_ORDER = ['combat', 'efficiency', 'quality-of-life'];
+  const GROUP_ORDER = ['combat', 'efficiency', 'quality-of-life', 'access'];
   function groupRank(group) {
     const rank = GROUP_ORDER.indexOf(group);
     return rank < 0 ? GROUP_ORDER.length : rank;

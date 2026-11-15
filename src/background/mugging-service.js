@@ -40,6 +40,7 @@
         next[key] = Math.max(min, Math.min(max, key === 'limit' ? Math.trunc(value) : value));
       }
       await SLINK.core.storage.set(SETTINGS_KEY, next);
+      if(Object.hasOwn(input,'enabled'))await ensureAlarm();
       return next;
     });
     settingsQueue = task.catch(() => undefined);
@@ -254,6 +255,8 @@
 
   async function runContribution(_input, sender, active = () => false) {
     if (contributing) return contributing;
+    const pageActive=active;
+    active=async()=>await pageActive()&&(await SLINK.core.storage.get(SETTINGS_KEY,{})).enabled===true;
     contributing = (async () => {
       const now = Date.now();
       const settings = await SLINK.core.storage.get(SETTINGS_KEY, {});
@@ -277,6 +280,7 @@
         ceiling:CONTRIBUTION_CEILING,
         interactiveReserve:INTERACTIVE_RESERVE
       });
+      if(!await active())return {mode:'inactive',fetched:0};
       const response = capacity.available > 0 || await fairFightKey()
         ? await requestTasks(session, mode, Math.min(40,Math.max(20, capacity.available * 4)))
         : { tasks:[] };
@@ -334,6 +338,7 @@
   }
 
   async function ensureAlarm() {
+    if((await SLINK.core.storage.get(SETTINGS_KEY,{})).enabled!==true){await chrome.alarms.clear(ALARM);return;}
     if (!await chrome.alarms.get(ALARM)) await chrome.alarms.create(ALARM, { delayInMinutes:1, periodInMinutes:1 });
   }
 

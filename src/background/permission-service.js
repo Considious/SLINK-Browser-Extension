@@ -170,6 +170,8 @@
       || String(levelingSettings?.tornKey || '').trim()
       || String(warSettings?.tornKey || '').trim();
     const next = {
+      ...previous,
+      ffKey:input.clearFfKey === true ? '' : (String(input.ffKey || '').trim() || previous.ffKey || ''),
       enabled:Object.hasOwn(input, 'enabled') ? input.enabled === true : previous.enabled,
       tornKey:input.clearTornKey ? '' : sharedLocalKey
     };
@@ -181,7 +183,9 @@
       await SLINK.core.storage.set(KEYS.acceptedTerms, { version:terms.version, sha256:terms.sha256, acceptedAt:Date.now() });
     }
     if (next.tornKey !== previous.tornKey || next.enabled !== previous.enabled || policyChanged) await clearSession();
-    if (next.enabled && next.tornKey) await ensureSession(true);
+    if (next.tornKey && (input.verifyPermissions === true || (next.enabled && !input.skipVerification))) {
+      await ensureSession(true,input.verifyPermissions === true ? null : undefined);
+    }
     return status();
   }
 
@@ -254,7 +258,7 @@
     ]);
     return {
       configured:Boolean(currentSettings.enabled && currentSettings.tornKey && accepted),
-      settings:{ enabled:currentSettings.enabled, hasTornKey:Boolean(currentSettings.tornKey) },
+      settings:{ enabled:currentSettings.enabled, hasTornKey:Boolean(currentSettings.tornKey), hasFfKey:Boolean(currentSettings.ffKey) },
       terms:{ ...terms, accepted },
       session:{ authenticated:Boolean(session?.token && Number(session.expiresAt) > Date.now()), userId:session?.userId || null, expiresAt:Number(session?.expiresAt) || 0 },
       permissions:SLINK.core.permissions.normalizeSnapshot(permissions || {})

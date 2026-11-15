@@ -58,6 +58,7 @@
   }catch(error){console.warn('[SLINK] Companion unavailable:',error);}
 
   async function modulePresentation(module) {
+    if (module.id === 'access') return 'full';
     if (module.id !== 'war') {
       return await SLINK.core.storage.get(`ui.modules.${module.id}.showInTorn`, module.defaultShowInTorn)
         ? 'full'
@@ -286,6 +287,10 @@
       const change=changes[SLINK.core.storage.fullKey(`ui.modules.${module.id}.showInTorn`)];
       return change&&Boolean(change.oldValue??module.defaultShowInTorn)!==Boolean(change.newValue??module.defaultShowInTorn);
     }).map(module=>module.id);
+    for(const [id,isEnabled] of [['market',value=>value?.enabled!==false],['mugging',value=>value?.enabled===true]]){
+      const change=changes[SLINK.core.storage.fullKey(id+'.settings.v1')];
+      if(change&&isEnabled(change.oldValue)!==isEnabled(change.newValue))changedViews.push(id);
+    }
     const warSettingsKey = SLINK.core.storage.fullKey('war.settings.v1');
     // Ordinary War preferences are handled by War itself. Rebuilding every
     // module for those writes destroys unrelated room-management forms.

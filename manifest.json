@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK — QoL feature preview",
-  "version": "0.19.126",
+  "version": "0.19.127",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -68,7 +68,8 @@
         "assets/themes/gothic-valentines-blood-075.png",
         "assets/themes/gothic-valentines-blood-050.png",
         "assets/themes/gothic-valentines-blood-025.png",
-        "assets/themes/gothic-valentines-blood-004.png"
+        "assets/themes/gothic-valentines-blood-004.png",
+        "src/access/credentials.html"
       ],
       "matches": [
         "https://www.torn.com/*"
@@ -172,6 +173,8 @@
         "src/core/faction-csv.js",
         "src/modules/faction-officers.js",
         "src/modules/contribution.js",
+        "src/core/access-usage.js",
+        "src/modules/access.js",
         "src/content/content-script.js",
         "src/core/stocks-preview.js",
         "src/content/stocks-preview.js",

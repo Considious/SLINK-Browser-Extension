@@ -20,6 +20,15 @@
     defaultShowInTorn:true,
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {
+      const monitor=await SLINK.core.storage.get('market.settings.v1',{});
+      if(monitor?.enabled===false){
+        context.ui.setStatus('Market Watch checks are paused. Saved watches and preferences are kept.');
+        context.ui.setContentHtml('<p>Enable checks in Access to resume Market Watch.</p>');
+        context.ui.setAlertCount('market',0,{group:'efficiency',label:'active Market Watch deals'});
+        context.ui.setActions([{id:'access',label:'Open Access',onClick:()=>context.ui.navigateTo('access')},
+          {id:'settings',label:'Manage saved watches',onClick:()=>SLINK.core.messaging.send('ui.dashboard.open',{page:'alerts',efficiencyView:'market'})}]);
+        return {};
+      }
       const ui = context.ui;
       let stopped = false;
       let current = null;

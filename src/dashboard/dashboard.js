@@ -420,7 +420,7 @@
     byId('use-mugging').disabled = !hasScope('slink.mugging');
     byId('use-mugging').closest('label').title = hasScope('slink.mugging') ? '' : 'Requires slink.mugging permission.';
     byId('shared-torn-key').placeholder = levelAccepted || warAccepted || adhdAccepted ? 'Saved locally — leave blank to keep' : 'Enter once for selected SLINK modules';
-    byId('shared-ff-key').placeholder = leveling?.settings?.hasFfKey || war?.settings?.hasFfKey ? 'Saved locally — leave blank to keep' : 'Optional FFScouter key';
+    byId('shared-ff-key').placeholder = access?.settings?.hasFfKey || leveling?.settings?.hasFfKey || war?.settings?.hasFfKey ? 'Saved locally — leave blank to keep' : 'Optional FFScouter key';
     const terms = leveling?.terms || war?.terms || access?.terms || {};
     byId('shared-terms-summary').textContent = terms.summary || war?.terms?.summary || 'Current SLINK terms are loading.';
     byId('shared-terms-link').href = terms.documentUrl || war?.terms?.documentUrl || '#';
@@ -1552,11 +1552,9 @@
     })); else if (war?.settings?.hasTornKey) tasks.push(SLINK.core.messaging.send('war.settings.save', { clearTornKey:true, clearFfKey:true }).then(() => SLINK.core.messaging.send('war.session.clear')));
     const useEfficiency = byId('use-adhd').checked;
     const useMugging = byId('use-mugging').checked;
-    if (useEfficiency || useMugging) tasks.push(SLINK.core.messaging.send('access.settings.save', {
-      enabled:useEfficiency,
-      tornKey,
-      acceptTerms
-    })); else if (access?.settings?.hasTornKey || access?.settings?.enabled) tasks.push(SLINK.core.messaging.send('access.settings.save', { enabled:false, clearTornKey:true }).then(() => SLINK.core.messaging.send('access.session.clear')));
+    if (useEfficiency || useMugging || tornKey || ffKey || access?.settings?.enabled) tasks.push(SLINK.core.messaging.send('access.settings.save', {
+      enabled:useEfficiency, tornKey, ffKey, acceptTerms
+    }));
     tasks.push(SLINK.core.messaging.send('mugging.settings.save', { enabled:useMugging }));
     const results = await Promise.allSettled(tasks);
     const failures = results.filter(result => result.status === 'rejected');
@@ -1614,7 +1612,7 @@
       await refresh();
     } catch (error) { byId('access-message').textContent = errorText(error); } finally { setBusy(submit, false); }
   });
-  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('access.settings.save',{enabled:false,clearTornKey:true}),SLINK.core.messaging.send('mugging.settings.save',{enabled:false})]); await Promise.all([SLINK.core.messaging.send('leveling.session.clear'),SLINK.core.messaging.send('war.session.clear'),SLINK.core.messaging.send('access.session.clear')]); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
+  byId('remove-local-keys').addEventListener('click', async () => { if (!confirm('Remove locally saved Torn and FFScouter keys from all SLINK modules? Remote Public Only donations are not affected.')) return; try { await Promise.all([SLINK.core.messaging.send('leveling.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('war.settings.save',{clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('access.settings.save',{enabled:false,clearTornKey:true,clearFfKey:true}),SLINK.core.messaging.send('mugging.settings.save',{enabled:false})]); await Promise.all([SLINK.core.messaging.send('leveling.session.clear'),SLINK.core.messaging.send('war.session.clear'),SLINK.core.messaging.send('access.session.clear')]); accessExpanded = true; await refresh(); } catch(error) { byId('access-message').textContent=errorText(error); } });
   byId('backup-local-data').addEventListener('click', async event => {
     const button = event.currentTarget; setBusy(button, true);
     try {
@@ -2126,7 +2124,7 @@
     catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
   }, 60_000);
   setInterval(async () => {
-    if (!market?.configured || !market?.permitted||visiblePage()!=='alerts'||efficiencyActive!=='market') return;
+    if (!market?.configured || !market?.permitted||market?.settings?.enabled===false||visiblePage()!=='alerts'||efficiencyActive!=='market') return;
     try { market = await requestEditorStatus('market','market.status', { refreshIfDue:true }); renderMarket(); }
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
   }, 30_000);
