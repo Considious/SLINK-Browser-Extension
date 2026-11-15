@@ -33,6 +33,7 @@ importScripts(
   'ff-backup-service.js',
   '../core/war.js',
   '../core/worker-client.js',
+  '../core/access-usage.js',
   '../core/torn-api-limiter.js',
   '../core/shared-data.js',
   'shared-data-service.js',
@@ -389,6 +390,8 @@ const routes = {
     return SLINK.core.tornApiLimiter.syncShared(payload);
   },
 
+  async 'tornApi.accessUsage'(){ return SLINK.core.tornApiLimiter.getAccessUsage(); },
+
   async 'tornApi.usage'() {
     return SLINK.core.tornApiLimiter.getUsage();
   },
@@ -398,7 +401,7 @@ const routes = {
   },
 
   async 'ui.dashboard.open'(payload = {}) {
-    const page = ['workspace', 'alerts', 'quality', 'admin', 'diagnostics'].includes(String(payload.page))
+    const page = ['workspace', 'alerts', 'quality', 'access', 'admin', 'diagnostics'].includes(String(payload.page))
       ? String(payload.page)
       : await SLINK.core.storage.get('ui.dashboard.activePage','workspace');
     await SLINK.core.storage.set('ui.dashboard.activePage', page);

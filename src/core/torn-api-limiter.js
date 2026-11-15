@@ -4,6 +4,7 @@
   const SLINK = global.SLINK_EXTENSION;
   if (!SLINK) throw new Error('SLINK runtime must load before the Torn API limiter.');
 
+  const usage=global.SLINK_ACCESS_USAGE;
   const LEDGER_KEY = 'core.tornApiLedger.v1';
   const SHARED_LEDGER_KEY = 'considious:torn-api-ledger:v1';
   const SHARED_LOCK_NAME = 'considious-torn-api-limiter-v1';
@@ -77,12 +78,13 @@
   }
 
   async function storedLedger(now = Date.now()) {
-    return normalizeLedger(await SLINK.core.storage.get(LEDGER_KEY, { events:[], cooldownUntil:0 }), now);
+    const stored=await SLINK.core.storage.get(LEDGER_KEY,{events:[],cooldownUntil:0});
+    return {...normalizeLedger(stored,now),history:usage?.prune(stored.history,now)||[]};
   }
 
   async function saveLedger(ledger) {
     const normalized = normalizeLedger(ledger);
-    await SLINK.core.storage.set(LEDGER_KEY, normalized);
+    await SLINK.core.storage.set(LEDGER_KEY,{...normalized,history:usage?.prune(ledger.history)||[]});
     return normalized;
   }
 
@@ -146,11 +148,27 @@
   }
 
   async function getContributionCapacity(options = {}) {
-    return contributionCapacityFromLedger(await storedLedger(), {...options,demand:await foregroundDemand()});
+    const capacity=contributionCapacityFromLedger(await storedLedger(), {...options,demand:await foregroundDemand()});
+    return await adminMaintenanceBlocked()?{...capacity,available:0,adminExcluded:true}:capacity;
+  }
+
+  async function adminMaintenanceBlocked(){
+    const records=await Promise.all(['access.session.v1','war.session.v1','leveling.session.v1','permissions.snapshot'].map(k=>SLINK.core.storage.get(k,null)));
+    return records.some(r=>Array.isArray(r?.scopes)&&r.scopes.some(scope=>scope==='admin.*'||scope==='*'));
+  }
+  async function getAccessUsage(){
+    if(!usage)return null;
+    const [ledger,foreground,adminExcluded]=await Promise.all([storedLedger(),foregroundDemand(),adminMaintenanceBlocked()]);
+    return usage.snapshot(ledger.events,ledger.history,{limit:DEFAULT_LIMIT,cooldownUntil:ledger.cooldownUntil,foreground,maintenance:{adminExcluded}});
+  }
+  function note(ledger){
+    const item=usage?.event(ledger.events.at(-1));
+    if(item)ledger.history.push(item);
   }
 
   async function reserve(options = {}) {
     const wait=options.wait!==false,priority=String(options.priority||'normal');
+    if(priority==='contribution')return reserveContribution({...options,wait:options.wait===true});
     while(true) {
       const result=await serialize(async()=>{
         const now=Date.now(),ledger=await storedLedger(now),demand=await foregroundDemand();
@@ -158,7 +176,7 @@
         const limit=Math.min(Math.max(1,Number(options.limit)||DEFAULT_LIMIT),Math.max(0,DEFAULT_LIMIT-protectedSlots.reserved));
         if(ledger.cooldownUntil<=now&&ledger.events.length<limit){
           ledger.events.push({at:now,id:eventId('slink-extension'),script:String(options.script||'SLINK Extension').slice(0,80),priority,method:String(options.method||'GET').slice(0,12),endpoint:String(options.endpoint||'unknown').slice(0,180),tabId:'extension'});
-          await saveLedger(ledger);return {reservedAt:now,count:ledger.events.length,limit};
+          note(ledger);await saveLedger(ledger);return {reservedAt:now,count:ledger.events.length,limit};
         }
         return {retryAfterMs:Math.max(50,Math.max(ledger.events[0]?.at+WINDOW_MS+25||now+250,ledger.cooldownUntil)-now),count:ledger.events.length,limit};
       });
@@ -171,12 +189,13 @@
 
   async function reserveContribution(options = {}) {
     while(true){
+      if(await adminMaintenanceBlocked()){const error=new Error('Shared maintenance is disabled for admin.* keys.');error.code='SLINK_MAINTENANCE_ADMIN_EXCLUDED';throw error;}
       const result=await serialize(async()=>{
         const now=Date.now(),ledger=await storedLedger(now);
         const capacity=contributionCapacityFromLedger(ledger,{...options,now,demand:await foregroundDemand()});
         if(ledger.cooldownUntil<=now&&capacity.available>0){
           ledger.events.push({at:now,id:eventId('slink-extension'),script:String(options.script||'SLINK Shared Contribution').slice(0,80),priority:'contribution',method:String(options.method||'GET').slice(0,12),endpoint:String(options.endpoint||'unknown').slice(0,180),tabId:'extension'});
-          await saveLedger(ledger);return {reservedAt:now,count:ledger.events.length,limit:capacity.limit,contributionCount:capacity.contributionCount+1,contributionCeiling:capacity.ceiling,interactiveReserve:capacity.interactiveReserve};
+          note(ledger);await saveLedger(ledger);return {reservedAt:now,count:ledger.events.length,limit:capacity.limit,contributionCount:capacity.contributionCount+1,contributionCeiling:capacity.ceiling,interactiveReserve:capacity.interactiveReserve};
         }
         return {retryAfterMs:Math.max(50,Math.max(ledger.events[0]?.at+WINDOW_MS+25||now+250,ledger.cooldownUntil)-now),usage:ledger.events.length,limit:capacity.limit,contributionUsage:capacity.contributionCount,contributionCeiling:capacity.ceiling};
       });
@@ -189,14 +208,15 @@
   async function syncShared(input = {}) {
     return serialize(async () => {
       const now = Date.now();
-      const merged = mergeLedgers(await storedLedger(now), input?.ledger, now);
-      await saveLedger(merged);
+      const local=await storedLedger(now);
+      const merged=mergeLedgers(local,input?.ledger,now);
+      await saveLedger({...merged,history:local.history});
       return { ledger:merged, usage:usageFromLedger(merged, DEFAULT_LIMIT), sharedLedgerKey:SHARED_LEDGER_KEY, sharedLockName:SHARED_LOCK_NAME };
     });
   }
 
   SLINK.define('core', 'tornApiLimiter', Object.freeze({
     CONTRIBUTION_CEILING, DEFAULT_LIMIT, INTERACTIVE_RESERVE, SHARED_LEDGER_KEY, SHARED_LOCK_NAME, WINDOW_MS,
-    protectedCapacity, foregroundDemand, contributionCapacityFromLedger, getContributionCapacity, getUsage, mergeLedgers, normalizeLedger, prune, reserve, reserveContribution, syncShared
+    protectedCapacity, foregroundDemand, contributionCapacityFromLedger, getContributionCapacity, getUsage, getAccessUsage, mergeLedgers, normalizeLedger, prune, reserve, reserveContribution, syncShared
   }));
 })(globalThis);

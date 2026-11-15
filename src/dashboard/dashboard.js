@@ -1425,12 +1425,33 @@
     if (qualityCount > 0 && ![...document.querySelectorAll('[data-quality-view]')].some(button => !button.hidden && button.dataset.qualityView === qualityActive)) void switchQuality(qualityActive, false);
   }
 
+  let usageTimer,usageRevision=0;
+  function watchAccessUsage(){
+    clearTimeout(usageTimer);const run=++usageRevision;
+    if(visiblePage()!=='access')return;
+    const target=byId('access-api-usage');
+    const update=async()=>{
+      if(run!==usageRevision||visiblePage()!=='access')return;
+      try{const data=await SLINK.core.messaging.send('tornApi.accessUsage');
+        if(data&&run===usageRevision&&visiblePage()==='access'){
+          const expanded=target.querySelector('details')?.open;
+          const html=globalThis.SLINK_ACCESS_USAGE.html(data);
+          target.innerHTML=html;
+          if(expanded)target.querySelector('details').open=true;
+        }
+      }catch{/* Keep the last usable snapshot. */}
+      if(run===usageRevision)usageTimer=setTimeout(update,10000);
+    };
+    void update();
+  }
+  document.addEventListener('visibilitychange',watchAccessUsage);
   function switchPage(name, persist = true) {
     if ((name === 'admin' || name === 'diagnostics') && !hasScope('admin.*')) name = 'workspace';
     if (name === 'quality' && byId('quality-tab')?.hidden) name = 'workspace';
     for (const page of document.querySelectorAll('[data-dashboard-page]')) page.hidden = page.dataset.dashboardPage !== name;
     for (const button of document.querySelectorAll('[data-page-tab]')) button.classList.toggle('active', button.dataset.pageTab === name);
     if (persist) void SLINK.core.storage.set('ui.dashboard.activePage', name);
+    watchAccessUsage();
     if (name === 'quality') void switchQuality(qualityActive, false);
     else void syncDashboardModule();
   }
@@ -2063,7 +2084,7 @@
     switchEfficiency(await SLINK.core.storage.get('ui.efficiency.activeView', 'alerts'));
     await switchCombat(await SLINK.core.storage.get('ui.dashboard.combatView','overview'),false);
     await switchQuality(qualityActive, false);
-    switchPage(['workspace', 'alerts', 'quality', 'admin', 'diagnostics'].includes(requestedPage) ? requestedPage : 'workspace', false);
+    switchPage(['workspace', 'alerts', 'quality', 'access', 'admin', 'diagnostics'].includes(requestedPage) ? requestedPage : 'workspace', false);
     navigationReady=true;await syncDashboardModule();
   }
   catch (error) {
