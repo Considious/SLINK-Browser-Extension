@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SLINK — QoL feature preview",
-  "version": "0.19.129",
+  "version": "0.19.130",
   "description": "Shared Live Intelligence NetworK with Combat, Efficiency, and Quality of Life tools for Torn.",
   "permissions": [
     "alarms",
@@ -174,7 +174,6 @@
         "src/modules/faction-officers.js",
         "src/modules/contribution.js",
         "src/core/access-usage.js",
-        "src/core/market-watch-editor.js",
         "src/modules/access.js",
         "src/content/content-script.js",
         "src/core/stocks-preview.js",

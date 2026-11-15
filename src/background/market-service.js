@@ -482,27 +482,13 @@
     });return publicStatus(false);
   }
 
-  async function removeWatch(payload = {}, savedListOnly = false) {
+  async function removeWatch(payload = {}) {
     const uid=String(payload?.uid||'');
     await mutateSettings(()=>null,previous=>({...previous,watches:previous.watches.filter(watch=>watch.uid!==uid)}));
     const current=await runtime();delete current.results[uid];await saveRuntime(current);
-    return savedListOnly ? listSavedWatches() : publicStatus(false);
+    return publicStatus(false);
   }
 
-  async function watchEditorStatus(input={}){
-    const [current,access,cached]=await Promise.all([settings(),accessState(),runtime()]);
-    const catalog=access.permitted&&input.loadCatalog===true?await ensureCatalog({current:cached}):cached.catalog;
-    return {
-      watches:current.watches, permitted:access.permitted, limit:access.limit,
-      activeCount:MARKET.activeSlotCount(current), lastPriority:current.lastPriority,
-      items:access.permitted&&input.includeCatalog===true
-        ? (catalog?.items||[]).map(({id,name})=>({id,name})) : null
-    };
-  }
-
-  async function listSavedWatches(){
-    return (await settings()).watches.map(({uid,label,maxPrice,enabled})=>({uid,label,maxPrice,enabled}));
-  }
   async function dismissDeal(payload = {}) {
     const key = String(payload?.dismissKey || '').trim();
     if (!key || key.length > 240) throw new Error('Choose a current Market Watch deal to dismiss.');
@@ -681,9 +667,6 @@
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },
     'market.watch.save':payload => withActivity(upsertWatch, payload),
     'market.watch.toggle':payload => withActivity(toggleWatch, payload),
-    'market.watch.editor':watchEditorStatus,
-    'market.watch.listSaved':listSavedWatches,
-    'market.watch.removeSaved':input=>removeWatch(input,true),
     'market.watch.remove':payload => withActivity(removeWatch, payload),
     'market.deal.dismiss':payload => withActivity(dismissDeal, payload),
     'market.sound.claim':claimSound, 'market.sound.ack':acknowledgeSound

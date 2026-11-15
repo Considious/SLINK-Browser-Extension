@@ -30,7 +30,6 @@
             <label>Mugging checks <input type="checkbox" role="switch" data-module="mugging" disabled></label>
             <label>Merit checks <input type="checkbox" role="switch" data-module="merits" disabled></label>
             <label>$1 Bazaar checks <input type="checkbox" role="switch" data-module="dollarBazaars" disabled></label></section>
-          <section data-watch-editor></section>
           <section data-appearance><h2>Appearance</h2>
             <label>SLINK theme <select data-theme disabled></select></label>
             <label>Panel opacity <input data-opacity type="range" min="30" max="100" step="1" aria-label="Panel opacity" disabled></label>
@@ -100,13 +99,11 @@
         if(watching)return;
         watching=true;
         void hydrate();
-        void watchEditor.refresh();
         if(!themePanel&&g.SLINK_TORN_THEME){
           themePanel=g.SLINK_TORN_THEME.mountSettings($('[data-appearance]'),{read:()=>send('themes.torn.get'),patch:changes=>send('themes.torn.patch',changes)});
         }
         void update(++revision);
       }
-      const watchEditor=g.SLINK_MARKET_WATCH_EDITOR.mount($('[data-watch-editor]'),{active,send,listen:context.listen});
       async function action(control, fn){
         if(!active()||writing)return;
         writing=true;control.disabled=true;notice.textContent='';
@@ -152,7 +149,7 @@
       context.listen(document,'visibilitychange',sync);
       const refreshKeys=['permissions.snapshot','access.settings.v1','access.session.v1','market.settings.v1','mugging.settings.v1','ui.monitoring.merits.enabled','ui.monitoring.dollarBazaars.enabled',themes.STORAGE_KEY,themes.PANEL_OPACITY_STORAGE_KEY,launcherKey];
       const storageListener=(changes,area)=>{
-        if(area==='local'&&active()&&!writing&&refreshKeys.some(key=>Object.hasOwn(changes,storage.fullKey(key)))){void hydrate();if(['market.settings.v1','permissions.snapshot','access.session.v1'].some(key=>changes[storage.fullKey(key)]))void watchEditor.refresh();}
+        if(area==='local'&&active()&&!writing&&refreshKeys.some(key=>Object.hasOwn(changes,storage.fullKey(key))))void hydrate();
       };
       chrome.storage.onChanged.addListener(storageListener);
       sync();
