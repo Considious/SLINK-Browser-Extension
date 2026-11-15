@@ -391,21 +391,23 @@ const routes = {
   },
 
   async 'access.inPage.status'() {
-    const [access, war, leveling, market, mugging, session, permissions] = await Promise.all([
+    const [access, war, leveling, market, mugging, session, permissions, meritsEnabled, dollarEnabled] = await Promise.all([
       SLINK.services.permissionAccess.settings(),
       SLINK.core.storage.get('war.settings.v1',{}),
       SLINK.core.storage.get('leveling.settings.v1',{}),
       SLINK.core.storage.get('market.settings.v1',{}),
       SLINK.core.storage.get('mugging.settings.v1',{}),
       SLINK.core.storage.get('access.session.v1',null),
-      getPermissionSnapshot()
+      getPermissionSnapshot(),
+      SLINK.core.storage.get('ui.monitoring.merits.enabled',true),
+      SLINK.core.storage.get('ui.monitoring.dollarBazaars.enabled',true)
     ]);
     return {
       hasTornKey:Boolean(access.tornKey||war.tornKey||leveling.tornKey),
       hasFfKey:Boolean(access.ffKey||war.ffKey||leveling.ffKey),
       authenticated:Boolean(session?.token&&Number(session.expiresAt)>Date.now()),
       efficiency:access.enabled===true,war:Boolean(war.tornKey),leveling:Boolean(leveling.tornKey),
-      permissions,modules:{market:market.enabled!==false,mugging:mugging.enabled===true}
+      permissions,modules:{market:market.enabled!==false,mugging:mugging.enabled===true,merits:meritsEnabled!==false,dollarBazaars:dollarEnabled!==false}
     };
   },
   async 'access.inPage.verify'() {
@@ -419,6 +421,9 @@ const routes = {
       await SLINK.services.mugging.routes['mugging.settings.save']({enabled:payload.enabled});
     }else if(payload.module==='market'){
       await SLINK.services.market.routes['market.monitor.setEnabled']({enabled:payload.enabled});
+    }else if(['merits','dollarBazaars'].includes(payload.module)){
+      await SLINK.core.storage.set('ui.monitoring.'+payload.module+'.enabled',payload.enabled);
+      if(payload.module==='dollarBazaars')await SLINK.services.market.ensureDollarAlarm();
     }else throw Error('Unknown module.');
     return {enabled:payload.enabled};
   },

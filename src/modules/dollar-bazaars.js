@@ -24,6 +24,11 @@
     defaultShowInTorn:true,
     matches:url => url.hostname === 'www.torn.com',
     async start(context) {
+      if(await SLINK.core.storage.get('ui.monitoring.dollarBazaars.enabled',true)===false){
+        context.ui.setStatus('$1 Bazaar checks are paused. Saved data is kept.');
+        context.ui.setActions([{id:'access',label:'Open Access',onClick:()=>context.ui.navigateTo('access')}]);
+        return {};
+      }
       const ui = context.ui;
       let stopped = false;
       let current = null;

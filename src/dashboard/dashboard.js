@@ -2119,7 +2119,7 @@
     catch (error) { byId('adhd-error').textContent = errorText(error); byId('adhd-error').hidden = false; }
   }, 30_000);
   setInterval(async () => {
-    if (!merits?.configured||visiblePage()!=='alerts'||efficiencyActive!=='merits') return;
+    if (!merits?.configured||visiblePage()!=='alerts'||efficiencyActive!=='merits'||await SLINK.core.storage.get('ui.monitoring.merits.enabled',true)===false) return;
     try { merits = await requestEditorStatus('merits','merits.status', { refreshIfDue:true }); renderMerits(); }
     catch (error) { byId('merits-error').textContent = errorText(error); byId('merits-error').hidden = false; }
   }, 60_000);
@@ -2129,7 +2129,7 @@
     catch (error) { byId('market-error').textContent = errorText(error); byId('market-error').hidden = false; }
   }, 30_000);
   setInterval(async () => {
-    if(visiblePage()!=='alerts'||efficiencyActive!=='dollar')return;
+    if(visiblePage()!=='alerts'||efficiencyActive!=='dollar'||await SLINK.core.storage.get('ui.monitoring.dollarBazaars.enabled',true)===false)return;
     try { dollarBazaars = await SLINK.core.messaging.send('market.dollar.status', { refreshIfDue:true }); renderDollarBazaars(); }
     catch (error) { byId('dollar-bazaars-error').textContent = errorText(error); byId('dollar-bazaars-error').hidden = false; }
   }, 60_000);

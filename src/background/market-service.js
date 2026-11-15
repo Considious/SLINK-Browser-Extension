@@ -156,6 +156,7 @@
       const kind = current.weaver.cooldownUntil === retryAt ? current.weaver.cooldownReason : 'minute';
       throw weaverLimitError(kind, retryAt - now);
     }
+    if(url.includes('/api/dollar-bazaars/')&&!await dollarEnabled())throw Error('$1 Bazaar checks are paused.');
     if(!url.includes('/api/dollar-bazaars/')){
       await assertMonitoringEnabled();
       if(!(await accessState()).permitted)throw Error('A current signed Market Watch permission is required.');
@@ -481,13 +482,16 @@
     });return publicStatus(false);
   }
 
-  async function removeWatch(payload = {}) {
+  async function removeWatch(payload = {}, savedListOnly = false) {
     const uid=String(payload?.uid||'');
     await mutateSettings(()=>null,previous=>({...previous,watches:previous.watches.filter(watch=>watch.uid!==uid)}));
     const current=await runtime();delete current.results[uid];await saveRuntime(current);
-    return publicStatus(false);
+    return savedListOnly ? listSavedWatches() : publicStatus(false);
   }
 
+  async function listSavedWatches(){
+    return (await settings()).watches.map(({uid,label,maxPrice,enabled})=>({uid,label,maxPrice,enabled}));
+  }
   async function dismissDeal(payload = {}) {
     const key = String(payload?.dismissKey || '').trim();
     if (!key || key.length > 240) throw new Error('Choose a current Market Watch deal to dismiss.');
@@ -600,10 +604,12 @@
     };
   }
 
+  const dollarEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.dollarBazaars.enabled',true)!==false;
   async function refreshDollarBazaars(force = false) {
     if (dollarRefreshing) return dollarRefreshing;
     dollarRefreshing = (async () => {
       const previous = await dollarRecord();
+      if(!await dollarEnabled())return buildDollarStatus(previous);
       if (!force && Number(previous.nextRefreshAt) > Date.now()) return buildDollarStatus(previous);
       let next;
       try {
@@ -627,6 +633,7 @@
   }
 
   async function ensureDollarAlarm() {
+    if(!await dollarEnabled()){await chrome.alarms.clear(DOLLAR_ALARM);return null;}
     if (!await chrome.alarms.get(DOLLAR_ALARM)) await chrome.alarms.create(DOLLAR_ALARM, { delayInMinutes:1, periodInMinutes:60 });
     return chrome.alarms.get(DOLLAR_ALARM);
   }
@@ -663,6 +670,8 @@
     'market.catalog':async payload => { await ensureCatalog({ force:payload?.force === true }); return publicStatus(false); },
     'market.watch.save':payload => withActivity(upsertWatch, payload),
     'market.watch.toggle':payload => withActivity(toggleWatch, payload),
+    'market.watch.listSaved':listSavedWatches,
+    'market.watch.removeSaved':input=>removeWatch(input,true),
     'market.watch.remove':payload => withActivity(removeWatch, payload),
     'market.deal.dismiss':payload => withActivity(dismissDeal, payload),
     'market.sound.claim':claimSound, 'market.sound.ack':acknowledgeSound

@@ -28,6 +28,24 @@ const exercise=async (source,check)=>{
   const paused=data.get('market.settings.v1');
   check(paused.enabled===false&&JSON.stringify(paused.watches)===JSON.stringify(testSettings.watches)&&paused.custom==='keep','Pausing preserves saved watches and preferences');
 
+  data.set('ui.monitoring.dollarBazaars.enabled',false);
+  await market.ensureDollarAlarm();
+  const dollar=await market.routes['market.dollar.refresh']();
+  check(!alarms.has('slink.market.dollar-bazaars')&&!dollar.fetchedAt&&!dollar.lastError,'Paused Dollar Bazaars clears its own alarm and skips fetch');
+  const saved=await market.routes['market.watch.listSaved']();
+  check(saved.length===1&&saved[0].itemId===undefined,'Saved watch list exposes only the fields used by Access');
+  const removed=await market.routes['market.watch.removeSaved']({uid:saved[0].uid});
+  check(removed.length===0&&!alarms.has('slink.market.watch'),'Remove saved watch without signing in or waking Market Watch');
+
+  data.set('ui.monitoring.merits.enabled',false);
+  runtime.services.permissionAccess={status:async()=>({configured:true}),ensureSession:async()=>{throw Error('Unexpected auth');}};
+  runtime.core.permissions={hasScope:()=>true};
+  runtime.core.tornApiLimiter={getUsage:async()=>({}),reserve:async()=>{throw Error('Unexpected request reservation');}};
+  runtime.core.merits={REQUIRED_SCOPE:'test',normalizeSettings:value=>value,buildView:(snapshot,settings)=>({settings})};
+  new Function('globalThis',source('src/background/merits-service.js'))(global);
+  const merits=await runtime.services.merits.routes['merits.refresh']();
+  check(merits.configured===true&&!merits.lastError&&!merits.fetchedAt,'Paused Merits skips authentication and Torn requests');
+
   const worker=source('src/background/service-worker.js');
   const accessRoutes=worker.slice(worker.indexOf("  async 'access.inPage.status'()"),worker.indexOf("  async 'tornApi.accessUsage'()"));
   const mock={core:{storage,permissions:{hasScope:()=>false}},services:{permissionAccess:{settings:async()=>({tornKey:'fixture-secret',ffKey:'fixture-ff'}),ensureSession:async()=>({token:'fixture-token'})}}};

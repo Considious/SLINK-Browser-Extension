@@ -27,7 +27,10 @@
             <div data-credentials></div><p data-notice role="status"></p></section>
           <section><h2>Modules</h2><p>Pausing a module keeps its tab and saved settings.</p>
             <label>Market Watch checks <input type="checkbox" role="switch" data-module="market" disabled></label>
-            <label>Mugging checks <input type="checkbox" role="switch" data-module="mugging" disabled></label></section>
+            <label>Mugging checks <input type="checkbox" role="switch" data-module="mugging" disabled></label>
+            <label>Merit checks <input type="checkbox" role="switch" data-module="merits" disabled></label>
+            <label>$1 Bazaar checks <input type="checkbox" role="switch" data-module="dollarBazaars" disabled></label></section>
+          <section><details data-watches><summary>Saved Market Watches</summary><p class="muted">Remove saved watches even without an active Market Watch tier.</p><div data-watch-list></div></details></section>
           <section data-appearance><h2>Appearance</h2>
             <label>SLINK theme <select data-theme disabled></select></label>
             <label>Panel opacity <input data-opacity type="range" min="30" max="100" step="1" aria-label="Panel opacity" disabled></label>
@@ -97,11 +100,32 @@
         if(watching)return;
         watching=true;
         void hydrate();
+        void savedWatches();
         if(!themePanel&&g.SLINK_TORN_THEME){
           themePanel=g.SLINK_TORN_THEME.mountSettings($('[data-appearance]'),{read:()=>send('themes.torn.get'),patch:changes=>send('themes.torn.patch',changes)});
         }
         void update(++revision);
       }
+      let watchRevision=0;
+      async function savedWatches(rows){
+        const details=$('[data-watches]'),list=$('[data-watch-list]'),run=++watchRevision;
+        if(!active()||!details.open)return;
+        try{
+          const watches=rows||await send('market.watch.listSaved');
+          if(!active()||!details.open||run!==watchRevision)return;
+          list.replaceChildren();
+          if(!watches.length){list.textContent='No Market Watches saved on this installation.';return;}
+          for(const watch of watches){
+            const row=document.createElement('div');row.className='access-actions';
+            const label=document.createElement('span');
+            label.textContent=watch.label+' · '+Number(watch.maxPrice).toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0})+(watch.enabled?'':' · off');
+            const button=document.createElement('button');button.type='button';button.textContent='Remove';
+            button.dataset.removeWatch=watch.uid;button.setAttribute('aria-label','Remove watch for '+watch.label);
+            row.append(label,button);list.append(row);
+          }
+        }catch(error){if(active()&&run===watchRevision)list.textContent=format.errorMessage(error);}
+      }
+      context.listen($('[data-watches]'),'toggle',()=>void savedWatches());
       async function action(control, fn){
         if(!active()||writing)return;
         writing=true;control.disabled=true;notice.textContent='';
@@ -127,7 +151,10 @@
         if(!event.isTrusted)return;
         const control=event.target.closest('button');
         if(!control)return;
-        if(control.matches('[data-edit]')){
+        if(control.matches('[data-remove-watch]')){
+          if(!g.confirm('Remove this saved Market Watch?'))return;
+          void action(control,async()=>savedWatches(await send('market.watch.removeSaved',{uid:control.dataset.removeWatch})));
+        }else if(control.matches('[data-edit]')){
           const container=$('[data-credentials]');
           if(container.firstChild){container.replaceChildren();control.setAttribute('aria-expanded','false');void hydrate();return;}
           // Never put keys into the page's document or its open shadow root.
@@ -145,9 +172,9 @@
       const observer=new MutationObserver(sync);
       for(const element of [view,shell])if(element)observer.observe(element,{attributes:true,attributeFilter:['hidden']});
       context.listen(document,'visibilitychange',sync);
-      const refreshKeys=['permissions.snapshot','access.settings.v1','access.session.v1','market.settings.v1','mugging.settings.v1',themes.STORAGE_KEY,themes.PANEL_OPACITY_STORAGE_KEY,launcherKey];
+      const refreshKeys=['permissions.snapshot','access.settings.v1','access.session.v1','market.settings.v1','mugging.settings.v1','ui.monitoring.merits.enabled','ui.monitoring.dollarBazaars.enabled',themes.STORAGE_KEY,themes.PANEL_OPACITY_STORAGE_KEY,launcherKey];
       const storageListener=(changes,area)=>{
-        if(area==='local'&&active()&&!writing&&refreshKeys.some(key=>Object.hasOwn(changes,storage.fullKey(key))))void hydrate();
+        if(area==='local'&&active()&&!writing&&refreshKeys.some(key=>Object.hasOwn(changes,storage.fullKey(key)))){void hydrate();if(changes[storage.fullKey('market.settings.v1')])void savedWatches();}
       };
       chrome.storage.onChanged.addListener(storageListener);
       sync();

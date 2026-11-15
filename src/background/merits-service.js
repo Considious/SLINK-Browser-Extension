@@ -48,8 +48,11 @@
     return session;
   }
 
+  const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.merits.enabled',true)!==false;
   async function tornJson(url, key) {
+    if(!await monitoringEnabled())throw Error('Merit checks are paused.');
     await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Extension', endpoint:new URL(url).pathname });
+    if(!await monitoringEnabled())throw Error('Merit checks are paused.');
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },
       cache:'no-store'
@@ -88,6 +91,7 @@
   }
 
   async function refresh(force = false, forceCatalog = false) {
+    if(!await monitoringEnabled())return publicStatus(false);
     if (refreshing) return refreshing;
     refreshing = (async () => {
       const before = await runtime();
@@ -161,7 +165,7 @@
       SLINK.core.storage.get('permissions.snapshot', null),
       SLINK.core.tornApiLimiter.getUsage()
     ]);
-    if (refreshIfDue && access.configured && Number(currentRuntime.nextRefreshAt || 0) <= Date.now()) {
+    if (refreshIfDue && await monitoringEnabled() && access.configured && Number(currentRuntime.nextRefreshAt || 0) <= Date.now()) {
       try { return await refresh(false); }
       catch {}
     }

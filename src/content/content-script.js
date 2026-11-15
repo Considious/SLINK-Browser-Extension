@@ -291,6 +291,10 @@
       const change=changes[SLINK.core.storage.fullKey(id+'.settings.v1')];
       if(change&&isEnabled(change.oldValue)!==isEnabled(change.newValue))changedViews.push(id);
     }
+    for(const id of ['merits','dollarBazaars']){
+      const change=changes[SLINK.core.storage.fullKey('ui.monitoring.'+id+'.enabled')];
+      if(change&&(change.oldValue!==false)!==(change.newValue!==false))changedViews.push(id);
+    }
     const warSettingsKey = SLINK.core.storage.fullKey('war.settings.v1');
     // Ordinary War preferences are handled by War itself. Rebuilding every
     // module for those writes destroys unrelated room-management forms.
