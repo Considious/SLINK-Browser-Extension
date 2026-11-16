@@ -265,6 +265,8 @@
         await SLINK.core.storage.set(CONTRIBUTION_KEY, disabled);
         return disabled;
       }
+      const session = await SLINK.services.permissionAccess.ensureSession(false, REQUIRED_SCOPE);
+      if (session?.scopes?.includes('admin.*')) return {mode:'admin_excluded',fetched:0};
       const activity = await SLINK.core.storage.get(ACTIVITY_KEY, {});
       const mode = contributionMode(activity?.lastActiveAt, now);
       if (mode !== 'active' || !await active()) {
@@ -274,7 +276,6 @@
         if(previous.mode!=='inactive')await SLINK.core.storage.set(CONTRIBUTION_KEY,paused);
         return paused;
       }
-      const session = await SLINK.services.permissionAccess.ensureSession(false, REQUIRED_SCOPE);
       if (!SLINK.core.permissions.hasScope(session, REQUIRED_SCOPE)) throw new Error('Your SLINK account does not have slink.mugging permission.');
       const capacity = await SLINK.core.tornApiLimiter.getContributionCapacity({
         ceiling:CONTRIBUTION_CEILING,
@@ -376,13 +377,27 @@
     };
   }
 
+  function muggingDeadline(controller, work) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error('Find Targets timed out. Try again.'));
+        controller.abort();
+      }, 25_000);
+    });
+    return Promise.race([Promise.resolve().then(work), timeout]).finally(() => clearTimeout(timer));
+  }
+
   async function refresh(input = {}) {
     if (refreshing) return refreshing;
-    refreshing = (async () => {
+    const deadline = new AbortController(), signal = deadline.signal;
+    refreshing = muggingDeadline(deadline, async () => {
       const session = await SLINK.services.permissionAccess.ensureSession(false, REQUIRED_SCOPE);
       if (!SLINK.core.permissions.hasScope(session, REQUIRED_SCOPE)) {
         throw new Error('Your SLINK account does not have slink.mugging permission.');
       }
+      signal.throwIfAborted();
+      if(input.background && session.scopes?.includes('admin.*'))return {};
       const settings = {
         ...(await SLINK.core.storage.get(SETTINGS_KEY, {})),
         ...(input && typeof input === 'object' ? input : {})
@@ -391,6 +406,7 @@
       if (input.touch !== false) await touchActivity();
       const suppliedStats = Number(input.userBattleStats) || 0;
       const userBattleStats = suppliedStats > 0 ? suppliedStats : await ownBattleStats(input.forceBattleStats === true);
+      signal.throwIfAborted();
       const loadAssignments=()=>SLINK.core.http.requestJson('muggingWorker', `${BASE_URL}/api/assignments/rough`, {
         method:'POST',
         headers:{
@@ -398,7 +414,9 @@
           'Content-Type':'application/json'
         },
         cache:'no-store',
+        signal,
         body:JSON.stringify({
+          assignment_mode:input.background?'background':'manual',
           user_battle_stats:userBattleStats,
           min_fair_fight:Number(settings.minFairFight) || 1,
           max_fair_fight:Number(settings.maxFairFight) || 3,
@@ -406,8 +424,10 @@
         })
       });
       let response=await loadAssignments();
-      const checked=await fairFightChecks.check(response?.targets||[]).catch(()=>({queued:0}));
-      if(checked.queued>0){const synced=await syncPending(true);if(Number(synced.accepted)>0)response=await loadAssignments();}
+      signal.throwIfAborted();
+      const checked=input.background?await fairFightChecks.check(response?.targets||[]).catch(()=>({queued:0})):{queued:0};
+      signal.throwIfAborted();
+      if(checked.queued>0){const synced=await syncPending(true);if(!signal.aborted&&Number(synced.accepted)>0)response=await loadAssignments();}
       const ownProfile = await storedOwnBattleStats();
       const cache = normalizeCache({
         ...response,
@@ -416,9 +436,12 @@
         userLevel:Math.max(0, Math.trunc(Number(ownProfile?.level) || 0)),
         ownBattleStatsCheckedAt:Math.max(0, Number(ownProfile?.checkedAt) || 0)
       });
+      signal.throwIfAborted();
       await SLINK.core.storage.set(CACHE_KEY, cache);
+      if(!input.background&&!signal.aborted)void fairFightChecks.check(response?.targets||[])
+        .then(result=>result.queued>0?syncPending(true):null).catch(()=>null);
       return { ...cache, contribution:await SLINK.core.storage.get(CONTRIBUTION_KEY, { enabled:false, mode:'disabled', fetched:0, skipped:0, errors:0, pendingSync:0 }) };
-    })();
+    });
     try {
       return await refreshing;
     } finally {

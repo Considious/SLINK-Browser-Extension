@@ -30,6 +30,10 @@
 
 - BAZAAR-01 · Extension and PDA · LIVE VERIFY. Page tools can optionally collapse the seller description. Verify its setting persists and Bazaar listing and purchase controls remain available.
 
+- ADMIN-01 · AWAITING WORKER DEPLOYMENT. Leveling demand and collector enrollment, donated-key selection, and passive Mugging tasks exclude admin accounts. Verify with ordinary and admin accounts while testing manual actions.
+- MUGGING-01 · AWAITING WORKER DEPLOYMENT. Prior manual target IDs are excluded from the next batch for up to 15 minutes. Verify consecutive requests and no-results behavior.
+- MUGGING-02 · LIVE VERIFY. Find Targets on both clients times out after 25 seconds, clears the busy state, and rejects late data before publishing it.
+
 ## TO DO
 - Priority 1 · Extension, PDA, and Cloudflare. Reconcile the remaining active Casino, Companion, Stocks, Timers, Page Tools, Items/Armory, Quick Use, and Mugging checks against current code.
 - Priority 2 · Extension and PDA. Reconcile Access, API Usage and module switches, then the local client features in the implementation brief.
