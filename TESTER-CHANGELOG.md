@@ -2,6 +2,8 @@
 
 ## What changed
 
+- **Casino visibility and spacing**. In light and dark, hide Poker and one game from each native row. Check that the switches keep keyboard focus, visible cards have even gaps at narrow and desktop widths, settings and help remain available, and Show all restores the original layout. Reload and confirm saved choices take effect.
+
 - **Disposal, Forgery, and Hustling**. Check advice beneath the Disposal job title, beside the project name in the open Forgery picker, and beneath each Hustling game name. Try a recycled Disposal row, a locked Forgery project, and Hustling with no crowd, Hype, and active bets. Verify native controls stay usable, and that advice clears when the helper is disabled or the route changes.
 
 - **Crime guide links**. Test every guide link under Efficiency → Crimes in Candy Cartel and one other theme. Check light and dark appearance, after visiting a guide, with keyboard focus on Extension, and with touch on Torn PDA.

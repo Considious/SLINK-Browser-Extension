@@ -15,6 +15,9 @@
 - CRIME-06 · Extension and PDA · LIVE VERIFY. Forgery identifies the open project picker directly, including when Torn renders it outside the card. The captured-picker fixture covers risk labels, locked options, re-entry, and disablement.
 - CRIME-07 · Extension and PDA · LIVE VERIFY. Hustling adds concise guidance under each game title based on Torn’s available actions and current bets. The supplied Cornhole row and simulated crowd and betting states pass on both clients.
 
+- CASINO-01 · Extension and PDA · LIVE VERIFY. The Casino visibility panel uses stable, readable switches and recognizes Poker’s current holdem route.
+- CASINO-02 · Extension and PDA · LIVE VERIFY. Torn’s native Casino tiles wrap with even gaps when games are hidden. Fixture checks cover saved visibility, restoration, and access to unrelated controls.
+
 ## TO DO
 - Priority 1 · Extension, PDA, and Cloudflare. Reconcile the remaining active Casino, Companion, Stocks, Timers, Page Tools, Items/Armory, Quick Use, and Mugging checks against current code.
 - Priority 2 · Extension and PDA. Reconcile Access, API Usage and module switches, then the local client features in the implementation brief.
