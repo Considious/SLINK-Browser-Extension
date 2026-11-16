@@ -11,9 +11,11 @@
 - CRIME-03 · Cloudflare Services · AWAITING DEPLOYMENT. Cloudflare Workers rejects the dictionary seed fetch’s previous redirect mode. The QOL6 branch restores lazy seeding with manual redirect handling. Verify the live endpoint and clients after deployment.
 - CRIME-04 · Extension and PDA · LIVE VERIFY. Crime guide links use themed text and a control surface with visible underline and focus. Check Candy Cartel in light and dark, visited styling, keyboard focus, and touch.
 
-## TO DO
+- CRIME-05 · Extension and PDA · LIVE VERIFY. Disposal attaches guidance under the job title shown by Torn’s current flex section. The captured-row fixture covers job changes and disablement.
+- CRIME-06 · Extension and PDA · LIVE VERIFY. Forgery identifies the open project picker directly, including when Torn renders it outside the card. The captured-picker fixture covers risk labels, locked options, re-entry, and disablement.
+- CRIME-07 · Extension and PDA · LIVE VERIFY. Hustling adds concise guidance under each game title based on Torn’s available actions and current bets. The supplied Cornhole row and simulated crowd and betting states pass on both clients.
 
-- CRIME-05 · Extension and PDA. Verify Disposal, Forgery, and Hustling against the Torn DOM.
+## TO DO
 - Priority 1 · Extension, PDA, and Cloudflare. Reconcile the remaining active Casino, Companion, Stocks, Timers, Page Tools, Items/Armory, Quick Use, and Mugging checks against current code.
 - Priority 2 · Extension and PDA. Reconcile Access, API Usage and module switches, then the local client features in the implementation brief.
 

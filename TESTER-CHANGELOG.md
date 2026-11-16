@@ -2,6 +2,8 @@
 
 ## What changed
 
+- **Disposal, Forgery, and Hustling**. Check advice beneath the Disposal job title, beside the project name in the open Forgery picker, and beneath each Hustling game name. Try a recycled Disposal row, a locked Forgery project, and Hustling with no crowd, Hype, and active bets. Verify native controls stay usable, and that advice clears when the helper is disabled or the route changes.
+
 - **Crime guide links**. Test every guide link under Efficiency → Crimes in Candy Cartel and one other theme. Check light and dark appearance, after visiting a guide, with keyboard focus on Extension, and with touch on Torn PDA.
 
 - **Crime dashboard**. Click a non-Arson crime once. Leave and reopen the dashboard, refresh its data, then switch to another crime and back. Check that the selected tab and its helper controls stay in sync, including with touch in PDA.
