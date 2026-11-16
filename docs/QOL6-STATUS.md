@@ -20,6 +20,8 @@
 
 - COMPANION-01 · Extension and PDA · LIVE VERIFY. Companion settings align their dropdowns and stack in narrow space. In Extension, Back to dashboard stays in the scrollable theme content area. Check the Gothic theme, narrow windows, and keyboard focus.
 
+- CRIME-08 · Extension and PDA · LIVE VERIFY. Crime headers containing the native stats banner retain Torn’s header styling. Artwork and frame paint are bounded at the banner. Check the native stats toggle and adjacent buttons on PDA.
+
 ## TO DO
 - Priority 1 · Extension, PDA, and Cloudflare. Reconcile the remaining active Casino, Companion, Stocks, Timers, Page Tools, Items/Armory, Quick Use, and Mugging checks against current code.
 - Priority 2 · Extension and PDA. Reconcile Access, API Usage and module switches, then the local client features in the implementation brief.
