@@ -26,6 +26,8 @@
 - COMPANION-03 · LIVE VERIFY. Wander tries a safe walk before rest and hunker-down animates in and out. Stay and reduced motion respect position and motion preferences.
 - COMPANION-04 · LIVE VERIFY. Small, Normal and Large persist and use size-aware viewport and overlap checks.
 
+- STOCKS-01 · Extension and PDA · LIVE VERIFY. SLINK quote controls are in a separate Stocks panel. The quantity helper reattaches when Torn replaces a form or the stock root. Verify two consecutive trades on Extension with TornTools and Confirm placement on PDA.
+
 ## TO DO
 - Priority 1 · Extension, PDA, and Cloudflare. Reconcile the remaining active Casino, Companion, Stocks, Timers, Page Tools, Items/Armory, Quick Use, and Mugging checks against current code.
 - Priority 2 · Extension and PDA. Reconcile Access, API Usage and module switches, then the local client features in the implementation brief.
