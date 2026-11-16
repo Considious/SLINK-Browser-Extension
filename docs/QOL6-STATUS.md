@@ -18,6 +18,8 @@
 - CASINO-01 · Extension and PDA · LIVE VERIFY. The Casino visibility panel uses stable, readable switches and recognizes Poker’s current holdem route.
 - CASINO-02 · Extension and PDA · LIVE VERIFY. Torn’s native Casino tiles wrap with even gaps when games are hidden. Fixture checks cover saved visibility, restoration, and access to unrelated controls.
 
+- COMPANION-01 · Extension and PDA · LIVE VERIFY. Companion settings align their dropdowns and stack in narrow space. In Extension, Back to dashboard stays in the scrollable theme content area. Check the Gothic theme, narrow windows, and keyboard focus.
+
 ## TO DO
 - Priority 1 · Extension, PDA, and Cloudflare. Reconcile the remaining active Casino, Companion, Stocks, Timers, Page Tools, Items/Armory, Quick Use, and Mugging checks against current code.
 - Priority 2 · Extension and PDA. Reconcile Access, API Usage and module switches, then the local client features in the implementation brief.

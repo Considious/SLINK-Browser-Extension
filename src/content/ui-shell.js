@@ -80,7 +80,9 @@
     .window.main > .theme-content-shell > .module-view > .content { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
     .companion-settings-button { flex:0 0 auto; padding:0 6px; }
     .companion-perch { flex:0 0 49px; width:49px; height:45px; pointer-events:none; }
-    .companion-settings-back { align-self:start; margin:8px 10px 0; }
+    .companion-settings-nav { display:flex; min-width:0; }
+    .companion-settings-back { max-inline-size:100%; padding:4px 8px; white-space:normal; overflow-wrap:anywhere; }
+    .theme-content-shell[data-companion-open] > .head { flex-wrap:wrap; }
     .companion-settings-view summary { display:none; }
     .row { display:grid; grid-template-columns:105px minmax(0,1fr); gap:8px; }
     .label { color:var(--slink-muted); }
@@ -240,7 +242,11 @@
     companionBack.textContent = 'Back to dashboard';
     const companionContent = document.createElement('div');
     companionContent.className = 'content';
-    companionView.append(companionBack, companionContent);
+    const companionNav = document.createElement('div');
+    companionNav.className = 'companion-settings-nav';
+    companionNav.append(companionBack);
+    companionContent.append(companionNav);
+    companionView.append(companionContent);
     let companionOpen = false;
     function toggleCompanion(open, focus = false) {
       companionOpen = open && !companionButton.hidden;
@@ -695,6 +701,7 @@
       groups.hidden = companionOpen || groupButtons.size < 2;
       tabs.hidden = companionOpen || activeViews.length === 0;
       companionView.hidden = !companionOpen;
+      themeContentShell.toggleAttribute('data-companion-open', companionOpen);
       companionButton.setAttribute('aria-expanded', String(companionOpen));
       main.element.hidden = hidden || collapsed || (!companionOpen && docked.length === 0);
       bubble.hidden = hidden || !collapsed || views.size === 0 || minimizedMode === 'chat';
