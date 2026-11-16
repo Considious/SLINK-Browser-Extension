@@ -27,7 +27,6 @@
       let clockTimer = null;
       let current = null;
       let lastRenderSignature = null;
-      let activeCrime='arson';
       let arsonEnabled=false,pickpocketEnabled=false,crackingEnabled=false,disposalEnabled=false,forgeryEnabled=false,hustlingEnabled=false,scammingEnabled=false;
       const arsonPage=crimes&&SLINK.core.arsonPage;
       const arson=Boolean(arsonPage);
@@ -113,6 +112,7 @@
         ui.setThemeHealth?.(status?.life?.current, status?.life?.maximum);
         const alerts = SLINK.core.adhd.alertsForView(status?.activeAlerts || [], crimes);
         if(!crimes&&status?.configured&&status?.activeAlerts)globalThis.SLINK_COMPANION_ALERTS?.('efficiency',globalThis.SLINK_COMPANIONS.efficiencyRows(alerts));
+        const activeCrime = crimes ? SLINK.core.adhd.crimeTab.current() : null;
         const selectedAlerts=crimes?(activeCrime==='uniques'?alerts:[]):alerts;
         ui.setAlertCount(crimes?'crimes':'adhd', alerts.length, { group:'efficiency', label:'active Efficiency reminders' });
         updateStatus();
@@ -153,7 +153,7 @@
           for(const [id,label] of Object.entries(SLINK.core.adhd.CRIME_TABS)){
             const tab=document.createElement('button');tab.type='button';tab.textContent=label;tab.setAttribute('aria-pressed',String(id===activeCrime));
             if(id===activeCrime)tab.style.fontWeight='700';
-            tab.onclick=()=>{activeCrime=id;render(current);};nav.append(tab);
+            tab.onclick=()=>{if(SLINK.core.adhd.crimeTab.select(id))render(current);};nav.append(tab);
           }
           root.append(nav);
           if(activeCrime==='arson'&&arson){

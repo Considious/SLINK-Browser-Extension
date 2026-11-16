@@ -21,7 +21,6 @@
   let accessExpanded = null;
   let targetView = 'leveling';
   let efficiencyActive='alerts';
-  let activeCrime='arson';
   const visiblePage=()=>document.visibilityState!=='hidden'?document.querySelector('[data-dashboard-page]:not([hidden])')?.dataset.dashboardPage:null;
   let adminUser = null;
   let activeTheme = SLINK.core.themes.get();
@@ -529,6 +528,7 @@
   }
 
   function renderAdhd() {
+    const activeCrime = SLINK.core.adhd.crimeTab.current();
     const permitted = adhd?.permitted === true;
     const configured = adhd?.configured === true;
     const allAlerts = adhd?.activeAlerts || [];
@@ -566,7 +566,7 @@
     crimeNav.style.cssText='display:grid;grid-template-columns:repeat(3,minmax(0,1fr))';
     if(!crimeNav.children.length)for(const [id,label] of Object.entries(SLINK.core.adhd.CRIME_TABS)){
       const tab=document.createElement('button');tab.type='button';tab.className='efficiency-tab';tab.textContent=label;tab.dataset.crimeTab=id;
-      tab.onclick=()=>{activeCrime=id;renderAdhd();};crimeNav.append(tab);
+      tab.onclick=()=>{if(SLINK.core.adhd.crimeTab.select(id))renderAdhd();};crimeNav.append(tab);
     }
     for(const tab of crimeNav.children){tab.classList.toggle('active',tab.dataset.crimeTab===activeCrime);tab.setAttribute('aria-pressed',String(tab.dataset.crimeTab===activeCrime));}
     byId('crime-panel-title').textContent=SLINK.core.adhd.CRIME_TABS[activeCrime];

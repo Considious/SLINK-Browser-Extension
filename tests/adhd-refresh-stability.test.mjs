@@ -27,11 +27,15 @@ const status = {
   city:{ bought:0 }, configured:true, fetchedAt:1000, tornApiUsage:{ count:3, limit:60 }
 };
 const api = { core:{ format:{errorMessage:error=>error.message}, factionChat:{ isPrimed:()=>false } }, define(group,key,value){this[group][key]=value;}, modules:{ definitions:new Map(), register(definition){ this.definitions.set(definition.id,definition); } }, services:{} };
+api.core.storage = { get:async (_key, fallback)=>fallback };
 api.core.messaging = { send:async name=>{ calls.push(name); return name==='adhd.status'||name==='adhd.refresh' ? status : {}; } };
+const savedTab = new Map();
 const context = vm.createContext({
-  console, URL, setTimeout, clearTimeout, setInterval:()=>1, clearInterval(){},
+  console, URL, URLSearchParams, setTimeout, clearTimeout, setInterval:()=>1, clearInterval(){},
   addEventListener(){}, removeEventListener(){},
   document:{ createElement:tag=>new FakeNode(tag), createTextNode:text=>Object.assign(new FakeNode('#text'),{textContent:text}) },
+  location:{pathname:'/page.php',search:'?sid=crimes',hash:'#/pickpocketing'},
+  sessionStorage:{getItem:key=>savedTab.get(key),setItem:(key,value)=>savedTab.set(key,value)},
   SLINK_EXTENSION:api
 });
 context.globalThis = context;
@@ -63,13 +67,21 @@ assert.equal(api.core.adhd.alertsForView(common,true).map(row=>row.id).join(',')
 assert.equal(api.core.adhd.alertsForView([ring])[0].title,'Cluster Ring opportunity');
 assert.equal(api.core.adhd.alertsForView([ring],true)[0],ring);
 status.activeAlerts=[{id:'arsonUnique',title:'Arson reminder',links:[]},{id:'searchCashUnique',title:'Search reminder',links:[]}];
-const crimeController=await api.modules.definitions.get('crimes').start({ui,signal:{aborted:false}});
-const content=node=>[node.textContent,...node.children.map(content)].join(' ');
-assert.match(content(root),/Search reminder/);
-assert.doesNotMatch(content(root),/Arson reminder/);
-findButton(root,'Arson').onclick();
-assert.match(content(root),/Arson reminder/);
-assert.doesNotMatch(content(root),/Search reminder/);
+const crimeModule = api.modules.definitions.get('crimes');
+const crimeContext = {ui,signal:{aborted:false}};
+let crimeController = await crimeModule.start(crimeContext);
+const pressed = name => findButton(root,name)?.['aria-pressed'];
+assert.equal(pressed('Pickpocket'), 'true', 'Use the current Torn route before any explicit choice.');
+findButton(root,'Forgery').onclick();
+assert.equal(pressed('Forgery'), 'true', 'One click selects the requested subpage.');
+await ui.actions.find(action => action.id === 'refresh').onClick({ currentTarget:new FakeNode('button') });
+assert.equal(pressed('Forgery'), 'true', 'An asynchronous refresh preserves the selection.');
+crimeController.stop();
+context.location.hash = '#/arson';
+crimeController = await crimeModule.start(crimeContext);
+assert.equal(pressed('Forgery'), 'true', 'A module restart preserves the choice over the Arson default.');
+vm.runInContext(read('src/core/adhd.js'), context);
+assert.equal(api.core.adhd.crimeTab.current(), 'forgery', 'The current tab restores the saved choice after a reload.');
 crimeController.stop();
 
-console.log('Torn Efficiency retains alert controls across an unchanged periodic refresh.');
+console.log('Torn Efficiency retains alert controls and keeps the selected crime across refresh and restart.');

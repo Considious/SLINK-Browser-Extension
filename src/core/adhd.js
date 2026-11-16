@@ -33,6 +33,37 @@
   const CRIME_ALERT_IDS = new Set(CRIME_UNIQUE_DEFINITIONS.map(row => row.id));
   const CRIME_GUIDES=Object.freeze({"arson":["Ultimate Arson Guide",16510947],"pickpocket":["Ultimate Pickpocketing Guide",16358739],"cracking":["Ultimate Cracking Guide",16373016],"forgery":["Ultimate Forgery Guide",16388086],"hustling":["Ultimate Hustling Guide",16363421],"scamming":["Ultimate Scamming Guide",16418415],"disposal":["Ultimate Disposal Guide",16367936]});
   const CRIME_TABS=Object.freeze({arson:'Arson',pickpocket:'Pickpocket',cracking:'Cracking',disposal:'Disposal',forgery:'Forgery',hustling:'Hustling',scamming:'Scamming',uniques:'Uniques'});
+  function createCrimeTabState(tabs, browser) {
+    const key = 'slink.crimes.selected-tab.v1';
+    const valid = id => typeof id === 'string' && Object.hasOwn(tabs, id);
+    let selected;
+    try {
+      const saved = browser.sessionStorage?.getItem(key);
+      if (valid(saved)) selected = saved;
+    } catch {}
+
+    function current() {
+      if (selected) return selected;
+      const { pathname, search, hash } = browser.location || {};
+      if (pathname === '/page.php' && new URLSearchParams(search).get('sid') === 'crimes') {
+        const route = hash?.match(/^#\/?([^/?]+)/)?.[1]?.toLowerCase();
+        const id = route === 'pickpocketing' ? 'pickpocket' : route;
+        if (valid(id)) return id;
+      }
+      return 'arson';
+    }
+
+    function select(id) {
+      if (!valid(id)) return false;
+      selected = id;
+      try { browser.sessionStorage?.setItem(key, id); } catch {}
+      return true;
+    }
+
+    return Object.freeze({ current, select });
+  }
+  const crimeTab = createCrimeTabState(CRIME_TABS, global);
+
   const isCrimeAlert = id => CRIME_ALERT_IDS.has(id);
   function alertsForView(alerts, crimes = false) {
     return alerts.flatMap(alert => crimes ? (isCrimeAlert(alert.id) ? [alert] : [])
@@ -712,7 +743,7 @@
     addictionPercentFromBattleStats,
     SCAMMING_TIP: 'Shows the current tile, Torn’s visible landing range, and whether Capitalize is available. Never sends a reply.',
     HUSTLING_TIP: 'Shows audience attention, suspicion, and game stakes. Never takes actions.',
-    FORGERY_TIP: 'For fewer critical failures, stick with driver’s licenses. For faster skill gain, the guide suggests switching to travel visas at Forgery skill 50.', CRIME_TABS, CRIME_GUIDES, isCrimeAlert, alertsForView,
+    FORGERY_TIP: 'For fewer critical failures, stick with driver’s licenses. For faster skill gain, the guide suggests switching to travel visas at Forgery skill 50.', CRIME_TABS, CRIME_GUIDES, crimeTab, isCrimeAlert, alertsForView,
     clusterRingAchieved,
     clusterRingReady,
     shopliftingUniqueOpportunities,
