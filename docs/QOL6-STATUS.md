@@ -22,6 +22,10 @@
 
 - CRIME-08 · Extension and PDA · LIVE VERIFY. Crime headers containing the native stats banner retain Torn’s header styling. Artwork and frame paint are bounded at the banner. Check the native stats toggle and adjacent buttons on PDA.
 
+- COMPANION-02 · User verified on an earlier build. Jack stays active when minimized and clicking opens the dashboard; dragging keeps him on the page.
+- COMPANION-03 · LIVE VERIFY. Wander tries a safe walk before rest and hunker-down animates in and out. Stay and reduced motion respect position and motion preferences.
+- COMPANION-04 · LIVE VERIFY. Small, Normal and Large persist and use size-aware viewport and overlap checks.
+
 ## TO DO
 - Priority 1 · Extension, PDA, and Cloudflare. Reconcile the remaining active Casino, Companion, Stocks, Timers, Page Tools, Items/Armory, Quick Use, and Mugging checks against current code.
 - Priority 2 · Extension and PDA. Reconcile Access, API Usage and module switches, then the local client features in the implementation brief.
