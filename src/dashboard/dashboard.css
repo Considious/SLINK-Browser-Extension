@@ -95,3 +95,6 @@ input,select{border-color:var(--slink-border-soft);background:var(--slink-bg);co
 
 /* Icons, labels and alert counts occupy their own space. */
 .dashboard-tabs{flex-wrap:wrap}
+#crime-guide-link > a:any-link{display:inline-block;max-width:100%;padding:.35em .6em;border:1px solid var(--slink-border);border-radius:6px;background:var(--slink-control);color:var(--slink-text);text-decoration:underline;text-underline-offset:.16em;overflow-wrap:anywhere}
+#crime-guide-link > a:hover{text-decoration-thickness:2px}
+#crime-guide-link > a:focus-visible{outline:2px solid currentColor;outline-offset:2px}

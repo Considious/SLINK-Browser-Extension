@@ -8,9 +8,12 @@
 
 - CRIME-02 · Extension and PDA · LIVE VERIFY. The dashboard preserves an explicit crime selection across refresh and module restart, using Torn’s current crime for the initial view when no selection is saved. The Extension and PDA regression tests pass. Run the live click and tap checks in `TESTER-CHANGELOG.md`.
 
+- CRIME-03 · Cloudflare Services · AWAITING DEPLOYMENT. Cloudflare Workers rejects the dictionary seed fetch’s previous redirect mode. The QOL6 branch restores lazy seeding with manual redirect handling. Verify the live endpoint and clients after deployment.
+- CRIME-04 · Extension and PDA · LIVE VERIFY. Crime guide links use themed text and a control surface with visible underline and focus. Check Candy Cartel in light and dark, visited styling, keyboard focus, and touch.
+
 ## TO DO
 
-- CRIME-03 · Extension and PDA. Check dictionary availability, theme link contrast, and the individual Disposal, Forgery, and Hustling outputs.
+- CRIME-05 · Extension and PDA. Verify Disposal, Forgery, and Hustling against the Torn DOM.
 - Priority 1 · Extension, PDA, and Cloudflare. Reconcile the remaining active Casino, Companion, Stocks, Timers, Page Tools, Items/Armory, Quick Use, and Mugging checks against current code.
 - Priority 2 · Extension and PDA. Reconcile Access, API Usage and module switches, then the local client features in the implementation brief.
 

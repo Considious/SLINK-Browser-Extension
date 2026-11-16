@@ -2,6 +2,8 @@
 
 ## What changed
 
+- **Crime guide links**. Test every guide link under Efficiency → Crimes in Candy Cartel and one other theme. Check light and dark appearance, after visiting a guide, with keyboard focus on Extension, and with touch on Torn PDA.
+
 - **Crime dashboard**. Click a non-Arson crime once. Leave and reopen the dashboard, refresh its data, then switch to another crime and back. Check that the selected tab and its helper controls stay in sync, including with touch in PDA.
 
 - **Crime helpers**. With all seven helpers enabled, open Arson, Pickpocketing, Cracking, Disposal, Forgery, Hustling, and Scamming in Torn. Leave and return to each crime twice without changing its toggle. Confirm the old advice disappears on departure and the current advice appears once on return. Repeat from a direct link and with browser Back/Forward in Extension, then repeat on Android and iOS PDA. Check Pickpocketing advice separately from its filter, and verify Scamming with an active response preview.

@@ -63,6 +63,9 @@
         .slink-adhd-alert[data-tone="urgent"]{border-left-color:var(--slink-error)}.slink-adhd-alert[data-tone="ready"]{border-left-color:var(--slink-ready)}
         .slink-adhd-alert strong,.slink-adhd-alert span{display:block;overflow-wrap:anywhere}.slink-adhd-alert span{margin-top:2px;color:var(--slink-muted)}
         .slink-adhd-links{display:flex;flex-wrap:wrap;gap:5px;width:100%;min-width:0;max-width:100%;margin-top:7px}.slink-adhd-links a,.slink-adhd-links button{display:inline-flex;align-items:center;justify-content:center;min-height:28px;padding:4px 8px;border:1px solid var(--slink-border);border-radius:6px;background:var(--slink-bg);color:var(--slink-text);box-shadow:inset 0 0 0 1px rgba(255,255,255,.035);font:inherit;text-decoration:none;cursor:pointer}.slink-adhd-links a:hover,.slink-adhd-links button:hover{border-color:var(--slink-accent-alt);background:var(--slink-selected-bg);filter:brightness(1.12)}.slink-adhd-links button:disabled{cursor:not-allowed;opacity:.48;filter:none}
+        a.slink-crime-guide:any-link{display:inline-block;max-width:100%;padding:.35em .6em;border:1px solid var(--slink-border);border-radius:6px;background:var(--slink-bg-control);color:var(--slink-text);text-decoration:underline;text-underline-offset:.16em;overflow-wrap:anywhere}
+        a.slink-crime-guide:hover{text-decoration-thickness:2px}
+        a.slink-crime-guide:focus-visible{outline:2px solid currentColor;outline-offset:2px}
         .slink-adhd-empty{padding:16px;border-radius:7px;background:var(--slink-bg-control);color:var(--slink-muted);text-align:center}
         .slink-adhd-links.adhd-alert-actions{width:100%;max-width:100%;align-self:flex-start;justify-content:flex-start}.slink-adhd-links.adhd-alert-actions>*{flex:0 0 auto}.slink-sound-toggle{display:flex;align-items:center;width:max-content;max-width:100%;flex:0 0 auto;align-self:flex-start;gap:6px;margin:7px 0;color:var(--slink-text);font-size:12px}.slink-sound-toggle input{margin:0}
       `);
@@ -199,7 +202,7 @@
             label.append(toggle,document.createTextNode(' Show Scamming guidance in Torn'));note.textContent=SLINK.core.adhd.SCAMMING_TIP;root.append(label,note);
           }
           const guide=SLINK.core.adhd.CRIME_GUIDES[activeCrime];
-          if(guide){const p=document.createElement('p'),a=document.createElement('a');a.className='slink-page-action';globalThis.SLINK_TORN_COMPONENTS?.install(root.getRootNode());a.textContent=guide[0];a.href='https://www.torn.com/forums.php?p=threads&f=61&t='+guide[1];a.target='_blank';a.rel='noopener noreferrer';p.append(a);root.append(p);}
+          if(guide){const p=document.createElement('p'),a=document.createElement('a');a.className='slink-crime-guide';a.textContent=guide[0];a.href='https://www.torn.com/forums.php?p=threads&f=61&t='+guide[1];a.target='_blank';a.rel='noopener noreferrer';p.append(a);root.append(p);}
           if(activeCrime==='uniques')for(const definition of SLINK.core.adhd.CRIME_UNIQUE_DEFINITIONS){
             const row=(status?.crimeUniques||[]).find(entry=>entry.id===definition.id);
             const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=status?.settings?.enabled?.[definition.id]!==false;
