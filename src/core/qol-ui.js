@@ -22,6 +22,8 @@
     }
     function installStyle(){if(style)return;style=node('style');style.textContent=`
 
+      html[data-slink-hide-bazaar-description] [data-testid="bazaar-description"],
+      html[data-slink-hide-bazaar-description] .editor-content:has(> [data-testid="bazaar-description"]:only-child){display:none!important}
       .slink-qol .slink-qol-tile{position:relative;display:inline-grid;max-inline-size:100%;min-inline-size:0}
       .slink-qol .slink-qol-tile>[data-qol-use]{inline-size:100%;min-block-size:30px;padding-inline-end:30px;white-space:normal;overflow-wrap:anywhere;text-align:start}
       .slink-qol .slink-qol-tile>.slink-qol-remove{position:absolute;inset-block-start:2px;inset-inline-end:2px;inline-size:24px;min-block-size:24px;padding:0;line-height:1;background:transparent}
@@ -45,7 +47,7 @@
       if(!manager||inputPending)return;manager.replaceChildren();manager.classList.add('slink-qol');globalThis.SLINK_TORN_COMPONENTS?.card(manager);globalThis.SLINK_TORN_COMPONENTS?.install(manager.getRootNode());const localStyle=node('style');localStyle.textContent=style?.textContent||'';manager.append(localStyle);
       manager.append(node('h3','Page tools'));
       const toggles=node('div',undefined,{class:'slink-qol-toggles'});manager.append(toggles);
-      for(const [key,label]of [['enabled','Enable page tools'],['quickItems','Quick-use favorites'],['customLinks','Custom links'],['effects','Item effects'],['values','Item values']]){
+      for(const [key,label]of [['enabled','Enable page tools'],['quickItems','Quick-use favorites'],['customLinks','Custom links'],['effects','Item effects'],['values','Item values'],['hideBazaarDescription','Hide Bazaar description']]){
         const l=node('label'),input=node('input',undefined,{type:'checkbox'});input.checked=config[key];input.addEventListener('change',()=>void mutate(s=>({...s,[key]:input.checked})).catch(e=>notice(e.message)));l.append(doc.createTextNode(label),input);globalThis.SLINK_TORN_COMPONENTS?.switchRow(l,input);toggles.append(l);
       }
       const row=node('div',undefined,{class:'slink-qol-row'}),blood=node('select',undefined,{'aria-label':'Your Torn blood type'});blood.append(node('option','Choose Torn blood type',{value:''}));for(const type of Q.BLOOD)blood.append(node('option',type,{value:type}));blood.value=config.bloodType||'';
@@ -154,8 +156,16 @@
       observer ||= new MutationObserver(records=>{if(records.some(r=>!r.target.closest?.('.slink-qol')&&!r.target.closest?.('.slink-qol-info,.slink-qol-effect,.slink-qol-add')&&(r.type==='characterData'||[...r.addedNodes,...r.removedNodes].some(n=>n.nodeType!==1||!n.matches?.('.slink-qol-add,.slink-qol-info,.slink-qol-effect')))))schedule();});
       observer.observe(scope,{childList:true,subtree:true,characterData:true});
     }
-    function schedule(){if(!timer&&!stopped)timer=global.setTimeout(scan,120);}
-    function cleanNative(){observer?.disconnect();tray?.remove();tray=null;links?.remove();links=null;scope?.querySelectorAll('.slink-qol-add,.slink-qol-info,.slink-qol-effect').forEach(n=>n.remove());}
+    function syncBazaarDescription(){
+      const url=new URL(global.location.href);
+      const onBazaar=url.pathname==='/bazaar.php'||(url.pathname==='/page.php'&&url.searchParams.get('sid')==='bazaar');
+      const hide=onBazaar&&!stopped&&allowed&&(!host.allowed||host.allowed())&&config.enabled&&config.hideBazaarDescription;
+      if(hide)installStyle();
+      const attribute='data-slink-hide-bazaar-description';
+      if(doc.documentElement.hasAttribute(attribute)!==hide)doc.documentElement.toggleAttribute(attribute,hide);
+    }
+    function schedule(){syncBazaarDescription();if(!timer&&!stopped)timer=global.setTimeout(scan,120);}
+    function cleanNative(){syncBazaarDescription();observer?.disconnect();tray?.remove();tray=null;links?.remove();links=null;scope?.querySelectorAll('.slink-qol-add,.slink-qol-info,.slink-qol-effect').forEach(n=>n.remove());}
     function readLife(){const el=doc.querySelector('#barLife,[id^="barLife"],[aria-label^="Life:"]');const text=[el?.textContent,el?.getAttribute('title'),el?.getAttribute('aria-label')].join(' ');const m=text.replace(/,/g,'').match(/(\d+)\s*\/\s*(\d+)/);return m&&+m[2]>0?100*(1-+m[1]/+m[2]):null;}
     function currentHospital(){const el=doc.querySelector('#sidebar [title*="Hospital" i] [data-time],#sidebar [data-time][title*="Hospital" i],#sidebar [data-state="hospital"]');const until=Number(el?.dataset.time||el?.dataset.until);if(until>Date.now()/1000)return (until*1000-Date.now())/60000;return null;}
     function medicalSignature(value){return JSON.stringify([value?.life?.current,value?.life?.maximum,value?.status?.state,value?.status?.until]);}
@@ -201,7 +211,7 @@
       if(allowed&&host.cached){try{const c=await host.cached();if(stopped||revision!==loadRevision)return;if(c){metadata=new Map(Q.catalog(c.catalog).map(x=>[x.id,x]));bonus=Q.bonuses(c.perks);catalogAt=Number(c.catalogAt)||0;profileAt=Number(c.profileAt)||0;bonusAt=Number(c.perksAt)||0;context=c.context||null;schedule();}}catch(error){if(!stopped&&revision===loadRevision)notice('Cached item information is unavailable: '+error.message);}}
       if(allowed&&config.enabled&&host.updates&&!updateChecked){updateChecked=true;void host.updates().then(data=>{const release=data?.[host.product];if(Q.versionCompare(release?.version,host.version)>0){notice('SLINK '+release.version+' is available.');const href=Q.safeUrl(release.url);if(href){const update=node('aside',undefined,{class:'slink-qol slink-page-ui slink-page-card','aria-label':'SLINK update available'});update.append(node('a','SLINK '+release.version+' available',{href,target:'_blank',rel:'noopener noreferrer'}),button('Dismiss',()=>update.remove()));doc.querySelector('#sidebar')?.prepend(update);}}}).catch(()=>{});}
     }catch(error){if(stopped||revision!==loadRevision)return;allowed=false;loaded=false;cleanNative();if(manager){manager.replaceChildren(node('p','Page tools could not load. Verify access and reopen this tab.'));manager.append(node('div',undefined,{role:'status'}));}reportLoad('Settings could not be loaded: '+error.message,'error');notice('Settings could not be loaded: '+error.message);}}
-    const wake=()=>{if(!active()){observer?.disconnect();return;}schedule();};
+    const wake=()=>{syncBazaarDescription();if(!active()){observer?.disconnect();return;}schedule();};
     const readyObserver=doc.body?new MutationObserver(records=>{if(active()&&records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1&&(n.matches?.('.equipped-items-wrap,#faction-armoury,#sidebar')||n.querySelector?.('.equipped-items-wrap,#faction-armoury,#sidebar')))))schedule();}):null;
     readyObserver?.observe(doc.body,{childList:true,subtree:true});
     doc.addEventListener('visibilitychange',wake);global.addEventListener('focus',wake);global.addEventListener('hashchange',wake);global.addEventListener('popstate',wake);

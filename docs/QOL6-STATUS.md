@@ -28,6 +28,8 @@
 
 - STOCKS-01 · Extension and PDA · LIVE VERIFY. SLINK quote controls are in a separate Stocks panel. The quantity helper reattaches when Torn replaces a form or the stock root. Verify two consecutive trades on Extension with TornTools and Confirm placement on PDA.
 
+- BAZAAR-01 · Extension and PDA · LIVE VERIFY. Page tools can optionally collapse the seller description. Verify its setting persists and Bazaar listing and purchase controls remain available.
+
 ## TO DO
 - Priority 1 · Extension, PDA, and Cloudflare. Reconcile the remaining active Casino, Companion, Stocks, Timers, Page Tools, Items/Armory, Quick Use, and Mugging checks against current code.
 - Priority 2 · Extension and PDA. Reconcile Access, API Usage and module switches, then the local client features in the implementation brief.
