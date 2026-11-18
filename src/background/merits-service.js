@@ -49,10 +49,10 @@
   }
 
   const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.merits.enabled',true)!==false;
-  async function tornJson(url, key) {
-    if(!await monitoringEnabled())throw Error('Merit checks are paused.');
+  async function tornJson(url, key, missionRewards = false) {
+    if(!missionRewards&&!await monitoringEnabled())throw Error('Merit checks are paused.');
     await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Extension', endpoint:new URL(url).pathname });
-    if(!await monitoringEnabled())throw Error('Merit checks are paused.');
+    if(!missionRewards&&!await monitoringEnabled())throw Error('Merit checks are paused.');
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },
       cache:'no-store'
@@ -213,7 +213,22 @@
     return publicStatus(false);
   }
 
+  const missionSources = new Map([
+    ['ammo','/v2/user/ammo'], ['mods','/v2/user/itemmods'],
+    ['inventory','/user/?selections=inventory'], ['progress','/user/?selections=personalstats,honors']
+  ]);
+  async function missionRewardData(payload) {
+    const path = missionSources.get(payload?.kind);
+    if (!path) return null;
+    const key = await accessKey();
+    if (!key) return null;
+    const url = new URL(path, 'https://api.torn.com');
+    url.searchParams.set('comment', 'SLINK Mission Rewards');
+    return tornJson(url.href, key, true);
+  }
+
   const routes = Object.freeze({
+    'missions.rewardData':missionRewardData,
     'merits.status':payload => publicStatus(payload?.refreshIfDue !== false),
     'merits.refresh':payload => refresh(true, payload?.forceCatalog === true),
     'merits.settings.save':saveSettings,
