@@ -24,7 +24,9 @@
     "https://yata.yt/*",
     "https://prombot.co.uk:8443/*",
     "https://torn-intel.com/*",
-    "https://droqsdb.com/*"
+    "https://droqsdb.com/*",
+    "https://api.kalends.dev/*",
+    "https://kalends.dev/*"
   ],
   "background": {
     "service_worker": "src/background/service-worker.js"
@@ -75,6 +77,17 @@
     }
   ],
   "content_scripts": [
+    {
+      "matches": [
+        "https://www.torn.com/page.php*"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "js": [
+        "vendor/kal/capture.js",
+        "src/content/kal-observer.js"
+      ]
+    },
     {
       "matches": [
         "https://www.torn.com/*"
@@ -154,7 +167,10 @@
         "src/modules/faction-rooms.js",
         "src/modules/faction-officers.js",
         "src/modules/contribution.js",
-        "src/content/content-script.js"
+        "src/content/content-script.js",
+        "src/core/kal.js",
+        "src/core/kal-ui.js",
+        "src/content/kal.js"
       ]
     }
   ]

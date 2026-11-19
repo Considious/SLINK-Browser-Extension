@@ -25,6 +25,8 @@
     "test:alert-controls": "node tests/alert-controls.test.mjs",
     "test:faction-rooms-polish": "node tests/faction-rooms-polish.browser.mjs",
     "test:room-activity": "node --test tests/faction-rooms-activity.test.mjs",
-    "test:room-focus": "node tests/faction-rooms-focus.browser.mjs"
+    "test:room-focus": "node tests/faction-rooms-focus.browser.mjs",
+    "test:kal": "node --test tests/kal.test.mjs tests/kal-collector.test.mjs",
+    "test:kal:browser": "node tests/kal.browser.mjs"
   }
 }

@@ -1,5 +1,8 @@
 importScripts(
   '../core/runtime.js',
+  '../core/kal.js',
+  '../core/kal-contributions.js',
+  'kal-service.js',
   '../core/errors.js',
   '../core/format.js',
   '../core/storage.js',
@@ -423,6 +426,7 @@ const routes = {
 
   ...SLINK.services.leveling.routes,
   ...SLINK.services.playerIntelligence.routes,
+  ...SLINK.services.kal.routes,
   ...SLINK.services.targetList.routes,
   ...SLINK.services.chatConfig.routes,
   ...SLINK.services.chatFairFight.routes,
@@ -553,6 +557,7 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === 'slink.kal.retry') void SLINK.services.kal.drain().catch(()=>{});
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
   if (alarm.name === SLINK.services.adhd.ALARM) {
     if(activeTornPageTabId!=null)void SLINK.services.adhd.syncRecipes?.().catch(()=>{});
@@ -598,4 +603,5 @@ chrome.alarms.onAlarm.addListener(alarm => {
 });
 
 void initialize().catch(error => console.error('[SLINK] Service worker initialization:', error));
+
 
