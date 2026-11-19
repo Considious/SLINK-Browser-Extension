@@ -1,7 +1,6 @@
 importScripts(
   '../core/runtime.js',
   '../core/kal.js',
-  '../core/kal-contributions.js',
   'kal-service.js',
   '../core/errors.js',
   '../core/format.js',
@@ -557,7 +556,6 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === 'slink.kal.retry') void SLINK.services.kal.drain().catch(()=>{});
   if (alarm.name === CONNECTION_ALARM) void connectionStatus();
   if (alarm.name === SLINK.services.adhd.ALARM) {
     if(activeTornPageTabId!=null)void SLINK.services.adhd.syncRecipes?.().catch(()=>{});
