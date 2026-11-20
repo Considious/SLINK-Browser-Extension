@@ -25,7 +25,8 @@
     "https://yata.yt/*",
     "https://prombot.co.uk:8443/*",
     "https://torn-intel.com/*",
-    "https://droqsdb.com/*"
+    "https://droqsdb.com/*",
+    "https://api.kalends.dev/*"
   ],
   "background": {
     "service_worker": "src/background/service-worker.js"
@@ -177,6 +178,9 @@
         "src/core/access-usage.js",
         "src/modules/access.js",
         "src/content/content-script.js",
+        "src/core/kal.js",
+        "src/core/kal-ui.js",
+        "src/content/kal.js",
         "src/core/stocks-preview.js",
         "src/content/stocks-preview.js",
         "src/content/bank-preview.js",
