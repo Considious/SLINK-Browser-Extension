@@ -1034,6 +1034,8 @@
           <label>Inside-hit cap<input id="slink-war-inside-cap" type="number" min="0" max="9999" value="${Number(shared.insideHitCap) || 0}" ${officer ? '' : 'disabled'}></label>
           <label>Major-window inside gate<select id="slink-war-inside-mode" ${officer ? '' : 'disabled'}><option value="off" ${shared.insideBlockMode === 'off' ? 'selected' : ''}>Off</option><option value="warn" ${(shared.insideBlockMode || 'warn') === 'warn' ? 'selected' : ''}>Warning with override</option><option value="block" ${shared.insideBlockMode === 'block' ? 'selected' : ''}>Hard block</option></select></label>
           <div class="wide slink-war-note">${officer ? 'War mode, idle filtering, inside cap, and the major-window inside gate apply to everyone in your faction. The gate only activates in Termed mode.' : `Faction-wide mode is ${shared.mode === 'termed' ? 'Termed war' : 'Real war'}. A slink.war.officer may change it.`}</div>
+          <label class="wide">Enable ranked-war Link Formatter<input id="slink-war-link-formatter" type="checkbox" ${linkFormatterEnabled ? 'checked' : ''}></label>
+          <div class="wide slink-war-note">Adds a Link column to enemy rows only. A separately installed Torn Profile Link Formatter takes precedence.</div>
           <label>Target sort<select id="slink-war-sort"><option value="availability" ${targetSort === 'availability' ? 'selected' : ''}>Availability</option><option value="fairFightDesc" ${targetSort === 'fairFightDesc' ? 'selected' : ''}>FF high to low</option><option value="fairFightAsc" ${targetSort === 'fairFightAsc' ? 'selected' : ''}>FF low to high</option></select></label>
           <div class="slink-war-settings-actions"><button id="slink-war-save" type="button" ${savingWarSettings ? 'disabled' : ''}>${savingWarSettings ? 'Saving…' : 'Save War settings'}</button><button id="slink-war-clear" type="button" ${savingWarSettings ? 'disabled' : ''}>Clear War session</button></div>
         </div>`;
@@ -1244,6 +1246,12 @@
           try { current = await requestWarStatus('war.session.clear'); localError=''; render(); }
           catch (error) { localError=SLINK.core.format.errorMessage(error); render(); }
         });
+        bindControl(root.querySelector('#slink-war-link-formatter'),'change', async event => {
+          linkFormatterEnabled = event.currentTarget.checked;
+          await SLINK.core.storage.set('ui.war.linkFormatter.v1',linkFormatterEnabled);
+          if (!linkFormatterEnabled) removeLinkFormatter();
+          else scheduleLiveWarRead();
+        });
         bindControl(root.querySelector('#slink-war-save'),'click', saveWarSettings);
         updateWarSendButtons();
       }
@@ -1347,6 +1355,257 @@
         }
       }
 
+
+
+      // SLINK-native adaptation of Torn Profile Link Formatter v1.6.29.
+      // Original script: GNS-C4 [3960752], contributor Considious [3853023].
+      // Single, explicit click prepares a draft; a second click sends it.
+      // The standalone formatter takes precedence when installed.
+      let linkFormatterEnabled = true;
+      let formatterStyles = null;
+      const formatterWidths = new WeakMap();
+      const armedFormatterButtons = new WeakMap();
+      function formatWarChat(row) {
+        const link = row.querySelector('.member a[href*="profiles.php?XID="]');
+        const id = Number(row.dataset.player_id || link?.href.match(/XID=(\d+)/)?.[1]);
+        if (!id || !link) return '';
+        const name = (link.textContent || 'Player').replace(/\s*\[\d+\]\s*$/, '').trim().replace(/[\[\]\\]/g, '');
+        const source = current?.runtime?.snapshot?.members?.find(member => Number(member.id) === id);
+        const observed = observedWarRows.get(id);
+        const state = observed && Date.now() - observed.observedAt <= WAR_PAGE_MAX_AGE_MS
+          ? observed : source;
+        const activity = String(state?.activity || 'Unknown').toLowerCase();
+        const emoji = activity === 'online' ? '🟢 ' : activity === 'idle' ? '🟡 '
+          : activity === 'offline' ? '⚫ ' : '⚪ ';
+        const stateText = String(state?.statusState || 'Unknown');
+        const until = Number(state?.statusUntil) || 0;
+        const status = /hospital/i.test(stateText) && until > Date.now() / 1000
+          ? 'Hospital — out in ' + SLINK.core.format.formatHumanDuration(until - Date.now() / 1000)
+            + ', at ' + WAR.tctTime(until) + ' TCT'
+          : 'Status: ' + stateText;
+        const attack = 'https://www.torn.com/page.php?sid=attack&user2ID=' + id;
+        const parts = ['[Attack](' + attack + ')', status];
+        if (Number.isFinite(Number(source?.battleStatsEstimate)) && source?.battleStatsEstimate != null) {
+          parts.push('(FFScouter: ~Total: ' + SLINK.core.format.shortNumber(source.battleStatsEstimate) + ')');
+        }
+        return emoji + '[' + name + '](https://www.torn.com/profiles.php?XID=' + id
+          + ') [' + id + '] — ' + parts.join(' — ');
+      }
+      function factionChatForFormatter() {
+        const root = document.querySelector('#faction');
+        if (!root || !root.getClientRects().length) return null;
+        const textarea = root.querySelector('textarea');
+        const send = textarea?.parentElement?.querySelector('button:not([data-prevent-flyout-swipe])')
+          || root.querySelector('button[class*="iconWrapper"]');
+        return textarea && send ? {textarea,send} : null;
+      }
+      async function onFormatterClick(event,button,row) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!viewingRankedWar() || button.disabled) return;
+        const message = formatWarChat(row);
+        if (!message) return;
+        if (event.shiftKey) {
+          armedFormatterButtons.delete(button);
+          button.textContent = '📄';
+          try { await navigator.clipboard.writeText(message); button.title = 'Copied formatted player link'; }
+          catch { button.title = 'Clipboard permission unavailable'; }
+          return;
+        }
+        const existing = armedFormatterButtons.get(button);
+        const chat = factionChatForFormatter();
+        if (!chat) { button.title = 'Open faction chat first'; return; }
+        if (existing) {
+          if (chat.textarea.value !== existing || chat.send.disabled) {
+            armedFormatterButtons.delete(button);
+            button.textContent = '📄';
+            button.title = 'Chat draft changed; click to prepare again';
+            return;
+          }
+          armedFormatterButtons.delete(button);
+          button.textContent = '📄';
+          chat.send.click(); // One native send, directly from the second user click.
+          return;
+        }
+        if (chat.textarea.value.trim()) { button.title = 'Send or clear the existing draft first'; return; }
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;
+        if (!setter) return;
+        setter.call(chat.textarea,message);
+        chat.textarea.dispatchEvent(new Event('input',{bubbles:true}));
+        armedFormatterButtons.set(button,message);
+        button.textContent = '➤';
+        button.title = 'Click again to send this prepared message. Shift-click copies instead.';
+      }
+      function removeLinkFormatter() {
+        for (const cell of document.querySelectorAll('.enemy-faction .slink-war-link-cell')) {
+          const row = cell.parentElement;
+          const memberCell = row?.querySelector(':scope > .member');
+          const old = memberCell && formatterWidths.get(memberCell);
+          if (old && memberCell.style.getPropertyValue('width').trim() === old.applied) {
+            if (old.value) memberCell.style.setProperty('width',old.value,old.priority);
+            else memberCell.style.removeProperty('width');
+          }
+          cell.remove();
+        }
+        formatterStyles?.remove();
+        formatterStyles = null;
+      }
+      function insertLinkFormatter(list) {
+        if (!linkFormatterEnabled || !viewingRankedWar()) { removeLinkFormatter(); return; }
+        if (!list || list.closest('.enemy-faction') == null) return;
+        if (list.querySelector('.gnsc-link-cell') || list.previousElementSibling?.querySelector('.gnsc-link-cell')) {
+          removeLinkFormatter(); // The separately-installed script owns the column.
+          return;
+        }
+        if (!formatterStyles) {
+          formatterStyles = document.createElement('style');
+          formatterStyles.textContent = '.enemy-faction .slink-war-link-cell{float:left;box-sizing:border-box;width:28px;height:30px;line-height:30px;text-align:center;overflow:hidden;white-space:nowrap}.enemy-faction .slink-war-link-cell button{border:0;background:transparent;color:inherit;padding:0;margin:0;width:27px;height:29px;font:inherit;font-size:18px;line-height:29px;cursor:pointer}.enemy-faction .slink-war-link-header{font:inherit;line-height:inherit}';
+          (document.head || document.documentElement).appendChild(formatterStyles);
+        }
+        const header = list.previousElementSibling;
+        const candidates = [
+          ...(header?.matches('.white-grad') ? [header] : []),
+          ...list.querySelectorAll(':scope > li.enemy')
+        ].filter(row => !row.querySelector(':scope > .slink-war-link-cell'));
+        const ready = candidates.map(row => {
+          const memberCell = row.querySelector(':scope > .member');
+          const clear = row.querySelector(':scope > .clear');
+          const attack = row.querySelector(':scope > .attack');
+          const isHeader = row === header;
+          if (!memberCell || !clear || !attack || (!isHeader && !memberCell.querySelector('a[href*="profiles.php?XID="]'))) return null;
+          const value = memberCell.style.getPropertyValue('width').trim();
+          const priority = memberCell.style.getPropertyPriority('width');
+          // All measurements precede all layout writes.
+          const fallback = value ? '' : memberCell.getBoundingClientRect().width;
+          return {row,memberCell,clear,isHeader,value,priority,fallback};
+        }).filter(Boolean);
+        for (const item of ready) {
+          const base = item.value || (item.fallback >= 125 ? item.fallback + 'px' : '');
+          if (!base || item.row.querySelector(':scope > .slink-war-link-cell')) continue;
+          const applied = 'calc(' + base + ' - 28px)';
+          formatterWidths.set(item.memberCell,{value:item.value,priority:item.priority,applied});
+          const cell = document.createElement('div');
+          cell.className = 'slink-war-link-cell left' + (item.isHeader ? ' slink-war-link-header' : '');
+          if (item.isHeader) cell.textContent = 'Link';
+          else {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = '📄';
+            button.title = 'Click to prepare faction chat; click again to send. Shift-click to copy.';
+            button.addEventListener('click',event => void onFormatterClick(event,button,item.row));
+            cell.appendChild(button);
+          }
+          item.memberCell.style.setProperty('width',applied,'important');
+          item.clear.before(cell);
+        }
+      }
+
+      // Read-only local-first War status. Only the manually opened, focused
+      // ranked-war view is observed; never scrape background Torn pages.
+      // Existing War API/worker snapshots remain the fallback.
+      const observedWarRows = new Map();
+      const WAR_PAGE_MAX_AGE_MS = 15_000;
+      let warPageScanTimer = null;
+      let warPageLastScanAt = 0;
+      function viewingRankedWar() {
+        return /\/factions\.php$/i.test(location.pathname)
+          && /\/war\/rank(?:\/|$)/i.test(location.hash)
+          && document.visibilityState === 'visible' && document.hasFocus();
+      }
+      function readLiveWarRows() {
+        if (!viewingRankedWar()) return 0;
+        const list = document.querySelector('.enemy-faction ul.members-list');
+        if (!list) return 0;
+        const now = Date.now();
+        let changed = 0;
+        for (const row of list.querySelectorAll(':scope > li.enemy')) {
+          const nameLink = row.querySelector('.member a[href*="profiles.php?XID="]');
+          const id = Number(row.dataset.player_id || nameLink?.href.match(/XID=(\d+)/)?.[1]);
+          if (!Number.isSafeInteger(id) || id <= 0) continue;
+          const cell = row.querySelector(':scope > .status');
+          if (!cell) continue;
+          const text = (cell.querySelector('[aria-label]')?.getAttribute('aria-label')
+            || cell.textContent || '').replace(/\s+/g, ' ').trim();
+          if (!text) continue;
+          const state = /\bhospital\b/i.test(text) ? 'Hospital'
+            : /\btravel/i.test(text) ? 'Traveling'
+            : /\babroad\b/i.test(text) ? 'Abroad'
+            : /\bokay\b/i.test(text) ? 'Okay'
+            : text.split(/\s+/)[0];
+          const statusUntil = state === 'Hospital'
+            ? Math.max(0, Number(row.getAttribute('data-until')) || 0) : 0;
+          const activityLabel = row.querySelector('[class*="userStatusWrap"][aria-label]')?.getAttribute('aria-label') || '';
+          const activity = /\bonline\b/i.test(activityLabel) ? 'Online'
+            : /\bidle\b|\baway\b/i.test(activityLabel) ? 'Idle'
+            : /\boffline\b/i.test(activityLabel) ? 'Offline' : '';
+          const plane = /Type of plane:\s*([^.;]+)/i.exec(text)?.[1]?.trim() || '';
+          const name = (nameLink?.textContent || 'Player ' + id).replace(/\s*\[\d+\]\s*$/, '').trim();
+          const level = Number(row.querySelector(':scope > .level')?.textContent?.trim()) || 0;
+          const next = {id, name, level, statusState:state, statusDescription:text, statusUntil, activity, plane, observedAt:now, source:'visible-war-roster'};
+          const old = observedWarRows.get(id);
+          if (!old || old.statusState !== state || old.statusDescription !== text
+            || old.statusUntil !== statusUntil || (activity && old.activity !== activity)
+            || old.plane !== plane) changed++;
+          observedWarRows.set(id,next);
+        }
+        insertLinkFormatter(list);
+        warPageLastScanAt = now;
+        return changed;
+      }
+      function applyLiveWarRows() {
+        if (!viewingRankedWar() || !current?.runtime) return false;
+        const now = Date.now();
+        const snapshot = current.runtime.snapshot || {};
+        let changed = false;
+        const backendMembers = Array.isArray(snapshot.members) ? snapshot.members : [];
+        const members = backendMembers.map(member => {
+          const row = observedWarRows.get(Number(member.id));
+          if (!row || now - row.observedAt > WAR_PAGE_MAX_AGE_MS) return member;
+          if (member.statusState === row.statusState && member.statusDescription === row.statusDescription
+            && Number(member.statusUntil || 0) === row.statusUntil
+            && (!row.activity || member.activity === row.activity) && member.statusSource === row.source) return member;
+          changed = true;
+          return {...member, statusState:row.statusState, statusDescription:row.statusDescription,
+            statusUntil:row.statusUntil, activity:row.activity || member.activity,
+            statusSource:row.source, statusObservedAt:row.observedAt, planeImageType:row.plane || member.planeImageType};
+        });
+        // Show a locally observed target even if backend/API roster is still loading.
+        const knownIds = new Set(members.map(member => Number(member.id)));
+        for (const row of observedWarRows.values()) {
+          if (now - row.observedAt > WAR_PAGE_MAX_AGE_MS || knownIds.has(row.id)) continue;
+          changed = true;
+          members.push({id:row.id, name:row.name, level:row.level, activity:row.activity || 'Unknown',
+            statusState:row.statusState, statusDescription:row.statusDescription,
+            statusUntil:row.statusUntil, statusSource:row.source,
+            statusObservedAt:row.observedAt, planeImageType:row.plane,
+            fairFight:null, battleStatsEstimate:null});
+        }
+        if (changed) current = {...current, runtime:{...current.runtime, snapshot:{...snapshot,members}}};
+        return changed;
+      }
+      function scheduleLiveWarRead() {
+        if (stopped || !viewingRankedWar() || warPageScanTimer) return;
+        warPageScanTimer = setTimeout(() => {
+          warPageScanTimer = null;
+          if (!viewingRankedWar()) return;
+          const changed = readLiveWarRows();
+          if (applyLiveWarRows() && changed && fullUi) render();
+        }, 100);
+      }
+      function warRosterMutation(records) {
+        if (!viewingRankedWar()) return false;
+        for (const record of records) {
+          const target = record.target;
+          if (target?.nodeType === Node.ELEMENT_NODE && target.closest?.('.enemy-faction')) return true;
+          for (const node of record.addedNodes) {
+            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+            if (node.matches?.('.enemy-faction, .enemy-faction ul.members-list, li.enemy')
+              || node.querySelector?.('.enemy-faction, .enemy-faction ul.members-list')) return true;
+          }
+        }
+        return false;
+      }
+
       async function runCycle(force = false) {
         if (busy || stopped || savingWarSettings || context.signal?.aborted) return;
         const revision = settingsRevision;
@@ -1362,6 +1621,7 @@
             );
           }
           if (stopped || context.signal?.aborted) return;
+          if (viewingRankedWar()) { readLiveWarRows(); applyLiveWarRows(); }
           if (revision === settingsRevision) localError = '';
           await renderHybridAlerts();
           evaluateAlerts();
@@ -1396,6 +1656,7 @@
       }
 
       current = await requestWarStatus('war.status');
+      linkFormatterEnabled = await SLINK.core.storage.get('ui.war.linkFormatter.v1', true);
       dismissedRetalMap = await dismissedRetals();
       activeTab = await SLINK.core.storage.get('ui.war.activeTab.v1', 'targets');
       const savedTargetFilters = await SLINK.core.storage.get('ui.war.targetFilters.v1', {});
@@ -1423,6 +1684,8 @@
       document.addEventListener('click', handleProfileAttack, true);
       document.addEventListener('click', handleRankTabClick, true);
       document.addEventListener('visibilitychange', refreshLeader);
+      global.addEventListener('hashchange', scheduleLiveWarRead);
+      document.addEventListener('visibilitychange', scheduleLiveWarRead);
       if (fullUi) {
         moduleView = context.ui.getContentElement()?.closest('.module-view') || null;
         if (moduleView) {
@@ -1437,6 +1700,7 @@
       await refreshLeader();
       leaderTimer = setInterval(() => void refreshLeader(), 5_000);
       armoryObserver = new MutationObserver(records => {
+        if (warRosterMutation(records)) scheduleLiveWarRead();
         if (/\/profiles\.php$/i.test(location.pathname)) renderProfileAttackGate();
         if (onAttackPage() && mutationsMayContainAttackResult(records)) scanAttackMugResults();
         if (/\/factions\.php$/i.test(location.pathname) && rankPanelIsVisible()) scheduleRankOrderCapture();
@@ -1446,9 +1710,15 @@
       renderInsideGateSurfaces();
       scanAttackMugResults();
       syncWarVisibility();
+      scheduleLiveWarRead();
       void runCycle(false);
       return { stop() {
         stopped = true;
+        removeLinkFormatter();
+        clearTimeout(warPageScanTimer);
+        warPageScanTimer = null;
+        global.removeEventListener('hashchange', scheduleLiveWarRead);
+        document.removeEventListener('visibilitychange', scheduleLiveWarRead);
         clearTimeout(timer);
         clearTimeout(attackMugScanTimer);
         attackMugScanTimer = null;
