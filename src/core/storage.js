@@ -38,7 +38,7 @@
     const stored = await chrome.storage.local.get(null);
     const values = Object.create(null);
     for (const [key, value] of Object.entries(stored || {})) {
-      if (key.startsWith(SLINK.STORAGE_PREFIX)) values[key] = value;
+      if (key.startsWith(SLINK.STORAGE_PREFIX) && !key.startsWith('slink.kal.credentials.')) values[key] = value;
     }
     return {
       schemaVersion:1,
@@ -55,7 +55,7 @@
     }
     const values = Object.create(null);
     for (const [key, value] of Object.entries(backup.values)) {
-      if (key.startsWith(SLINK.STORAGE_PREFIX)) values[key] = value;
+      if (key.startsWith(SLINK.STORAGE_PREFIX) && !key.startsWith('slink.kal.credentials.')) values[key] = value;
     }
     const restoredKeys = Object.keys(values);
     if (!restoredKeys.length) throw new Error('The backup does not contain any SLINK settings.');
@@ -73,3 +73,4 @@
     update
   }));
 })(globalThis);
+

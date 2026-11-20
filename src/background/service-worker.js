@@ -1,5 +1,7 @@
 importScripts(
   '../core/runtime.js',
+  '../core/kal.js',
+  'kal-service.js',
   '../core/errors.js',
   '../core/format.js',
   '../core/storage.js',
@@ -423,6 +425,7 @@ const routes = {
 
   ...SLINK.services.leveling.routes,
   ...SLINK.services.playerIntelligence.routes,
+  ...SLINK.services.kal.routes,
   ...SLINK.services.targetList.routes,
   ...SLINK.services.chatConfig.routes,
   ...SLINK.services.chatFairFight.routes,
@@ -598,4 +601,5 @@ chrome.alarms.onAlarm.addListener(alarm => {
 });
 
 void initialize().catch(error => console.error('[SLINK] Service worker initialization:', error));
+
 

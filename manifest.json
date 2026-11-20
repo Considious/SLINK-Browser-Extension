@@ -24,7 +24,8 @@
     "https://yata.yt/*",
     "https://prombot.co.uk:8443/*",
     "https://torn-intel.com/*",
-    "https://droqsdb.com/*"
+    "https://droqsdb.com/*",
+    "https://api.kalends.dev/*"
   ],
   "background": {
     "service_worker": "src/background/service-worker.js"
@@ -154,7 +155,10 @@
         "src/modules/faction-rooms.js",
         "src/modules/faction-officers.js",
         "src/modules/contribution.js",
-        "src/content/content-script.js"
+        "src/content/content-script.js",
+        "src/core/kal.js",
+        "src/core/kal-ui.js",
+        "src/content/kal.js"
       ]
     }
   ]
