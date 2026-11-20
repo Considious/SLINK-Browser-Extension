@@ -10,6 +10,18 @@ These are the highest-priority QOL6 work. **Fixes/regressions take priority over
 
 
 
+## URGENT REGRESSION — P0 — SLINK timers (Extension + Torn PDA)
+
+**User report (2026-11-20):** A PDA user still sees the independent SLINK timer box; it obstructs Torn and reopens after being closed/minimized. This is unresolved, even though related timer items already appear under **Batch 2 — Timers and company**. **Fix before feature work; do not mark resolved without PDA live confirmation.**
+
+- [ ] **Stop unwanted reopening:** trace the timer mount/re-mount lifecycle, navigation/visibility observers, saved open/collapsed state, and settings hydration; closing or minimizing must remain effective across rerenders and navigation. No duplicate surfaces, forced re-expansion, or reappearance after the toggle is off.
+- [ ] **Move to the TornTools-style timer location:** integrate concise SLINK timers into the same established sidebar/content region as TornTools timers (or the closest compatible native anchor), rather than a free-floating standalone box. Gracefully handle TornTools not being installed; never cover native controls or chat.
+- [ ] **Dedicated timers enable/disable control:** a persistent Page Tools switch must fully remove the timer UI and prevent observers from remounting it until explicitly re-enabled, in both Extension and PDA. Preserve other Page Tools.
+- [ ] **PDA-first regression pass:** on Android/iOS, test phone-width portrait/landscape, closing and reopening SLINK dashboard, minimizing timers, page navigation, reload, Torn chat, and switching modules. Verify the timers stay in the intended position and respect collapsed/disabled preferences.
+- [ ] **Keep timer content compact:** reuse the existing Batch 2 specification for OC, Ranked War, Company Addiction, and Virus; don't invent duplicate or verbose timer surfaces. Check missing/stale data and automatic refresh separately.
+
+**Existing related checklist:** **Batch 2 — Timers and company** remains the feature-detail/test section; these P0 items are the blocking regression and placement acceptance criteria, not a second implementation.
+
 ## Jack O’ Slink companion
 
 - [x] **Companion runtime persistence:** User verified Jack stays active when the dashboard closes or minimizes on an earlier build.
