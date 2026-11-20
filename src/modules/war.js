@@ -1539,7 +1539,9 @@
             : /\bidle\b|\baway\b/i.test(activityLabel) ? 'Idle'
             : /\boffline\b/i.test(activityLabel) ? 'Offline' : '';
           const plane = /Type of plane:\s*([^.;]+)/i.exec(text)?.[1]?.trim() || '';
-          const next = {id, statusState:state, statusDescription:text, statusUntil, activity, plane, observedAt:now, source:'visible-war-roster'};
+          const name = (nameLink?.textContent || 'Player ' + id).replace(/\s*\[\d+\]\s*$/, '').trim();
+          const level = Number(row.querySelector(':scope > .level')?.textContent?.trim()) || 0;
+          const next = {id, name, level, statusState:state, statusDescription:text, statusUntil, activity, plane, observedAt:now, source:'visible-war-roster'};
           const old = observedWarRows.get(id);
           if (!old || old.statusState !== state || old.statusDescription !== text
             || old.statusUntil !== statusUntil || (activity && old.activity !== activity)
@@ -1551,11 +1553,12 @@
         return changed;
       }
       function applyLiveWarRows() {
-        if (!viewingRankedWar() || !current?.runtime?.snapshot?.members?.length) return false;
+        if (!viewingRankedWar() || !current?.runtime) return false;
         const now = Date.now();
-        const snapshot = current.runtime.snapshot;
+        const snapshot = current.runtime.snapshot || {};
         let changed = false;
-        const members = snapshot.members.map(member => {
+        const backendMembers = Array.isArray(snapshot.members) ? snapshot.members : [];
+        const members = backendMembers.map(member => {
           const row = observedWarRows.get(Number(member.id));
           if (!row || now - row.observedAt > WAR_PAGE_MAX_AGE_MS) return member;
           if (member.statusState === row.statusState && member.statusDescription === row.statusDescription
@@ -1566,6 +1569,17 @@
             statusUntil:row.statusUntil, activity:row.activity || member.activity,
             statusSource:row.source, statusObservedAt:row.observedAt, planeImageType:row.plane || member.planeImageType};
         });
+        // Show a locally observed target even if backend/API roster is still loading.
+        const knownIds = new Set(members.map(member => Number(member.id)));
+        for (const row of observedWarRows.values()) {
+          if (now - row.observedAt > WAR_PAGE_MAX_AGE_MS || knownIds.has(row.id)) continue;
+          changed = true;
+          members.push({id:row.id, name:row.name, level:row.level, activity:row.activity || 'Unknown',
+            statusState:row.statusState, statusDescription:row.statusDescription,
+            statusUntil:row.statusUntil, statusSource:row.source,
+            statusObservedAt:row.observedAt, planeImageType:row.plane,
+            fairFight:null, battleStatsEstimate:null});
+        }
         if (changed) current = {...current, runtime:{...current.runtime, snapshot:{...snapshot,members}}};
         return changed;
       }
