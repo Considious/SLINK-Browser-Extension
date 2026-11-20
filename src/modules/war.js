@@ -1347,6 +1347,98 @@
         }
       }
 
+
+      // Read-only local-first War status. Only the manually opened, focused
+      // ranked-war view is observed; never scrape background Torn pages.
+      // Existing War API/worker snapshots remain the fallback.
+      const observedWarRows = new Map();
+      const WAR_PAGE_MAX_AGE_MS = 15_000;
+      let warPageScanTimer = null;
+      let warPageLastScanAt = 0;
+      function viewingRankedWar() {
+        return /\/factions\.php$/i.test(location.pathname)
+          && /\/war\/rank(?:\/|$)/i.test(location.hash)
+          && document.visibilityState === 'visible' && document.hasFocus();
+      }
+      function readLiveWarRows() {
+        if (!viewingRankedWar()) return 0;
+        const list = document.querySelector('.enemy-faction ul.members-list');
+        if (!list) return 0;
+        const now = Date.now();
+        let changed = 0;
+        for (const row of list.querySelectorAll(':scope > li.enemy')) {
+          const nameLink = row.querySelector('.member a[href*="profiles.php?XID="]');
+          const id = Number(row.dataset.player_id || nameLink?.href.match(/XID=(\d+)/)?.[1]);
+          if (!Number.isSafeInteger(id) || id <= 0) continue;
+          const cell = row.querySelector(':scope > .status');
+          if (!cell) continue;
+          const text = (cell.querySelector('[aria-label]')?.getAttribute('aria-label')
+            || cell.textContent || '').replace(/\s+/g, ' ').trim();
+          if (!text) continue;
+          const state = /\bhospital\b/i.test(text) ? 'Hospital'
+            : /\btravel/i.test(text) ? 'Traveling'
+            : /\babroad\b/i.test(text) ? 'Abroad'
+            : /\bokay\b/i.test(text) ? 'Okay'
+            : text.split(/\s+/)[0];
+          const statusUntil = state === 'Hospital'
+            ? Math.max(0, Number(row.getAttribute('data-until')) || 0) : 0;
+          const activityLabel = row.querySelector('[class*="userStatusWrap"][aria-label]')?.getAttribute('aria-label') || '';
+          const activity = /\bonline\b/i.test(activityLabel) ? 'Online'
+            : /\bidle\b|\baway\b/i.test(activityLabel) ? 'Idle'
+            : /\boffline\b/i.test(activityLabel) ? 'Offline' : '';
+          const plane = /Type of plane:\s*([^.;]+)/i.exec(text)?.[1]?.trim() || '';
+          const next = {id, statusState:state, statusDescription:text, statusUntil, activity, plane, observedAt:now, source:'visible-war-roster'};
+          const old = observedWarRows.get(id);
+          if (!old || old.statusState !== state || old.statusDescription !== text
+            || old.statusUntil !== statusUntil || (activity && old.activity !== activity)
+            || old.plane !== plane) changed++;
+          observedWarRows.set(id,next);
+        }
+        warPageLastScanAt = now;
+        return changed;
+      }
+      function applyLiveWarRows() {
+        if (!viewingRankedWar() || !current?.runtime?.snapshot?.members?.length) return false;
+        const now = Date.now();
+        const snapshot = current.runtime.snapshot;
+        let changed = false;
+        const members = snapshot.members.map(member => {
+          const row = observedWarRows.get(Number(member.id));
+          if (!row || now - row.observedAt > WAR_PAGE_MAX_AGE_MS) return member;
+          if (member.statusState === row.statusState && member.statusDescription === row.statusDescription
+            && Number(member.statusUntil || 0) === row.statusUntil
+            && (!row.activity || member.activity === row.activity) && member.statusSource === row.source) return member;
+          changed = true;
+          return {...member, statusState:row.statusState, statusDescription:row.statusDescription,
+            statusUntil:row.statusUntil, activity:row.activity || member.activity,
+            statusSource:row.source, statusObservedAt:row.observedAt, planeImageType:row.plane || member.planeImageType};
+        });
+        if (changed) current = {...current, runtime:{...current.runtime, snapshot:{...snapshot,members}}};
+        return changed;
+      }
+      function scheduleLiveWarRead() {
+        if (stopped || !viewingRankedWar() || warPageScanTimer) return;
+        warPageScanTimer = setTimeout(() => {
+          warPageScanTimer = null;
+          if (!viewingRankedWar()) return;
+          const changed = readLiveWarRows();
+          if (applyLiveWarRows() && changed && fullUi) render();
+        }, 100);
+      }
+      function warRosterMutation(records) {
+        if (!viewingRankedWar()) return false;
+        for (const record of records) {
+          const target = record.target;
+          if (target?.nodeType === Node.ELEMENT_NODE && target.closest?.('.enemy-faction')) return true;
+          for (const node of record.addedNodes) {
+            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+            if (node.matches?.('.enemy-faction, .enemy-faction ul.members-list, li.enemy')
+              || node.querySelector?.('.enemy-faction, .enemy-faction ul.members-list')) return true;
+          }
+        }
+        return false;
+      }
+
       async function runCycle(force = false) {
         if (busy || stopped || savingWarSettings || context.signal?.aborted) return;
         const revision = settingsRevision;
@@ -1362,6 +1454,7 @@
             );
           }
           if (stopped || context.signal?.aborted) return;
+          if (viewingRankedWar()) { readLiveWarRows(); applyLiveWarRows(); }
           if (revision === settingsRevision) localError = '';
           await renderHybridAlerts();
           evaluateAlerts();
@@ -1423,6 +1516,8 @@
       document.addEventListener('click', handleProfileAttack, true);
       document.addEventListener('click', handleRankTabClick, true);
       document.addEventListener('visibilitychange', refreshLeader);
+      global.addEventListener('hashchange', scheduleLiveWarRead);
+      document.addEventListener('visibilitychange', scheduleLiveWarRead);
       if (fullUi) {
         moduleView = context.ui.getContentElement()?.closest('.module-view') || null;
         if (moduleView) {
@@ -1437,6 +1532,7 @@
       await refreshLeader();
       leaderTimer = setInterval(() => void refreshLeader(), 5_000);
       armoryObserver = new MutationObserver(records => {
+        if (warRosterMutation(records)) scheduleLiveWarRead();
         if (/\/profiles\.php$/i.test(location.pathname)) renderProfileAttackGate();
         if (onAttackPage() && mutationsMayContainAttackResult(records)) scanAttackMugResults();
         if (/\/factions\.php$/i.test(location.pathname) && rankPanelIsVisible()) scheduleRankOrderCapture();
@@ -1446,9 +1542,14 @@
       renderInsideGateSurfaces();
       scanAttackMugResults();
       syncWarVisibility();
+      scheduleLiveWarRead();
       void runCycle(false);
       return { stop() {
         stopped = true;
+        clearTimeout(warPageScanTimer);
+        warPageScanTimer = null;
+        global.removeEventListener('hashchange', scheduleLiveWarRead);
+        document.removeEventListener('visibilitychange', scheduleLiveWarRead);
         clearTimeout(timer);
         clearTimeout(attackMugScanTimer);
         attackMugScanTimer = null;
