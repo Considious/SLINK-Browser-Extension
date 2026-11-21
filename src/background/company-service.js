@@ -127,7 +127,29 @@
     }
   }
 
+  let sidebarCheck=null;
+  async function sidebarCompany(){
+    if(sidebarCheck)return sidebarCheck;
+    sidebarCheck=(async()=>{
+      if(!await monitoringEnabled())return null;
+      const session=await SLINK.services.permissionAccess.ensureSession(false,COMPANY.SCOPE);
+      const owner=String(session?.userId||'');if(!owner)return null;
+      const keyName='inline-status.companyDaily.v1',cached=await SLINK.core.storage.get(keyName,null),now=new Date(),date=now.toISOString().slice(0,10);
+      if(now.getUTCHours()!==18||now.getUTCMinutes()!==15||cached?.owner===owner&&cached.date===date)return cached?.owner===owner?cached:null;
+      const record={owner,date,at:Date.now(),penalty:cached?.owner===owner?cached.penalty:null};
+      await SLINK.core.storage.set(keyName,record);
+      const key=await tornKey();if(!key)return record;
+      const result=await tornJson('https://api.torn.com/v2/company/employees?comment=SLINK%20Company%20sidebar',key);
+      const rows=Array.isArray(result.employees)?result.employees:Object.values(result.employees||{});
+      const value=rows.find(e=>Number(e.id??e.user_id)===Number(owner))?.effectiveness?.addiction;
+      record.penalty=typeof value==='number'&&Number.isFinite(value)?Math.min(0,value):null;
+      await SLINK.core.storage.set(keyName,record);return record;
+    })();
+    try{return await sidebarCheck;}finally{sidebarCheck=null;}
+  }
+
   const routes = Object.freeze({
+    'inline-status.company':sidebarCompany,
     'company.status':payload => publicStatus(payload?.refreshIfDue !== false),
     'company.refresh':() => refresh(true),
     'company.settings.save':payload => saveSettings(payload?.settings || payload)

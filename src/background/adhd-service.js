@@ -690,11 +690,15 @@
       finally{clearTimeout(timer);}
     },
     'inline-status.virus':async()=>{
-      await requireAccess();
+      const session=await requireAccess(),owner=String(session.userId),cacheKey='inline-status.virus.v1';
+      const cached=await SLINK.core.storage.get(cacheKey,null);
+      if(cached?.owner===owner&&cached.at<=Date.now()&&Date.now()-cached.at<900000)return {virus:cached.virus};
       const key=await accessKey();
       if(!key)throw Error('Enable Efficiency and save your Torn API key first.');
       const result=await tornJson('https://api.torn.com/v2/user/virus?comment=SLINK%20virus%20timer',key);
-      return {virus:result?.virus===null?null:{until:result?.virus?.until}};
+      if(result?.virus!==null&&!(typeof result?.virus?.until==='number'&&Number.isFinite(result.virus.until)&&result.virus.until>0))throw Error('Torn did not return a usable virus timestamp.');
+      const virus=result.virus===null?null:{until:result.virus.until};
+      await SLINK.core.storage.set(cacheKey,{owner,at:Date.now(),virus});return {virus};
     },
     async 'crimes.recipes.candidates'(input){if(!await recipeSession()||typeof input?.key!=='string')return [];return recipes.candidates('arson',input.key);},
     async 'crimes.recipes.record'(input,sender){
