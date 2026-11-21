@@ -85,8 +85,8 @@
           (last ? '<span>Last observed restock: ' + escapeHtml(ABROAD.formatTct(last)) + '</span>' : '<span>Restock history is still learning.</span>') +
           (next ? '<span>Estimated next restock: ' + escapeHtml(ABROAD.formatTct(next)) + (row.predictionSource ? ' · ' + escapeHtml(row.predictionSource) : '') + '</span>' : '') +
           (leaveAt ? '<span class="slink-leave-time">Leave at ' + escapeHtml(ABROAD.formatTct(leaveAt)) + '</span>' : '<span>Leave time will appear when a provider publishes a restock estimate.</span>') +
-          '</div><div class="slink-abroad-actions"><button type="button" data-watch-key="' + escapeHtml(row.key) + '" data-watched="' + String(row.watched === true) + '">' +
-          (row.watched ? 'Watching departure' : 'Alert me when to leave') + '</button></div></article>';
+          '</div><div class="slink-abroad-actions"><button type="button" class="slink-switch-button" role="switch" data-watch-key="' + escapeHtml(row.key) + '" data-watched="' + String(row.watched === true) + '">' +
+          'Departure alert' + '</button></div></article>';
       }
 
       const root = ui.getContentElement();
@@ -191,7 +191,7 @@
           }
           const button = record.node.querySelector('[data-watch-key]');
           button.dataset.watched = String(row.watched === true);
-          button.textContent = row.watched ? 'Watching departure' : 'Alert me when to leave';
+          button.setAttribute('aria-checked',String(row.watched === true));
           button.disabled = pendingWatches.has(row.key);
         }
         for (const [key,record] of cards) if (!present.has(key)) {record.node.remove();cards.delete(key);}

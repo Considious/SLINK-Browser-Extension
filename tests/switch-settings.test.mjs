@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const local=fs.existsSync(new URL('./src__core__qol.js',import.meta.url));
+const read=(path)=>fs.readFileSync(new URL(local?'./'+path.replaceAll('/','__'):'../'+path,import.meta.url),'utf8');
+const scope={};vm.runInNewContext(read('src/core/qol.js'),scope);
+assert.equal(scope.SLINK_QOL.normalize().timers,true);assert.equal(scope.SLINK_QOL.normalize({timers:false}).timers,false);
+assert.equal(scope.SLINK_QOL.normalize(JSON.parse(JSON.stringify({enabled:true,timers:false,quickItems:true}))).quickItems,true);
+const merit=read('src/modules/merits.js');
+const fn=merit.slice(merit.indexOf('  function cardMarkup('),merit.indexOf('  SLINK.modules.register('));
+const card=new Function('escapeHtml','formatNumber','progressMarkup',fn+';return cardMarkup;')(String,Number,()=>'<div>Progress</div>');
+const goal={key:'a',name:'Fixture honor'};
+const full=card(goal,{settings:{pinned:['b','c','d']}});assert.match(full,/disabled title="Three merits/);assert.match(full,/<small>Three merits are pinned/);assert.match(full,/aria-checked="false"/);
+const pinned=card(goal,{settings:{pinned:['a','b','c']}});assert.doesNotMatch(pinned,/disabled/);assert.match(pinned,/aria-checked="true"/);
+console.log('Switch settings: default compatibility, saved timer opt-out, unrelated settings and merit pin limit passed.');

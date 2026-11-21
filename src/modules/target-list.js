@@ -157,7 +157,7 @@
           <div class="target-list-actions">
             <a href="${profile}" data-target-list-profile="${target.id}">Profile</a><a href="${attack}">Attack</a>
             <button type="button" data-target-list-action="refresh" ${busyId === target.id ? 'disabled' : ''}>${busyId === target.id ? 'Refreshing…' : 'Refresh'}</button>
-            <button type="button" data-target-list-action="stakeout">${target.stakeout ? 'Stop Stakeout' : 'Stakeout'}</button>
+            <button type="button" class="slink-switch-button" role="switch" aria-checked="${target.stakeout === true}" data-target-list-action="stakeout">Stakeout</button>
             <button type="button" data-target-list-action="edit">Edit</button>
             <button type="button" data-target-list-action="remove">Remove</button>
           </div>

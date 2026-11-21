@@ -25,7 +25,7 @@
     const later = goal.laterMilestones?.length
       ? `<small class="slink-merit-later">Later: ${goal.laterMilestones.slice(0, 5).map(row => `${escapeHtml(row.name)}${row.targets?.length ? ` ${row.targets.map(formatNumber).join(' / ')}` : ''}`).join(' · ')}</small>`
       : '';
-    return `<article class="slink-merit-card ${pinned ? 'pinned' : ''}"><header><div><strong>${escapeHtml(goal.name)}</strong><small>${goal.kind === 'medal' ? 'Medal' : 'Honor'}${goal?.type?.title ? ` · ${escapeHtml(goal.type.title)}` : ''}</small></div><button type="button" data-merit-pin="${escapeHtml(goal.key)}">${isPinned ? 'Unpin' : 'Pin'}</button></header><p>${escapeHtml(goal.description || 'Torn did not provide a requirement.')}</p>${progressMarkup(goal.progress)}${later}</article>`;
+    return `<article class="slink-merit-card ${pinned ? 'pinned' : ''}"><header><div><strong>${escapeHtml(goal.name)}</strong><small>${goal.kind === 'medal' ? 'Medal' : 'Honor'}${goal?.type?.title ? ` · ${escapeHtml(goal.type.title)}` : ''}</small></div><button type="button" class="slink-switch-button" role="switch" aria-label="Pin ${escapeHtml(goal.name)}" aria-checked="${Boolean(isPinned)}" ${!isPinned && (status.settings?.pinned?.length || 0) >= 3 ? 'disabled title="Three merits are pinned. Unpin one to add another."' : ''} data-merit-pin="${escapeHtml(goal.key)}">Pinned</button></header>${!isPinned && (status.settings?.pinned?.length || 0) >= 3 ? '<small>Three merits are pinned. Unpin one to add another.</small>' : ''}<p>${escapeHtml(goal.description || 'Torn did not provide a requirement.')}</p>${progressMarkup(goal.progress)}${later}</article>`;
   }
 
   SLINK.modules.register({

@@ -212,7 +212,7 @@
               <header><div><h3>${escapeHtml(definition.car)}</h3><span>Class ${escapeHtml(definition.class)} · ${escapeHtml(definition.tracks.join(', '))}</span></div><span data-racing-completion>${buildState.completed ? 'COMPLETE' : 'NEEDED'}</span></header>
               <div class="slink-racing-specs"><div><small>Turbo</small><strong>${escapeHtml(definition.build.turbo)}</strong></div><div><small>Transmission</small><strong>${escapeHtml(definition.build.transmission)}</strong></div><div><small>Gearbox</small><strong>${escapeHtml(definition.build.gearbox)}</strong></div><div><small>Tires</small><strong>${escapeHtml(definition.build.tires)}</strong></div></div>
               <div class="slink-racing-name"><label>Expected Torn nickname<input id="racing-name-${escapeHtml(definition.id)}" type="text" maxlength="100" data-racing-name value="${escapeHtml(effective)}" placeholder="${escapeHtml(suggested)}" aria-invalid="${String(!validation.valid)}"></label><span class="slink-racing-count" data-racing-count data-invalid="${String(!validation.valid)}">${validation.length}/${validation.maxLength}</span></div>
-              <footer><small>${buildState.customName ? 'Custom nickname' : 'Suggested nickname'} · 22 characters maximum</small><div><button type="button" data-racing-reset-name>Use suggestion</button> <button type="button" data-racing-toggle>${buildState.completed ? 'Move to Needed' : 'Mark Complete'}</button></div></footer>
+              <footer><small>${buildState.customName ? 'Custom nickname' : 'Suggested nickname'} · 22 characters maximum</small><div><button type="button" data-racing-reset-name>Use suggestion</button> <label><input type="checkbox" data-switch-exempt data-racing-toggle ${buildState.completed ? 'checked' : ''}> Completed</label></div></footer>
             </article>`;
           }).join('') : ''}<div class="slink-racing-empty" hidden>No builds in this view.</div></div>`;
           mounted = true;
@@ -231,7 +231,7 @@
           if (!card.hidden) visible++;
           card.dataset.completed = String(done);
           card.querySelector('[data-racing-completion]').textContent = done ? 'COMPLETE' : 'NEEDED';
-          card.querySelector('[data-racing-toggle]').textContent = done ? 'Move to Needed' : 'Mark Complete';
+          card.querySelector('[data-racing-toggle]').checked = done;
           card.querySelectorAll('button').forEach(button => { button.disabled = actionBusy; });
           card.querySelector('footer small').textContent = `${userState.builds[definition.id].customName ? 'Custom nickname' : 'Suggested nickname'} · 22 characters maximum`;
           validateInput(card.querySelector('[data-racing-name]'));
