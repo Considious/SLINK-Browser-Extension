@@ -46,7 +46,7 @@
   const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.company.enabled',true)!==false;
   async function tornJson(url, key) {
     if(!await monitoringEnabled())throw Error('This module is paused in Access.');
-    await SLINK.core.tornApiLimiter.reserve({ wait:true });
+    await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Company', endpoint:url });
     if(!await monitoringEnabled())throw Error('This module is paused in Access.');
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },

@@ -51,7 +51,7 @@
   const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.merits.enabled',true)!==false;
   async function tornJson(url, key, missionRewards = false) {
     if(!missionRewards&&!await monitoringEnabled())throw Error('Merit checks are paused.');
-    await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Extension', endpoint:new URL(url).pathname });
+    await SLINK.core.tornApiLimiter.reserve({ wait:true, script:missionRewards?'SLINK Mission Rewards':'SLINK Merits', endpoint:url });
     if(!missionRewards&&!await monitoringEnabled())throw Error('Merit checks are paused.');
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },

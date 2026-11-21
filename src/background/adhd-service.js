@@ -70,7 +70,7 @@
   const pausedError=()=>Object.assign(Error('Efficiency API alerts are paused in SLINK Access.'),{code:'SLINK_ALERTS_PAUSED'});
   async function tornJson(url, key) {
     if(!await monitoringEnabled())throw pausedError();
-    await SLINK.core.tornApiLimiter.reserve({ wait:true, priority:'alerts', script:'SLINK General Alerts' });
+    await SLINK.core.tornApiLimiter.reserve({ wait:true, priority:'alerts', script:'SLINK Efficiency alerts', endpoint:url });
     if(!await monitoringEnabled())throw pausedError();
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },

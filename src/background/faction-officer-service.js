@@ -56,7 +56,7 @@
   const assertMonitoring=async()=>{if(!await monitoringEnabled())throw Error('Faction Officers is paused in Access.');};
   async function tornJson(path,key) {
     await assertMonitoring();
-    await SLINK.core.tornApiLimiter.reserve({wait:true});
+    await SLINK.core.tornApiLimiter.reserve({wait:true,script:'SLINK Faction Officers',endpoint:path});
     await assertMonitoring();
     const response = await SLINK.core.http.requestJson('tornApi',`https://api.torn.com${path}`,{
       headers:{Authorization:`ApiKey ${key}`},cache:'no-store'

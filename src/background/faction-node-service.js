@@ -4,7 +4,7 @@
   let loading=null,patchQueue=Promise.resolve(),viewQueue=Promise.resolve();
   const access=global.SLINK_FACTION_NODE.createTestAccess({
     async context(){const [settings,primary,leveling,war,...accepted]=await Promise.all([SLINK.core.storage.get(KEY,{}),SLINK.core.storage.get('access.settings.v1',{}),SLINK.core.storage.get('leveling.settings.v1',{}),SLINK.core.storage.get('war.settings.v1',{}),SLINK.core.storage.get('access.acceptedTerms.v1',null),SLINK.core.storage.get('leveling.acceptedTerms.v1',null),SLINK.core.storage.get('war.acceptedTerms.v1',null)]);return {enabled:settings.noticeAccepted===global.SLINK_FACTION_NODE.ROOM_NOTICE,key:String(primary.tornKey||'').trim()||String(leveling.tornKey||'').trim()||String(war.tornKey||'').trim(),accepted};},
-    reserve:()=>SLINK.core.tornApiLimiter.reserve({wait:true}),
+    reserve:()=>SLINK.core.tornApiLimiter.reserve({wait:true,script:'SLINK Faction Rooms authentication',endpoint:'/api/permissions/auth'}),
     request:(url,options={})=>SLINK.core.http.requestJson('factionChatTest',url,{...options,...(options.body?{body:JSON.stringify(options.body)}:{})})
   });
   const routes={

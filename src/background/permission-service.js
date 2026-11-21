@@ -98,7 +98,7 @@
         existing.apiKeyFingerprint === currentKeyFingerprint &&
         Number(existing.expiresAt) > Date.now() + 60_000
       ) return existing;
-      await SLINK.core.tornApiLimiter.reserve({ wait:true });
+      await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Access authentication', endpoint:'/api/permissions/auth' });
       let response;
       try {
         response = await SLINK.core.http.requestJson('contributionWorker', `${BASE_URL}/api/permissions/auth`, {
@@ -212,7 +212,7 @@
     let identityWarning = '';
     try {
       const currentSettings = await settings();
-      await SLINK.core.tornApiLimiter.reserve({ wait:true });
+      await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Access profile', endpoint:'/v2/user/'+encodeURIComponent(userId)+'/basic' });
       const data = await SLINK.core.http.requestJson('tornApi', `https://api.torn.com/v2/user/${encodeURIComponent(userId)}/basic?comment=SLINK%20Perms`, {
         headers:{ Authorization:`ApiKey ${currentSettings.tornKey}` },
         cache:'no-store'

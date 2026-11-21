@@ -211,7 +211,7 @@
         error.code = 'SLINK_WAR_TORN_KEY_REQUIRED';
         throw error;
       }
-      await SLINK.core.tornApiLimiter.reserve({ wait:true });
+      await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK War authentication', endpoint:'/api/auth' });
       let response;
       try {
         response = await workerRequest('/api/auth', {
@@ -271,7 +271,7 @@
   const pausedError=()=>Object.assign(Error('War is paused in SLINK Access.'),{code:'SLINK_WAR_PAUSED'});
   async function tornRequest(path, apiKey) {
     if(path!=='/v2/faction/members'&&!await monitoringEnabled())throw pausedError();
-    await SLINK.core.tornApiLimiter.reserve({ wait:true });
+    await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK War', endpoint:path });
     if(path!=='/v2/faction/members'&&!await monitoringEnabled())throw pausedError();
     return SLINK.core.http.requestJson('tornApi', `https://api.torn.com${path}`, {
       headers:{ Authorization:`ApiKey ${apiKey}` },

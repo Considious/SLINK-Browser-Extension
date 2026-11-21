@@ -27,7 +27,7 @@
         error.code = 'SLINK_API_KEY_REQUIRED';
         throw error;
       }
-      await SLINK.core.tornApiLimiter.reserve({ wait:true });
+      await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Travel Safety', endpoint:'/v2/user/organizedcrime' });
       const response = await SLINK.core.http.requestJson(
         'tornApi',
         'https://api.torn.com/v2/user/organizedcrime?comment=SLINK%20travel%20safety',

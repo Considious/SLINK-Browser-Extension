@@ -79,7 +79,7 @@
     const key = await tornKey();
     if (!key) return currentSettings;
     try {
-      await SLINK.core.tornApiLimiter.reserve({ wait:true });
+      await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Abroad Stocks', endpoint:'/v2/user/property' });
       const response = await SLINK.core.http.requestJson('tornApi', 'https://api.torn.com/v2/user/property?comment=SLINK%20abroad%20travel%20default', {
         headers:{ Authorization:`ApiKey ${key}` },
         cache:'no-store'

@@ -233,7 +233,7 @@
         error.code = 'SLINK_TORN_KEY_REQUIRED';
         throw error;
       }
-      await SLINK.core.tornApiLimiter.reserve({ wait: true });
+      await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Leveling authentication', endpoint:'/api/auth' });
       let response;
       try {
         response = await workerRequest('/api/auth', {
@@ -327,7 +327,7 @@
   async function tornText(url) {
     const currentSettings = await settings();
     if (!currentSettings.tornKey) throw new Error('Torn API key is not configured.');
-    await SLINK.core.tornApiLimiter.reserve({ wait: true });
+    await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Leveling', endpoint:url });
     return SLINK.core.http.requestText('tornApi', url, {
       headers: { Authorization: `ApiKey ${currentSettings.tornKey}` },
       cache: 'no-store'

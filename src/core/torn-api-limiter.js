@@ -175,7 +175,7 @@
         const protectedSlots=protectedCapacity(ledger,demand,priority);
         const limit=Math.min(Math.max(1,Number(options.limit)||DEFAULT_LIMIT),Math.max(0,DEFAULT_LIMIT-protectedSlots.reserved));
         if(ledger.cooldownUntil<=now&&ledger.events.length<limit){
-          ledger.events.push({at:now,id:eventId('slink-extension'),script:String(options.script||'SLINK Extension').slice(0,80),priority,method:String(options.method||'GET').slice(0,12),endpoint:String(options.endpoint||'unknown').slice(0,180),tabId:'extension'});
+          ledger.events.push({at:now,id:eventId('slink-extension'),script:String(options.script||'SLINK Extension').slice(0,80),priority,method:String(options.method||'GET').slice(0,12),endpoint:usage?.endpoint(options.endpoint)||String(options.endpoint||'unknown').slice(0,180),tabId:'extension'});
           note(ledger);await saveLedger(ledger);return {reservedAt:now,count:ledger.events.length,limit};
         }
         return {retryAfterMs:Math.max(50,Math.max(ledger.events[0]?.at+WINDOW_MS+25||now+250,ledger.cooldownUntil)-now),count:ledger.events.length,limit};
@@ -194,7 +194,7 @@
         const now=Date.now(),ledger=await storedLedger(now);
         const capacity=contributionCapacityFromLedger(ledger,{...options,now,demand:await foregroundDemand()});
         if(ledger.cooldownUntil<=now&&capacity.available>0){
-          ledger.events.push({at:now,id:eventId('slink-extension'),script:String(options.script||'SLINK Shared Contribution').slice(0,80),priority:'contribution',method:String(options.method||'GET').slice(0,12),endpoint:String(options.endpoint||'unknown').slice(0,180),tabId:'extension'});
+          ledger.events.push({at:now,id:eventId('slink-extension'),script:String(options.script||'SLINK Shared Contribution').slice(0,80),priority:'contribution',method:String(options.method||'GET').slice(0,12),endpoint:usage?.endpoint(options.endpoint)||String(options.endpoint||'unknown').slice(0,180),tabId:'extension'});
           note(ledger);await saveLedger(ledger);return {reservedAt:now,count:ledger.events.length,limit:capacity.limit,contributionCount:capacity.contributionCount+1,contributionCeiling:capacity.ceiling,interactiveReserve:capacity.interactiveReserve};
         }
         return {retryAfterMs:Math.max(50,Math.max(ledger.events[0]?.at+WINDOW_MS+25||now+250,ledger.cooldownUntil)-now),usage:ledger.events.length,limit:capacity.limit,contributionUsage:capacity.contributionCount,contributionCeiling:capacity.ceiling};

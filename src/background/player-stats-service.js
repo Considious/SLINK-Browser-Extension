@@ -57,7 +57,7 @@
   const monitoringEnabled=async()=>await SLINK.core.storage.get('ui.monitoring.player-stats.enabled',true)!==false;
   async function tornJson(url, key) {
     if(!await monitoringEnabled())throw Error('Player Stats is paused in Access.');
-    await SLINK.core.tornApiLimiter.reserve({ wait:true });
+    await SLINK.core.tornApiLimiter.reserve({ wait:true, script:'SLINK Player Stats', endpoint:url });
     if(!await monitoringEnabled())throw Error('Player Stats is paused in Access.');
     const response = await SLINK.core.http.requestJson('tornApi', url, {
       headers:{ Authorization:`ApiKey ${key}` },

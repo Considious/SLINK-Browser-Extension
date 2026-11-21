@@ -24,3 +24,32 @@ test('Access uses its existing ledger, redacts arbitrary paths, and separates ma
  await assert.rejects(limiter.reserve({priority:'contribution'}),{code:'SLINK_MAINTENANCE_ADMIN_EXCLUDED'});
  assert.equal((await limiter.getAccessUsage()).maintenance.adminExcluded,true);
 });
+
+test('module names and safe endpoint selections survive ledger normalization',()=>{
+ const context=vm.createContext({});
+ vm.runInContext(read('../src/core/access-usage.js'),context);
+ const ui=context.SLINK_ACCESS_USAGE,at=Date.now();
+ const cases=[
+  ['SLINK Stocks','stocks'],['SLINK Money and Property','money'],['SLINK Bank','bank'],
+  ['SLINK Merits','merits'],['SLINK Mission Rewards','missions'],['SLINK Events','events'],
+  ['SLINK Museums','museums'],['SLINK Shared Data','shared'],['SLINK Faction Officers','officers'],
+  ['SLINK Faction Rooms authentication','rooms'],['SLINK Access permissions','access'],
+  ['SLINK Mug Ext','mugging'],['SLINK Lvl Ext','leveling'],['SLINK Poll PDA','leveling'],
+  ['SLINK Stake PDA','mugging'],['SLINK Tgt Ext','targets'],['SLINK Intel PDA','intelligence']
+ ];
+ for(const [script,module] of cases){
+  const event=ui.event({at,script,priority:'normal',endpoint:'https://api.torn.com/v2/user?selections=personalstats,perks&key=private-key'});
+  assert.equal(event.module,module,script);
+  assert.equal(event.operation,'/v2/user?selections=perks,personalstats');
+ }
+ const endpoint=ui.endpoint('https://api.torn.com/v2/user/123/basic?key=secret');
+ assert.equal(endpoint,'/v2/user/:id/basic');
+ assert.equal(ui.endpoint(endpoint),endpoint);
+ assert.doesNotMatch(ui.endpoint('/v2/user?selections=perks,private-key&key=secret'),/private-key|secret/);
+ assert.equal(ui.event({at,script:'SLINK Shared Data',priority:'market',endpoint:'/v2/torn/items'}).module,'shared');
+ const legacy=ui.prune([{at,module:'unknown',operation:'Unknown endpoint',priority:'normal'}],at);
+ assert.equal(legacy[0].module,'legacy');
+ const html=ui.html(ui.snapshot([],legacy,{limit:60,maintenance:{adminExcluded:true}},at));
+ assert.doesNotMatch(html,/Disabled for verified|admin\.\*|Unattributed|Unknown endpoint|<strong>SLINK Maintenance/);
+ assert.match(html,/Earlier client version/);
+});
