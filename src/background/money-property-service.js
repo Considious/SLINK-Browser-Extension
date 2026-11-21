@@ -209,12 +209,25 @@
       const key=await tornKey();
       if(!key)throw Error('Save your Torn API key in Access first.');
       const base='https://api.torn.com/v2/';
-      const [holdings,market,money]=await Promise.all([
+      const educationKey='stocks.preview.education-catalog.v1';
+      const cachedEducation=await SLINK.core.storage.get(educationKey,{});
+      const educationCatalog=async()=>{
+        if(cachedEducation.body&&Date.now()-cachedEducation.at<CORE.CATALOG_MS)return cachedEducation.body;
+        const body=await tornJson(base+'torn/education?comment=SLINK%20Stocks',key);
+        await SLINK.core.storage.set(educationKey,{body,at:Date.now()});
+        return body;
+      };
+      const [holdings,market,money,items,education,educationCourses]=await Promise.all([
         tornJson(base+'user/stocks?comment=SLINK%20Stocks',key),
         tornJson(base+'torn/stocks?comment=SLINK%20Stocks',key),
-        tornJson(base+'user/money?comment=SLINK%20Stocks',key).catch(()=>null)
+        tornJson(base+'user/money?comment=SLINK%20Stocks',key).catch(()=>null),
+        SLINK.services.sharedData.catalog({key,maxAgeMs:CORE.CATALOG_MS,needPrices:true}).catch(()=>null),
+        tornJson(base+'user/education?comment=SLINK%20Stocks',key).catch(()=>null),
+        educationCatalog().catch(()=>null)
       ]);
-      return {holdings:holdings.stocks,market:market.stocks,cash:money?.money?.cash,fetchedAt:Date.now()};
+      const cash=money?.money?.cash??money?.money?.wallet??null;
+      return {holdings:holdings.stocks,market:market.stocks,cash,education,educationCourses,
+        benefitRows:CORE.stockRows(holdings,market,items?.items||[],cash??0),fetchedAt:Date.now()};
     },
     'money-property.status':payload => publicStatus(payload?.refreshIfDue !== false),
     'money-property.refresh':() => refresh(true),
